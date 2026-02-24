@@ -131,11 +131,24 @@ th {
 <script>
 const STORAGE_KEY = "trailer_board_v3";
 const params = new URLSearchParams(location.search);
-const isDriver = params.get("mode") === "driver";
+const mode = (params.get("mode") || "dispatcher").toLowerCase();
+const isDriver = mode === "driver";
+const isCheckin = mode === "checkin";
 
 if (isDriver) {
   document.getElementById("controls").style.display = "none";
   document.getElementById("actionHeader").style.display = "none";
+}
+
+if (isCheckin) {
+  // Check-in can add only (no delete, no status dropdown)
+  document.getElementById("actionHeader").style.display = "none";
+
+  const controls = document.getElementById("controls");
+  controls.innerHTML = `
+    <input id="trailer" placeholder="Trailer #" />
+    <button class="primary" onclick="checkIn()">Check In (Incoming)</button>
+  `;
 }
 
 function load() {
@@ -197,7 +210,24 @@ function addTrailer() {
   const trailer = document.getElementById("trailer").value.trim();
   const status = document.getElementById("status").value;
   if (!trailer) return;
+function checkIn() {
+  const trailer = document.getElementById("trailer").value.trim();
+  if (!trailer) return;
 
+  let rows = load();
+  const existing = rows.find(r => r.trailer === trailer);
+
+  if (existing) {
+    // If it already exists, keep its status (don’t overwrite Ready/Loading)
+    // But if you WANT it to always set Incoming, tell me.
+  } else {
+    rows.push({ trailer, status: "Incoming" });
+  }
+
+  save(rows);
+  render();
+  document.getElementById("trailer").value = "";
+  alert("Checked in! Please wait for dispatch.");
   let rows = load();
   const existing = rows.find(r => r.trailer === trailer);
 

@@ -210,24 +210,7 @@ function addTrailer() {
   const trailer = document.getElementById("trailer").value.trim();
   const status = document.getElementById("status").value;
   if (!trailer) return;
-function checkIn() {
-  const trailer = document.getElementById("trailer").value.trim();
-  if (!trailer) return;
 
-  let rows = load();
-  const existing = rows.find(r => r.trailer === trailer);
-
-  if (existing) {
-    // If it already exists, keep its status (don’t overwrite Ready/Loading)
-    // But if you WANT it to always set Incoming, tell me.
-  } else {
-    rows.push({ trailer, status: "Incoming" });
-  }
-
-  save(rows);
-  render();
-  document.getElementById("trailer").value = "";
-  alert("Checked in! Please wait for dispatch.");
   let rows = load();
   const existing = rows.find(r => r.trailer === trailer);
 
@@ -250,25 +233,20 @@ function checkIn() {
   document.getElementById("trailer").value = "";
 }
 
-function deleteTrailer(trailer) {
+function checkIn() {
+  const trailer = document.getElementById("trailer").value.trim();
+  if (!trailer) return;
+
   let rows = load();
-  rows = rows.filter(r => r.trailer !== trailer);
+  const existing = rows.find(r => r.trailer === trailer);
+
+  // Safer: do NOT overwrite if it already exists
+  if (!existing) {
+    rows.push({ trailer, status: "Incoming" });
+  }
+
   save(rows);
   render();
+  document.getElementById("trailer").value = "";
+  alert("Checked in! Please wait for dispatch.");
 }
-
-function clearAll() {
-  if (confirm("Clear all trailers?")) {
-    localStorage.removeItem(STORAGE_KEY);
-    render();
-  }
-}
-
-/* 🔄 AUTO REFRESH EVERY 5 SECONDS */
-setInterval(render, 5000);
-
-render();
-</script>
-
-</body>
-</html>

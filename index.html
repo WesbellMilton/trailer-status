@@ -1,17 +1,4 @@
-[2:40 PM, 2/24/2026] +1 (647) 998-9749: <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Trailer Status Board</title>
-  <style>
-    :root { --bg:#0b1220; --card:#121b2f; --text:#eaf0ff; --muted:#a9b4d0; --line:#263454; --good:#22c55e; --warn:#f59e0b; --bad:#ef4444; }
-    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background: linear-gradient(180deg,#070b14,#0b1220); color:var(--text); }
-    .wrap { max-width: 980px; margin: 0 auto; padding: 18px; }
-    .top { display:flex; gap:14px; flex-wrap:wrap; align-items:stretch; }
-    .card { background: rgba(18,27,47,0.85); border:1px solid var(--line); border-radius:14px; padding:14px; backdrop-filter: blur(6px); }
-    .c…
-[2:45 PM, 2/24/2026] +1 (647) 998-9749: <!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
@@ -97,7 +84,6 @@ th {
 <body>
 <div class="wrap">
 
-  <!-- 🔹 CHANGE COMPANY NAME HERE -->
   <div class="company">Wesbell Logistics</div>
   <div class="subtitle">Trailer Status Board</div>
 
@@ -129,7 +115,7 @@ th {
 </div>
 
 <script>
-const STORAGE_KEY = "trailer_board_v3";
+const STORAGE_KEY = "trailer_board_final";
 const params = new URLSearchParams(location.search);
 const mode = (params.get("mode") || "dispatcher").toLowerCase();
 const isDriver = mode === "driver";
@@ -141,9 +127,7 @@ if (isDriver) {
 }
 
 if (isCheckin) {
-  // Check-in can add only (no delete, no status dropdown)
   document.getElementById("actionHeader").style.display = "none";
-
   const controls = document.getElementById("controls");
   controls.innerHTML = `
     <input id="trailer" placeholder="Trailer #" />
@@ -158,7 +142,6 @@ function save(data) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
-// Tracks which trailers should flash (set when they become Ready)
 let flashSet = new Set();
 
 function render() {
@@ -173,10 +156,9 @@ function render() {
     if (r.status === "Loading") colorClass = "warn";
     if (r.status === "Ready") colorClass = "good";
 
-    // Green flash effect
     if (flashSet.has(r.trailer)) {
       tr.style.transition = "background 0.2s ease";
-      tr.style.background = "rgba(34, 197, 94, 0.35)"; // green glow
+      tr.style.background = "rgba(34,197,94,0.35)";
       setTimeout(() => {
         tr.style.background = "";
       }, 1200);
@@ -187,14 +169,12 @@ function render() {
       <td><span class="pill ${colorClass}">${r.status}</span></td>
     `;
 
-    if (!isDriver) {
+    if (!isDriver && !isCheckin) {
       const td = document.createElement("td");
-
       const del = document.createElement("button");
       del.textContent = "Delete";
       del.className = "danger";
       del.onclick = () => deleteTrailer(r.trailer);
-
       td.appendChild(del);
       tr.appendChild(td);
     }
@@ -202,7 +182,6 @@ function render() {
     tbody.appendChild(tr);
   });
 
-  // Clear flashes after render so it only flashes once
   flashSet.clear();
 }
 
@@ -213,8 +192,6 @@ function addTrailer() {
 
   let rows = load();
   const existing = rows.find(r => r.trailer === trailer);
-
-  // Detect if it just became Ready
   const wasReady = existing ? existing.status === "Ready" : false;
 
   if (existing) {
@@ -223,8 +200,7 @@ function addTrailer() {
     rows.push({ trailer, status });
   }
 
-  const isNowReady = status === "Ready";
-  if (!wasReady && isNowReady) {
+  if (!wasReady && status === "Ready") {
     flashSet.add(trailer);
   }
 
@@ -240,7 +216,6 @@ function checkIn() {
   let rows = load();
   const existing = rows.find(r => r.trailer === trailer);
 
-  // Safer: do NOT overwrite if it already exists
   if (!existing) {
     rows.push({ trailer, status: "Incoming" });
   }
@@ -250,3 +225,24 @@ function checkIn() {
   document.getElementById("trailer").value = "";
   alert("Checked in! Please wait for dispatch.");
 }
+
+function deleteTrailer(trailer) {
+  let rows = load();
+  rows = rows.filter(r => r.trailer !== trailer);
+  save(rows);
+  render();
+}
+
+function clearAll() {
+  if (confirm("Clear all trailers?")) {
+    localStorage.removeItem(STORAGE_KEY);
+    render();
+  }
+}
+
+setInterval(render, 5000);
+render();
+</script>
+
+</body>
+</html>

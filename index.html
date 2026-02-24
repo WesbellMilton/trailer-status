@@ -1,4 +1,4 @@
-<!doctype html>
+[2:40 PM, 2/24/2026] +1 (647) 998-9749: <!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -10,340 +10,235 @@
     .wrap { max-width: 980px; margin: 0 auto; padding: 18px; }
     .top { display:flex; gap:14px; flex-wrap:wrap; align-items:stretch; }
     .card { background: rgba(18,27,47,0.85); border:1px solid var(--line); border-radius:14px; padding:14px; backdrop-filter: blur(6px); }
-    .card h1 { font-size:18px; margin:0 0 6px; }
-    .sub { color: var(--muted); font-size: 13px; margin:0; }
-    .grow { flex: 1 1 420px; }
-    .qrbox { width: 260px; min-width: 240px; display:flex; flex-direction:column; justify-content:space-between; }
-    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:end; margin-top:10px; }
-    label { font-size:12px; color: var(--muted); display:block; margin-bottom:6px; }
-    input, select, button {
-      border-radius: 10px; border:1px solid var(--line); background:#0d1528; color:var(--text);
-      padding: 10px 12px; font-size:14px;
-    }
-    input { width: 180px; }
-    select { width: 220px; }
-    button { cursor:pointer; }
-    button.primary { background: #1b2a52; border-color:#2b3f75; }
-    button.danger { background: #3a1020; border-color:#6b1a35; }
-    button:disabled { opacity:.55; cursor:not-allowed; }
+    .c…
+[2:45 PM, 2/24/2026] +1 (647) 998-9749: <!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Trailer Status Board</title>
 
-    table { width:100%; border-collapse: collapse; margin-top:14px; overflow:hidden; border-radius: 14px; border:1px solid var(--line); }
-    th, td { padding: 12px 10px; border-bottom:1px solid var(--line); vertical-align: middle; }
-    th { text-align:left; font-size:12px; color: var(--muted); background:#0d1528; letter-spacing:.4px; }
-    tr:last-child td { border-bottom:none; }
-    .pill { display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; border:1px solid var(--line); background:#0d1528; font-size:13px; }
-    .dot { width:9px; height:9px; border-radius:50%; display:inline-block; }
-    .dot.good { background: var(--good); }
-    .dot.warn { background: var(--warn); }
-    .dot.bad { background: var(--bad); }
+<style>
+:root {
+  --bg:#0b1220;
+  --card:#121b2f;
+  --text:#eaf0ff;
+  --muted:#a9b4d0;
+  --line:#263454;
+  --good:#22c55e;
+  --warn:#f59e0b;
+  --bad:#ef4444;
+}
+body {
+  margin:0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  background: linear-gradient(180deg,#070b14,#0b1220);
+  color:var(--text);
+}
+.wrap { max-width:1000px; margin:auto; padding:20px; }
 
-    .toolbar { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; align-items:center; }
-    .small { font-size:12px; color:var(--muted); }
-    .right { margin-left:auto; display:flex; gap:10px; flex-wrap:wrap; }
-    .linklike { color:#bcd0ff; text-decoration: underline; cursor:pointer; }
-    .footer { margin-top:14px; color:var(--muted); font-size:12px; }
+.company {
+  text-align:center;
+  font-size:26px;
+  font-weight:bold;
+  margin-bottom:6px;
+}
 
-    @media (max-width: 720px){
-      input, select { width: 100%; }
-      .qrbox { width: 100%; }
-    }
-  </style>
+.subtitle {
+  text-align:center;
+  color:var(--muted);
+  margin-bottom:20px;
+}
+
+.card {
+  background:rgba(18,27,47,0.9);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:16px;
+}
+
+input, select, button {
+  border-radius:10px;
+  border:1px solid var(--line);
+  background:#0d1528;
+  color:var(--text);
+  padding:10px;
+}
+
+button { cursor:pointer; }
+button.primary { background:#1b2a52; }
+button.danger { background:#3a1020; }
+
+table {
+  width:100%;
+  border-collapse:collapse;
+  margin-top:15px;
+}
+th, td {
+  padding:12px;
+  border-bottom:1px solid var(--line);
+}
+th {
+  text-align:left;
+  font-size:12px;
+  color:var(--muted);
+}
+.pill {
+  padding:6px 10px;
+  border-radius:999px;
+  display:inline-block;
+}
+.good { background:var(--good); }
+.warn { background:var(--warn); }
+.bad { background:var(--bad); }
+</style>
 </head>
+
 <body>
-  <div class="wrap">
-    <div class="top">
-      <div class="card grow">
-        <h1>Trailer Status Board</h1>
-        <p class="sub" id="modeText"></p>
+<div class="wrap">
 
-        <div class="toolbar">
-          <span class="small">Quick filters:</span>
-          <button class="primary" id="filterAll">All</button>
-          <button class="primary" id="filterIncoming">Incoming</button>
-          <button class="primary" id="filterLoading">Loading</button>
-          <button class="primary" id="filterReady">Ready</button>
+  <!-- 🔹 CHANGE COMPANY NAME HERE -->
+  <div class="company">Wesbell Logistics</div>
+  <div class="subtitle">Trailer Status Board</div>
 
-          <div class="right">
-            <span class="small">Share to drivers:</span>
-            <span class="linklike" id="driverLink"></span>
-          </div>
-        </div>
+  <div class="card">
 
-        <div class="row" id="dispatcherControls">
-          <div>
-            <label>Trailer #</label>
-            <input id="trailerInput" placeholder="e.g. 12345" maxlength="20"/>
-          </div>
-          <div>
-            <label>Status</label>
-            <select id="statusInput">
-              <option value="Incoming">Incoming</option>
-              <option value="Loading">Loading</option>
-              <option value="Ready">Ready (Finished Loading)</option>
-            </select>
-          </div>
-          <div>
-            <button class="primary" id="addBtn">Add / Update</button>
-          </div>
-          <div>
-            <button class="danger" id="clearBtn" title="Clears all trailers from this device">Clear All</button>
-          </div>
-        </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th style="width:40%;">Trailer #</th>
-              <th style="width:40%;">Status</th>
-              <th style="width:20%;" id="actionsHeader">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="tbody"></tbody>
-        </table>
-
-        <div class="footer">
-          Tip: Drivers should use the QR link (view-only). Dispatchers should use the normal link (editable).
-        </div>
-      </div>
-
-      <div class="card qrbox">
-        <div>
-          <h1>Driver QR Code</h1>
-          <p class="sub">Scan to view status (read-only)</p>
-        </div>
-        <div id="qrcode" style="display:flex; justify-content:center; padding:10px 0;"></div>
-        <div class="small" id="qrUrlText" style="word-break:break-all;"></div>
-      </div>
+    <div id="controls">
+      <input id="trailer" placeholder="Trailer #" />
+      <select id="status">
+        <option>Incoming</option>
+        <option>Loading</option>
+        <option>Ready</option>
+      </select>
+      <button class="primary" onclick="addTrailer()">Add / Update</button>
+      <button class="danger" onclick="clearAll()">Clear All</button>
     </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Trailer #</th>
+          <th>Status</th>
+          <th id="actionHeader">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+
   </div>
+</div>
 
-  <!-- QR Code library (small, reliable CDN) -->
-  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script>
+const STORAGE_KEY = "trailer_board_v3";
+const params = new URLSearchParams(location.search);
+const isDriver = params.get("mode") === "driver";
 
-  <script>
-    // ---------- Config ----------
-    const STORAGE_KEY = "trailer_status_board_v1";
+if (isDriver) {
+  document.getElementById("controls").style.display = "none";
+  document.getElementById("actionHeader").style.display = "none";
+}
 
-    // Mode control: default dispatcher (editable); ?mode=driver is view-only
-    const params = new URLSearchParams(location.search);
-    const mode = (params.get("mode") || "dispatcher").toLowerCase();
-    const isDriver = mode === "driver";
+function load() {
+  return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+}
+function save(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
 
-    // Filter state
-    let activeFilter = "All";
+// Tracks which trailers should flash (set when they become Ready)
+let flashSet = new Set();
 
-    // ---------- Helpers ----------
-    function loadData(){
-      try {
-        return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-      } catch {
-        return [];
-      }
-    }
-    function saveData(rows){
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
-    }
+function render() {
+  const tbody = document.getElementById("tbody");
+  tbody.innerHTML = "";
+  const rows = load();
 
-    function statusMeta(status){
-      // Choose dot color
-      if (status === "Ready") return { dot:"good" };
-      if (status === "Loading") return { dot:"warn" };
-      return { dot:"bad" }; // Incoming
-    }
+  rows.forEach(r => {
+    const tr = document.createElement("tr");
 
-    function normalizeTrailer(trailer){
-      return (trailer || "").trim();
-    }
+    let colorClass = "bad";
+    if (r.status === "Loading") colorClass = "warn";
+    if (r.status === "Ready") colorClass = "good";
 
-    function render(){
-      const tbody = document.getElementById("tbody");
-      tbody.innerHTML = "";
-
-      let rows = loadData();
-
-      // Sort: Ready at top, then Loading, then Incoming; within that newest first
-      const rank = (s) => (s==="Ready"?0 : s==="Loading"?1 : 2);
-      rows.sort((a,b)=> (rank(a.status)-rank(b.status)) || (b.updatedAt - a.updatedAt));
-
-      // Apply filter
-      const filtered = rows.filter(r => activeFilter==="All" ? true : r.status===activeFilter);
-
-      if (filtered.length === 0){
-        const tr = document.createElement("tr");
-        tr.innerHTML = <td colspan="${isDriver?2:3}" style="color:var(--muted);">No trailers in this view.</td>;
-        tbody.appendChild(tr);
-        return;
-      }
-
-      for (const r of filtered){
-        const meta = statusMeta(r.status);
-        const tr = document.createElement("tr");
-
-        const statusLabel = (r.status === "Ready")
-          ? "Ready (Finished Loading)"
-          : r.status;
-
-        tr.innerHTML = `
-          <td><strong>${escapeHtml(r.trailer)}</strong></td>
-          <td>
-            <span class="pill">
-              <span class="dot ${meta.dot}"></span>
-              ${escapeHtml(statusLabel)}
-            </span>
-          </td>
-        `;
-
-        if (!isDriver){
-          const td = document.createElement("td");
-
-          const sel = document.createElement("select");
-          sel.innerHTML = `
-            <option value="Incoming">Incoming</option>
-            <option value="Loading">Loading</option>
-            <option value="Ready">Ready (Finished Loading)</option>
-          `;
-          sel.value = r.status;
-          sel.addEventListener("change", () => {
-            updateStatus(r.trailer, sel.value);
-          });
-
-          const del = document.createElement("button");
-          del.className = "danger";
-          del.textContent = "Delete";
-          del.style.marginLeft = "8px";
-          del.addEventListener("click", () => {
-            deleteTrailer(r.trailer);
-          });
-
-          td.appendChild(sel);
-          td.appendChild(del);
-          tr.appendChild(td);
-        }
-
-        tbody.appendChild(tr);
-      }
+    // Green flash effect
+    if (flashSet.has(r.trailer)) {
+      tr.style.transition = "background 0.2s ease";
+      tr.style.background = "rgba(34, 197, 94, 0.35)"; // green glow
+      setTimeout(() => {
+        tr.style.background = "";
+      }, 1200);
     }
 
-    function escapeHtml(str){
-      return String(str)
-        .replaceAll("&","&amp;")
-        .replaceAll("<","&lt;")
-        .replaceAll(">","&gt;")
-        .replaceAll('"',"&quot;")
-        .replaceAll("'","&#039;");
+    tr.innerHTML = `
+      <td><strong>${r.trailer}</strong></td>
+      <td><span class="pill ${colorClass}">${r.status}</span></td>
+    `;
+
+    if (!isDriver) {
+      const td = document.createElement("td");
+
+      const del = document.createElement("button");
+      del.textContent = "Delete";
+      del.className = "danger";
+      del.onclick = () => deleteTrailer(r.trailer);
+
+      td.appendChild(del);
+      tr.appendChild(td);
     }
 
-    function addOrUpdateTrailer(trailer, status){
-      trailer = normalizeTrailer(trailer);
-      if (!trailer) return;
+    tbody.appendChild(tr);
+  });
 
-      const rows = loadData();
-      const idx = rows.findIndex(r => r.trailer.toLowerCase() === trailer.toLowerCase());
-      const now = Date.now();
+  // Clear flashes after render so it only flashes once
+  flashSet.clear();
+}
 
-      if (idx >= 0){
-        rows[idx].trailer = trailer; // keep latest casing
-        rows[idx].status = status;
-        rows[idx].updatedAt = now;
-      } else {
-        rows.push({ trailer, status, updatedAt: now });
-      }
+function addTrailer() {
+  const trailer = document.getElementById("trailer").value.trim();
+  const status = document.getElementById("status").value;
+  if (!trailer) return;
 
-      saveData(rows);
-      render();
-    }
+  let rows = load();
+  const existing = rows.find(r => r.trailer === trailer);
 
-    function updateStatus(trailer, status){
-      const rows = loadData();
-      const idx = rows.findIndex(r => r.trailer.toLowerCase() === trailer.toLowerCase());
-      if (idx >= 0){
-        rows[idx].status = status;
-        rows[idx].updatedAt = Date.now();
-        saveData(rows);
-        render();
-      }
-    }
+  // Detect if it just became Ready
+  const wasReady = existing ? existing.status === "Ready" : false;
 
-    function deleteTrailer(trailer){
-      let rows = loadData();
-      rows = rows.filter(r => r.trailer.toLowerCase() !== trailer.toLowerCase());
-      saveData(rows);
-      render();
-    }
+  if (existing) {
+    existing.status = status;
+  } else {
+    rows.push({ trailer, status });
+  }
 
-    function clearAll(){
-      if (!confirm("Clear ALL trailers from this device?")) return;
-      localStorage.removeItem(STORAGE_KEY);
-      render();
-    }
+  const isNowReady = status === "Ready";
+  if (!wasReady && isNowReady) {
+    flashSet.add(trailer);
+  }
 
-    function setFilter(name){
-      activeFilter = name;
-      render();
-    }
+  save(rows);
+  render();
+  document.getElementById("trailer").value = "";
+}
 
-    // ---------- Setup UI ----------
-    const modeText = document.getElementById("modeText");
-    const dispatcherControls = document.getElementById("dispatcherControls");
-    const actionsHeader = document.getElementById("actionsHeader");
+function deleteTrailer(trailer) {
+  let rows = load();
+  rows = rows.filter(r => r.trailer !== trailer);
+  save(rows);
+  render();
+}
 
-    if (isDriver){
-      modeText.textContent = "Driver view (read-only).";
-      dispatcherControls.style.display = "none";
-      actionsHeader.style.display = "none";
-    } else {
-      modeText.textContent = "Dispatcher view (add/update/delete).";
-      actionsHeader.textContent = "Actions";
-    }
-
-    // Driver share link + QR
-    const driverUrl = new URL(location.href);
-    driverUrl.searchParams.set("mode", "driver");
-    document.getElementById("driverLink").textContent = driverUrl.toString();
-    document.getElementById("driverLink").addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(driverUrl.toString());
-        alert("Driver link copied!");
-      } catch {
-        prompt("Copy this link:", driverUrl.toString());
-      }
-    });
-
-    document.getElementById("qrUrlText").textContent = driverUrl.toString();
-    new QRCode(document.getElementById("qrcode"), {
-      text: driverUrl.toString(),
-      width: 180,
-      height: 180,
-      correctLevel: QRCode.CorrectLevel.M
-    });
-
-    // Buttons
-    document.getElementById("filterAll").onclick = () => setFilter("All");
-    document.getElementById("filterIncoming").onclick = () => setFilter("Incoming");
-    document.getElementById("filterLoading").onclick = () => setFilter("Loading");
-    document.getElementById("filterReady").onclick = () => setFilter("Ready");
-
-    if (!isDriver){
-      document.getElementById("addBtn").onclick = () => {
-        const trailer = document.getElementById("trailerInput").value;
-        const status = document.getElementById("statusInput").value;
-        addOrUpdateTrailer(trailer, status);
-        document.getElementById("trailerInput").value = "";
-        document.getElementById("trailerInput").focus();
-      };
-
-      document.getElementById("clearBtn").onclick = clearAll;
-
-      // Enter key adds
-      document.getElementById("trailerInput").addEventListener("keydown", (e) => {
-        if (e.key === "Enter") document.getElementById("addBtn").click();
-      });
-    }
-
-    // Live refresh (in case another tab updates localStorage)
-    window.addEventListener("storage", render);
-
+function clearAll() {
+  if (confirm("Clear all trailers?")) {
+    localStorage.removeItem(STORAGE_KEY);
     render();
-  </script>
+  }
+}
+
+/* 🔄 AUTO REFRESH EVERY 5 SECONDS */
+setInterval(render, 5000);
+
+render();
+</script>
+
 </body>
 </html>

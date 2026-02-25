@@ -153,7 +153,18 @@ const cls = statusClass(r.status);
 
     if (!isDriver && !isCheckin){
       const td = document.createElement("td");
+// Notes input (dispatcher only)
+const notesInput = document.createElement("input");
+notesInput.placeholder = "Add note...";
+notesInput.value = r.notes || "";
+notesInput.style.marginRight = "6px";
+notesInput.style.width = "140px";
 
+notesInput.onchange = () => {
+  upsert(r.trailer, r.status, r.dockDoor, notesInput.value);
+};
+
+td.appendChild(notesInput);
       const sel = document.createElement("select");
       ["Incoming","Loading","Ready"].forEach(s=>{
         const o=document.createElement("option"); o.value=s; o.textContent=s; sel.appendChild(o);

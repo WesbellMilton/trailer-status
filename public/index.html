@@ -206,7 +206,30 @@ async function clearAll(){
   if (!confirm("Clear all trailers?")) return;
   await fetch("/api/clear", { method:"POST" });
 }
+// Populate Dock 28–42 dropdown
+function populateDockDoors() {
+  const dockSelect = document.getElementById("dockDoor");
+  if (!dockSelect) return;
 
+  dockSelect.innerHTML = "";
+
+  const noDoor = document.createElement("option");
+  noDoor.value = "";
+  noDoor.textContent = "No Door";
+  dockSelect.appendChild(noDoor);
+
+  for (let i = 28; i <= 42; i++) {
+    const opt = document.createElement("option");
+    opt.value = Dock ${i};
+    opt.textContent = Dock ${i};
+    dockSelect.appendChild(opt);
+  }
+
+  const yard = document.createElement("option");
+  yard.value = "Yard";
+  yard.textContent = "Yard";
+  dockSelect.appendChild(yard);
+}
 // Buttons
 if (!isDriver && !isCheckin){
   document.getElementById("addBtn").onclick = ()=>{

@@ -148,6 +148,7 @@ const cls = statusClass(r.status);
   <td><strong>${escapeHtml(r.dockDoor || "-")}</strong></td>
   <td><strong>${escapeHtml(r.trailer)}</strong></td>
   <td><span class="pill ${cls}">${escapeHtml(r.status)}</span></td>
+  <td>${escapeHtml(r.notes || "")}</td>
 `;
 
     if (!isDriver && !isCheckin){

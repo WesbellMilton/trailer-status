@@ -1,5 +1,5 @@
 {
-  "name": "dock-board",
+  "name": "trailer-status",
   "version": "1.0.0",
   "main": "server.js",
   "type": "commonjs",

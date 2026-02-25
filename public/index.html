@@ -343,7 +343,7 @@ if (isCheckin){
 
 // Real-time WebSocket
 const proto = location.protocol === "https:" ? "wss" : "ws";
-const ws = new WebSocket(${proto}://${location.host});
+const ws = new WebSocket('${proto}://${location.host});
 
 ws.onmessage = (ev) => {
   const msg = JSON.parse(ev.data);

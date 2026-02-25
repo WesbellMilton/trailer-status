@@ -348,7 +348,9 @@ async function clearAll(){
   // ---------- Real-time WebSocket ----------
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const ws = new WebSocket(${proto}://${location.host});
-
+ws.onopen = () => console.log("WS connected");
+ws.onerror = (e) => console.log("WS error", e);
+ws.onclose = () => console.log("WS closed");
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
 

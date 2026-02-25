@@ -10,8 +10,9 @@ app.use(express.static(path.join(__dirname, "public")));
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// In-memory data (simple). For restart-proof storage, I can add SQLite.
-let trailers = {}; // { "TR123": { status: "Incoming", updatedAt: 123456789 } }
+// In-memory data (simple). For restart-proof storage, add SQLite later.
+let trailers = {}; 
+// { "TR123": { status:"Incoming", dockDoor:"Dock 28", notes:"", updatedAt:123456789 } }
 
 function broadcast(type, payload) {
   const msg = JSON.stringify({ type, payload });
@@ -21,7 +22,6 @@ function broadcast(type, payload) {
 }
 
 wss.on("connection", (ws) => {
-  // Send current state immediately
   ws.send(JSON.stringify({ type: "state", payload: trailers }));
 });
 
@@ -30,16 +30,26 @@ app.get("/api/state", (req, res) => res.json(trailers));
 app.post("/api/upsert", (req, res) => {
   const trailer = String(req.body.trailer || "").trim();
   const status = String(req.body.status || "").trim();
+  const dockDoor = String(req.body.dockDoor || "").trim(); // "" allowed
+  const notes = String(req.body.notes || "").trim();       // "" allowed
 
   if (!trailer) return res.status(400).json({ error: "Trailer required" });
   if (!["Incoming", "Loading", "Ready"].includes(status)) {
     return res.status(400).json({ error: "Invalid status" });
   }
 
-  const prev = trailers[trailer]?.status;
-  trailers[trailer] = { status, updatedAt: Date.now() };
+  const prev = trailers[trailer]?.status || null;
 
-  broadcast("upsert", { trailer, ...trailers[trailer], prevStatus: prev || null });
+  // Preserve existing fields if client didn’t send them (safe updates)
+  const existing = trailers[trailer] || {};
+  trailers[trailer] = {
+    status,
+    dockDoor: dockDoor ?? existing.dockDoor ?? "",
+    notes: notes ?? existing.notes ?? "",
+    updatedAt: Date.now(),
+  };
+
+  broadcast("upsert", { trailer, ...trailers[trailer], prevStatus: prev });
   res.json({ ok: true });
 });
 
@@ -49,7 +59,7 @@ app.post("/api/checkin", (req, res) => {
 
   // Don’t overwrite if already exists
   if (!trailers[trailer]) {
-    trailers[trailer] = { status: "Incoming", updatedAt: Date.now() };
+    trailers[trailer] = { status: "Incoming", dockDoor: "", notes: "", updatedAt: Date.now() };
     broadcast("upsert", { trailer, ...trailers[trailer], prevStatus: null });
   }
 

@@ -12,7 +12,7 @@ const wss = new WebSocket.Server({ server });
 
 // In-memory data (simple). For restart-proof storage, add SQLite later.
 let trailers = {}; 
-// { "TR123": { status:"Incoming", dockDoor:"Dock 28", notes:"", updatedAt:123456789 } }
+// { "TR123": { status, dockDoor, notes, updatedAt } }
 
 function broadcast(type, payload) {
   const msg = JSON.stringify({ type, payload });

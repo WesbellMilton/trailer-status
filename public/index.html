@@ -190,7 +190,7 @@ function escapeHtml(str){
     .replaceAll('"',"&quot;").replaceAll("'","&#039;");
 }
 
-async function upsert(trailer, status){
+async function upsert(trailer, status, dockDoor, notes){
   await fetch("/api/upsert", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ trailer, status }) });
 }
 

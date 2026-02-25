@@ -72,7 +72,8 @@
 </div>
 
 <script>
-  // ---------- Mode ----------
+  alert("JS LOADED");
+
   const params = new URLSearchParams(location.search);
   const mode = (params.get("mode") || "dispatcher").toLowerCase();
   const isDriver = mode === "driver";

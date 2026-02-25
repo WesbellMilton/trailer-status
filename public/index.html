@@ -254,54 +254,68 @@
 
   // ---------- API ----------
   async function upsert(trailer, status, dockDoor, notes){
-  const res = await fetch("/api/upsert", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({ trailer, status, dockDoor, notes })
-  });
+  try {
+    const res = await fetch("/api/upsert", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ trailer, status, dockDoor, notes })
+    });
 
-  // If server rejected it, show the error
-  if (!res.ok){
-    const txt = await res.text();
-    alert("Upsert failed: " + txt);
-    return;
+    if (!res.ok){
+      const txt = await res.text();
+      alert("Upsert failed: " + txt);
+      return;
+    }
+
+    // ✅ update UI immediately (even if websocket is broken)
+    state[trailer] = { status, dockDoor, notes, updatedAt: Date.now() };
+    render();
+
+  } catch (err){
+    alert("Upsert error: " + err);
   }
-
-  // ✅ Update screen immediately (so buttons “work” even if WS is down)
-  state[trailer] = { status, dockDoor, notes, updatedAt: Date.now() };
-  render();
 }
 
 async function delTrailer(trailer){
-  const res = await fetch("/api/delete", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({ trailer })
-  });
+  try {
+    const res = await fetch("/api/delete", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ trailer })
+    });
 
-  if (!res.ok){
-    const txt = await res.text();
-    alert("Delete failed: " + txt);
-    return;
+    if (!res.ok){
+      const txt = await res.text();
+      alert("Delete failed: " + txt);
+      return;
+    }
+
+    delete state[trailer];
+    render();
+
+  } catch (err){
+    alert("Delete error: " + err);
   }
-
-  delete state[trailer];
-  render();
 }
 
 async function clearAll(){
   if (!confirm("Clear all trailers?")) return;
 
-  const res = await fetch("/api/clear", { method:"POST" });
+  try {
+    const res = await fetch("/api/clear", { method:"POST" });
 
-  if (!res.ok){
-    const txt = await res.text();
-    alert("Clear failed: " + txt);
-    return;
+    if (!res.ok){
+      const txt = await res.text();
+      alert("Clear failed: " + txt);
+      return;
+    }
+
+    state = {};
+    render();
+
+  } catch (err){
+    alert("Clear error: " + err);
   }
-
-  state = {};
-  render();
 }
   // ---------- Controls wiring ----------
   if (!isDriver && !isCheckin){

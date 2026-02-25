@@ -114,7 +114,9 @@ if (isDriver) {
 } else {
   modeNote.textContent = "Dispatcher view (real-time).";
 }
-
+if (!isDriver && !isCheckin) {
+  populateDockDoors();
+}
 let flashSet = new Set();
 let state = {}; // { trailer: {status, updatedAt} }
 

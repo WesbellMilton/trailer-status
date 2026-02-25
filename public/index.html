@@ -27,12 +27,29 @@ th{text-align:left;font-size:12px;color:var(--muted);}
   <div class="subtitle">Trailer Status Board</div>
 
   <div class="card">
-    <div id="controls">
-      <input id="trailer" placeholder="Trailer #" />
-      <select id="dockDoor"></select>
-      <button class="primary" id="addBtn">Add / Update</button>
-      <button class="danger" id="clearBtn">Clear All</button>
-    </div>
+   <div id="controls" class="row">
+  <input id="trailer" placeholder="Trailer #" />
+
+  <select id="status">
+    <option value="Incoming">Incoming</option>
+    <option value="Loading">Loading</option>
+    <option value="Ready">Ready</option>
+  </select>
+
+  <select id="dockDoor"></select>
+
+  <button class="primary" id="addBtn">Add / Update</button>
+  <button class="danger" id="clearBtn">Clear All</button>
+
+  <input id="search" placeholder="Search trailer or dock…" style="margin-left:auto; min-width:220px;" />
+</div>
+
+<div class="row" style="margin-top:10px; gap:8px;">
+  <button class="primary" id="filterAll">All</button>
+  <button class="primary" id="filterIncoming">Incoming</button>
+  <button class="primary" id="filterLoading">Loading</button>
+  <button class="primary" id="filterReady">Ready</button>
+</div>
 
     <table>
       <thead>

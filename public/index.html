@@ -191,7 +191,7 @@ function escapeHtml(str){
 }
 
 async function upsert(trailer, status, dockDoor, notes){
-  await fetch("/api/upsert", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ trailer, status }) });
+  await fetch("/api/upsert", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ trailer, status, dockDoor, notes }) });
 }
 
 async function checkin(trailer){

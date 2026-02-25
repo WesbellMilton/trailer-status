@@ -9,8 +9,16 @@ app.use(express.json());
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// state: { "TR123": { status, dockDoor, notes, updatedAt } }
-let trailers = {};
+// In-memory storage
+let trailers = {}; // { "1850": { status:"Incoming", notes:"...", updatedAt: 123 } }
+
+// Serve the single HTML file at /
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
+
+// Helpful: confirm server is alive
+app.get("/health", (req, res) => res.json({ ok: true }));
 
 function broadcast(type, payload) {
   const msg = JSON.stringify({ type, payload });
@@ -23,43 +31,47 @@ wss.on("connection", (ws) => {
   ws.send(JSON.stringify({ type: "state", payload: trailers }));
 });
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
-});
-
-app.get("/api/ping", (req, res) => {
-  res.json({ ok: true, time: Date.now() });
-});
-
+// API: get full state
 app.get("/api/state", (req, res) => {
   res.json(trailers);
 });
 
+// API: add/update
 app.post("/api/upsert", (req, res) => {
   const trailer = String(req.body.trailer || "").trim();
-  const status = String(req.body.status || "Incoming").trim();
-  const dockDoor = String(req.body.dockDoor || "").trim();
+  const status = String(req.body.status || "").trim();
   const notes = String(req.body.notes || "").trim();
 
   if (!trailer) return res.status(400).json({ error: "Trailer required" });
+  if (!["Incoming", "Loading", "Ready"].includes(status)) {
+    return res.status(400).json({ error: "Invalid status" });
+  }
 
-  const prevStatus = trailers[trailer] ? trailers[trailer].status : null;
+  const prevStatus = trailers[trailer]?.status || null;
 
-  trailers[trailer] = { status, dockDoor, notes, updatedAt: Date.now() };
+  trailers[trailer] = {
+    status,
+    notes,
+    updatedAt: Date.now(),
+  };
 
   broadcast("upsert", { trailer, ...trailers[trailer], prevStatus });
   res.json({ ok: true });
 });
 
+// API: delete
 app.post("/api/delete", (req, res) => {
   const trailer = String(req.body.trailer || "").trim();
   if (!trailer) return res.status(400).json({ error: "Trailer required" });
 
-  delete trailers[trailer];
-  broadcast("delete", { trailer });
+  if (trailers[trailer]) {
+    delete trailers[trailer];
+    broadcast("delete", { trailer });
+  }
   res.json({ ok: true });
 });
 
+// API: clear all
 app.post("/api/clear", (req, res) => {
   trailers = {};
   broadcast("state", trailers);

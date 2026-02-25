@@ -217,7 +217,9 @@ function render(){
       <td class="notesCell">${escapeHtml(r.notes || "")}</td>
     `;
 
-    if (!isDriver && !isCheckin){
+    if (!isDriver && !isCheckin) {
+  populateDockDoors();
+}
       const td = document.createElement("td");
 
       // Notes editor

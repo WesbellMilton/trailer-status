@@ -299,14 +299,14 @@ async function clearAll(){
 }
 
 // Buttons + search + filters
-if (!isDriver && !isCheckin){
-  document.getElementById("addBtn").onclick = () => {
+document.getElementById("addBtn").onclick = () => {
   const trailer = document.getElementById("trailer").value.trim();
   const status = document.getElementById("status").value;
   const dockDoor = document.getElementById("dockDoor").value;
-  const notes = ""; // start blank
+  const notes = "";
 
   if (!trailer) return;
+
   upsert(trailer, status, dockDoor, notes);
   document.getElementById("trailer").value = "";
 };

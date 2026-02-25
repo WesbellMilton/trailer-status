@@ -157,7 +157,7 @@ const cls = statusClass(r.status);
         const o=document.createElement("option"); o.value=s; o.textContent=s; sel.appendChild(o);
       });
       sel.value = r.status;
-      sel.onchange = ()=> upsert(r.trailer, sel.value);
+      sel.onchange = ()=> upsert(r.trailer, sel.value, r.dockDoor);
 
       const del = document.createElement("button");
       del.className="danger"; del.textContent="Delete"; del.style.marginLeft="8px";

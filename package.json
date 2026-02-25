@@ -1,6 +1,7 @@
 {
-  "name": "trailer-status",
+  "name": "trailer-status-board",
   "version": "1.0.0",
+  "description": "Inbound/Outbound Trailer Status Board with Driver View",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

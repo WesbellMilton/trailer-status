@@ -254,34 +254,55 @@
 
   // ---------- API ----------
   async function upsert(trailer, status, dockDoor, notes){
-    await fetch("/api/upsert", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ trailer, status, dockDoor, notes })
-    });
+  const res = await fetch("/api/upsert", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ trailer, status, dockDoor, notes })
+  });
+
+  // If server rejected it, show the error
+  if (!res.ok){
+    const txt = await res.text();
+    alert("Upsert failed: " + txt);
+    return;
   }
 
-  async function checkin(trailer){
-    await fetch("/api/checkin", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ trailer })
-    });
+  // ✅ Update screen immediately (so buttons “work” even if WS is down)
+  state[trailer] = { status, dockDoor, notes, updatedAt: Date.now() };
+  render();
+}
+
+async function delTrailer(trailer){
+  const res = await fetch("/api/delete", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ trailer })
+  });
+
+  if (!res.ok){
+    const txt = await res.text();
+    alert("Delete failed: " + txt);
+    return;
   }
 
-  async function delTrailer(trailer){
-    await fetch("/api/delete", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ trailer })
-    });
+  delete state[trailer];
+  render();
+}
+
+async function clearAll(){
+  if (!confirm("Clear all trailers?")) return;
+
+  const res = await fetch("/api/clear", { method:"POST" });
+
+  if (!res.ok){
+    const txt = await res.text();
+    alert("Clear failed: " + txt);
+    return;
   }
 
-  async function clearAll(){
-    if (!confirm("Clear all trailers?")) return;
-    await fetch("/api/clear", { method:"POST" });
-  }
-
+  state = {};
+  render();
+}
   // ---------- Controls wiring ----------
   if (!isDriver && !isCheckin){
     document.getElementById("addBtn").onclick = () => {

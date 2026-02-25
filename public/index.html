@@ -138,7 +138,29 @@ if (isDriver){
   modeNote.textContent = "Dispatcher view (real-time).";
   populateDockDoors();
 }
+function populateDockDoors(){
+  const dockSelect = document.getElementById("dockDoor");
+  if (!dockSelect) return;
 
+  dockSelect.innerHTML = "";
+
+  const noDoor = document.createElement("option");
+  noDoor.value = "";
+  noDoor.textContent = "No Door";
+  dockSelect.appendChild(noDoor);
+
+  for (let i = 28; i <= 42; i++){
+    const opt = document.createElement("option");
+    opt.value = Dock ${i};
+    opt.textContent = Dock ${i};
+    dockSelect.appendChild(opt);
+  }
+
+  const yard = document.createElement("option");
+  yard.value = "Yard";
+  yard.textContent = "Yard";
+  dockSelect.appendChild(yard);
+}
 function render(){
   const tbody = document.getElementById("tbody");
   tbody.innerHTML = "";

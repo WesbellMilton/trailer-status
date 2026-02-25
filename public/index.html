@@ -300,15 +300,17 @@ async function clearAll(){
 
 // Buttons + search + filters
 if (!isDriver && !isCheckin){
-  document.getElementById("addBtn").onclick = ()=>{
-    const trailer = document.getElementById("trailer").value.trim();
-    const status = document.getElementById("status").value;
-    const dockDoor = document.getElementById("dockDoor").value;
-    const notes = ""; // start blank
-    if (!trailer) return;
-    upsert(trailer, status, dockDoor, notes);
-    document.getElementById("trailer").value = "";
-  };
+  document.getElementById("addBtn").onclick = () => {
+  const trailer = document.getElementById("trailer").value.trim();
+  const status = document.getElementById("status").value;
+  const dockDoor = document.getElementById("dockDoor").value;
+  const notes = ""; // start blank
+
+  if (!trailer) return;
+  upsert(trailer, status, dockDoor, notes);
+  document.getElementById("trailer").value = "";
+};
+
 
   document.getElementById("clearBtn").onclick = clearAll;
 

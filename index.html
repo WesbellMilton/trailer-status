@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Wesbell Logistics — Dock Board</title>
+  <style>
+    :root{--text:#eaf0ff;--muted:#a9b4d0;--line:#263454;--good:#22c55e;--warn:#f59e0b;--bad:#ef4444;}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#070b14,#0b1220);color:var(--text);}
+    .wrap{max-width:1100px;margin:auto;padding:20px;}
+    .company{text-align:center;font-size:26px;font-weight:800;margin-bottom:6px;}
+    .subtitle{text-align:center;color:var(--muted);margin-bottom:20px;}
+    .card{background:rgba(18,27,47,0.9);border:1px solid var(--line);border-radius:14px;padding:16px;}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+    input,select,button{border-radius:10px;border:1px solid var(--line);background:#0d1528;color:var(--text);padding:10px;}
+    button{cursor:pointer}
+    button.primary{background:#1b2a52;}
+    button.danger{background:#3a1020;}
+    table{width:100%;border-collapse:collapse;margin-top:15px;}
+    th,td{padding:12px;border-bottom:1px solid var(--line);vertical-align:middle;}
+    th{text-align:left;font-size:12px;color:var(--muted);}
+    .pill{padding:6px 10px;border-radius:999px;display:inline-block;font-weight:700;}
+    .good{background:var(--good);color:#06120b;}
+    .warn{background:var(--warn);color:#1a1202;}
+    .bad{background:var(--bad);color:#1a0202;}
+    .small{color:var(--muted);font-size:12px;margin-top:10px;}
+    .notesCell{max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  </style>
+</head>
+
+<body>
+<div class="wrap">
+  <div class="company">Wesbell Logistics</div>
+  <div class="subtitle">Digital Dock Board</div>
+
+  <div class="card">
+    <div class="row">
+      <input id="trailer" placeholder="Trailer #" />
+      <select id="status">
+        <option value="Incoming">Incoming</option>
+        <option value="Loading">Loading</option>
+        <option value="Ready">Ready</option>
+      </select>
+      <select id="dockDoor"></select>
+      <input id="notes" placeholder="Notes (optional)" style="min-width:220px;" />
+      <button class="primary" id="addBtn">Add / Update</button>
+      <button class="danger" id="clearBtn">Clear All</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Dock Door</th>
+          <th>Trailer #</th>
+          <th>Status</th>
+          <th>Notes</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+
+    <div class="small" id="statusLine">Connecting…</div>
+  </div>
+</div>
+
+<script>
+  const dockSelect = document.getElementById("dockDoor");
+  dockSelect.innerHTML = <option value="">No Door</option> +
+    Array.from({length: 15}, (_,i)=><option value="Dock ${i+28}">Dock ${i+28}</option>).join("") +
+    <option value="Yard">Yard</option>;
+
+  const tbody = document.getElementById("tbody");
+  const statusLine = document.getElementById("statusLine");
+
+  let state = {};
+  let flashSet = new Set();
+
+  function esc(s){
+    return String(s ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+  }
+  function cls(s){ return s==="Ready" ? "good" : (s==="Loading" ? "warn" : "bad"); }
+  function rank(s){ return s==="Ready"?0:(s==="Loading"?1:2); }
+
+  function render(){
+    tbody.innerHTML = "";
+    const rows = Object.entries(state).map(([trailer,v])=>({ trailer, ...v }));
+    rows.sort((a,b)=> (rank(a.status)-rank(b.status)) || a.trailer.localeCompare(b.trailer));
+
+    if(!rows.length){
+      tbody.innerHTML = <tr><td colspan="5" style="color:var(--muted);">No trailers.</td></tr>;
+      return;
+    }
+
+    for(const r of rows){
+      const tr = document.createElement("tr");
+      if(flashSet.has(r.trailer)){
+        tr.style.transition = "background 0.2s ease";
+        tr.style.background = "rgba(34,197,94,0.35)";
+        setTimeout(()=> tr.style.background="", 1200);
+      }
+
+      tr.innerHTML = `
+        <td><strong>${esc(r.dockDoor || "-")}</strong></td>
+        <td><strong>${esc(r.trailer)}</strong></td>
+        <td><span class="pill ${cls(r.status)}">${esc(r.status)}</span></td>
+        <td class="notesCell" title="${esc(r.notes||"")}">${esc(r.notes||"")}</td>
+        <td><button class="danger">Delete</button></td>
+      `;
+
+      tr.querySelector("button").onclick = () => delTrailer(r.trailer);
+      tbody.appendChild(tr);
+    }
+
+    flashSet.clear();
+  }
+
+  async function upsert(trailer, status, dockDoor, notes){
+    const res = await fetch("/api/upsert", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ trailer, status, dockDoor, notes })
+    });
+    if(!res.ok){
+      const t = await res.text();
+      alert("Upsert failed: " + t);
+    }
+  }
+
+  async function delTrailer(trailer){
+    const res = await fetch("/api/delete", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ trailer })
+    });
+    if(!res.ok){
+      const t = await res.text();
+      alert("Delete failed: " + t);
+    }
+  }
+
+  async function clearAll(){
+    if(!confirm("Clear all trailers?")) return;
+    const res = await fetch("/api/clear", { method:"POST" });
+    if(!res.ok){
+      const t = await res.text();
+      alert("Clear failed: " + t);
+    }
+  }
+
+  document.getElementById("addBtn").onclick = () => {
+    const trailer = document.getElementById("trailer").value.trim();
+    const status = document.getElementById("status").value;
+    const dockDoor = document.getElementById("dockDoor").value;
+    const notes = document.getElementById("notes").value.trim();
+    if(!trailer) return;
+    upsert(trailer, status, dockDoor, notes);
+    document.getElementById("trailer").value = "";
+    document.getElementById("notes").value = "";
+  };
+
+  document.getElementById("clearBtn").onclick = clearAll;
+
+  // WebSocket realtime
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const ws = new WebSocket(${proto}://${location.host});
+
+  ws.onopen = () => statusLine.textContent = "Connected (real-time).";
+  ws.onclose = () => statusLine.textContent = "Disconnected (refresh page).";
+  ws.onerror = () => statusLine.textContent = "WebSocket error.";
+
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+
+    if(msg.type === "state"){
+      state = msg.payload || {};
+      render();
+      return;
+    }
+
+    if(msg.type === "upsert"){
+      const p = msg.payload || {};
+      if(p.prevStatus && p.prevStatus !== "Ready" && p.status === "Ready") flashSet.add(p.trailer);
+      state[p.trailer] = { status:p.status, dockDoor:p.dockDoor, notes:p.notes, updatedAt:p.updatedAt };
+      render();
+      return;
+    }
+
+    if(msg.type === "delete"){
+      delete state[msg.payload.trailer];
+      render();
+    }
+  };
+
+  render();
+</script>
+</body>
+</html>

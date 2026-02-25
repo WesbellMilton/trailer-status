@@ -55,7 +55,29 @@ const params = new URLSearchParams(location.search);
 const mode = (params.get("mode") || "dispatcher").toLowerCase();
 const isDriver = mode === "driver";
 const isCheckin = mode === "checkin";
+// Generate Dock 28–42 dropdown
+const dockSelect = document.getElementById("dockDoor");
 
+if (dockSelect) {
+  dockSelect.innerHTML = "";
+
+  const defaultOption = document.createElement("option");
+  defaultOption.value = "";
+  defaultOption.textContent = "No Door";
+  dockSelect.appendChild(defaultOption);
+
+  for (let i = 28; i <= 42; i++) {
+    const opt = document.createElement("option");
+    opt.value = Dock ${i};
+    opt.textContent = Dock ${i};
+    dockSelect.appendChild(opt);
+  }
+
+  const yard = document.createElement("option");
+  yard.value = "Yard";
+  yard.textContent = "Yard";
+  dockSelect.appendChild(yard);
+}
 const controls = document.getElementById("controls");
 const actionHeader = document.getElementById("actionHeader");
 const modeNote = document.getElementById("modeNote");

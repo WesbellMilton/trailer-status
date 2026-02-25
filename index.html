@@ -117,16 +117,22 @@
   }
 
   async function upsert(trailer, status, dockDoor, notes){
-    const res = await fetch("/api/upsert", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ trailer, status, dockDoor, notes })
-    });
-    if(!res.ok){
-      const t = await res.text();
-      alert("Upsert failed: " + t);
-    }
+  const res = await fetch("/api/upsert", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ trailer, status, dockDoor, notes })
+  });
+
+  if (!res.ok){
+    const t = await res.text();
+    alert("Upsert failed: " + t);
+    return;
   }
+
+  // ✅ update immediately (don’t wait for websocket)
+  state[trailer] = { status, dockDoor, notes, updatedAt: Date.now() };
+  render();
+}
 
   async function delTrailer(trailer){
     const res = await fetch("/api/delete", {

@@ -197,9 +197,9 @@ ws.onmessage = (ev) => {
   }
 
   if (msg.type === "upsert"){
-    const { trailer, status, updatedAt, prevStatus } = msg.payload;
+    const { trailer, status, dockDoor, updatedAt, prevStatus } = msg.payload;
     if (prevStatus && prevStatus !== "Ready" && status === "Ready") flashSet.add(trailer);
-    state[trailer] = { status, updatedAt };
+    state[trailer] = { status, dockDoor, updatedAt };
     render();
     return;
   }

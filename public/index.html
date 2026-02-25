@@ -143,9 +143,10 @@ function render(){
     }
 
    tr.innerHTML = `
+  tr.innerHTML = `
+  <td><strong>${escapeHtml(r.dockDoor || "-")}</strong></td>
   <td><strong>${escapeHtml(r.trailer)}</strong></td>
-  <td><span class="pill ${statusClass(r.status)}">${escapeHtml(r.status)}</span></td>
-  <td>${escapeHtml(r.dockDoor || "-")}</td>
+  <td><span class="pill ${cls}">${escapeHtml(r.status)}</span></td>
 `;
 
     if (!isDriver && !isCheckin){

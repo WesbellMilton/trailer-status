@@ -150,19 +150,28 @@
   }
 
   async function apiUpsert(trailer, direction, status){
+  try {
     const res = await fetch("/api/upsert", {
       method: "POST",
       headers: { "Content-Type":"application/json" },
       body: JSON.stringify({ trailer, direction, status })
     });
+
+    const text = await res.text();
+    console.log("Upsert response:", res.status, text);
+
     if (!res.ok) {
-      const txt = await res.text();
-      alert("Add/Update failed: " + txt);
+      alert("Add failed: " + text);
       return;
     }
-    await apiGetState();
-  }
 
+    await apiGetState();
+
+  } catch (err) {
+    alert("Network error: " + err);
+    console.error(err);
+  }
+}
   async function apiDelete(trailer){
     const res = await fetch("/api/delete", {
       method: "POST",

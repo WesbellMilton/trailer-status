@@ -30,16 +30,32 @@ app.get("/api/state", (req, res) => res.json(trailers));
 app.post("/api/upsert", (req, res) => {
   const trailer = String(req.body.trailer || "").trim();
   const status = String(req.body.status || "").trim();
-  const dockDoor = String(req.body.dockDoor || "").trim(); // "" allowed
-  const notes = String(req.body.notes || "").trim();       // "" allowed
+  const dockDoor = String(req.body.dockDoor || "").trim();
+  const notes = String(req.body.notes || "").trim();
 
   if (!trailer) return res.status(400).json({ error: "Trailer required" });
+
   if (!["Incoming", "Loading", "Ready"].includes(status)) {
     return res.status(400).json({ error: "Invalid status" });
   }
 
-  const prev = trailers[trailer]?.status || null;
+  const prev = trailers[trailer]?.status;
 
+  trailers[trailer] = {
+    status,
+    dockDoor,
+    notes,
+    updatedAt: Date.now()
+  };
+
+  broadcast("upsert", {
+    trailer,
+    ...trailers[trailer],
+    prevStatus: prev || null
+  });
+
+  res.json({ ok: true });
+});
   // Preserve existing fields if client didn’t send them (safe updates)
   const existing = trailers[trailer] || {};
   trailers[trailer] = {

@@ -110,10 +110,11 @@ function render(){
       setTimeout(()=> tr.style.background="", 1200);
     }
 
-    tr.innerHTML = `
-      <td><strong>${escapeHtml(r.trailer)}</strong></td>
-      <td><span class="pill ${statusClass(r.status)}">${escapeHtml(r.status)}</span></td>
-    `;
+   tr.innerHTML = `
+  <td><strong>${escapeHtml(r.trailer)}</strong></td>
+  <td><span class="pill ${statusClass(r.status)}">${escapeHtml(r.status)}</span></td>
+  <td>${escapeHtml(r.dockDoor || "-")}</td>
+`;
 
     if (!isDriver && !isCheckin){
       const td = document.createElement("td");

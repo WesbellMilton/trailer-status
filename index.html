@@ -81,7 +81,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 .bad{background:rgba(239,68,68,.18);border:1px solid rgba(239,68,68,.35)}
 .cool{background:rgba(148,163,184,.18);border:1px solid rgba(148,163,184,.35)}
 
-/* Driver move button */
 .readyBtn{
   border:1px solid rgba(34,197,94,.45);
   background:rgba(34,197,94,.18);
@@ -98,7 +97,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   100%{box-shadow:0 0 0 rgba(34,197,94,0)}
 }
 
-/* Dock buttons */
 .dockBtns{display:flex;gap:8px;flex-wrap:wrap}
 .dockBtn{
   padding:10px 12px;
@@ -112,7 +110,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 .dockBtn.dockready{border-color:rgba(148,163,184,.45);background:rgba(148,163,184,.18)}
 .dockBtn:active{transform:scale(.98)}
 
-/* Quick Tips */
 .tips{
   padding:14px;
   border-top:1px solid var(--line);
@@ -151,7 +148,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 }
 .smallHint{color:var(--muted);font-size:12px}
 
-/* Dispatcher delete */
 .deleteBtn{
   margin-left:8px;
   background:rgba(239,68,68,.25);
@@ -160,24 +156,12 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 }
 .deleteBtn:active{transform:scale(.98)}
 
-/* Notes */
 .noteCell{
   max-width:260px;
   color:var(--muted);
   font-size:12px;
   white-space:pre-wrap;
   word-break:break-word;
-}
-.noteBadge{
-  display:inline-block;
-  margin-top:6px;
-  padding:2px 8px;
-  border-radius:999px;
-  border:1px solid rgba(120,145,220,.25);
-  background:rgba(255,255,255,.04);
-  color:#fff;
-  font-size:11px;
-  font-weight:900;
 }
 </style>
 </head>
@@ -203,7 +187,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
   <div class="card">
 
-    <!-- Dispatcher controls -->
     <div class="controls" id="controls">
       <input id="trailer" placeholder="Trailer #" />
       <input id="door" placeholder="Dock Door" />
@@ -224,7 +207,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       <span class="smallHint">Dock: <span class="badge mono">/dock</span> • Driver: <span class="badge mono">/driver</span></span>
     </div>
 
-    <!-- Driver check-in -->
     <div class="controls" id="driverCheckin" style="display:none;">
       <input id="driverTrailer" placeholder="Enter your Trailer # (ex: 1850)" />
       <button class="primary" id="driverSetBtn">Check In</button>
@@ -270,7 +252,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   const isDriver = pathMode.includes("/driver") || qsMode === "driver";
   const isDock   = pathMode.includes("/dock")   || qsMode === "dock";
 
-  // DOM refs
   const modeLabel = document.getElementById("modeLabel");
   const controls = document.getElementById("controls");
   const actionHeader = document.getElementById("actionHeader");
@@ -294,7 +275,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   const addBtn = document.getElementById("addBtn");
   const clearBtn = document.getElementById("clearBtn");
 
-  // Driver check-in
   const driverCheckin = document.getElementById("driverCheckin");
   const driverTrailerInp = document.getElementById("driverTrailer");
   const driverSetBtn = document.getElementById("driverSetBtn");
@@ -305,7 +285,10 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   let state = {};
   let ackMap = JSON.parse(localStorage.getItem("driver_ack") || "{}");
 
-  // Mode UI
+  // Live WS state (optional, server sends stats too but we compute locally)
+  let ws;
+  let pollFallbackTimer = null;
+
   if (isDriver){
     controls.style.display = "none";
     driverCheckin.style.display = "flex";
@@ -319,7 +302,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       if (!t) return alert("Enter your trailer # to check in.");
       driverTrailer = t;
       localStorage.setItem("driver_trailer", driverTrailer);
-      load();
+      render();
     };
 
     driverClearBtn.onclick = () => {
@@ -327,11 +310,10 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       driverTrailer = "";
       driverTrailerInp.value = "";
       driverInfo.textContent = "";
-      load();
+      render();
     };
   } else if (isDock){
     controls.style.display = "none";
-    driverCheckin.style.display = "none";
     driverInfo.style.display = "none";
     actionHeader.textContent = "Dock Update";
     modeLabel.textContent = "Dock Mode";
@@ -351,30 +333,29 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
     if (!isDriver && !isDock){
       tipsLeft.innerHTML = `
-        <li><b>2-step Ready:</b> Dock sets <b>Dock Ready</b>, Dispatch sets <b>Ready</b> (driver sees).</li>
-        <li>Use <b>Quick note</b> for issues like missing seal, paperwork, etc.</li>
+        <li><b>2-step Ready:</b> Dock sets <b>Dock Ready</b>, Dispatch sets <b>Ready</b>.</li>
+        <li>Use <b>Quick note</b> for issues: seal missing, paperwork, etc.</li>
         <li>Driver link: <span class="badge mono">${base}/driver</span></li>
       `;
       tipsRight.innerHTML = `
         <li>Dock link: <span class="badge mono">${base}/dock</span></li>
         <li>Incoming → Loading → Dock Ready → <b>Ready</b> → Departed</li>
-        <li>Clear All is shared — use carefully.</li>
+        <li>Live updates enabled (WebSocket).</li>
       `;
     } else if (isDock){
       tipsLeft.innerHTML = `
         <li>Dock can set <b>Loading</b> or <b>Dock Ready</b>.</li>
         <li>Dispatcher must set <b>Ready</b> for driver to move.</li>
-        <li>Add notes from dispatch side if needed.</li>
       `;
       tipsRight.innerHTML = `
-        <li>This updates the shared board for everyone.</li>
-        <li>Use Dock Ready when dock is completed.</li>
+        <li>Tap <b>Add Note</b> to leave an issue for dispatch/driver.</li>
+        <li>Live updates enabled (WebSocket).</li>
       `;
     } else {
       tipsLeft.innerHTML = `
         <li>You only get MOVE when dispatch sets <b>Ready</b>.</li>
         <li>Flashing green = <b>NEW READY</b>.</li>
-        <li>Notes appear in your trailer row.</li>
+        <li>Notes show in your trailer row.</li>
       `;
       tipsRight.innerHTML = `
         <li>Confirm Load Secured</li>
@@ -405,7 +386,8 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       const t = await res.text();
       alert("Update failed: " + t);
     }
-    await load();
+    // No need to reload; WS will push. Still safe to refresh once.
+    await loadOnce();
   }
 
   async function deleteTrailer(trailer){
@@ -422,7 +404,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       const t = await res.text();
       alert("Delete failed: " + t);
     }
-    await load();
+    await loadOnce();
   }
 
   async function confirmMove(trailer, v){
@@ -460,12 +442,12 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
     let entries = Object.entries(state);
 
-    // Dock mode: show only Loading + Dock Ready
+    // Dock mode: only actionable statuses
     if (isDock){
       entries = entries.filter(([_, v]) => v.status === "Loading" || v.status === "Dock Ready");
     }
 
-    // Driver: must check in; only see own trailer
+    // Driver mode: must check in and only see own trailer
     if (isDriver){
       if (!driverTrailer){
         tbody.innerHTML = `<tr><td colspan="6" style="color:var(--muted);padding:14px;">
@@ -474,6 +456,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         updateKPIs();
         return;
       }
+
       entries = entries.filter(([t]) => t === driverTrailer);
 
       if (entries.length === 0){
@@ -485,7 +468,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       }
     }
 
-    // Sort: Ready first, Dock Ready second, then Loading, Incoming, Departed
     const rank = (s)=> s==="Ready" ? 0 : (s==="Dock Ready" ? 1 : (s==="Loading" ? 2 : (s==="Incoming" ? 3 : 4)));
     entries.sort((a,b)=>{
       const av=a[1], bv=b[1];
@@ -511,13 +493,12 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
       const tdAction = document.createElement("td");
 
-      // Dispatcher actions (status dropdown + delete + edit note)
+      // Dispatcher
       if (!isDriver && !isDock){
         const sel = document.createElement("select");
         ["Incoming","Loading","Dock Ready","Ready"].forEach(s=>{
           const o = document.createElement("option");
-          o.value = s;
-          o.textContent = s;
+          o.value = s; o.textContent = s;
           sel.appendChild(o);
         });
         sel.value = (v.status === "Departed") ? "Ready" : v.status;
@@ -543,7 +524,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         tdAction.appendChild(del);
       }
 
-      // Dock actions: ONLY Loading + Dock Ready + add note prompt
+      // Dock
       if (isDock){
         const wrap = document.createElement("div");
         wrap.className = "dockBtns";
@@ -570,11 +551,10 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         wrap.appendChild(btnLoading);
         wrap.appendChild(btnDockReady);
         wrap.appendChild(noteBtn);
-
         tdAction.appendChild(wrap);
       }
 
-      // Driver actions: MOVE only when dispatcher sets Ready
+      // Driver
       if (isDriver){
         driverInfo.innerHTML =
           `Checked in: <b>${t}</b> &nbsp; | &nbsp; Door: <b>${v.door || "NOT SET"}</b> &nbsp; | &nbsp; Status: <b>${v.status}</b>`;
@@ -598,13 +578,14 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     updateKPIs();
   }
 
-  async function load(){
+  // One-time fetch (used for initial boot + WS fallback)
+  async function loadOnce(){
     const res = await fetch("/api/state");
     state = await res.json();
     render();
   }
 
-  // Dispatcher add/update + clear
+  // Dispatcher controls
   if (!isDriver && !isDock){
     addBtn.onclick = () => {
       const t = trailerInp.value.trim();
@@ -626,13 +607,67 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     clearBtn.onclick = () => {
       const ok = confirm("Clear ALL trailers for everyone?");
       if (!ok) return;
-      fetch("/api/clear", { method:"POST" }).then(load);
+      fetch("/api/clear", { method:"POST" }).then(loadOnce);
     };
   }
 
+  // WebSocket live updates + auto reconnect
+  function startWebSocket(){
+    const proto = (location.protocol === "https:") ? "wss" : "ws";
+    const wsUrl = `${proto}://${location.host}`;
+
+    try {
+      ws = new WebSocket(wsUrl);
+    } catch (e) {
+      console.warn("WS create failed, using fallback polling.", e);
+      startFallbackPolling();
+      return;
+    }
+
+    ws.onopen = () => {
+      console.log("WS connected");
+      stopFallbackPolling();
+    };
+
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === "state" && msg.payload) {
+          state = msg.payload;
+          render();
+        }
+        // If you later add other message types, you can handle them here.
+      } catch (e) {
+        console.warn("WS bad message", e);
+      }
+    };
+
+    ws.onclose = () => {
+      console.warn("WS disconnected. Reconnecting…");
+      startFallbackPolling();
+      setTimeout(startWebSocket, 1500);
+    };
+
+    ws.onerror = () => {
+      // onclose will handle reconnect; keep this quiet
+    };
+  }
+
+  function startFallbackPolling(){
+    if (pollFallbackTimer) return;
+    pollFallbackTimer = setInterval(loadOnce, 5000); // fallback 5s
+  }
+
+  function stopFallbackPolling(){
+    if (!pollFallbackTimer) return;
+    clearInterval(pollFallbackTimer);
+    pollFallbackTimer = null;
+  }
+
+  // Start
   setTips();
-  load();
-  setInterval(load, 3000);
+  loadOnce();       // initial render
+  startWebSocket(); // live mode
 })();
 </script>
 

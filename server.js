@@ -10,10 +10,7 @@ const compression = require("compression");
 
 const app = express();
 
-/**
- * IMPORTANT:
- * - Disable CSP so inline <script> in index.html works
- */
+// IMPORTANT: allow inline <script> in index.html (CSP off)
 app.use(
   helmet({
     contentSecurityPolicy: false
@@ -24,6 +21,7 @@ app.use(compression());
 app.use(express.json());
 app.use(express.static(__dirname));
 
+// Simple request logging
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
@@ -32,16 +30,61 @@ app.use((req, res, next) => {
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-const BUILD = process.env.BUILD || "v1";
-
-// DB
+/**
+ * SQLite DB path:
+ * - Local default: ./data.db
+ * - Render persistent disk: set DB_PATH=/var/data/data.db
+ */
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data.db");
 const db = new sqlite3.Database(DB_PATH);
 
+// In-memory caches (fast rendering + websocket payload)
 let trailers = {};
 let confirmations = [];
 
-// DB helpers
+/* ================================
+   HELPERS
+================================ */
+
+function broadcast(type, payload) {
+  const msg = JSON.stringify({ type, payload });
+  for (const client of wss.clients) {
+    if (client.readyState === WebSocket.OPEN) client.send(msg);
+  }
+}
+
+function cleanStr(v, maxLen) {
+  const s = String(v ?? "").trim();
+  if (!s) return "";
+  return s.length > maxLen ? s.slice(0, maxLen) : s;
+}
+
+function computeStats(board) {
+  const stats = {
+    total: 0,
+    byStatus: { Incoming: 0, Loading: 0, Ready: 0, Departed: 0 },
+    byDirection: { Inbound: 0, Outbound: 0, "Cross Dock": 0 }
+  };
+
+  for (const [, v] of Object.entries(board)) {
+    stats.total += 1;
+    if (v.status && stats.byStatus[v.status] !== undefined) stats.byStatus[v.status] += 1;
+    if (v.direction && stats.byDirection[v.direction] !== undefined) stats.byDirection[v.direction] += 1;
+  }
+  return stats;
+}
+
+// No-cache headers to prevent stale index.html on phones/Render
+function noCache(res) {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+}
+
+/* ================================
+   SQLITE PROMISE HELPERS
+================================ */
+
 function dbRun(sql, params = []) {
   return new Promise((resolve, reject) => {
     db.run(sql, params, function (err) {
@@ -50,6 +93,7 @@ function dbRun(sql, params = []) {
     });
   });
 }
+
 function dbAll(sql, params = []) {
   return new Promise((resolve, reject) => {
     db.all(sql, params, (err, rows) => {
@@ -59,7 +103,12 @@ function dbAll(sql, params = []) {
   });
 }
 
+/* ================================
+   DB INIT + CACHE RELOAD
+================================ */
+
 async function initDb() {
+  // WAL improves reliability on Render/local
   await dbRun(`PRAGMA journal_mode = WAL;`);
   await dbRun(`PRAGMA synchronous = NORMAL;`);
 
@@ -115,71 +164,45 @@ async function reloadCachesFromDb() {
   }));
 }
 
-// Helpers
-function broadcast(type, payload) {
-  const msg = JSON.stringify({ type, payload });
-  for (const client of wss.clients) {
-    if (client.readyState === WebSocket.OPEN) client.send(msg);
-  }
-}
+/* ================================
+   ROUTES
+================================ */
 
-function cleanStr(v, maxLen) {
-  const s = String(v ?? "").trim();
-  if (!s) return "";
-  return s.length > maxLen ? s.slice(0, maxLen) : s;
-}
-
-function computeStats(board) {
-  const stats = {
-    total: 0,
-    byStatus: { Incoming: 0, Loading: 0, Ready: 0, Departed: 0 },
-    byDirection: { Inbound: 0, Outbound: 0, "Cross Dock": 0 }
-  };
-
-  for (const [, v] of Object.entries(board)) {
-    stats.total += 1;
-    if (v.status && stats.byStatus[v.status] !== undefined) stats.byStatus[v.status] += 1;
-    if (v.direction && stats.byDirection[v.direction] !== undefined) stats.byDirection[v.direction] += 1;
-  }
-  return stats;
-}
-
-// No-cache headers (stops old index being served)
-function noCache(res) {
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-  res.setHeader("Pragma", "no-cache");
-  res.setHeader("Expires", "0");
-  res.setHeader("X-App-Build", BUILD);
-}
-
-// Routes
+// Dispatcher board
 app.get("/", (req, res) => {
   noCache(res);
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
+// Driver board (clean link)
 app.get("/driver", (req, res) => {
   noCache(res);
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
 app.get("/health", (req, res) => {
-  res.json({ ok: true, build: BUILD, db: DB_PATH });
+  res.json({ ok: true, db: DB_PATH });
 });
 
-// APIs
+// API
 app.get("/api/state", (req, res) => res.json(trailers));
 app.get("/api/stats", (req, res) => res.json(computeStats(trailers)));
 app.get("/api/confirmations", (req, res) => res.json(confirmations));
 
+/* ================================
+   SAFETY CONFIRM (PERSISTED)
+================================ */
+
 app.post("/api/confirm-safety", async (req, res) => {
   try {
-    const trailer = cleanStr(req.body?.trailer, 20);
-    const door = cleanStr(req.body?.door, 20);
+    const trailer = cleanStr(req.body?.trailer, 20); // optional
+    const door = cleanStr(req.body?.door, 20);       // optional
     const loadSecured = !!req.body?.loadSecured;
     const dockPlateUp = !!req.body?.dockPlateUp;
 
-    if (!loadSecured || !dockPlateUp) return res.status(400).send("Both confirmations required");
+    if (!loadSecured || !dockPlateUp) {
+      return res.status(400).send("Both confirmations required");
+    }
 
     const ip =
       (req.headers["x-forwarded-for"]?.split(",")[0]?.trim()) ||
@@ -194,6 +217,7 @@ app.post("/api/confirm-safety", async (req, res) => {
       [at, trailer, door, ip, userAgent]
     );
 
+    // refresh confirmations cache only
     const confRows = await dbAll(`
       SELECT at, trailer, door, ip, userAgent
       FROM confirmations
@@ -216,6 +240,10 @@ app.post("/api/confirm-safety", async (req, res) => {
     res.status(500).send("Server error");
   }
 });
+
+/* ================================
+   UPSERT TRAILER (PERSISTED)
+================================ */
 
 app.post("/api/upsert", async (req, res) => {
   try {
@@ -241,10 +269,12 @@ app.post("/api/upsert", async (req, res) => {
          direction=excluded.direction,
          status=excluded.status,
          door=excluded.door,
-         updatedAt=excluded.updatedAt`,
+         updatedAt=excluded.updatedAt
+      `,
       [trailer, direction, status, door, updatedAt]
     );
 
+    // update cache
     trailers[trailer] = { direction, status, door: door || "", updatedAt };
 
     broadcast("state", trailers);
@@ -256,10 +286,32 @@ app.post("/api/upsert", async (req, res) => {
   }
 });
 
+/* ================================
+   DELETE / CLEAR
+================================ */
+
+app.post("/api/delete", async (req, res) => {
+  try {
+    const trailer = cleanStr(req.body?.trailer, 20);
+    if (!trailer) return res.status(400).send("Trailer required");
+
+    await dbRun(`DELETE FROM trailers WHERE trailer = ?`, [trailer]);
+    delete trailers[trailer];
+
+    broadcast("state", trailers);
+    broadcast("stats", computeStats(trailers));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("delete error:", err);
+    res.status(500).send("Server error");
+  }
+});
+
 app.post("/api/clear", async (req, res) => {
   try {
     await dbRun(`DELETE FROM trailers`);
     trailers = {};
+
     broadcast("state", trailers);
     broadcast("stats", computeStats(trailers));
     res.json({ ok: true });
@@ -269,7 +321,10 @@ app.post("/api/clear", async (req, res) => {
   }
 });
 
-// Supervisor page
+/* ================================
+   SUPERVISOR PAGE
+================================ */
+
 app.get("/supervisor", (req, res) => {
   res.send(`
     <html>
@@ -318,11 +373,15 @@ app.get("/supervisor", (req, res) => {
   `);
 });
 
-// Auto-archive Departed after 15 min
+/* ================================
+   AUTO-ARCHIVE DEPARTED
+================================ */
+
 setInterval(async () => {
   try {
     const cutoff = Date.now() - 15 * 60 * 1000;
     await dbRun(`DELETE FROM trailers WHERE status='Departed' AND updatedAt < ?`, [cutoff]);
+
     await reloadCachesFromDb();
     broadcast("state", trailers);
     broadcast("stats", computeStats(trailers));
@@ -331,24 +390,29 @@ setInterval(async () => {
   }
 }, 60 * 1000);
 
-// WebSocket
+/* ================================
+   WEBSOCKET
+================================ */
+
 wss.on("connection", (ws) => {
   ws.send(JSON.stringify({ type: "state", payload: trailers }));
   ws.send(JSON.stringify({ type: "confirmations", payload: confirmations }));
   ws.send(JSON.stringify({ type: "stats", payload: computeStats(trailers) }));
 });
 
-// Start
+/* ================================
+   START
+================================ */
+
 const PORT = process.env.PORT || 3000;
 
 initDb()
   .then(() => {
     server.listen(PORT, () => {
       console.log("Running on port", PORT);
-      console.log("Build:", BUILD);
       console.log("Driver link: /driver");
       console.log("Supervisor link: /supervisor");
-      console.log("DB:", DB_PATH);
+      console.log("SQLite DB:", DB_PATH);
     });
   })
   .catch((err) => {

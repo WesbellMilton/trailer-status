@@ -66,7 +66,8 @@ thead th{
 }
 tbody td{
   padding:12px;
-  border-bottom:1px solid rgba(120,145,220,.12)
+  border-bottom:1px solid rgba(120,145,220,.12);
+  vertical-align:top;
 }
 tbody tr:hover{background:rgba(255,255,255,.03)}
 
@@ -149,7 +150,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   font-size:13px;
 }
 .smallHint{color:var(--muted);font-size:12px}
-.clickDoor{cursor:pointer;text-decoration:underline dotted}
 
 /* Dispatcher delete */
 .deleteBtn{
@@ -159,6 +159,26 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   font-weight:950;
 }
 .deleteBtn:active{transform:scale(.98)}
+
+/* Notes */
+.noteCell{
+  max-width:260px;
+  color:var(--muted);
+  font-size:12px;
+  white-space:pre-wrap;
+  word-break:break-word;
+}
+.noteBadge{
+  display:inline-block;
+  margin-top:6px;
+  padding:2px 8px;
+  border-radius:999px;
+  border:1px solid rgba(120,145,220,.25);
+  background:rgba(255,255,255,.04);
+  color:#fff;
+  font-size:11px;
+  font-weight:900;
+}
 </style>
 </head>
 
@@ -198,6 +218,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         <option>Dock Ready</option>
         <option>Ready</option>
       </select>
+      <input id="note" placeholder="Quick note (optional)" style="min-width:220px;" />
       <button class="primary" id="addBtn">Add / Update</button>
       <button class="danger" id="clearBtn">Clear All</button>
       <span class="smallHint">Dock: <span class="badge mono">/dock</span> • Driver: <span class="badge mono">/driver</span></span>
@@ -220,6 +241,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
           <th>Door</th>
           <th>Direction</th>
           <th>Status</th>
+          <th>Note</th>
           <th id="actionHeader">Actions</th>
         </tr>
       </thead>
@@ -268,6 +290,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   const doorInp = document.getElementById("door");
   const directionSel = document.getElementById("direction");
   const statusSel = document.getElementById("status");
+  const noteInp = document.getElementById("note");
   const addBtn = document.getElementById("addBtn");
   const clearBtn = document.getElementById("clearBtn");
 
@@ -329,7 +352,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     if (!isDriver && !isDock){
       tipsLeft.innerHTML = `
         <li><b>2-step Ready:</b> Dock sets <b>Dock Ready</b>, Dispatch sets <b>Ready</b> (driver sees).</li>
-        <li>Enter dock door (ex: <b>D12</b>) so everyone knows where to go.</li>
+        <li>Use <b>Quick note</b> for issues like missing seal, paperwork, etc.</li>
         <li>Driver link: <span class="badge mono">${base}/driver</span></li>
       `;
       tipsRight.innerHTML = `
@@ -341,7 +364,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       tipsLeft.innerHTML = `
         <li>Dock can set <b>Loading</b> or <b>Dock Ready</b>.</li>
         <li>Dispatcher must set <b>Ready</b> for driver to move.</li>
-        <li>If Door is wrong, ask dispatch to update.</li>
+        <li>Add notes from dispatch side if needed.</li>
       `;
       tipsRight.innerHTML = `
         <li>This updates the shared board for everyone.</li>
@@ -351,7 +374,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       tipsLeft.innerHTML = `
         <li>You only get MOVE when dispatch sets <b>Ready</b>.</li>
         <li>Flashing green = <b>NEW READY</b>.</li>
-        <li>You must confirm both safety steps.</li>
+        <li>Notes appear in your trailer row.</li>
       `;
       tipsRight.innerHTML = `
         <li>Confirm Load Secured</li>
@@ -372,11 +395,11 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     kDeparted.textContent = String(c.Departed);
   }
 
-  async function update(trailer, door, direction, status){
+  async function update(trailer, door, direction, status, note){
     const res = await fetch("/api/upsert", {
       method:"POST",
       headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ trailer, door, direction, status })
+      body: JSON.stringify({ trailer, door, direction, status, note })
     });
     if (!res.ok){
       const t = await res.text();
@@ -429,7 +452,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     ackMap[trailer] = v.updatedAt;
     localStorage.setItem("driver_ack", JSON.stringify(ackMap));
 
-    await update(trailer, v.door || "", v.direction || "Inbound", "Departed");
+    await update(trailer, v.door || "", v.direction || "Inbound", "Departed", v.note || "");
   }
 
   function render(){
@@ -445,7 +468,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     // Driver: must check in; only see own trailer
     if (isDriver){
       if (!driverTrailer){
-        tbody.innerHTML = `<tr><td colspan="5" style="color:var(--muted);padding:14px;">
+        tbody.innerHTML = `<tr><td colspan="6" style="color:var(--muted);padding:14px;">
           Enter your trailer # above to see your dock door.
         </td></tr>`;
         updateKPIs();
@@ -454,7 +477,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       entries = entries.filter(([t]) => t === driverTrailer);
 
       if (entries.length === 0){
-        tbody.innerHTML = `<tr><td colspan="5" style="color:var(--muted);padding:14px;">
+        tbody.innerHTML = `<tr><td colspan="6" style="color:var(--muted);padding:14px;">
           Trailer "${driverTrailer}" not found on board. Call dispatch.
         </td></tr>`;
         updateKPIs();
@@ -470,7 +493,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     });
 
     if (entries.length === 0){
-      tbody.innerHTML = `<tr><td colspan="5" style="color:var(--muted);padding:14px;">No trailers.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" style="color:var(--muted);padding:14px;">No trailers.</td></tr>`;
       updateKPIs();
       return;
     }
@@ -483,11 +506,12 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         <td>${v.door || "-"}</td>
         <td>${v.direction || ""}</td>
         <td><span class="tag ${statusClass(v.status)}">${v.status || ""}</span></td>
+        <td class="noteCell">${(v.note && v.note.trim()) ? v.note : "-"}</td>
       `;
 
       const tdAction = document.createElement("td");
 
-      // Dispatcher actions (status dropdown + delete)
+      // Dispatcher actions (status dropdown + delete + edit note)
       if (!isDriver && !isDock){
         const sel = document.createElement("select");
         ["Incoming","Loading","Dock Ready","Ready"].forEach(s=>{
@@ -497,7 +521,17 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
           sel.appendChild(o);
         });
         sel.value = (v.status === "Departed") ? "Ready" : v.status;
-        sel.onchange = () => update(t, v.door || "", v.direction || "Inbound", sel.value);
+        sel.onchange = () => update(t, v.door || "", v.direction || "Inbound", sel.value, v.note || "");
+
+        const editNoteBtn = document.createElement("button");
+        editNoteBtn.className = "primary";
+        editNoteBtn.textContent = "Edit Note";
+        editNoteBtn.style.marginLeft = "8px";
+        editNoteBtn.onclick = () => {
+          const newNote = prompt(`Quick note for ${t}:`, v.note || "");
+          if (newNote === null) return;
+          update(t, v.door || "", v.direction || "Inbound", v.status || "Incoming", String(newNote).trim());
+        };
 
         const del = document.createElement("button");
         del.className = "deleteBtn";
@@ -505,10 +539,11 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         del.onclick = () => deleteTrailer(t);
 
         tdAction.appendChild(sel);
+        tdAction.appendChild(editNoteBtn);
         tdAction.appendChild(del);
       }
 
-      // Dock actions: ONLY Loading + Dock Ready
+      // Dock actions: ONLY Loading + Dock Ready + add note prompt
       if (isDock){
         const wrap = document.createElement("div");
         wrap.className = "dockBtns";
@@ -516,15 +551,26 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         const btnLoading = document.createElement("button");
         btnLoading.className = "dockBtn loading";
         btnLoading.textContent = "Loading";
-        btnLoading.onclick = () => update(t, v.door || "", v.direction || "Inbound", "Loading");
+        btnLoading.onclick = () => update(t, v.door || "", v.direction || "Inbound", "Loading", v.note || "");
 
         const btnDockReady = document.createElement("button");
         btnDockReady.className = "dockBtn dockready";
         btnDockReady.textContent = "Dock Ready";
-        btnDockReady.onclick = () => update(t, v.door || "", v.direction || "Inbound", "Dock Ready");
+        btnDockReady.onclick = () => update(t, v.door || "", v.direction || "Inbound", "Dock Ready", v.note || "");
+
+        const noteBtn = document.createElement("button");
+        noteBtn.className = "primary";
+        noteBtn.textContent = "Add Note";
+        noteBtn.onclick = () => {
+          const newNote = prompt(`Quick note for ${t}:`, v.note || "");
+          if (newNote === null) return;
+          update(t, v.door || "", v.direction || "Inbound", v.status || "Loading", String(newNote).trim());
+        };
 
         wrap.appendChild(btnLoading);
         wrap.appendChild(btnDockReady);
+        wrap.appendChild(noteBtn);
+
         tdAction.appendChild(wrap);
       }
 
@@ -568,11 +614,13 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         t,
         doorInp.value.trim(),
         directionSel.value,
-        statusSel.value
+        statusSel.value,
+        noteInp.value.trim()
       );
 
       trailerInp.value = "";
       doorInp.value = "";
+      noteInp.value = "";
     };
 
     clearBtn.onclick = () => {

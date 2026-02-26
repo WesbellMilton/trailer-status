@@ -46,7 +46,7 @@ body{
   overflow:hidden;
 }
 
-.controls{padding:14px;display:flex;gap:10px;flex-wrap:wrap}
+.controls{padding:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 input,select,button{
   padding:8px 10px;
   border-radius:8px;
@@ -54,7 +54,7 @@ input,select,button{
   background:#0c132a;
   color:#fff;
 }
-button{cursor:pointer;font-weight:800}
+button{cursor:pointer;font-weight:900}
 button.primary{background:rgba(99,102,241,.25)}
 button.danger{background:rgba(239,68,68,.25)}
 
@@ -80,6 +80,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 .bad{background:rgba(239,68,68,.18);border:1px solid rgba(239,68,68,.35)}
 .cool{background:rgba(148,163,184,.18);border:1px solid rgba(148,163,184,.35)}
 
+/* Driver move button */
 .readyBtn{
   border:1px solid rgba(34,197,94,.45);
   background:rgba(34,197,94,.18);
@@ -104,10 +105,10 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   border:1px solid var(--line);
   background:rgba(255,255,255,.04);
   font-weight:950;
-  min-width:110px;
+  min-width:130px;
 }
 .dockBtn.loading{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.18)}
-.dockBtn.ready{border-color:rgba(34,197,94,.45);background:rgba(34,197,94,.18)}
+.dockBtn.dockready{border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.10)}
 .dockBtn:active{transform:scale(.98)}
 
 /* Quick Tips */
@@ -164,6 +165,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     <div class="kpis">
       <span class="kpi">Total <strong id="kTotal">0</strong></span>
       <span class="kpi">Ready <strong id="kReady">0</strong></span>
+      <span class="kpi">Dock Ready <strong id="kDockReady">0</strong></span>
       <span class="kpi">Loading <strong id="kLoading">0</strong></span>
       <span class="kpi">Incoming <strong id="kIncoming">0</strong></span>
       <span class="kpi">Departed <strong id="kDeparted">0</strong></span>
@@ -184,6 +186,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       <select id="status">
         <option>Incoming</option>
         <option>Loading</option>
+        <option>Dock Ready</option>
         <option>Ready</option>
       </select>
       <button class="primary" id="addBtn">Add / Update</button>
@@ -195,7 +198,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       <input id="driverTrailer" placeholder="Enter your Trailer # (ex: 1850)" />
       <button class="primary" id="driverSetBtn">Check In</button>
       <button id="driverClearBtn">Change</button>
-      <span class="smallHint">Tip: your trailer is saved on this device.</span>
+      <span class="smallHint">Saved on this device.</span>
     </div>
 
     <div class="driverInfo" id="driverInfo" style="display:none;"></div>
@@ -233,7 +236,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   const pathMode = location.pathname.toLowerCase();
 
   const isDriver = pathMode.includes("/driver") || qsMode === "driver";
-  const isDock = pathMode.includes("/dock") || qsMode === "dock";
+  const isDock   = pathMode.includes("/dock")   || qsMode === "dock";
 
   // DOM refs
   const modeLabel = document.getElementById("modeLabel");
@@ -243,6 +246,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
   const kTotal = document.getElementById("kTotal");
   const kReady = document.getElementById("kReady");
+  const kDockReady = document.getElementById("kDockReady");
   const kLoading = document.getElementById("kLoading");
   const kIncoming = document.getElementById("kIncoming");
   const kDeparted = document.getElementById("kDeparted");
@@ -294,8 +298,8 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       load();
     };
   } else if (isDock){
-    controls.style.display = "none";        // dock doesn't use dispatcher controls
-    driverCheckin.style.display = "none";   // no driver check-in
+    controls.style.display = "none";
+    driverCheckin.style.display = "none";
     driverInfo.style.display = "none";
     actionHeader.textContent = "Dock Update";
     modeLabel.textContent = "Dock Mode";
@@ -305,6 +309,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
   function statusClass(s){
     if (s === "Ready") return "good";
+    if (s === "Dock Ready") return "cool";
     if (s === "Loading") return "warn";
     if (s === "Incoming") return "bad";
     return "cool"; // Departed
@@ -315,34 +320,32 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
     if (!isDriver && !isDock){
       tipsLeft.innerHTML = `
-        <li>Enter dock door (ex: <b>D12</b>) so drivers know where to go.</li>
-        <li>Only mark <b>Ready</b> when paperwork + dock are actually ready.</li>
+        <li><b>2-step Ready:</b> Dock sets <b>Dock Ready</b>, Dispatch sets <b>Ready</b> (driver sees).</li>
+        <li>Enter dock door (ex: <b>D12</b>) so everyone knows where to go.</li>
         <li>Driver link: <span class="badge mono">${base}/driver</span></li>
       `;
       tipsRight.innerHTML = `
-        <li>Incoming → Loading → <b>Ready</b> → (Driver) Departed</li>
         <li>Dock link: <span class="badge mono">${base}/dock</span></li>
+        <li>Incoming → Loading → Dock Ready → <b>Ready</b> → (Driver) Departed</li>
         <li>Clear All is shared — use carefully.</li>
       `;
     } else if (isDock){
       tipsLeft.innerHTML = `
-        <li>Tap <b>Loading</b> or <b>Ready</b> to update.</li>
+        <li>Dock can set <b>Loading</b> or <b>Dock Ready</b>.</li>
+        <li>Dispatcher must set <b>Ready</b> for driver to move.</li>
         <li>Tap the <b>Door</b> value to edit it.</li>
-        <li>This updates the shared board for everyone.</li>
       `;
       tipsRight.innerHTML = `
-        <li>Focus: Loading + Ready worklist.</li>
-        <li>Ready should only be used when complete.</li>
-        <li>Driver view is read-only except Move.</li>
+        <li>This updates the shared board for everyone.</li>
+        <li>Ready is “Driver Ready” only (dispatch controls).</li>
       `;
     } else {
       tipsLeft.innerHTML = `
-        <li>Check in with your trailer # to see your dock door.</li>
+        <li>You only get MOVE when dispatch sets <b>Ready</b>.</li>
         <li>Flashing green = <b>NEW READY</b>.</li>
         <li>You must confirm both safety steps.</li>
       `;
       tipsRight.innerHTML = `
-        <li>Ready trailer → press MOVE</li>
         <li>Confirm Load Secured</li>
         <li>Confirm Dock Plate Up → Departed</li>
       `;
@@ -350,11 +353,12 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   }
 
   function updateKPIs(){
-    const c = { Incoming:0, Loading:0, Ready:0, Departed:0 };
+    const c = { Incoming:0, Loading:0, "Dock Ready":0, Ready:0, Departed:0 };
     Object.values(state).forEach(v => { if (c[v.status] !== undefined) c[v.status]++; });
 
     kTotal.textContent = String(Object.keys(state).length);
     kReady.textContent = String(c.Ready);
+    kDockReady.textContent = String(c["Dock Ready"]);
     kLoading.textContent = String(c.Loading);
     kIncoming.textContent = String(c.Incoming);
     kDeparted.textContent = String(c.Departed);
@@ -395,7 +399,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
   async function editDoor(trailer, v){
     const entered = prompt(`Set dock door for trailer ${trailer}:`, v.door || "");
-    if (entered === null) return; // cancel
+    if (entered === null) return;
     const newDoor = String(entered).trim();
     await update(trailer, newDoor, v.direction || "Inbound", v.status || "Incoming");
   }
@@ -405,12 +409,12 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
     let entries = Object.entries(state);
 
-    // Dock mode: show the work list (Loading + Ready)
+    // Dock mode: only show the dock work list
     if (isDock){
-      entries = entries.filter(([_, v]) => v.status === "Loading" || v.status === "Ready");
+      entries = entries.filter(([_, v]) => v.status === "Loading" || v.status === "Dock Ready");
     }
 
-    // Driver: must check in and only see their trailer
+    // Driver: must check in; only see own trailer
     if (isDriver){
       if (!driverTrailer){
         tbody.innerHTML = `<tr><td colspan="5" style="color:var(--muted);padding:14px;">
@@ -419,7 +423,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         updateKPIs();
         return;
       }
-
       entries = entries.filter(([t]) => t === driverTrailer);
 
       if (entries.length === 0){
@@ -431,8 +434,8 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       }
     }
 
-    // Sort
-    const rank = (s)=> s==="Ready" ? 0 : (s==="Loading" ? 1 : (s==="Incoming" ? 2 : 3));
+    // Sort: Ready first, Dock Ready second, then Loading, Incoming, Departed
+    const rank = (s)=> s==="Ready" ? 0 : (s==="Dock Ready" ? 1 : (s==="Loading" ? 2 : (s==="Incoming" ? 3 : 4)));
     entries.sort((a,b)=>{
       const av=a[1], bv=b[1];
       return (rank(av.status)-rank(bv.status)) || String(a[0]).localeCompare(String(b[0]));
@@ -447,6 +450,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     for (const [t, v] of entries){
       const tr = document.createElement("tr");
 
+      // Door cell (dock can tap to edit)
       const doorCell = document.createElement("td");
       if (isDock){
         doorCell.innerHTML = `<span class="clickDoor">${v.door || "Tap to set"}</span>`;
@@ -455,9 +459,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         doorCell.textContent = v.door || "-";
       }
 
-      tr.innerHTML = `
-        <td><b>${t}</b></td>
-      `;
+      tr.innerHTML = `<td><b>${t}</b></td>`;
       tr.appendChild(doorCell);
 
       const tdDir = document.createElement("td");
@@ -470,10 +472,10 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
       const tdAction = document.createElement("td");
 
-      // Dispatcher actions
+      // Dispatcher actions: can promote Dock Ready -> Ready
       if (!isDriver && !isDock){
         const sel = document.createElement("select");
-        ["Incoming","Loading","Ready"].forEach(s=>{
+        ["Incoming","Loading","Dock Ready","Ready"].forEach(s=>{
           const o = document.createElement("option");
           o.value = s;
           o.textContent = s;
@@ -484,7 +486,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         tdAction.appendChild(sel);
       }
 
-      // Dock actions: tap to set Loading / Ready
+      // Dock actions: ONLY Loading + Dock Ready (cannot set Ready)
       if (isDock){
         const wrap = document.createElement("div");
         wrap.className = "dockBtns";
@@ -494,20 +496,20 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         btnLoading.textContent = "Loading";
         btnLoading.onclick = () => update(t, v.door || "", v.direction || "Inbound", "Loading");
 
-        const btnReady = document.createElement("button");
-        btnReady.className = "dockBtn ready";
-        btnReady.textContent = "Ready";
-        btnReady.onclick = () => update(t, v.door || "", v.direction || "Inbound", "Ready");
+        const btnDockReady = document.createElement("button");
+        btnDockReady.className = "dockBtn dockready";
+        btnDockReady.textContent = "Dock Ready";
+        btnDockReady.onclick = () => update(t, v.door || "", v.direction || "Inbound", "Dock Ready");
 
         wrap.appendChild(btnLoading);
-        wrap.appendChild(btnReady);
+        wrap.appendChild(btnDockReady);
         tdAction.appendChild(wrap);
       }
 
-      // Driver actions
+      // Driver: only MOVE when status is Ready
       if (isDriver){
-        // driver summary
-        driverInfo.innerHTML = `Checked in: <b>${t}</b> &nbsp; | &nbsp; Door: <b>${v.door || "NOT SET"}</b> &nbsp; | &nbsp; Status: <b>${v.status}</b>`;
+        driverInfo.innerHTML =
+          `Checked in: <b>${t}</b> &nbsp; | &nbsp; Door: <b>${v.door || "NOT SET"}</b> &nbsp; | &nbsp; Status: <b>${v.status}</b>`;
 
         if (v.status === "Ready"){
           const btn = document.createElement("button");
@@ -534,7 +536,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     render();
   }
 
-  // Dispatcher buttons
+  // Dispatcher add/update + clear
   if (!isDriver && !isDock){
     addBtn.onclick = () => {
       const t = trailerInp.value.trim();

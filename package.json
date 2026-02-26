@@ -1,7 +1,7 @@
 {
   "name": "wesbell-trailer-status",
   "version": "2.1.0",
-  "description": "Wesbell Logistics Trailer Status Board - Controlled Workflow (Incoming → Loading → Ready → Departed) with Driver Safety Confirmation, Auto-Archive, KPI Dashboard & SQLite Persistence",
+  "description": "Wesbell Logistics Trailer Status Board with Controlled Workflow, Driver Mode, Safety Confirmation, Auto-Archive and SQLite Persistence",
   "main": "server.js",
   "type": "commonjs",
   "private": true,
@@ -9,9 +9,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js",
-    "clean": "rm -f data.db",
-    "postinstall": "echo Installed successfully"
+    "dev": "node --watch server.js"
   },
   "engines": {
     "node": ">=20.0.0"

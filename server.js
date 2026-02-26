@@ -1,640 +1,564 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Wesbell Trailer Status</title>
+require("dotenv").config();
 
-<style>
-:root{
-  --bg0:#050814;
-  --bg2:#0b1430;
-  --line:rgba(120,145,220,.18);
-  --text:#eaf0ff;
-  --muted:#a7b2d3;
-  --good:#22c55e;
-  --warn:#f59e0b;
-  --bad:#ef4444;
-  --cool:#94a3b8;
-}
-*{box-sizing:border-box}
-body{
-  margin:0;
-  font-family:system-ui;
-  color:var(--text);
-  background:
-    radial-gradient(1000px 500px at 20% -10%, rgba(99,102,241,.35), transparent 60%),
-    linear-gradient(180deg,var(--bg0),var(--bg2));
-}
-.wrap{max-width:1200px;margin:auto;padding:20px}
-.topbar{
-  display:flex;justify-content:space-between;align-items:center;gap:12px;
-  padding:14px;border:1px solid var(--line);
-  border-radius:14px;background:rgba(255,255,255,.04)
-}
-.brand h1{margin:0;font-size:18px}
-.sub{font-size:12px;color:var(--muted)}
-.kpis{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end}
-.kpi{font-size:13px;color:var(--muted);white-space:nowrap}
-.kpi strong{color:#fff}
+const express = require("express");
+const http = require("http");
+const path = require("path");
+const WebSocket = require("ws");
+const sqlite3 = require("sqlite3").verbose();
+const helmet = require("helmet");
+const compression = require("compression");
 
-.card{
-  margin-top:14px;
-  border:1px solid var(--line);
-  border-radius:14px;
-  background:rgba(255,255,255,.04);
-  overflow:hidden;
-}
+const app = express();
 
-.controls{padding:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-input,select,button{
-  padding:8px 10px;
-  border-radius:8px;
-  border:1px solid var(--line);
-  background:#0c132a;
-  color:#fff;
-}
-button{cursor:pointer;font-weight:900}
-button.primary{background:rgba(99,102,241,.25)}
-button.danger{background:rgba(239,68,68,.25)}
+// Allow inline <script> in index.html (CSP off)
+app.use(
+  helmet({
+    contentSecurityPolicy: false
+  })
+);
 
-table{width:100%;border-collapse:collapse}
-thead th{
-  font-size:12px;color:var(--muted);
-  padding:12px;text-align:left;
-  border-bottom:1px solid var(--line)
-}
-tbody td{
-  padding:12px;
-  border-bottom:1px solid rgba(120,145,220,.12);
-  vertical-align:top;
-}
-tbody tr:hover{background:rgba(255,255,255,.03)}
+app.use(compression());
+app.use(express.json());
+app.use(express.static(__dirname));
 
-.tag{
-  padding:4px 8px;border-radius:999px;
-  font-size:12px;font-weight:900;
-  display:inline-block;
-}
-.good{background:rgba(34,197,94,.18);border:1px solid rgba(34,197,94,.35)}
-.warn{background:rgba(245,158,11,.18);border:1px solid rgba(245,158,11,.35)}
-.bad{background:rgba(239,68,68,.18);border:1px solid rgba(239,68,68,.35)}
-.cool{background:rgba(148,163,184,.18);border:1px solid rgba(148,163,184,.35)}
+// Simple request logging
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
 
-/* Driver move button */
-.readyBtn{
-  border:1px solid rgba(34,197,94,.45);
-  background:rgba(34,197,94,.18);
-  font-weight:950;
-}
-.flash{
-  animation:flash 1s infinite;
-  background:rgba(34,197,94,.32)!important;
-  border-color:rgba(34,197,94,.75)!important;
-}
-@keyframes flash{
-  0%{box-shadow:0 0 0 rgba(34,197,94,0)}
-  50%{box-shadow:0 0 12px rgba(34,197,94,.7)}
-  100%{box-shadow:0 0 0 rgba(34,197,94,0)}
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
+
+/**
+ * SQLite DB path:
+ * - Local default: ./data.db
+ * - Render persistent disk: set DB_PATH=/var/data/data.db
+ */
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data.db");
+const db = new sqlite3.Database(DB_PATH);
+
+// In-memory caches (fast rendering + websocket payload)
+let trailers = {};
+let confirmations = [];
+let dockPlates = {}; // door -> {status, note, updatedAt}
+
+/* ================================
+   HELPERS
+================================ */
+
+function broadcast(type, payload) {
+  const msg = JSON.stringify({ type, payload });
+  for (const client of wss.clients) {
+    if (client.readyState === WebSocket.OPEN) client.send(msg);
+  }
 }
 
-/* Dock buttons */
-.dockBtns{display:flex;gap:8px;flex-wrap:wrap}
-.dockBtn{
-  padding:10px 12px;
-  border-radius:10px;
-  border:1px solid var(--line);
-  background:rgba(255,255,255,.04);
-  font-weight:950;
-  min-width:130px;
+function cleanStr(v, maxLen) {
+  const s = String(v ?? "").trim();
+  if (!s) return "";
+  return s.length > maxLen ? s.slice(0, maxLen) : s;
 }
-.dockBtn.loading{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.18)}
-.dockBtn.dockready{border-color:rgba(148,163,184,.45);background:rgba(148,163,184,.18)}
-.dockBtn:active{transform:scale(.98)}
 
-/* Quick Tips */
-.tips{
-  padding:14px;
-  border-top:1px solid var(--line);
-  display:flex;gap:16px;flex-wrap:wrap
+function computeStats(board) {
+  const stats = {
+    total: 0,
+    byStatus: { Incoming: 0, Loading: 0, "Dock Ready": 0, Ready: 0, Departed: 0 },
+    byDirection: { Inbound: 0, Outbound: 0, "Cross Dock": 0 }
+  };
+
+  for (const [, v] of Object.entries(board)) {
+    stats.total += 1;
+    if (v.status && stats.byStatus[v.status] !== undefined) stats.byStatus[v.status] += 1;
+    if (v.direction && stats.byDirection[v.direction] !== undefined) stats.byDirection[v.direction] += 1;
+  }
+  return stats;
 }
-.tipBox{
-  flex:1;
-  min-width:260px;
-  border:1px solid rgba(120,145,220,.14);
-  border-radius:12px;
-  background:rgba(12,19,42,.45);
-  padding:12px;
+
+// Prevent stale index.html from being cached
+function noCache(res) {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
 }
-.tipBox h4{
-  margin:0 0 8px 0;
-  font-size:12px;
-  color:var(--muted);
-  text-transform:uppercase;
-  letter-spacing:.6px;
+
+/* ================================
+   SQLITE PROMISE HELPERS
+================================ */
+
+function dbRun(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function (err) {
+      if (err) reject(err);
+      else resolve(this);
+    });
+  });
 }
-.tipBox ul{margin:0;padding-left:18px;font-size:13px;color:var(--muted)}
-.tipBox li{margin:6px 0}
-.mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
-.badge{
-  display:inline-block;
-  padding:2px 8px;
-  border-radius:999px;
-  border:1px solid rgba(120,145,220,.25);
-  background:rgba(255,255,255,.04);
-  color:#fff;
+
+function dbAll(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows);
+    });
+  });
 }
-.driverInfo{
-  padding:0 14px 14px 14px;
-  color:var(--muted);
-  font-size:13px;
+
+/* ================================
+   DB INIT + CACHE RELOAD
+================================ */
+
+async function initDb() {
+  await dbRun(`PRAGMA journal_mode = WAL;`);
+  await dbRun(`PRAGMA synchronous = NORMAL;`);
+
+  // Trailers (with note)
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS trailers (
+      trailer TEXT PRIMARY KEY,
+      direction TEXT NOT NULL,
+      status TEXT NOT NULL,
+      door TEXT NOT NULL DEFAULT '',
+      note TEXT NOT NULL DEFAULT '',
+      updatedAt INTEGER NOT NULL
+    )
+  `);
+
+  // Upgrade older DBs safely
+  await dbRun(`ALTER TABLE trailers ADD COLUMN note TEXT NOT NULL DEFAULT ''`).catch(() => {});
+
+  // Driver confirmations
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS confirmations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      at INTEGER NOT NULL,
+      trailer TEXT NOT NULL DEFAULT '',
+      door TEXT NOT NULL DEFAULT '',
+      ip TEXT NOT NULL DEFAULT '',
+      userAgent TEXT NOT NULL DEFAULT ''
+    )
+  `);
+
+  // Dock plate maintenance
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS dockplates (
+      door TEXT PRIMARY KEY,
+      status TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      updatedAt INTEGER NOT NULL
+    )
+  `);
+
+  await reloadCachesFromDb();
 }
-.smallHint{color:var(--muted);font-size:12px}
 
-/* Dispatcher delete */
-.deleteBtn{
-  margin-left:8px;
-  background:rgba(239,68,68,.25);
-  border:1px solid rgba(239,68,68,.45);
-  font-weight:950;
-}
-.deleteBtn:active{transform:scale(.98)}
+async function reloadCachesFromDb() {
+  const trailerRows = await dbAll(`
+    SELECT trailer, direction, status, door, note, updatedAt
+    FROM trailers
+  `);
 
-/* Notes */
-.noteCell{
-  max-width:260px;
-  color:var(--muted);
-  font-size:12px;
-  white-space:pre-wrap;
-  word-break:break-word;
-}
-.noteBadge{
-  display:inline-block;
-  margin-top:6px;
-  padding:2px 8px;
-  border-radius:999px;
-  border:1px solid rgba(120,145,220,.25);
-  background:rgba(255,255,255,.04);
-  color:#fff;
-  font-size:11px;
-  font-weight:900;
-}
-</style>
-</head>
-
-<body>
-<div class="wrap">
-
-  <div class="topbar">
-    <div class="brand">
-      <h1>Wesbell Logistics</h1>
-      <div class="sub" id="modeLabel">Trailer Status Board</div>
-    </div>
-
-    <div class="kpis">
-      <span class="kpi">Total <strong id="kTotal">0</strong></span>
-      <span class="kpi">Ready <strong id="kReady">0</strong></span>
-      <span class="kpi">Dock Ready <strong id="kDockReady">0</strong></span>
-      <span class="kpi">Loading <strong id="kLoading">0</strong></span>
-      <span class="kpi">Incoming <strong id="kIncoming">0</strong></span>
-      <span class="kpi">Departed <strong id="kDeparted">0</strong></span>
-    </div>
-  </div>
-
-  <div class="card">
-
-    <!-- Dispatcher controls -->
-    <div class="controls" id="controls">
-      <input id="trailer" placeholder="Trailer #" />
-      <input id="door" placeholder="Dock Door" />
-      <select id="direction">
-        <option>Inbound</option>
-        <option>Outbound</option>
-        <option>Cross Dock</option>
-      </select>
-      <select id="status">
-        <option>Incoming</option>
-        <option>Loading</option>
-        <option>Dock Ready</option>
-        <option>Ready</option>
-      </select>
-      <input id="note" placeholder="Quick note (optional)" style="min-width:220px;" />
-      <button class="primary" id="addBtn">Add / Update</button>
-      <button class="danger" id="clearBtn">Clear All</button>
-      <span class="smallHint">Dock: <span class="badge mono">/dock</span> • Driver: <span class="badge mono">/driver</span></span>
-    </div>
-
-    <!-- Driver check-in -->
-    <div class="controls" id="driverCheckin" style="display:none;">
-      <input id="driverTrailer" placeholder="Enter your Trailer # (ex: 1850)" />
-      <button class="primary" id="driverSetBtn">Check In</button>
-      <button id="driverClearBtn">Change</button>
-      <span class="smallHint">Saved on this device.</span>
-    </div>
-
-    <div class="driverInfo" id="driverInfo" style="display:none;"></div>
-
-    <table>
-      <thead>
-        <tr>
-          <th>Trailer</th>
-          <th>Door</th>
-          <th>Direction</th>
-          <th>Status</th>
-          <th>Note</th>
-          <th id="actionHeader">Actions</th>
-        </tr>
-      </thead>
-      <tbody id="tbody"></tbody>
-    </table>
-
-    <div class="tips">
-      <div class="tipBox">
-        <h4>Quick Tips</h4>
-        <ul id="tipsLeft"></ul>
-      </div>
-      <div class="tipBox">
-        <h4>Workflow</h4>
-        <ul id="tipsRight"></ul>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-<script>
-(() => {
-  const qsMode = (new URLSearchParams(location.search).get("mode") || "").toLowerCase();
-  const pathMode = location.pathname.toLowerCase();
-
-  const isDriver = pathMode.includes("/driver") || qsMode === "driver";
-  const isDock   = pathMode.includes("/dock")   || qsMode === "dock";
-
-  // DOM refs
-  const modeLabel = document.getElementById("modeLabel");
-  const controls = document.getElementById("controls");
-  const actionHeader = document.getElementById("actionHeader");
-  const tbody = document.getElementById("tbody");
-
-  const kTotal = document.getElementById("kTotal");
-  const kReady = document.getElementById("kReady");
-  const kDockReady = document.getElementById("kDockReady");
-  const kLoading = document.getElementById("kLoading");
-  const kIncoming = document.getElementById("kIncoming");
-  const kDeparted = document.getElementById("kDeparted");
-
-  const tipsLeft = document.getElementById("tipsLeft");
-  const tipsRight = document.getElementById("tipsRight");
-
-  const trailerInp = document.getElementById("trailer");
-  const doorInp = document.getElementById("door");
-  const directionSel = document.getElementById("direction");
-  const statusSel = document.getElementById("status");
-  const noteInp = document.getElementById("note");
-  const addBtn = document.getElementById("addBtn");
-  const clearBtn = document.getElementById("clearBtn");
-
-  // Driver check-in
-  const driverCheckin = document.getElementById("driverCheckin");
-  const driverTrailerInp = document.getElementById("driverTrailer");
-  const driverSetBtn = document.getElementById("driverSetBtn");
-  const driverClearBtn = document.getElementById("driverClearBtn");
-  const driverInfo = document.getElementById("driverInfo");
-
-  let driverTrailer = localStorage.getItem("driver_trailer") || "";
-  let state = {};
-  let ackMap = JSON.parse(localStorage.getItem("driver_ack") || "{}");
-
-  // Mode UI
-  if (isDriver){
-    controls.style.display = "none";
-    driverCheckin.style.display = "flex";
-    driverInfo.style.display = "block";
-    actionHeader.textContent = "Move";
-    modeLabel.textContent = "Driver Mode";
-    if (driverTrailer) driverTrailerInp.value = driverTrailer;
-
-    driverSetBtn.onclick = () => {
-      const t = driverTrailerInp.value.trim();
-      if (!t) return alert("Enter your trailer # to check in.");
-      driverTrailer = t;
-      localStorage.setItem("driver_trailer", driverTrailer);
-      load();
+  trailers = {};
+  for (const r of trailerRows) {
+    trailers[r.trailer] = {
+      direction: r.direction,
+      status: r.status,
+      door: r.door || "",
+      note: r.note || "",
+      updatedAt: r.updatedAt || 0
     };
+  }
 
-    driverClearBtn.onclick = () => {
-      localStorage.removeItem("driver_trailer");
-      driverTrailer = "";
-      driverTrailerInp.value = "";
-      driverInfo.textContent = "";
-      load();
+  const confRows = await dbAll(`
+    SELECT at, trailer, door, ip, userAgent
+    FROM confirmations
+    ORDER BY id DESC
+    LIMIT 200
+  `);
+
+  confirmations = confRows.map(r => ({
+    at: r.at,
+    trailer: r.trailer || "",
+    door: r.door || "",
+    ip: r.ip || "",
+    userAgent: r.userAgent || ""
+  }));
+
+  const plateRows = await dbAll(`SELECT door, status, note, updatedAt FROM dockplates`);
+  dockPlates = {};
+  for (const r of plateRows) {
+    dockPlates[r.door] = {
+      status: r.status,
+      note: r.note || "",
+      updatedAt: r.updatedAt || 0
     };
-  } else if (isDock){
-    controls.style.display = "none";
-    driverCheckin.style.display = "none";
-    driverInfo.style.display = "none";
-    actionHeader.textContent = "Dock Update";
-    modeLabel.textContent = "Dock Mode";
-  } else {
-    modeLabel.textContent = "Dispatcher Mode";
   }
+}
 
-  function statusClass(s){
-    if (s === "Ready") return "good";
-    if (s === "Loading") return "warn";
-    if (s === "Incoming") return "bad";
-    return "cool"; // Dock Ready / Departed
+/* ================================
+   ROUTES
+================================ */
+
+// Dispatcher
+app.get("/", (req, res) => {
+  noCache(res);
+  res.sendFile(path.join(__dirname, "index.html"));
+});
+
+// Driver
+app.get("/driver", (req, res) => {
+  noCache(res);
+  res.sendFile(path.join(__dirname, "index.html"));
+});
+
+// Dock
+app.get("/dock", (req, res) => {
+  noCache(res);
+  res.sendFile(path.join(__dirname, "index.html"));
+});
+
+app.get("/health", (req, res) => {
+  res.json({ ok: true, db: DB_PATH });
+});
+
+// APIs
+app.get("/api/state", (req, res) => res.json(trailers));
+app.get("/api/stats", (req, res) => res.json(computeStats(trailers)));
+app.get("/api/confirmations", (req, res) => res.json(confirmations));
+app.get("/api/dockplates", (req, res) => res.json(dockPlates));
+
+/* ================================
+   DOCK PLATES (MAINTENANCE)
+================================ */
+
+app.post("/api/dockplates/set", async (req, res) => {
+  try {
+    const door = cleanStr(req.body?.door, 20).toUpperCase();
+    const status = cleanStr(req.body?.status, 20);
+    const note = cleanStr(req.body?.note, 200);
+
+    if (!door) return res.status(400).send("Door required");
+
+    const allowed = ["OK", "Service"];
+    if (!allowed.includes(status)) return res.status(400).send("Invalid status");
+
+    const updatedAt = Date.now();
+
+    await dbRun(
+      `INSERT INTO dockplates (door, status, note, updatedAt)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(door) DO UPDATE SET
+         status=excluded.status,
+         note=excluded.note,
+         updatedAt=excluded.updatedAt`,
+      [door, status, note, updatedAt]
+    );
+
+    dockPlates[door] = { status, note, updatedAt };
+    broadcast("dockplates", dockPlates);
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("dockplates/set error:", err);
+    res.status(500).send("Server error");
   }
+});
 
-  function setTips(){
-    const base = location.origin;
+// Management view
+app.get("/maintenance", (req, res) => {
+  res.send(`
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width,initial-scale=1"/>
+      <title>Maintenance - Dock Plates</title>
+      <style>
+        body{font-family:system-ui;background:#0b1220;color:#eaf0ff;margin:0;padding:20px}
+        h1{margin:0 0 8px 0}
+        .muted{color:#a9b4d0;font-size:13px}
+        table{width:100%;border-collapse:collapse;margin-top:12px}
+        th,td{padding:10px;border-bottom:1px solid #263454;text-align:left;font-size:13px}
+        th{color:#a9b4d0;font-size:12px}
+        .ok{color:#22c55e;font-weight:900}
+        .svc{color:#f59e0b;font-weight:900}
+      </style>
+    </head>
+    <body>
+      <h1>Dock Plate Status</h1>
+      <div class="muted">Live list (doors marked by Dock). Refreshes every 5s.</div>
 
-    if (!isDriver && !isDock){
-      tipsLeft.innerHTML = `
-        <li><b>2-step Ready:</b> Dock sets <b>Dock Ready</b>, Dispatch sets <b>Ready</b> (driver sees).</li>
-        <li>Use <b>Quick note</b> for issues like missing seal, paperwork, etc.</li>
-        <li>Driver link: <span class="badge mono">${base}/driver</span></li>
-      `;
-      tipsRight.innerHTML = `
-        <li>Dock link: <span class="badge mono">${base}/dock</span></li>
-        <li>Incoming → Loading → Dock Ready → <b>Ready</b> → Departed</li>
-        <li>Clear All is shared — use carefully.</li>
-      `;
-    } else if (isDock){
-      tipsLeft.innerHTML = `
-        <li>Dock can set <b>Loading</b> or <b>Dock Ready</b>.</li>
-        <li>Dispatcher must set <b>Ready</b> for driver to move.</li>
-        <li>Add notes from dispatch side if needed.</li>
-      `;
-      tipsRight.innerHTML = `
-        <li>This updates the shared board for everyone.</li>
-        <li>Use Dock Ready when dock is completed.</li>
-      `;
-    } else {
-      tipsLeft.innerHTML = `
-        <li>You only get MOVE when dispatch sets <b>Ready</b>.</li>
-        <li>Flashing green = <b>NEW READY</b>.</li>
-        <li>Notes appear in your trailer row.</li>
-      `;
-      tipsRight.innerHTML = `
-        <li>Confirm Load Secured</li>
-        <li>Confirm Dock Plate Up → Departed</li>
-      `;
-    }
-  }
+      <table>
+        <thead>
+          <tr><th>Door</th><th>Status</th><th>Note</th><th>Last Updated</th></tr>
+        </thead>
+        <tbody id="tb"></tbody>
+      </table>
 
-  function updateKPIs(){
-    const c = { Incoming:0, Loading:0, "Dock Ready":0, Ready:0, Departed:0 };
-    Object.values(state).forEach(v => { if (c[v.status] !== undefined) c[v.status]++; });
+      <script>
+        async function load(){
+          const res = await fetch('/api/dockplates');
+          const data = await res.json();
+          const rows = Object.entries(data).sort((a,b)=>a[0].localeCompare(b[0]));
+          const tb = document.getElementById('tb');
+          tb.innerHTML = '';
+          rows.forEach(([door, v])=>{
+            const tr = document.createElement('tr');
+            const when = v.updatedAt ? new Date(v.updatedAt).toLocaleString() : '';
+            const cls = v.status === 'OK' ? 'ok' : 'svc';
+            tr.innerHTML =
+              '<td><b>'+door+'</b></td>'+
+              '<td class="'+cls+'">'+v.status+'</td>'+
+              '<td>'+(v.note||'')+'</td>'+
+              '<td>'+when+'</td>';
+            tb.appendChild(tr);
+          });
 
-    kTotal.textContent = String(Object.keys(state).length);
-    kReady.textContent = String(c.Ready);
-    kDockReady.textContent = String(c["Dock Ready"]);
-    kLoading.textContent = String(c.Loading);
-    kIncoming.textContent = String(c.Incoming);
-    kDeparted.textContent = String(c.Departed);
-  }
-
-  async function update(trailer, door, direction, status, note){
-    const res = await fetch("/api/upsert", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ trailer, door, direction, status, note })
-    });
-    if (!res.ok){
-      const t = await res.text();
-      alert("Update failed: " + t);
-    }
-    await load();
-  }
-
-  async function deleteTrailer(trailer){
-    const ok = confirm(`Delete trailer ${trailer}?`);
-    if (!ok) return;
-
-    const res = await fetch("/api/delete", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ trailer })
-    });
-
-    if (!res.ok){
-      const t = await res.text();
-      alert("Delete failed: " + t);
-    }
-    await load();
-  }
-
-  async function confirmMove(trailer, v){
-    const ok1 = confirm("STEP 1/2: Confirm the LOAD is SECURED.");
-    if (!ok1) return;
-
-    const ok2 = confirm("STEP 2/2: Confirm the DOCK PLATE is UP.");
-    if (!ok2) return;
-
-    const res = await fetch("/api/confirm-safety", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({
-        trailer,
-        door: v.door || "",
-        loadSecured: true,
-        dockPlateUp: true
-      })
-    });
-
-    if (!res.ok){
-      const t = await res.text();
-      alert("Safety confirm failed: " + t);
-      return;
-    }
-
-    ackMap[trailer] = v.updatedAt;
-    localStorage.setItem("driver_ack", JSON.stringify(ackMap));
-
-    await update(trailer, v.door || "", v.direction || "Inbound", "Departed", v.note || "");
-  }
-
-  function render(){
-    tbody.innerHTML = "";
-
-    let entries = Object.entries(state);
-
-    // Dock mode: show only Loading + Dock Ready
-    if (isDock){
-      entries = entries.filter(([_, v]) => v.status === "Loading" || v.status === "Dock Ready");
-    }
-
-    // Driver: must check in; only see own trailer
-    if (isDriver){
-      if (!driverTrailer){
-        tbody.innerHTML = `<tr><td colspan="6" style="color:var(--muted);padding:14px;">
-          Enter your trailer # above to see your dock door.
-        </td></tr>`;
-        updateKPIs();
-        return;
-      }
-      entries = entries.filter(([t]) => t === driverTrailer);
-
-      if (entries.length === 0){
-        tbody.innerHTML = `<tr><td colspan="6" style="color:var(--muted);padding:14px;">
-          Trailer "${driverTrailer}" not found on board. Call dispatch.
-        </td></tr>`;
-        updateKPIs();
-        return;
-      }
-    }
-
-    // Sort: Ready first, Dock Ready second, then Loading, Incoming, Departed
-    const rank = (s)=> s==="Ready" ? 0 : (s==="Dock Ready" ? 1 : (s==="Loading" ? 2 : (s==="Incoming" ? 3 : 4)));
-    entries.sort((a,b)=>{
-      const av=a[1], bv=b[1];
-      return (rank(av.status)-rank(bv.status)) || String(a[0]).localeCompare(String(b[0]));
-    });
-
-    if (entries.length === 0){
-      tbody.innerHTML = `<tr><td colspan="6" style="color:var(--muted);padding:14px;">No trailers.</td></tr>`;
-      updateKPIs();
-      return;
-    }
-
-    for (const [t, v] of entries){
-      const tr = document.createElement("tr");
-
-      tr.innerHTML = `
-        <td><b>${t}</b></td>
-        <td>${v.door || "-"}</td>
-        <td>${v.direction || ""}</td>
-        <td><span class="tag ${statusClass(v.status)}">${v.status || ""}</span></td>
-        <td class="noteCell">${(v.note && v.note.trim()) ? v.note : "-"}</td>
-      `;
-
-      const tdAction = document.createElement("td");
-
-      // Dispatcher actions (status dropdown + delete + edit note)
-      if (!isDriver && !isDock){
-        const sel = document.createElement("select");
-        ["Incoming","Loading","Dock Ready","Ready"].forEach(s=>{
-          const o = document.createElement("option");
-          o.value = s;
-          o.textContent = s;
-          sel.appendChild(o);
-        });
-        sel.value = (v.status === "Departed") ? "Ready" : v.status;
-        sel.onchange = () => update(t, v.door || "", v.direction || "Inbound", sel.value, v.note || "");
-
-        const editNoteBtn = document.createElement("button");
-        editNoteBtn.className = "primary";
-        editNoteBtn.textContent = "Edit Note";
-        editNoteBtn.style.marginLeft = "8px";
-        editNoteBtn.onclick = () => {
-          const newNote = prompt(`Quick note for ${t}:`, v.note || "");
-          if (newNote === null) return;
-          update(t, v.door || "", v.direction || "Inbound", v.status || "Incoming", String(newNote).trim());
-        };
-
-        const del = document.createElement("button");
-        del.className = "deleteBtn";
-        del.textContent = "Delete";
-        del.onclick = () => deleteTrailer(t);
-
-        tdAction.appendChild(sel);
-        tdAction.appendChild(editNoteBtn);
-        tdAction.appendChild(del);
-      }
-
-      // Dock actions: ONLY Loading + Dock Ready + add note prompt
-      if (isDock){
-        const wrap = document.createElement("div");
-        wrap.className = "dockBtns";
-
-        const btnLoading = document.createElement("button");
-        btnLoading.className = "dockBtn loading";
-        btnLoading.textContent = "Loading";
-        btnLoading.onclick = () => update(t, v.door || "", v.direction || "Inbound", "Loading", v.note || "");
-
-        const btnDockReady = document.createElement("button");
-        btnDockReady.className = "dockBtn dockready";
-        btnDockReady.textContent = "Dock Ready";
-        btnDockReady.onclick = () => update(t, v.door || "", v.direction || "Inbound", "Dock Ready", v.note || "");
-
-        const noteBtn = document.createElement("button");
-        noteBtn.className = "primary";
-        noteBtn.textContent = "Add Note";
-        noteBtn.onclick = () => {
-          const newNote = prompt(`Quick note for ${t}:`, v.note || "");
-          if (newNote === null) return;
-          update(t, v.door || "", v.direction || "Inbound", v.status || "Loading", String(newNote).trim());
-        };
-
-        wrap.appendChild(btnLoading);
-        wrap.appendChild(btnDockReady);
-        wrap.appendChild(noteBtn);
-
-        tdAction.appendChild(wrap);
-      }
-
-      // Driver actions: MOVE only when dispatcher sets Ready
-      if (isDriver){
-        driverInfo.innerHTML =
-          `Checked in: <b>${t}</b> &nbsp; | &nbsp; Door: <b>${v.door || "NOT SET"}</b> &nbsp; | &nbsp; Status: <b>${v.status}</b>`;
-
-        if (v.status === "Ready"){
-          const btn = document.createElement("button");
-          const isNewReady = ackMap[t] !== v.updatedAt;
-          btn.className = "readyBtn" + (isNewReady ? " flash" : "");
-          btn.textContent = isNewReady ? "NEW READY • MOVE" : "READY • MOVE";
-          btn.onclick = () => confirmMove(t, v);
-          tdAction.appendChild(btn);
-        } else {
-          tdAction.textContent = "-";
+          if(rows.length===0){
+            tb.innerHTML = '<tr><td colspan="4" style="color:#a9b4d0;">No dock plate reports yet.</td></tr>';
+          }
         }
-      }
+        load();
+        setInterval(load, 5000);
+      </script>
+    </body>
+    </html>
+  `);
+});
 
-      tr.appendChild(tdAction);
-      tbody.appendChild(tr);
+/* ================================
+   SAFETY CONFIRM (PERSISTED)
+================================ */
+
+app.post("/api/confirm-safety", async (req, res) => {
+  try {
+    const trailer = cleanStr(req.body?.trailer, 20);
+    const door = cleanStr(req.body?.door, 20);
+    const loadSecured = !!req.body?.loadSecured;
+    const dockPlateUp = !!req.body?.dockPlateUp;
+
+    if (!loadSecured || !dockPlateUp) {
+      return res.status(400).send("Both confirmations required");
     }
 
-    updateKPIs();
+    const ip =
+      (req.headers["x-forwarded-for"]?.split(",")[0]?.trim()) ||
+      req.socket.remoteAddress ||
+      "";
+
+    const at = Date.now();
+    const userAgent = req.headers["user-agent"] || "";
+
+    await dbRun(
+      `INSERT INTO confirmations (at, trailer, door, ip, userAgent) VALUES (?, ?, ?, ?, ?)`,
+      [at, trailer, door, ip, userAgent]
+    );
+
+    const confRows = await dbAll(`
+      SELECT at, trailer, door, ip, userAgent
+      FROM confirmations
+      ORDER BY id DESC
+      LIMIT 200
+    `);
+
+    confirmations = confRows.map(r => ({
+      at: r.at,
+      trailer: r.trailer || "",
+      door: r.door || "",
+      ip: r.ip || "",
+      userAgent: r.userAgent || ""
+    }));
+
+    broadcast("confirmations", confirmations);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("confirm-safety error:", err);
+    res.status(500).send("Server error");
   }
+});
 
-  async function load(){
-    const res = await fetch("/api/state");
-    state = await res.json();
-    render();
+/* ================================
+   UPSERT TRAILER (PERSISTED + NOTE)
+================================ */
+
+app.post("/api/upsert", async (req, res) => {
+  try {
+    const trailer = cleanStr(req.body?.trailer, 20);
+    const direction = cleanStr(req.body?.direction, 30);
+    const status = cleanStr(req.body?.status, 30);
+    const door = cleanStr(req.body?.door, 20);
+    const note = cleanStr(req.body?.note, 200);
+
+    if (!trailer) return res.status(400).send("Trailer required");
+
+    const allowedDir = ["Inbound", "Outbound", "Cross Dock"];
+    const allowedStatus = ["Incoming", "Loading", "Dock Ready", "Ready", "Departed"];
+
+    if (!allowedDir.includes(direction)) return res.status(400).send("Invalid direction");
+    if (!allowedStatus.includes(status)) return res.status(400).send("Invalid status");
+
+    // Preserve old note if caller sends empty (so dropdown changes don't wipe notes)
+    const prev = trailers[trailer] || {};
+    const finalNote = (note !== "") ? note : (prev.note || "");
+
+    const updatedAt = Date.now();
+
+    await dbRun(
+      `INSERT INTO trailers (trailer, direction, status, door, note, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(trailer) DO UPDATE SET
+         direction=excluded.direction,
+         status=excluded.status,
+         door=excluded.door,
+         note=excluded.note,
+         updatedAt=excluded.updatedAt`,
+      [trailer, direction, status, door, finalNote, updatedAt]
+    );
+
+    trailers[trailer] = { direction, status, door: door || "", note: finalNote || "", updatedAt };
+
+    broadcast("state", trailers);
+    broadcast("stats", computeStats(trailers));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("upsert error:", err);
+    res.status(500).send("Server error");
   }
+});
 
-  // Dispatcher add/update + clear
-  if (!isDriver && !isDock){
-    addBtn.onclick = () => {
-      const t = trailerInp.value.trim();
-      if (!t) return;
+/* ================================
+   DELETE / CLEAR
+================================ */
 
-      update(
-        t,
-        doorInp.value.trim(),
-        directionSel.value,
-        statusSel.value,
-        noteInp.value.trim()
-      );
+app.post("/api/delete", async (req, res) => {
+  try {
+    const trailer = cleanStr(req.body?.trailer, 20);
+    if (!trailer) return res.status(400).send("Trailer required");
 
-      trailerInp.value = "";
-      doorInp.value = "";
-      noteInp.value = "";
-    };
+    await dbRun(`DELETE FROM trailers WHERE trailer = ?`, [trailer]);
+    delete trailers[trailer];
 
-    clearBtn.onclick = () => {
-      const ok = confirm("Clear ALL trailers for everyone?");
-      if (!ok) return;
-      fetch("/api/clear", { method:"POST" }).then(load);
-    };
+    broadcast("state", trailers);
+    broadcast("stats", computeStats(trailers));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("delete error:", err);
+    res.status(500).send("Server error");
   }
+});
 
-  setTips();
-  load();
-  setInterval(load, 3000);
-})();
-</script>
+app.post("/api/clear", async (req, res) => {
+  try {
+    await dbRun(`DELETE FROM trailers`);
+    trailers = {};
 
-</body>
-</html>
+    broadcast("state", trailers);
+    broadcast("stats", computeStats(trailers));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("clear error:", err);
+    res.status(500).send("Server error");
+  }
+});
+
+/* ================================
+   SUPERVISOR PAGE
+================================ */
+
+app.get("/supervisor", (req, res) => {
+  res.send(`
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width,initial-scale=1"/>
+      <title>Supervisor - Confirmations</title>
+      <style>
+        body{font-family:system-ui;background:#0b1220;color:#eaf0ff;margin:0;padding:20px}
+        h1{margin:0 0 10px 0}
+        table{width:100%;border-collapse:collapse;margin-top:12px}
+        th,td{padding:10px;border-bottom:1px solid #263454;text-align:left;font-size:13px}
+        th{color:#a9b4d0;font-size:12px}
+      </style>
+    </head>
+    <body>
+      <h1>Driver Safety Confirmations</h1>
+      <div style="color:#a9b4d0;font-size:13px;">Live log (latest first)</div>
+      <table>
+        <thead>
+          <tr><th>Time</th><th>Trailer</th><th>Door</th><th>IP</th></tr>
+        </thead>
+        <tbody id="tb"></tbody>
+      </table>
+      <script>
+        async function load(){
+          const res = await fetch('/api/confirmations');
+          const data = await res.json();
+          const tb = document.getElementById('tb');
+          tb.innerHTML = '';
+          data.forEach(x=>{
+            const tr = document.createElement('tr');
+            const t = new Date(x.at).toLocaleString();
+            tr.innerHTML =
+              '<td>'+t+'</td>'+
+              '<td>'+(x.trailer||'')+'</td>'+
+              '<td>'+(x.door||'')+'</td>'+
+              '<td>'+(x.ip||'')+'</td>';
+            tb.appendChild(tr);
+          });
+        }
+        load();
+        setInterval(load, 3000);
+      </script>
+    </body>
+    </html>
+  `);
+});
+
+/* ================================
+   AUTO-ARCHIVE DEPARTED
+================================ */
+
+setInterval(async () => {
+  try {
+    const cutoff = Date.now() - 15 * 60 * 1000;
+    await dbRun(`DELETE FROM trailers WHERE status='Departed' AND updatedAt < ?`, [cutoff]);
+
+    await reloadCachesFromDb();
+    broadcast("state", trailers);
+    broadcast("stats", computeStats(trailers));
+    broadcast("dockplates", dockPlates);
+  } catch (err) {
+    console.error("Auto-archive error:", err);
+  }
+}, 60 * 1000);
+
+/* ================================
+   WEBSOCKET
+================================ */
+
+wss.on("connection", (ws) => {
+  ws.send(JSON.stringify({ type: "state", payload: trailers }));
+  ws.send(JSON.stringify({ type: "confirmations", payload: confirmations }));
+  ws.send(JSON.stringify({ type: "stats", payload: computeStats(trailers) }));
+  ws.send(JSON.stringify({ type: "dockplates", payload: dockPlates }));
+});
+
+/* ================================
+   START
+================================ */
+
+const PORT = process.env.PORT || 3000;
+
+initDb()
+  .then(() => {
+    server.listen(PORT, () => {
+      console.log("Running on port", PORT);
+      console.log("Dispatcher: /");
+      console.log("Dock: /dock");
+      console.log("Driver: /driver");
+      console.log("Supervisor: /supervisor");
+      console.log("Maintenance: /maintenance");
+      console.log("SQLite DB:", DB_PATH);
+    });
+  })
+  .catch((err) => {
+    console.error("DB init failed:", err);
+    process.exit(1);
+  });

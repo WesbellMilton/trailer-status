@@ -1,7 +1,7 @@
 {
   "name": "trailer-status",
   "version": "1.0.0",
-  "description": "Trailer Status Board with Dock Door, KPI Dashboard, Driver Safety Confirmation & Supervisor Log",
+  "description": "Trailer Status Board with Dock Door, KPI Dashboard, Driver Safety Confirmation & Supervisor Log (SQLite)",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "express": "^4.19.2",
+    "sqlite3": "^5.1.7",
     "ws": "^8.17.0"
   }
 }

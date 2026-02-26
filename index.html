@@ -9,7 +9,6 @@
   :root{
     --bg0:#050814;
     --bg2:#0b1430;
-    --card:rgba(14,20,44,.78);
     --line:rgba(120,145,220,.18);
     --text:#eaf0ff;
     --muted:#a7b2d3;
@@ -17,6 +16,7 @@
     --good:#22c55e;
     --warn:#f59e0b;
     --bad:#ef4444;
+    --cool:#94a3b8;
 
     --shadow: 0 12px 40px rgba(0,0,0,.35);
     --radius: 18px;
@@ -168,6 +168,31 @@
   .good{background: rgba(34,197,94,.18); border:1px solid rgba(34,197,94,.35); color:#b9ffd0;}
   .warn{background: rgba(245,158,11,.16); border:1px solid rgba(245,158,11,.35); color:#ffe2b6;}
   .bad{background: rgba(239,68,68,.16); border:1px solid rgba(239,68,68,.35); color:#ffb9b9;}
+  .cool{background: rgba(148,163,184,.14); border:1px solid rgba(148,163,184,.30); color:#d7deea;}
+
+  /* Static green READY button */
+  .ready-green{
+    background: rgba(34,197,94,.14) !important;
+    border-color: rgba(34,197,94,.35) !important;
+    color: #b9ffd0 !important;
+  }
+
+  /* Flashing green ONLY for "newly ready" */
+  .flash-green{
+    background: rgba(34,197,94,.18) !important;
+    border-color: rgba(34,197,94,.60) !important;
+    color: #b9ffd0 !important;
+    animation: flashGreen 1.05s infinite;
+  }
+  @keyframes flashGreen{
+    0%   { box-shadow: 0 0 0 rgba(34,197,94,0); transform: translateY(0); }
+    45%  { box-shadow: 0 0 18px rgba(34,197,94,.60); transform: translateY(-1px); }
+    100% { box-shadow: 0 0 0 rgba(34,197,94,0); transform: translateY(0); }
+  }
+
+  /* SLA row highlighting (Ready aging) */
+  .sla-warn{ background: rgba(245,158,11,.10); }
+  .sla-bad{ background: rgba(239,68,68,.10); }
 
   /* Safety modal */
   .overlay{
@@ -201,11 +226,12 @@
       <div class="sub">Trailer Status Board</div>
     </div>
 
-    <div class="pillbar" id="kpis">
+    <div class="pillbar">
       <div class="kpi"><span>Total</span> <strong id="kpiTotal">0</strong></div>
       <div class="kpi"><span>Ready</span> <strong id="kpiReady">0</strong></div>
       <div class="kpi"><span>Loading</span> <strong id="kpiLoading">0</strong></div>
       <div class="kpi"><span>Incoming</span> <strong id="kpiIncoming">0</strong></div>
+      <div class="kpi"><span>Departed</span> <strong id="kpiDeparted">0</strong></div>
       <div class="kpi"><span>Inbound</span> <strong id="kpiInbound">0</strong></div>
       <div class="kpi"><span>Outbound</span> <strong id="kpiOutbound">0</strong></div>
       <div class="kpi"><span>Cross Dock</span> <strong id="kpiCross">0</strong></div>
@@ -256,7 +282,8 @@
               <th style="min-width:120px;">Door</th>
               <th style="min-width:120px;">Direction</th>
               <th style="min-width:120px;">Status</th>
-              <th id="actionsHeader" style="min-width:180px;">Actions</th>
+              <th style="min-width:120px;">Ready Age</th>
+              <th id="actionsHeader" style="min-width:220px;">Actions</th>
             </tr>
           </thead>
           <tbody id="tbody"></tbody>
@@ -266,18 +293,20 @@
 
     <div class="card">
       <div class="cardHeader">
-        <div class="title">Info</div>
-        <div class="hint">Ops flow</div>
+        <div class="title">Workflow</div>
+        <div class="hint">10/10 Mode</div>
       </div>
       <div style="padding:14px 16px;color:var(--muted);font-size:13px;line-height:1.45;">
         <div style="margin-bottom:10px;">
-          <strong style="color:var(--text)">Dispatcher:</strong> Set trailer + door, mark trailer <strong style="color:var(--text)">Ready</strong> when it can move.
+          <strong style="color:var(--text)">Dispatcher:</strong> Incoming → Loading → <strong style="color:var(--text)">Ready</strong>
         </div>
         <div style="margin-bottom:10px;">
-          <strong style="color:var(--text)">Driver:</strong> Open <span class="mono">?mode=driver</span> and click <strong style="color:var(--text)">Move Trailer</strong> on Ready trailers.
+          <strong style="color:var(--text)">Driver:</strong> Open <span class="mono">?mode=driver</span>.
+          Only trailers that <strong style="color:var(--text)">JUST became Ready</strong> will flash.
+          Confirm safety → trailer becomes <strong style="color:var(--text)">Departed</strong>.
         </div>
-        <div style="opacity:.85">
-          Safety prompt appears only when trailer is Ready and driver clicks Move.
+        <div style="opacity:.9">
+          SLA: Ready ≥ 30 min = yellow • Ready ≥ 60 min = red
         </div>
       </div>
     </div>
@@ -296,6 +325,77 @@
   let searchText = "";
   let activeFilter = "All";
 
+  // ===== Driver flashing logic (newly Ready only) =====
+  const LS_ACK_KEY = "driver_ready_ack_v1";       // map trailer -> updatedAt we already "acknowledged"
+  const LS_INIT_KEY = "driver_ready_init_v1";     // boolean: first time init done
+  let ackMap = {}; // { "1850": 1700000000000 }
+
+  function loadAckMap(){
+    try{
+      ackMap = JSON.parse(localStorage.getItem(LS_ACK_KEY) || "{}") || {};
+    }catch{
+      ackMap = {};
+    }
+  }
+  function saveAckMap(){
+    try{
+      localStorage.setItem(LS_ACK_KEY, JSON.stringify(ackMap));
+    }catch{}
+  }
+  function hasInit(){
+    return localStorage.getItem(LS_INIT_KEY) === "1";
+  }
+  function setInit(){
+    try{ localStorage.setItem(LS_INIT_KEY, "1"); }catch{}
+  }
+
+  // On first ever driver load, mark ALL current Ready trailers as "acknowledged"
+  // so the page doesn't flash everything that was already ready.
+  function driverInitialAcknowledgeIfNeeded(board){
+    if (!isDriver) return;
+    if (hasInit()) return;
+
+    for (const [tr, v] of Object.entries(board)){
+      if ((v.status || "") === "Ready"){
+        ackMap[tr] = Number(v.updatedAt || 0) || 0;
+      }
+    }
+    saveAckMap();
+    setInit();
+  }
+
+  // should a Ready trailer flash right now?
+  function shouldFlashReady(trailer, updatedAt){
+    if (!isDriver) return false;
+    const ts = Number(updatedAt || 0) || 0;
+    if (!ts) return false;
+    // Flash if we have NOT acknowledged this specific Ready event (updatedAt)
+    return ackMap[trailer] !== ts;
+  }
+
+  // when driver "handles" it (confirms safety OR just wants to stop flashing)
+  function acknowledgeReady(trailer, updatedAt){
+    const ts = Number(updatedAt || 0) || 0;
+    if (!ts) return;
+    ackMap[trailer] = ts;
+    saveAckMap();
+  }
+
+  // cleanup ackMap so it doesn't grow forever
+  function cleanupAckMap(board){
+    const now = Date.now();
+    for (const [tr, ts] of Object.entries(ackMap)){
+      const v = board[tr];
+      // if trailer no longer exists OR no longer Ready, keep it but prune if old
+      if (!v || v.status !== "Ready"){
+        if (now - Number(ts || 0) > 7 * 24 * 60 * 60 * 1000) { // 7 days
+          delete ackMap[tr];
+        }
+      }
+    }
+    saveAckMap();
+  }
+
   function escapeHtml(str){
     return String(str ?? "")
       .replaceAll("&","&amp;")
@@ -306,11 +406,18 @@
   }
 
   function statusClass(s){
-    return s === "Ready" ? "good" : (s === "Loading" ? "warn" : "bad");
+    if (s === "Ready") return "good";
+    if (s === "Loading") return "warn";
+    if (s === "Incoming") return "bad";
+    return "cool"; // Departed (or anything else)
   }
 
   function statusRank(s){
-    return s === "Ready" ? 0 : (s === "Loading" ? 1 : 2);
+    if (s === "Ready") return 0;
+    if (s === "Loading") return 1;
+    if (s === "Incoming") return 2;
+    if (s === "Departed") return 3;
+    return 9;
   }
 
   function setChipActive(filter){
@@ -324,7 +431,7 @@
   function computeKPIs(board){
     const k = {
       total: 0,
-      Ready: 0, Loading: 0, Incoming: 0,
+      Incoming: 0, Loading: 0, Ready: 0, Departed: 0,
       Inbound: 0, Outbound: 0, "Cross Dock": 0
     };
     for (const [, v] of Object.entries(board)){
@@ -341,19 +448,34 @@
     document.getElementById("kpiReady").textContent = k.Ready;
     document.getElementById("kpiLoading").textContent = k.Loading;
     document.getElementById("kpiIncoming").textContent = k.Incoming;
+    document.getElementById("kpiDeparted").textContent = k.Departed;
     document.getElementById("kpiInbound").textContent = k.Inbound;
     document.getElementById("kpiOutbound").textContent = k.Outbound;
     document.getElementById("kpiCross").textContent = k["Cross Dock"];
   }
 
-  // Driver mode: hide dispatcher controls; keep Actions column (Move button)
+  // Role UI
   if (isDriver){
-    modeHint.textContent = "Driver view • Read-only";
+    modeHint.textContent = "Driver view • Newly Ready flashes only";
     controls.style.display = "none";
     actionsHeader.textContent = "Move";
+    loadAckMap();
   } else {
-    modeHint.textContent = "Dispatcher view • Shared board";
+    modeHint.textContent = "Dispatcher view • Controlled workflow";
     actionsHeader.textContent = "Actions";
+  }
+
+  function minutesSince(ts){
+    if (!ts) return null;
+    const m = Math.floor((Date.now() - ts) / 60000);
+    return Number.isFinite(m) ? m : null;
+  }
+
+  function formatReadyAge(mins){
+    if (mins === null) return "—";
+    if (mins < 1) return "<1 min";
+    if (mins === 1) return "1 min";
+    return `${mins} min`;
   }
 
   function showSafetyPrompt(trailer, door){
@@ -386,7 +508,7 @@
 
         <div class="actions">
           <button class="ghost" id="cancelSafety">Cancel</button>
-          <button class="primary" id="confirmSafety">Confirm</button>
+          <button class="primary" id="confirmSafety">Confirm & Depart</button>
         </div>
       </div>
     `;
@@ -405,7 +527,11 @@
       }
 
       try{
-        const res = await fetch("/api/confirm-safety", {
+        const current = state[trailer] || {};
+        const readyUpdatedAt = current.updatedAt || 0;
+
+        // 1) Log confirmation
+        const res1 = await fetch("/api/confirm-safety", {
           method: "POST",
           headers: { "Content-Type":"application/json" },
           body: JSON.stringify({
@@ -416,15 +542,37 @@
           })
         });
 
-        if (!res.ok){
-          alert("Could not log confirmation: " + await res.text());
+        if (!res1.ok){
+          alert("Could not log confirmation: " + await res1.text());
+          return;
+        }
+
+        // Acknowledge this Ready event so flashing stops immediately
+        if (isDriver) {
+          acknowledgeReady(trailer, readyUpdatedAt);
+        }
+
+        // 2) Mark Departed (driver action)
+        const res2 = await fetch("/api/upsert", {
+          method: "POST",
+          headers: { "Content-Type":"application/json" },
+          body: JSON.stringify({
+            trailer,
+            door: door || current.door || "",
+            direction: current.direction || "Inbound",
+            status: "Departed"
+          })
+        });
+
+        if (!res2.ok){
+          alert("Could not mark Departed: " + await res2.text());
           return;
         }
 
         overlay.remove();
-        alert("Confirmed. You may move the trailer.");
+        await apiGetState();
       } catch (e){
-        alert("Network error logging confirmation: " + e);
+        alert("Network error: " + e);
       }
     };
   }
@@ -433,6 +581,13 @@
     const res = await fetch("/api/state");
     if (!res.ok) throw new Error("Failed to load state");
     state = await res.json();
+
+    // Driver: first-time init (avoid flashing existing Ready)
+    if (isDriver){
+      driverInitialAcknowledgeIfNeeded(state);
+      cleanupAckMap(state);
+    }
+
     paintKPIs();
     render();
   }
@@ -481,7 +636,8 @@
       trailer,
       door: v.door || "",
       direction: v.direction || "Inbound",
-      status: v.status || "Incoming"
+      status: v.status || "Incoming",
+      updatedAt: v.updatedAt || 0
     }));
 
     if (activeFilter !== "All"){
@@ -500,28 +656,36 @@
 
     if (!rows.length){
       const tr = document.createElement("tr");
-      const cols = 5;
-      tr.innerHTML = `<td colspan="${cols}" class="muted">No trailers found.</td>`;
+      tr.innerHTML = `<td colspan="6" class="muted">No trailers found.</td>`;
       tbody.appendChild(tr);
       return;
     }
 
     for (const r of rows){
       const tr = document.createElement("tr");
-      const cls = statusClass(r.status);
+
+      // SLA highlighting for Ready trailers
+      let readyAgeMins = null;
+      if (r.status === "Ready"){
+        readyAgeMins = minutesSince(r.updatedAt);
+        if (readyAgeMins !== null){
+          if (readyAgeMins >= 60) tr.classList.add("sla-bad");
+          else if (readyAgeMins >= 30) tr.classList.add("sla-warn");
+        }
+      }
 
       tr.innerHTML = `
         <td class="mono"><strong>${escapeHtml(r.trailer)}</strong></td>
         <td class="mono">${r.door ? escapeHtml(r.door) : `<span class="dash">—</span>`}</td>
         <td>${escapeHtml(r.direction)}</td>
-        <td><span class="tag ${cls}">${escapeHtml(r.status)}</span></td>
+        <td><span class="tag ${statusClass(r.status)}">${escapeHtml(r.status)}</span></td>
+        <td class="mono">${r.status === "Ready" ? formatReadyAge(readyAgeMins) : `<span class="muted">—</span>`}</td>
       `;
 
-      // Actions column
       const tdActions = document.createElement("td");
 
       if (!isDriver){
-        // Dispatcher actions: quick status dropdown + delete
+        // Dispatcher can only set Incoming/Loading/Ready
         const sel = document.createElement("select");
         ["Incoming","Loading","Ready"].forEach(s=>{
           const o = document.createElement("option");
@@ -529,9 +693,9 @@
           o.textContent = s;
           sel.appendChild(o);
         });
-        sel.value = r.status;
-        sel.style.marginRight = "8px";
+        sel.value = (r.status === "Departed") ? "Ready" : r.status;
         sel.onchange = ()=> apiUpsert(r.trailer, r.door, r.direction, sel.value);
+        sel.style.marginRight = "8px";
         tdActions.appendChild(sel);
 
         const del = document.createElement("button");
@@ -540,13 +704,23 @@
         del.onclick = ()=> apiDelete(r.trailer);
         tdActions.appendChild(del);
       } else {
-        // Driver actions: ONLY allow Move Trailer when status is Ready
+        // Driver: only action on READY
         if (r.status === "Ready"){
           const moveBtn = document.createElement("button");
-          moveBtn.className = "primary";
-          moveBtn.textContent = "Move Trailer";
+
+          const flash = shouldFlashReady(r.trailer, r.updatedAt);
+          moveBtn.className = flash ? "flash-green" : "ready-green";
+          moveBtn.textContent = flash ? "NEW READY • MOVE" : "READY • MOVE";
+
           moveBtn.onclick = ()=> showSafetyPrompt(r.trailer, r.door);
           tdActions.appendChild(moveBtn);
+
+          // Optional: tapping the button WITHOUT confirming still counts as "ack"
+          // (comment out if you want it to keep flashing until confirm)
+          moveBtn.addEventListener("click", () => {
+            acknowledgeReady(r.trailer, r.updatedAt);
+          }, { once: true });
+
         } else {
           tdActions.innerHTML = `<span class="muted">—</span>`;
         }
@@ -594,12 +768,12 @@
       if (e.key === "Enter") document.getElementById("addBtn").click();
     });
   } else {
-    // In driver mode, hide Clear All button if it somehow appears
+    // Driver: hide clear if it exists
     const clearBtn = document.getElementById("clearBtn");
     if (clearBtn) clearBtn.style.display = "none";
   }
 
-  // Refresh
+  // Start refresh loop
   async function start(){
     await apiGetState();
     setInterval(apiGetState, 3000);

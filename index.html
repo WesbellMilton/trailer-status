@@ -108,7 +108,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   min-width:130px;
 }
 .dockBtn.loading{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.18)}
-.dockBtn.dockready{border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.10)}
+.dockBtn.dockready{border-color:rgba(148,163,184,.45);background:rgba(148,163,184,.18)}
 .dockBtn:active{transform:scale(.98)}
 
 /* Quick Tips */
@@ -150,6 +150,15 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 }
 .smallHint{color:var(--muted);font-size:12px}
 .clickDoor{cursor:pointer;text-decoration:underline dotted}
+
+/* Dispatcher delete */
+.deleteBtn{
+  margin-left:8px;
+  background:rgba(239,68,68,.25);
+  border:1px solid rgba(239,68,68,.45);
+  font-weight:950;
+}
+.deleteBtn:active{transform:scale(.98)}
 </style>
 </head>
 
@@ -191,6 +200,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       </select>
       <button class="primary" id="addBtn">Add / Update</button>
       <button class="danger" id="clearBtn">Clear All</button>
+      <span class="smallHint">Dock: <span class="badge mono">/dock</span> • Driver: <span class="badge mono">/driver</span></span>
     </div>
 
     <!-- Driver check-in -->
@@ -269,7 +279,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   const driverInfo = document.getElementById("driverInfo");
 
   let driverTrailer = localStorage.getItem("driver_trailer") || "";
-
   let state = {};
   let ackMap = JSON.parse(localStorage.getItem("driver_ack") || "{}");
 
@@ -309,10 +318,9 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
   function statusClass(s){
     if (s === "Ready") return "good";
-    if (s === "Dock Ready") return "cool";
     if (s === "Loading") return "warn";
     if (s === "Incoming") return "bad";
-    return "cool"; // Departed
+    return "cool"; // Dock Ready / Departed
   }
 
   function setTips(){
@@ -326,18 +334,18 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       `;
       tipsRight.innerHTML = `
         <li>Dock link: <span class="badge mono">${base}/dock</span></li>
-        <li>Incoming → Loading → Dock Ready → <b>Ready</b> → (Driver) Departed</li>
+        <li>Incoming → Loading → Dock Ready → <b>Ready</b> → Departed</li>
         <li>Clear All is shared — use carefully.</li>
       `;
     } else if (isDock){
       tipsLeft.innerHTML = `
         <li>Dock can set <b>Loading</b> or <b>Dock Ready</b>.</li>
         <li>Dispatcher must set <b>Ready</b> for driver to move.</li>
-        <li>Tap the <b>Door</b> value to edit it.</li>
+        <li>If Door is wrong, ask dispatch to update.</li>
       `;
       tipsRight.innerHTML = `
         <li>This updates the shared board for everyone.</li>
-        <li>Ready is “Driver Ready” only (dispatch controls).</li>
+        <li>Use Dock Ready when dock is completed.</li>
       `;
     } else {
       tipsLeft.innerHTML = `
@@ -365,11 +373,32 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   }
 
   async function update(trailer, door, direction, status){
-    await fetch("/api/upsert", {
+    const res = await fetch("/api/upsert", {
       method:"POST",
       headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({ trailer, door, direction, status })
     });
+    if (!res.ok){
+      const t = await res.text();
+      alert("Update failed: " + t);
+    }
+    await load();
+  }
+
+  async function deleteTrailer(trailer){
+    const ok = confirm(`Delete trailer ${trailer}?`);
+    if (!ok) return;
+
+    const res = await fetch("/api/delete", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ trailer })
+    });
+
+    if (!res.ok){
+      const t = await res.text();
+      alert("Delete failed: " + t);
+    }
     await load();
   }
 
@@ -380,7 +409,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     const ok2 = confirm("STEP 2/2: Confirm the DOCK PLATE is UP.");
     if (!ok2) return;
 
-    await fetch("/api/confirm-safety", {
+    const res = await fetch("/api/confirm-safety", {
       method:"POST",
       headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({
@@ -391,17 +420,16 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       })
     });
 
+    if (!res.ok){
+      const t = await res.text();
+      alert("Safety confirm failed: " + t);
+      return;
+    }
+
     ackMap[trailer] = v.updatedAt;
     localStorage.setItem("driver_ack", JSON.stringify(ackMap));
 
     await update(trailer, v.door || "", v.direction || "Inbound", "Departed");
-  }
-
-  async function editDoor(trailer, v){
-    const entered = prompt(`Set dock door for trailer ${trailer}:`, v.door || "");
-    if (entered === null) return;
-    const newDoor = String(entered).trim();
-    await update(trailer, newDoor, v.direction || "Inbound", v.status || "Incoming");
   }
 
   function render(){
@@ -409,7 +437,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
     let entries = Object.entries(state);
 
-    // Dock mode: only show the dock work list
+    // Dock mode: show only Loading + Dock Ready
     if (isDock){
       entries = entries.filter(([_, v]) => v.status === "Loading" || v.status === "Dock Ready");
     }
@@ -450,29 +478,16 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     for (const [t, v] of entries){
       const tr = document.createElement("tr");
 
-      // Door cell (dock can tap to edit)
-      const doorCell = document.createElement("td");
-      if (isDock){
-        doorCell.innerHTML = `<span class="clickDoor">${v.door || "Tap to set"}</span>`;
-        doorCell.onclick = () => editDoor(t, v);
-      } else {
-        doorCell.textContent = v.door || "-";
-      }
-
-      tr.innerHTML = `<td><b>${t}</b></td>`;
-      tr.appendChild(doorCell);
-
-      const tdDir = document.createElement("td");
-      tdDir.textContent = v.direction || "";
-      tr.appendChild(tdDir);
-
-      const tdStatus = document.createElement("td");
-      tdStatus.innerHTML = `<span class="tag ${statusClass(v.status)}">${v.status || ""}</span>`;
-      tr.appendChild(tdStatus);
+      tr.innerHTML = `
+        <td><b>${t}</b></td>
+        <td>${v.door || "-"}</td>
+        <td>${v.direction || ""}</td>
+        <td><span class="tag ${statusClass(v.status)}">${v.status || ""}</span></td>
+      `;
 
       const tdAction = document.createElement("td");
 
-      // Dispatcher actions: can promote Dock Ready -> Ready
+      // Dispatcher actions (status dropdown + delete)
       if (!isDriver && !isDock){
         const sel = document.createElement("select");
         ["Incoming","Loading","Dock Ready","Ready"].forEach(s=>{
@@ -483,10 +498,17 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         });
         sel.value = (v.status === "Departed") ? "Ready" : v.status;
         sel.onchange = () => update(t, v.door || "", v.direction || "Inbound", sel.value);
+
+        const del = document.createElement("button");
+        del.className = "deleteBtn";
+        del.textContent = "Delete";
+        del.onclick = () => deleteTrailer(t);
+
         tdAction.appendChild(sel);
+        tdAction.appendChild(del);
       }
 
-      // Dock actions: ONLY Loading + Dock Ready (cannot set Ready)
+      // Dock actions: ONLY Loading + Dock Ready
       if (isDock){
         const wrap = document.createElement("div");
         wrap.className = "dockBtns";
@@ -506,7 +528,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         tdAction.appendChild(wrap);
       }
 
-      // Driver: only MOVE when status is Ready
+      // Driver actions: MOVE only when dispatcher sets Ready
       if (isDriver){
         driverInfo.innerHTML =
           `Checked in: <b>${t}</b> &nbsp; | &nbsp; Door: <b>${v.door || "NOT SET"}</b> &nbsp; | &nbsp; Status: <b>${v.status}</b>`;
@@ -553,7 +575,11 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       doorInp.value = "";
     };
 
-    clearBtn.onclick = () => fetch("/api/clear", { method:"POST" }).then(load);
+    clearBtn.onclick = () => {
+      const ok = confirm("Clear ALL trailers for everyone?");
+      if (!ok) return;
+      fetch("/api/clear", { method:"POST" }).then(load);
+    };
   }
 
   setTips();

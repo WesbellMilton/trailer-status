@@ -62,7 +62,7 @@ function cleanStr(v, maxLen) {
 function computeStats(board) {
   const stats = {
     total: 0,
-    byStatus: { Incoming: 0, Loading: 0, Ready: 0, Departed: 0 },
+    byStatus: { Incoming: 0, Loading: 0, "Dock Ready": 0, Ready: 0, Departed: 0 },
     byDirection: { Inbound: 0, Outbound: 0, "Cross Dock": 0 }
   };
 
@@ -174,8 +174,14 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
-// Driver board (clean link)
+// Driver board
 app.get("/driver", (req, res) => {
+  noCache(res);
+  res.sendFile(path.join(__dirname, "index.html"));
+});
+
+// Dock board
+app.get("/dock", (req, res) => {
   noCache(res);
   res.sendFile(path.join(__dirname, "index.html"));
 });
@@ -255,7 +261,9 @@ app.post("/api/upsert", async (req, res) => {
     if (!trailer) return res.status(400).send("Trailer required");
 
     const allowedDir = ["Inbound", "Outbound", "Cross Dock"];
-    const allowedStatus = ["Incoming", "Loading", "Ready", "Departed"];
+
+    // ✅ 2-step ready supported
+    const allowedStatus = ["Incoming", "Loading", "Dock Ready", "Ready", "Departed"];
 
     if (!allowedDir.includes(direction)) return res.status(400).send("Invalid direction");
     if (!allowedStatus.includes(status)) return res.status(400).send("Invalid status");
@@ -410,8 +418,10 @@ initDb()
   .then(() => {
     server.listen(PORT, () => {
       console.log("Running on port", PORT);
-      console.log("Driver link: /driver");
-      console.log("Supervisor link: /supervisor");
+      console.log("Dispatcher: /");
+      console.log("Dock: /dock");
+      console.log("Driver: /driver");
+      console.log("Supervisor: /supervisor");
       console.log("SQLite DB:", DB_PATH);
     });
   })

@@ -28,14 +28,15 @@ body{
 }
 .wrap{max-width:1200px;margin:auto;padding:20px}
 .topbar{
-  display:flex;justify-content:space-between;align-items:center;
+  display:flex;justify-content:space-between;align-items:center;gap:12px;
   padding:14px;border:1px solid var(--line);
   border-radius:14px;background:rgba(255,255,255,.04)
 }
 .brand h1{margin:0;font-size:18px}
 .sub{font-size:12px;color:var(--muted)}
-.kpis span{margin-left:12px;font-size:13px;color:var(--muted)}
-.kpis strong{color:white}
+.kpis{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end}
+.kpi{font-size:13px;color:var(--muted);white-space:nowrap}
+.kpi strong{color:#fff}
 
 .card{
   margin-top:14px;
@@ -51,9 +52,9 @@ input,select,button{
   border-radius:8px;
   border:1px solid var(--line);
   background:#0c132a;
-  color:white;
+  color:#fff;
 }
-button{cursor:pointer;font-weight:600}
+button{cursor:pointer;font-weight:700}
 button.primary{background:rgba(99,102,241,.25)}
 button.danger{background:rgba(239,68,68,.25)}
 
@@ -71,16 +72,22 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
 .tag{
   padding:4px 8px;border-radius:999px;
-  font-size:12px;font-weight:700
+  font-size:12px;font-weight:800
 }
-.good{background:rgba(34,197,94,.18)}
-.warn{background:rgba(245,158,11,.18)}
-.bad{background:rgba(239,68,68,.18)}
-.cool{background:rgba(148,163,184,.18)}
+.good{background:rgba(34,197,94,.18);border:1px solid rgba(34,197,94,.35)}
+.warn{background:rgba(245,158,11,.18);border:1px solid rgba(245,158,11,.35)}
+.bad{background:rgba(239,68,68,.18);border:1px solid rgba(239,68,68,.35)}
+.cool{background:rgba(148,163,184,.18);border:1px solid rgba(148,163,184,.35)}
 
+.readyBtn{
+  border:1px solid rgba(34,197,94,.45);
+  background:rgba(34,197,94,.18);
+  font-weight:900;
+}
 .flash{
   animation:flash 1s infinite;
-  background:rgba(34,197,94,.35)!important
+  background:rgba(34,197,94,.32)!important;
+  border-color:rgba(34,197,94,.75)!important;
 }
 @keyframes flash{
   0%{box-shadow:0 0 0 rgba(34,197,94,0)}
@@ -92,204 +99,309 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 .tips{
   padding:14px;
   border-top:1px solid var(--line);
-  display:flex;gap:20px;flex-wrap:wrap
+  display:flex;gap:16px;flex-wrap:wrap
 }
-.tipBox{flex:1;min-width:260px}
-.tipBox h4{margin:0 0 6px 0;font-size:12px;color:var(--muted);text-transform:uppercase}
+.tipBox{
+  flex:1;
+  min-width:260px;
+  border:1px solid rgba(120,145,220,.14);
+  border-radius:12px;
+  background:rgba(12,19,42,.45);
+  padding:12px;
+}
+.tipBox h4{
+  margin:0 0 8px 0;
+  font-size:12px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.6px;
+}
 .tipBox ul{margin:0;padding-left:18px;font-size:13px;color:var(--muted)}
+.tipBox li{margin:6px 0}
+.mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+.badge{
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:999px;
+  border:1px solid rgba(120,145,220,.25);
+  background:rgba(255,255,255,.04);
+  color:#fff;
+}
 </style>
 </head>
 
 <body>
 <div class="wrap">
 
-<div class="topbar">
-  <div class="brand">
-    <h1>Wesbell Logistics</h1>
-    <div class="sub" id="modeLabel">Dispatcher Mode</div>
+  <div class="topbar">
+    <div class="brand">
+      <h1>Wesbell Logistics</h1>
+      <div class="sub" id="modeLabel">Trailer Status Board</div>
+    </div>
+
+    <div class="kpis">
+      <span class="kpi">Total <strong id="kTotal">0</strong></span>
+      <span class="kpi">Ready <strong id="kReady">0</strong></span>
+      <span class="kpi">Loading <strong id="kLoading">0</strong></span>
+      <span class="kpi">Incoming <strong id="kIncoming">0</strong></span>
+      <span class="kpi">Departed <strong id="kDeparted">0</strong></span>
+    </div>
   </div>
-  <div class="kpis">
-    <span>Total <strong id="kTotal">0</strong></span>
-    <span>Ready <strong id="kReady">0</strong></span>
-    <span>Loading <strong id="kLoading">0</strong></span>
-    <span>Incoming <strong id="kIncoming">0</strong></span>
-    <span>Departed <strong id="kDeparted">0</strong></span>
+
+  <div class="card">
+
+    <div class="controls" id="controls">
+      <input id="trailer" placeholder="Trailer #" />
+      <input id="door" placeholder="Dock Door" />
+      <select id="direction">
+        <option>Inbound</option>
+        <option>Outbound</option>
+        <option>Cross Dock</option>
+      </select>
+      <select id="status">
+        <option>Incoming</option>
+        <option>Loading</option>
+        <option>Ready</option>
+      </select>
+      <button class="primary" id="addBtn">Add / Update</button>
+      <button class="danger" id="clearBtn">Clear All</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Trailer</th>
+          <th>Door</th>
+          <th>Direction</th>
+          <th>Status</th>
+          <th id="actionHeader">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+
+    <div class="tips">
+      <div class="tipBox">
+        <h4>Quick Tips</h4>
+        <ul id="tipsLeft"></ul>
+      </div>
+      <div class="tipBox">
+        <h4>Workflow</h4>
+        <ul id="tipsRight"></ul>
+      </div>
+    </div>
+
   </div>
-</div>
-
-<div class="card">
-
-<div class="controls" id="controls">
-  <input id="trailer" placeholder="Trailer #" />
-  <input id="door" placeholder="Dock Door" />
-  <select id="direction">
-    <option>Inbound</option>
-    <option>Outbound</option>
-    <option>Cross Dock</option>
-  </select>
-  <select id="status">
-    <option>Incoming</option>
-    <option>Loading</option>
-    <option>Ready</option>
-  </select>
-  <button class="primary" id="addBtn">Add / Update</button>
-  <button class="danger" id="clearBtn">Clear All</button>
-</div>
-
-<table>
-<thead>
-<tr>
-<th>Trailer</th>
-<th>Door</th>
-<th>Direction</th>
-<th>Status</th>
-<th id="actionHeader">Actions</th>
-</tr>
-</thead>
-<tbody id="tbody"></tbody>
-</table>
-
-<div class="tips">
-  <div class="tipBox">
-    <h4>Quick Tips</h4>
-    <ul id="tipsLeft"></ul>
-  </div>
-  <div class="tipBox">
-    <h4>Workflow</h4>
-    <ul id="tipsRight"></ul>
-  </div>
-</div>
-
-</div>
 </div>
 
 <script>
-const isDriver = location.pathname.includes("/driver");
-if(isDriver){
-  document.getElementById("controls").style.display="none";
-  document.getElementById("modeLabel").textContent="Driver Mode";
-}
+(() => {
+  // Driver mode: /driver OR legacy ?mode=driver
+  const isDriver =
+    location.pathname.toLowerCase().includes("/driver") ||
+    (new URLSearchParams(location.search).get("mode") || "").toLowerCase() === "driver";
 
-let state={};
-let ackMap=JSON.parse(localStorage.getItem("driver_ack")||"{}");
+  // DOM refs (NO GLOBAL ID RELIANCE)
+  const modeLabel = document.getElementById("modeLabel");
+  const controls = document.getElementById("controls");
+  const actionHeader = document.getElementById("actionHeader");
+  const tbody = document.getElementById("tbody");
 
-function statusClass(s){
-  if(s==="Ready") return "good";
-  if(s==="Loading") return "warn";
-  if(s==="Incoming") return "bad";
-  return "cool";
-}
+  const kTotal = document.getElementById("kTotal");
+  const kReady = document.getElementById("kReady");
+  const kLoading = document.getElementById("kLoading");
+  const kIncoming = document.getElementById("kIncoming");
+  const kDeparted = document.getElementById("kDeparted");
 
-function render(){
-  const tb=document.getElementById("tbody");
-  tb.innerHTML="";
-  Object.entries(state).forEach(([t,v])=>{
-    const tr=document.createElement("tr");
-    tr.innerHTML=`
-      <td>${t}</td>
-      <td>${v.door||"-"}</td>
-      <td>${v.direction}</td>
-      <td><span class="tag ${statusClass(v.status)}">${v.status}</span></td>
-    `;
-    const td=document.createElement("td");
+  const tipsLeft = document.getElementById("tipsLeft");
+  const tipsRight = document.getElementById("tipsRight");
 
-    if(!isDriver){
-      const sel=document.createElement("select");
-      ["Incoming","Loading","Ready"].forEach(s=>{
-        const o=document.createElement("option");
-        o.value=s;o.textContent=s;sel.appendChild(o);
-      });
-      sel.value=v.status==="Departed"?"Ready":v.status;
-      sel.onchange=()=>update(t,v.door,v.direction,sel.value);
-      td.appendChild(sel);
+  const trailerInp = document.getElementById("trailer");
+  const doorInp = document.getElementById("door");
+  const directionSel = document.getElementById("direction");
+  const statusSel = document.getElementById("status");
+  const addBtn = document.getElementById("addBtn");
+  const clearBtn = document.getElementById("clearBtn");
+
+  let state = {};
+  let ackMap = JSON.parse(localStorage.getItem("driver_ack") || "{}");
+
+  if (isDriver){
+    controls.style.display = "none";
+    actionHeader.textContent = "Move";
+    modeLabel.textContent = "Driver Mode";
+  } else {
+    modeLabel.textContent = "Dispatcher Mode";
+  }
+
+  function statusClass(s){
+    if (s === "Ready") return "good";
+    if (s === "Loading") return "warn";
+    if (s === "Incoming") return "bad";
+    return "cool"; // Departed
+  }
+
+  function setTips(){
+    const base = location.origin;
+
+    if (!isDriver){
+      tipsLeft.innerHTML = `
+        <li>Enter dock door (ex: <b>D12</b>) so drivers know where to go.</li>
+        <li>Only mark <b>Ready</b> when paperwork + dock are actually ready.</li>
+        <li>Driver link: <span class="badge mono">${base}/driver</span></li>
+      `;
+      tipsRight.innerHTML = `
+        <li>Incoming → Loading → <b>Ready</b> → (Driver) Departed</li>
+        <li>Drivers must click <b>two</b> safety prompts.</li>
+        <li>Clear All is shared — use carefully.</li>
+      `;
     } else {
-      if(v.status==="Ready"){
-        const btn=document.createElement("button");
-        const flash=ackMap[t]!==v.updatedAt;
-        btn.className=flash?"flash":"";
-        btn.textContent="MOVE";
-        btn.onclick=()=>confirmMove(t,v);
-        td.appendChild(btn);
-      } else td.innerHTML="-";
+      tipsLeft.innerHTML = `
+        <li>Only trailers marked <b>Ready</b> can be moved.</li>
+        <li>Flashing green = <b>NEW READY</b>.</li>
+        <li>You must confirm both safety steps.</li>
+      `;
+      tipsRight.innerHTML = `
+        <li>Tap green button → Confirm Step 1 → Confirm Step 2.</li>
+        <li>After both: trailer becomes <b>Departed</b>.</li>
+        <li>If Door is blank: call dispatch before moving.</li>
+      `;
+    }
+  }
+
+  function updateKPIs(){
+    const c = { Incoming:0, Loading:0, Ready:0, Departed:0 };
+    Object.values(state).forEach(v => { if (c[v.status] !== undefined) c[v.status]++; });
+
+    kTotal.textContent = String(Object.keys(state).length);
+    kReady.textContent = String(c.Ready);
+    kLoading.textContent = String(c.Loading);
+    kIncoming.textContent = String(c.Incoming);
+    kDeparted.textContent = String(c.Departed);
+  }
+
+  function render(){
+    tbody.innerHTML = "";
+
+    const entries = Object.entries(state)
+      .sort((a,b) => String(a[0]).localeCompare(String(b[0])));
+
+    if (entries.length === 0){
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td colspan="5" style="color:var(--muted);padding:14px;">No trailers.</td>`;
+      tbody.appendChild(tr);
+      updateKPIs();
+      return;
     }
 
-    tr.appendChild(td);
-    tb.appendChild(tr);
-  });
-  updateKPIs();
-}
+    for (const [t, v] of entries){
+      const tr = document.createElement("tr");
 
-function updateKPIs(){
-  const c={Incoming:0,Loading:0,Ready:0,Departed:0};
-  Object.values(state).forEach(v=>c[v.status]++);
-  kTotal.textContent=Object.keys(state).length;
-  kReady.textContent=c.Ready;
-  kLoading.textContent=c.Loading;
-  kIncoming.textContent=c.Incoming;
-  kDeparted.textContent=c.Departed;
-}
+      tr.innerHTML = `
+        <td><b>${t}</b></td>
+        <td>${v.door || "-"}</td>
+        <td>${v.direction || ""}</td>
+        <td><span class="tag ${statusClass(v.status)}">${v.status || ""}</span></td>
+      `;
 
-async function update(trailer,door,direction,status){
-  await fetch("/api/upsert",{method:"POST",headers:{"Content-Type":"application/json"},
-  body:JSON.stringify({trailer,door,direction,status})});
-  load();
-}
+      const td = document.createElement("td");
 
-/* TWO-STEP CONFIRM */
-async function confirmMove(t,v){
-  if(!confirm("STEP 1/2: Confirm Load Secured")) return;
-  if(!confirm("STEP 2/2: Confirm Dock Plate Up")) return;
+      if (!isDriver){
+        const sel = document.createElement("select");
+        ["Incoming","Loading","Ready"].forEach(s=>{
+          const o = document.createElement("option");
+          o.value = s;
+          o.textContent = s;
+          sel.appendChild(o);
+        });
+        sel.value = (v.status === "Departed") ? "Ready" : v.status;
+        sel.onchange = () => update(t, v.door || "", v.direction || "Inbound", sel.value);
+        td.appendChild(sel);
+      } else {
+        if (v.status === "Ready"){
+          const btn = document.createElement("button");
+          const isNewReady = ackMap[t] !== v.updatedAt;
+          btn.className = "readyBtn" + (isNewReady ? " flash" : "");
+          btn.textContent = isNewReady ? "NEW READY • MOVE" : "READY • MOVE";
+          btn.onclick = () => confirmMove(t, v);
+          td.appendChild(btn);
+        } else {
+          td.textContent = "-";
+        }
+      }
 
-  await fetch("/api/confirm-safety",{method:"POST",headers:{"Content-Type":"application/json"},
-  body:JSON.stringify({trailer:t,door:v.door,loadSecured:true,dockPlateUp:true})});
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    }
 
-  ackMap[t]=v.updatedAt;
-  localStorage.setItem("driver_ack",JSON.stringify(ackMap));
-  await update(t,v.door,v.direction,"Departed");
-}
-
-async function load(){
-  const res=await fetch("/api/state");
-  state=await res.json();
-  render();
-}
-
-addBtn.onclick=()=>{
-  const t=trailer.value.trim();
-  if(!t) return;
-  update(t,door.value,direction.value,status.value);
-  trailer.value="";door.value="";
-};
-clearBtn.onclick=()=>fetch("/api/clear",{method:"POST"}).then(load);
-
-function setTips(){
-  if(!isDriver){
-    tipsLeft.innerHTML=`
-      <li>Enter dock door correctly (ex: D12)</li>
-      <li>Only mark Ready when fully staged</li>
-      <li>Driver link: ${location.origin}/driver</li>
-    `;
-    tipsRight.innerHTML=`
-      <li>Incoming → Loading → Ready → Departed</li>
-      <li>Drivers must confirm both safety steps</li>
-    `;
-  }else{
-    tipsLeft.innerHTML=`
-      <li>Only Ready trailers can be moved</li>
-      <li>Flashing button = NEW READY</li>
-      <li>You must confirm BOTH prompts</li>
-    `;
-    tipsRight.innerHTML=`
-      <li>Confirm Load Secured</li>
-      <li>Confirm Dock Plate Up</li>
-      <li>Trailer becomes Departed</li>
-    `;
+    updateKPIs();
   }
-}
-setTips();
 
-load();
-setInterval(load,3000);
+  async function update(trailer, door, direction, status){
+    await fetch("/api/upsert", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ trailer, door, direction, status })
+    });
+    await load();
+  }
+
+  async function confirmMove(trailer, v){
+    const ok1 = confirm("STEP 1/2: Confirm the LOAD is SECURED.");
+    if (!ok1) return;
+
+    const ok2 = confirm("STEP 2/2: Confirm the DOCK PLATE is UP.");
+    if (!ok2) return;
+
+    await fetch("/api/confirm-safety", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({
+        trailer,
+        door: v.door || "",
+        loadSecured: true,
+        dockPlateUp: true
+      })
+    });
+
+    ackMap[trailer] = v.updatedAt;
+    localStorage.setItem("driver_ack", JSON.stringify(ackMap));
+
+    await update(trailer, v.door || "", v.direction || "Inbound", "Departed");
+  }
+
+  async function load(){
+    const res = await fetch("/api/state");
+    state = await res.json();
+    render();
+  }
+
+  // Dispatcher buttons
+  if (!isDriver){
+    addBtn.onclick = () => {
+      const t = trailerInp.value.trim();
+      if (!t) return;
+
+      update(
+        t,
+        doorInp.value.trim(),
+        directionSel.value,
+        statusSel.value
+      );
+
+      trailerInp.value = "";
+      doorInp.value = "";
+    };
+
+    clearBtn.onclick = () => fetch("/api/clear", { method:"POST" }).then(load);
+  }
+
+  // Start
+  setTips();
+  load();
+  setInterval(load, 3000);
+})();
 </script>
+
 </body>
 </html>

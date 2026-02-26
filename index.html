@@ -61,7 +61,7 @@
     <div id="controls" class="row">
       <input id="trailer" placeholder="Trailer #" />
 
-      <!-- NEW: Dock Door / Spot -->
+      <!-- Dock Door / Spot -->
       <input id="door" placeholder="Dock Door / Spot" style="min-width:160px;" />
 
       <select id="direction">
@@ -129,10 +129,76 @@
     return s === "Ready" ? "good" : (s === "Loading" ? "warn" : "bad");
   }
 
+  // ===== DRIVER SAFETY PROMPT + DRIVER VIEW =====
   if (isDriver){
     controls.style.display = "none";
     actionsHeader.style.display = "none";
+
+    const overlay = document.createElement("div");
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.background = "rgba(0,0,0,0.85)";
+    overlay.style.display = "flex";
+    overlay.style.alignItems = "center";
+    overlay.style.justifyContent = "center";
+    overlay.style.zIndex = "9999";
+
+    overlay.innerHTML = `
+      <div style="
+        background:#121b2f;
+        padding:30px;
+        border-radius:12px;
+        width:90%;
+        max-width:520px;
+        border:1px solid #263454;
+        text-align:left;
+      ">
+        <h2 style="margin-top:0;">⚠ Safety Confirmation Required</h2>
+        <div style="color:#a9b4d0; margin-top:-8px; margin-bottom:14px;">
+          Before moving trailer, confirm both items:
+        </div>
+
+        <div style="margin:15px 0;">
+          <label style="display:block;margin-bottom:12px; font-size:16px;">
+            <input type="checkbox" id="chkLoad" />
+            <span style="margin-left:8px;">Load is secured</span>
+          </label>
+
+          <label style="display:block; font-size:16px;">
+            <input type="checkbox" id="chkPlate" />
+            <span style="margin-left:8px;">Dock plate is up</span>
+          </label>
+        </div>
+
+        <button id="confirmSafety" style="
+          background:#22c55e;
+          border:none;
+          padding:12px 16px;
+          border-radius:10px;
+          font-weight:800;
+          cursor:pointer;
+          width:100%;
+        ">
+          Confirm & Continue
+        </button>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    document.getElementById("confirmSafety").onclick = () => {
+      const load = document.getElementById("chkLoad").checked;
+      const plate = document.getElementById("chkPlate").checked;
+
+      if (!load || !plate){
+        alert("Both confirmations are required before proceeding.");
+        return;
+      }
+
+      overlay.remove();
+    };
   }
+  // ===== END DRIVER SAFETY PROMPT =====
 
   async function apiGetState(){
     const res = await fetch("/api/state");
@@ -228,7 +294,6 @@
       if (!isDriver){
         const td = document.createElement("td");
 
-        // quick status change
         const sel = document.createElement("select");
         ["Incoming","Loading","Ready"].forEach(s=>{
           const o = document.createElement("option");
@@ -286,6 +351,10 @@
     document.getElementById("clearBtn").onclick=apiClear;
 
     document.getElementById("trailer").addEventListener("keydown",(e)=>{
+      if (e.key === "Enter") document.getElementById("addBtn").click();
+    });
+
+    document.getElementById("door").addEventListener("keydown",(e)=>{
       if (e.key === "Enter") document.getElementById("addBtn").click();
     });
   }

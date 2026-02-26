@@ -1,55 +1,55 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Trailer Status Board</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Trailer Status Board</title>
 
-  <style>
-    :root{
-      --text:#eaf0ff;
-      --muted:#a9b4d0;
-      --line:#263454;
-      --good:#22c55e;
-      --warn:#f59e0b;
-      --bad:#ef4444;
-      --card:rgba(18,27,47,0.92);
-      --bg1:#070b14;
-      --bg2:#0b1220;
-    }
+<style>
+:root{
+  --text:#eaf0ff;
+  --muted:#a9b4d0;
+  --line:#263454;
+  --good:#22c55e;
+  --warn:#f59e0b;
+  --bad:#ef4444;
+  --card:rgba(18,27,47,0.92);
+  --bg1:#070b14;
+  --bg2:#0b1220;
+}
 
-    body{
-      margin:0;
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
-      background:linear-gradient(180deg,var(--bg1),var(--bg2));
-      color:var(--text);
-    }
+body{
+  margin:0;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
+  background:linear-gradient(180deg,var(--bg1),var(--bg2));
+  color:var(--text);
+}
 
-    .wrap{max-width:1100px;margin:auto;padding:20px;}
-    .company{text-align:center;font-size:26px;font-weight:800;margin-bottom:6px;}
-    .subtitle{text-align:center;color:var(--muted);margin-bottom:20px;}
-    .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;}
+.wrap{max-width:1100px;margin:auto;padding:20px;}
+.company{text-align:center;font-size:26px;font-weight:800;margin-bottom:6px;}
+.subtitle{text-align:center;color:var(--muted);margin-bottom:20px;}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;}
 
-    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
-    input,select,button{
-      border-radius:10px;border:1px solid var(--line);
-      background:#0d1528;color:var(--text);padding:10px;
-    }
-    button{cursor:pointer}
-    button.primary{background:#1b2a52;}
-    button.danger{background:#3a1020;}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+input,select,button{
+  border-radius:10px;border:1px solid var(--line);
+  background:#0d1528;color:var(--text);padding:10px;
+}
+button{cursor:pointer}
+button.primary{background:#1b2a52;}
+button.danger{background:#3a1020;}
 
-    table{width:100%;border-collapse:collapse;margin-top:15px;}
-    th,td{padding:12px;border-bottom:1px solid var(--line);vertical-align:middle;}
-    th{text-align:left;font-size:12px;color:var(--muted);}
+table{width:100%;border-collapse:collapse;margin-top:15px;}
+th,td{padding:12px;border-bottom:1px solid var(--line);vertical-align:middle;}
+th{text-align:left;font-size:12px;color:var(--muted);}
 
-    .pill{padding:6px 10px;border-radius:999px;display:inline-block;font-weight:700;}
-    .good{background:var(--good);color:#06120b;}
-    .warn{background:var(--warn);color:#1a1202;}
-    .bad{background:var(--bad);color:#1a0202;}
+.pill{padding:6px 10px;border-radius:999px;display:inline-block;font-weight:700;}
+.good{background:var(--good);color:#06120b;}
+.warn{background:var(--warn);color:#1a1202;}
+.bad{background:var(--bad);color:#1a0202;}
 
-    .right{margin-left:auto;}
-  </style>
+.right{margin-left:auto;}
+</style>
 </head>
 
 <body>
@@ -60,8 +60,6 @@
   <div class="card">
     <div id="controls" class="row">
       <input id="trailer" placeholder="Trailer #" />
-
-      <!-- Dock Door / Spot -->
       <input id="door" placeholder="Dock Door / Spot" style="min-width:160px;" />
 
       <select id="direction">
@@ -82,13 +80,6 @@
       <input id="search" class="right" placeholder="Search trailer…" style="min-width:240px;" />
     </div>
 
-    <div class="row" style="margin-top:10px;">
-      <button class="primary" id="filterAll">All</button>
-      <button class="primary" id="filterInbound">Inbound</button>
-      <button class="primary" id="filterOutbound">Outbound</button>
-      <button class="primary" id="filterCross">Cross Dock</button>
-    </div>
-
     <table>
       <thead>
         <tr>
@@ -101,272 +92,242 @@
       </thead>
       <tbody id="tbody"></tbody>
     </table>
-
   </div>
 </div>
 
 <script>
-  const params = new URLSearchParams(location.search);
-  const isDriver = (params.get("mode") || "").toLowerCase() === "driver";
+const params = new URLSearchParams(location.search);
+const isDriver = (params.get("mode") || "").toLowerCase() === "driver";
 
-  const controls = document.getElementById("controls");
-  const actionsHeader = document.getElementById("actionsHeader");
+const controls = document.getElementById("controls");
+const actionsHeader = document.getElementById("actionsHeader");
 
-  let state = {};
-  let searchText = "";
-  let activeFilter = "All";
+let state = {};
+let searchText = "";
 
-  function escapeHtml(str){
-    return String(str ?? "")
-      .replaceAll("&","&amp;")
-      .replaceAll("<","&lt;")
-      .replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;")
-      .replaceAll("'","&#039;");
-  }
+function escapeHtml(str){
+  return String(str ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
 
-  function statusClass(s){
-    return s === "Ready" ? "good" : (s === "Loading" ? "warn" : "bad");
-  }
+function statusClass(s){
+  return s === "Ready" ? "good" : (s === "Loading" ? "warn" : "bad");
+}
 
-  // ===== DRIVER SAFETY PROMPT + DRIVER VIEW =====
-  if (isDriver){
-    controls.style.display = "none";
-    actionsHeader.style.display = "none";
+/* ================= DRIVER SAFETY PROMPT ================= */
+if (isDriver){
+  controls.style.display = "none";
+  actionsHeader.style.display = "none";
 
-    const overlay = document.createElement("div");
-    overlay.style.position = "fixed";
-    overlay.style.inset = "0";
-    overlay.style.background = "rgba(0,0,0,0.85)";
-    overlay.style.display = "flex";
-    overlay.style.alignItems = "center";
-    overlay.style.justifyContent = "center";
-    overlay.style.zIndex = "9999";
+  const overlay = document.createElement("div");
+  overlay.style.position = "fixed";
+  overlay.style.inset = "0";
+  overlay.style.background = "rgba(0,0,0,0.85)";
+  overlay.style.display = "flex";
+  overlay.style.alignItems = "center";
+  overlay.style.justifyContent = "center";
+  overlay.style.zIndex = "9999";
 
-    overlay.innerHTML = `
-      <div style="
-        background:#121b2f;
-        padding:30px;
-        border-radius:12px;
-        width:90%;
-        max-width:520px;
-        border:1px solid #263454;
-        text-align:left;
-      ">
-        <h2 style="margin-top:0;">⚠ Safety Confirmation Required</h2>
-        <div style="color:#a9b4d0; margin-top:-8px; margin-bottom:14px;">
-          Before moving trailer, confirm both items:
-        </div>
+  overlay.innerHTML = `
+    <div style="background:#121b2f;padding:30px;border-radius:12px;width:90%;max-width:520px;border:1px solid #263454;">
+      <h2>⚠ Safety Confirmation Required</h2>
+      <p style="color:#a9b4d0;">Before moving trailer confirm:</p>
 
-        <div style="margin:15px 0;">
-          <label style="display:block;margin-bottom:12px; font-size:16px;">
-            <input type="checkbox" id="chkLoad" />
-            <span style="margin-left:8px;">Load is secured</span>
-          </label>
+      <label style="display:block;margin-bottom:10px;">
+        <input type="checkbox" id="chkLoad" />
+        Load is secured
+      </label>
 
-          <label style="display:block; font-size:16px;">
-            <input type="checkbox" id="chkPlate" />
-            <span style="margin-left:8px;">Dock plate is up</span>
-          </label>
-        </div>
+      <label style="display:block;margin-bottom:20px;">
+        <input type="checkbox" id="chkPlate" />
+        Dock plate is up
+      </label>
 
-        <button id="confirmSafety" style="
-          background:#22c55e;
-          border:none;
-          padding:12px 16px;
-          border-radius:10px;
-          font-weight:800;
-          cursor:pointer;
-          width:100%;
-        ">
-          Confirm & Continue
-        </button>
-      </div>
-    `;
+      <button id="confirmSafety" style="background:#22c55e;border:none;padding:12px;border-radius:8px;font-weight:bold;width:100%;">
+        Confirm & Continue
+      </button>
+    </div>
+  `;
 
-    document.body.appendChild(overlay);
+  document.body.appendChild(overlay);
 
-    document.getElementById("confirmSafety").onclick = () => {
-      const load = document.getElementById("chkLoad").checked;
-      const plate = document.getElementById("chkPlate").checked;
+  document.getElementById("confirmSafety").onclick = async () => {
+    const load = document.getElementById("chkLoad").checked;
+    const plate = document.getElementById("chkPlate").checked;
 
-      if (!load || !plate){
-        alert("Both confirmations are required before proceeding.");
+    if (!load || !plate){
+      alert("Both confirmations required.");
+      return;
+    }
+
+    try{
+      const res = await fetch("/api/confirm-safety", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({
+          trailer:"",
+          door:"",
+          loadSecured:true,
+          dockPlateUp:true
+        })
+      });
+
+      if (!res.ok){
+        alert("Could not log confirmation.");
         return;
       }
 
       overlay.remove();
-    };
+    } catch(e){
+      alert("Network error.");
+    }
+  };
+}
+/* ======================================================== */
+
+async function apiGetState(){
+  const res = await fetch("/api/state");
+  if (!res.ok) throw new Error("Failed to load state");
+  state = await res.json();
+  render();
+}
+
+async function apiUpsert(trailer, door, direction, status){
+  const res = await fetch("/api/upsert", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body:JSON.stringify({ trailer, door, direction, status })
+  });
+  if (!res.ok){
+    alert(await res.text());
+    return;
   }
-  // ===== END DRIVER SAFETY PROMPT =====
+  await apiGetState();
+}
 
-  async function apiGetState(){
-    const res = await fetch("/api/state");
-    if (!res.ok) throw new Error("Failed to load state");
-    state = await res.json();
-    render();
+async function apiDelete(trailer){
+  const res = await fetch("/api/delete", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body:JSON.stringify({ trailer })
+  });
+  if (!res.ok){
+    alert(await res.text());
+    return;
+  }
+  await apiGetState();
+}
+
+async function apiClear(){
+  if (!confirm("Clear ALL trailers?")) return;
+  const res = await fetch("/api/clear", { method:"POST" });
+  if (!res.ok){
+    alert(await res.text());
+    return;
+  }
+  await apiGetState();
+}
+
+function render(){
+  const tbody = document.getElementById("tbody");
+  tbody.innerHTML = "";
+
+  let rows = Object.entries(state).map(([trailer, v]) => ({
+    trailer,
+    door: v.door || "",
+    direction: v.direction || "Inbound",
+    status: v.status || "Incoming"
+  }));
+
+  if (searchText.trim()){
+    const q = searchText.toLowerCase();
+    rows = rows.filter(r => r.trailer.toLowerCase().includes(q));
   }
 
-  async function apiUpsert(trailer, door, direction, status){
-    const res = await fetch("/api/upsert", {
-      method: "POST",
-      headers: { "Content-Type":"application/json" },
-      body: JSON.stringify({ trailer, door, direction, status })
-    });
+  const rank = s => s==="Ready"?0:(s==="Loading"?1:2);
+  rows.sort((a,b)=>(rank(a.status)-rank(b.status))||a.trailer.localeCompare(b.trailer));
 
-    if (!res.ok){
-      alert(await res.text());
-      return;
+  if (!rows.length){
+    const tr = document.createElement("tr");
+    const cols = isDriver ? 4 : 5;
+    tr.innerHTML = `<td colspan="${cols}" style="color:#a9b4d0;">No trailers.</td>`;
+    tbody.appendChild(tr);
+    return;
+  }
+
+  for (const r of rows){
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td><strong>${escapeHtml(r.trailer)}</strong></td>
+      <td>${r.door || "—"}</td>
+      <td>${escapeHtml(r.direction)}</td>
+      <td><span class="pill ${statusClass(r.status)}">${escapeHtml(r.status)}</span></td>
+    `;
+
+    if (!isDriver){
+      const td = document.createElement("td");
+
+      const sel = document.createElement("select");
+      ["Incoming","Loading","Ready"].forEach(s=>{
+        const o = document.createElement("option");
+        o.value=s;
+        o.textContent=s;
+        sel.appendChild(o);
+      });
+      sel.value=r.status;
+      sel.onchange=()=>apiUpsert(r.trailer,r.door,r.direction,sel.value);
+      td.appendChild(sel);
+
+      const del=document.createElement("button");
+      del.className="danger";
+      del.textContent="Delete";
+      del.onclick=()=>apiDelete(r.trailer);
+      td.appendChild(del);
+
+      tr.appendChild(td);
     }
 
-    await apiGetState();
+    tbody.appendChild(tr);
   }
+}
 
-  async function apiDelete(trailer){
-    const res = await fetch("/api/delete", {
-      method: "POST",
-      headers: { "Content-Type":"application/json" },
-      body: JSON.stringify({ trailer })
-    });
+document.getElementById("search").addEventListener("input",(e)=>{
+  searchText=e.target.value;
+  render();
+});
 
-    if (!res.ok){
-      alert(await res.text());
-      return;
-    }
+if (!isDriver){
+  document.getElementById("addBtn").onclick=()=>{
+    const trailer=document.getElementById("trailer").value.trim();
+    if(!trailer) return;
 
-    await apiGetState();
-  }
-
-  async function apiClear(){
-    if (!confirm("Clear ALL trailers?")) return;
-
-    const res = await fetch("/api/clear", { method: "POST" });
-
-    if (!res.ok){
-      alert(await res.text());
-      return;
-    }
-
-    await apiGetState();
-  }
-
-  function render(){
-    const tbody = document.getElementById("tbody");
-    tbody.innerHTML = "";
-
-    let rows = Object.entries(state).map(([trailer, v]) => ({
+    apiUpsert(
       trailer,
-      door: v.door || "",
-      direction: v.direction || "Inbound",
-      status: v.status || "Incoming"
-    }));
+      document.getElementById("door").value.trim(),
+      document.getElementById("direction").value,
+      document.getElementById("status").value
+    );
 
-    if (activeFilter !== "All"){
-      rows = rows.filter(r => r.direction === activeFilter);
-    }
+    document.getElementById("trailer").value="";
+    document.getElementById("door").value="";
+  };
 
-    if (searchText.trim()){
-      const q = searchText.toLowerCase();
-      rows = rows.filter(r => r.trailer.toLowerCase().includes(q));
-    }
+  document.getElementById("clearBtn").onclick=apiClear;
+}
 
-    const rank = s => s==="Ready"?0:(s==="Loading"?1:2);
-    rows.sort((a,b)=>(rank(a.status)-rank(b.status))||a.trailer.localeCompare(b.trailer));
+async function start(){
+  await apiGetState();
+  setInterval(apiGetState,3000);
+}
 
-    if (!rows.length){
-      const tr = document.createElement("tr");
-      const cols = isDriver ? 4 : 5;
-      tr.innerHTML = `<td colspan="${cols}" style="color:#a9b4d0;">No trailers.</td>`;
-      tbody.appendChild(tr);
-      return;
-    }
-
-    for (const r of rows){
-      const tr = document.createElement("tr");
-
-      tr.innerHTML = `
-        <td><strong>${escapeHtml(r.trailer)}</strong></td>
-        <td>${r.door ? escapeHtml(r.door) : "<span style='color:#a9b4d0;'>—</span>"}</td>
-        <td>${escapeHtml(r.direction)}</td>
-        <td><span class="pill ${statusClass(r.status)}">${escapeHtml(r.status)}</span></td>
-      `;
-
-      if (!isDriver){
-        const td = document.createElement("td");
-
-        const sel = document.createElement("select");
-        ["Incoming","Loading","Ready"].forEach(s=>{
-          const o = document.createElement("option");
-          o.value = s;
-          o.textContent = s;
-          sel.appendChild(o);
-        });
-        sel.value = r.status;
-        sel.style.marginRight = "6px";
-        sel.onchange = ()=> apiUpsert(r.trailer, r.door, r.direction, sel.value);
-        td.appendChild(sel);
-
-        const del = document.createElement("button");
-        del.className = "danger";
-        del.textContent = "Delete";
-        del.onclick = ()=> apiDelete(r.trailer);
-        td.appendChild(del);
-
-        tr.appendChild(td);
-      }
-
-      tbody.appendChild(tr);
-    }
-  }
-
-  document.getElementById("search").addEventListener("input",(e)=>{
-    searchText = e.target.value;
-    render();
-  });
-
-  const setFilter=f=>{activeFilter=f;render();};
-  document.getElementById("filterAll").onclick=()=>setFilter("All");
-  document.getElementById("filterInbound").onclick=()=>setFilter("Inbound");
-  document.getElementById("filterOutbound").onclick=()=>setFilter("Outbound");
-  document.getElementById("filterCross").onclick=()=>setFilter("Cross Dock");
-
-  if (!isDriver){
-    document.getElementById("addBtn").onclick=()=>{
-      const trailer=document.getElementById("trailer").value.trim();
-      if(!trailer) return;
-
-      const door=document.getElementById("door").value.trim();
-
-      apiUpsert(
-        trailer,
-        door,
-        document.getElementById("direction").value,
-        document.getElementById("status").value
-      );
-
-      document.getElementById("trailer").value="";
-      document.getElementById("door").value="";
-    };
-
-    document.getElementById("clearBtn").onclick=apiClear;
-
-    document.getElementById("trailer").addEventListener("keydown",(e)=>{
-      if (e.key === "Enter") document.getElementById("addBtn").click();
-    });
-
-    document.getElementById("door").addEventListener("keydown",(e)=>{
-      if (e.key === "Enter") document.getElementById("addBtn").click();
-    });
-  }
-
-  async function start(){
-    await apiGetState();
-    setInterval(apiGetState,3000);
-  }
-
-  start().catch(err=>{
-    document.body.innerHTML="<pre style='color:white;padding:20px;'>Error: "+escapeHtml(err)+"</pre>";
-  });
+start().catch(err=>{
+  document.body.innerHTML="<pre style='color:white;padding:20px;'>Error: "+escapeHtml(err)+"</pre>";
+});
 </script>
 </body>
 </html>

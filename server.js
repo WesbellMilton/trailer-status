@@ -15,6 +15,12 @@ const wss = new WebSocket.Server({ server });
 // }
 let trailers = {};
 
+// NEW: store driver safety confirmations (latest first)
+let confirmations = [];
+// confirmations = [
+//   { at: 123, trailer:"1850", door:"D12", ip:"", userAgent:"" }
+// ];
+
 function broadcast(type, payload) {
   const msg = JSON.stringify({ type, payload });
   for (const client of wss.clients) {
@@ -41,12 +47,47 @@ app.get("/api/state", (req, res) => {
   res.json(trailers);
 });
 
+// NEW: Safety confirm endpoints
+app.post("/api/confirm-safety", (req, res) => {
+  const trailer = cleanStr(req.body?.trailer, 20); // optional (can be blank)
+  const door = cleanStr(req.body?.door, 20);       // optional (can be blank)
+  const loadSecured = !!req.body?.loadSecured;
+  const dockPlateUp = !!req.body?.dockPlateUp;
+
+  if (!loadSecured || !dockPlateUp) {
+    return res.status(400).send("Both confirmations required");
+  }
+
+  const ip =
+    (req.headers["x-forwarded-for"]?.split(",")[0]?.trim()) ||
+    req.socket.remoteAddress ||
+    "";
+
+  confirmations.unshift({
+    at: Date.now(),
+    trailer,
+    door,
+    ip,
+    userAgent: req.headers["user-agent"] || ""
+  });
+
+  // keep last 200
+  confirmations = confirmations.slice(0, 200);
+
+  broadcast("confirmations", confirmations);
+  res.json({ ok: true });
+});
+
+app.get("/api/confirmations", (req, res) => {
+  res.json(confirmations);
+});
+
 app.post("/api/upsert", (req, res) => {
   const trailer = cleanStr(req.body?.trailer, 20);
   const direction = cleanStr(req.body?.direction, 30);
   const status = cleanStr(req.body?.status, 30);
 
-  // NEW: Dock Door / Spot
+  // Dock Door / Spot
   const door = cleanStr(req.body?.door, 20); // e.g., "D12", "Yard A"
 
   if (!trailer) return res.status(400).send("Trailer required");
@@ -86,9 +127,10 @@ app.post("/api/clear", (req, res) => {
   res.json({ ok: true });
 });
 
-// WebSocket: send full state on connect
+// WebSocket: send full state + confirmations on connect
 wss.on("connection", (ws) => {
   ws.send(JSON.stringify({ type: "state", payload: trailers }));
+  ws.send(JSON.stringify({ type: "confirmations", payload: confirmations }));
 });
 
 const PORT = process.env.PORT || 3000;

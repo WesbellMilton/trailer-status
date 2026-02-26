@@ -127,6 +127,11 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   background:rgba(255,255,255,.04);
   color:#fff;
 }
+.driverInfo{
+  padding:0 14px 14px 14px;
+  color:var(--muted);
+  font-size:13px;
+}
 </style>
 </head>
 
@@ -150,6 +155,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
   <div class="card">
 
+    <!-- Dispatcher controls -->
     <div class="controls" id="controls">
       <input id="trailer" placeholder="Trailer #" />
       <input id="door" placeholder="Dock Door" />
@@ -166,6 +172,15 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       <button class="primary" id="addBtn">Add / Update</button>
       <button class="danger" id="clearBtn">Clear All</button>
     </div>
+
+    <!-- Driver check-in (only shows in driver mode) -->
+    <div class="controls" id="driverCheckin" style="display:none;">
+      <input id="driverTrailer" placeholder="Enter your Trailer # (ex: 1850)" />
+      <button class="primary" id="driverSetBtn">Check In</button>
+      <button id="driverClearBtn">Change</button>
+    </div>
+
+    <div class="driverInfo" id="driverInfo" style="display:none;"></div>
 
     <table>
       <thead>
@@ -201,7 +216,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     location.pathname.toLowerCase().includes("/driver") ||
     (new URLSearchParams(location.search).get("mode") || "").toLowerCase() === "driver";
 
-  // DOM refs (NO GLOBAL ID RELIANCE)
+  // DOM refs
   const modeLabel = document.getElementById("modeLabel");
   const controls = document.getElementById("controls");
   const actionHeader = document.getElementById("actionHeader");
@@ -223,13 +238,43 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   const addBtn = document.getElementById("addBtn");
   const clearBtn = document.getElementById("clearBtn");
 
+  // Driver check-in
+  const driverCheckin = document.getElementById("driverCheckin");
+  const driverTrailerInp = document.getElementById("driverTrailer");
+  const driverSetBtn = document.getElementById("driverSetBtn");
+  const driverClearBtn = document.getElementById("driverClearBtn");
+  const driverInfo = document.getElementById("driverInfo");
+
+  // saved driver trailer
+  let driverTrailer = localStorage.getItem("driver_trailer") || "";
+
   let state = {};
   let ackMap = JSON.parse(localStorage.getItem("driver_ack") || "{}");
 
   if (isDriver){
     controls.style.display = "none";
+    driverCheckin.style.display = "flex";
+    driverInfo.style.display = "block";
     actionHeader.textContent = "Move";
     modeLabel.textContent = "Driver Mode";
+
+    if (driverTrailer) driverTrailerInp.value = driverTrailer;
+
+    driverSetBtn.onclick = () => {
+      const t = driverTrailerInp.value.trim();
+      if (!t) return alert("Enter your trailer # to check in.");
+      driverTrailer = t;
+      localStorage.setItem("driver_trailer", driverTrailer);
+      load();
+    };
+
+    driverClearBtn.onclick = () => {
+      localStorage.removeItem("driver_trailer");
+      driverTrailer = "";
+      driverTrailerInp.value = "";
+      driverInfo.textContent = "";
+      load();
+    };
   } else {
     modeLabel.textContent = "Dispatcher Mode";
   }
@@ -257,14 +302,14 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       `;
     } else {
       tipsLeft.innerHTML = `
-        <li>Only trailers marked <b>Ready</b> can be moved.</li>
+        <li>Check in with your trailer # to see your dock door.</li>
         <li>Flashing green = <b>NEW READY</b>.</li>
         <li>You must confirm both safety steps.</li>
       `;
       tipsRight.innerHTML = `
-        <li>Tap green button → Confirm Step 1 → Confirm Step 2.</li>
-        <li>After both: trailer becomes <b>Departed</b>.</li>
-        <li>If Door is blank: call dispatch before moving.</li>
+        <li>Ready trailer → press MOVE</li>
+        <li>Confirm Load Secured</li>
+        <li>Confirm Dock Plate Up → Departed</li>
       `;
     }
   }
@@ -283,16 +328,31 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   function render(){
     tbody.innerHTML = "";
 
-    const entries = Object.entries(state)
-      .sort((a,b) => String(a[0]).localeCompare(String(b[0])));
+    let entries = Object.entries(state);
 
-    if (entries.length === 0){
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td colspan="5" style="color:var(--muted);padding:14px;">No trailers.</td>`;
-      tbody.appendChild(tr);
-      updateKPIs();
-      return;
+    // Driver: must check in and only see their trailer
+    if (isDriver){
+      if (!driverTrailer){
+        tbody.innerHTML = `<tr><td colspan="5" style="color:var(--muted);padding:14px;">
+          Enter your trailer # above to see your dock door.
+        </td></tr>`;
+        updateKPIs();
+        return;
+      }
+
+      entries = entries.filter(([t]) => t === driverTrailer);
+
+      if (entries.length === 0){
+        tbody.innerHTML = `<tr><td colspan="5" style="color:var(--muted);padding:14px;">
+          Trailer "${driverTrailer}" not found on board. Call dispatch.
+        </td></tr>`;
+        driverInfo.textContent = "";
+        updateKPIs();
+        return;
+      }
     }
+
+    entries.sort((a,b) => String(a[0]).localeCompare(String(b[0])));
 
     for (const [t, v] of entries){
       const tr = document.createElement("tr");
@@ -318,6 +378,9 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         sel.onchange = () => update(t, v.door || "", v.direction || "Inbound", sel.value);
         td.appendChild(sel);
       } else {
+        // Update driver summary
+        driverInfo.innerHTML = `Checked in: <b>${t}</b> &nbsp; | &nbsp; Door: <b>${v.door || "NOT SET"}</b> &nbsp; | &nbsp; Status: <b>${v.status}</b>`;
+
         if (v.status === "Ready"){
           const btn = document.createElement("button");
           const isNewReady = ackMap[t] !== v.updatedAt;
@@ -396,7 +459,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     clearBtn.onclick = () => fetch("/api/clear", { method:"POST" }).then(load);
   }
 
-  // Start
   setTips();
   load();
   setInterval(load, 3000);

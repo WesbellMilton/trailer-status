@@ -8,7 +8,10 @@ const app = express();
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// Simple request logging
+/* ================================
+   REQUEST LOGGING
+================================ */
+
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
@@ -24,7 +27,6 @@ const wss = new WebSocket.Server({ server });
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data.db");
 const db = new sqlite3.Database(DB_PATH);
 
-// In-memory caches for fast WebSocket broadcasting
 let trailers = {};
 let confirmations = [];
 
@@ -50,7 +52,7 @@ function cleanStr(v, maxLen) {
 function computeStats(board) {
   const stats = {
     total: 0,
-    byStatus: { Incoming: 0, Loading: 0, Ready: 0 },
+    byStatus: { Incoming: 0, Loading: 0, Ready: 0, Departed: 0 },
     byDirection: { Inbound: 0, Outbound: 0, "Cross Dock": 0 }
   };
 
@@ -198,10 +200,6 @@ app.post("/api/confirm-safety", async (req, res) => {
   }
 });
 
-app.get("/api/confirmations", (req, res) => {
-  res.json(confirmations);
-});
-
 /* ---------- UPSERT TRAILER ---------- */
 
 app.post("/api/upsert", async (req, res) => {
@@ -214,7 +212,7 @@ app.post("/api/upsert", async (req, res) => {
     if (!trailer) return res.status(400).send("Trailer required");
 
     const allowedDir = ["Inbound", "Outbound", "Cross Dock"];
-    const allowedStatus = ["Incoming", "Loading", "Ready"];
+    const allowedStatus = ["Incoming", "Loading", "Ready", "Departed"];
 
     if (!allowedDir.includes(direction)) return res.status(400).send("Invalid direction");
     if (!allowedStatus.includes(status)) return res.status(400).send("Invalid status");
@@ -232,7 +230,6 @@ app.post("/api/upsert", async (req, res) => {
     `, [trailer, direction, status, door, updatedAt]);
 
     await reloadCaches();
-
     broadcast("state", trailers);
     broadcast("stats", computeStats(trailers));
 
@@ -281,54 +278,24 @@ app.post("/api/clear", async (req, res) => {
 });
 
 /* ================================
-   SUPERVISOR PAGE
+   AUTO-ARCHIVE DEPARTED (15 MIN)
 ================================ */
 
-app.get("/supervisor", (req, res) => {
-  res.send(`
-    <html>
-      <head>
-        <meta name="viewport" content="width=device-width,initial-scale=1"/>
-        <title>Supervisor - Confirmations</title>
-        <style>
-          body{font-family:system-ui;background:#0b1220;color:#eaf0ff;margin:0;padding:20px}
-          table{width:100%;border-collapse:collapse;margin-top:12px}
-          th,td{padding:10px;border-bottom:1px solid #263454;text-align:left;font-size:13px}
-          th{color:#a9b4d0;font-size:12px}
-        </style>
-      </head>
-      <body>
-        <h1>Driver Safety Confirmations</h1>
-        <table>
-          <thead>
-            <tr><th>Time</th><th>Trailer</th><th>Door</th><th>IP</th><th>User Agent</th></tr>
-          </thead>
-          <tbody id="tb"></tbody>
-        </table>
-        <script>
-          async function load(){
-            const res = await fetch('/api/confirmations');
-            const data = await res.json();
-            const tb = document.getElementById('tb');
-            tb.innerHTML = '';
-            data.forEach(x=>{
-              const tr = document.createElement('tr');
-              tr.innerHTML =
-                '<td>'+new Date(x.at).toLocaleString()+'</td>'+
-                '<td>'+x.trailer+'</td>'+
-                '<td>'+x.door+'</td>'+
-                '<td>'+x.ip+'</td>'+
-                '<td style="max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+x.userAgent+'</td>';
-              tb.appendChild(tr);
-            });
-          }
-          load();
-          setInterval(load,3000);
-        </script>
-      </body>
-    </html>
-  `);
-});
+setInterval(async () => {
+  try {
+    const cutoff = Date.now() - (15 * 60 * 1000);
+    await dbRun(
+      `DELETE FROM trailers WHERE status = 'Departed' AND updatedAt < ?`,
+      [cutoff]
+    );
+
+    await reloadCaches();
+    broadcast("state", trailers);
+    broadcast("stats", computeStats(trailers));
+  } catch (err) {
+    console.error("Auto-archive error:", err);
+  }
+}, 60 * 1000);
 
 /* ================================
    WEBSOCKET

@@ -138,8 +138,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   background:rgba(255,255,255,.04);
   color:var(--text);
 }
-
-/* Safety modal (kept simple with confirm()) */
 </style>
 </head>
 
@@ -193,21 +191,21 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
     <!-- Quick Tips -->
     <div class="tips" id="tipsArea">
-      <div class="tipBox" id="tipsLeft">
+      <div class="tipBox">
         <div class="tipTitle">Quick Tips</div>
         <ul id="tipsListLeft"></ul>
       </div>
-
-      <div class="tipBox" id="tipsRight">
+      <div class="tipBox">
         <div class="tipTitle">Shortcuts</div>
         <ul id="tipsListRight"></ul>
       </div>
     </div>
+
   </div>
 </div>
 
 <script>
-// DRIVER DETECTION: /driver OR ?mode=driver (backward compatible)
+// DRIVER DETECTION: /driver OR ?mode=driver
 const isDriver =
   location.pathname.toLowerCase().includes("/driver") ||
   (new URLSearchParams(location.search).get("mode") || "").toLowerCase()==="driver";
@@ -234,51 +232,31 @@ function setTips(){
   const base = location.origin;
 
   if (!isDriver){
-    // Dispatcher tips
     const tipsLeft = [
-      "Use the correct Door (ex: D12) so drivers know where to go.",
+      "Enter Door (ex: D12) so drivers know where to go.",
       "Only mark <b>Ready</b> when paperwork + dock is truly ready.",
       `Driver link: <span class="badgeLink mono">${base}/driver</span>`
     ];
     const tipsRight = [
       "Workflow: Incoming → Loading → <b>Ready</b> → (Driver) Departed",
-      "To update: change dropdown status for a trailer.",
+      "Update trailer using the status dropdown.",
       "Clear All is shared — use carefully."
     ];
-
-    tipsLeft.forEach(t => {
-      const li = document.createElement("li");
-      li.innerHTML = t;
-      left.appendChild(li);
-    });
-    tipsRight.forEach(t => {
-      const li = document.createElement("li");
-      li.innerHTML = t;
-      right.appendChild(li);
-    });
+    tipsLeft.forEach(t => { const li=document.createElement("li"); li.innerHTML=t; left.appendChild(li); });
+    tipsRight.forEach(t => { const li=document.createElement("li"); li.innerHTML=t; right.appendChild(li); });
   } else {
-    // Driver tips
     const tipsLeft = [
       "Only trailers marked <b>Ready</b> can be moved.",
       "A <b>NEW READY</b> trailer flashes green.",
-      "Before moving: confirm load secured + dock plate up."
+      "You must confirm BOTH steps to depart."
     ];
     const tipsRight = [
-      "Tap the green button → confirm safety → trailer becomes <b>Departed</b>.",
-      "If a trailer is missing a Door, call dispatch before moving.",
+      "Tap green button → confirm step 1 → confirm step 2 → Departed.",
+      "If Door is blank, call dispatch before moving.",
       `Dispatcher board: <span class="badgeLink mono">${base}/</span>`
     ];
-
-    tipsLeft.forEach(t => {
-      const li = document.createElement("li");
-      li.innerHTML = t;
-      left.appendChild(li);
-    });
-    tipsRight.forEach(t => {
-      const li = document.createElement("li");
-      li.innerHTML = t;
-      right.appendChild(li);
-    });
+    tipsLeft.forEach(t => { const li=document.createElement("li"); li.innerHTML=t; left.appendChild(li); });
+    tipsRight.forEach(t => { const li=document.createElement("li"); li.innerHTML=t; right.appendChild(li); });
   }
 }
 setTips();
@@ -356,9 +334,13 @@ async function update(trailer, door, direction, status){
   load();
 }
 
+/* ✅ DRIVER MUST CLICK EACH PROMPT (2 STEPS) */
 async function confirmMove(trailer, v){
-  const ok = confirm("Confirm BOTH:\n1) Load is secured\n2) Dock plate is up");
-  if (!ok) return;
+  const ok1 = confirm("STEP 1/2: Confirm the LOAD is SECURED.");
+  if (!ok1) return;
+
+  const ok2 = confirm("STEP 2/2: Confirm the DOCK PLATE is UP.");
+  if (!ok2) return;
 
   await fetch("/api/confirm-safety", {
     method: "POST",
@@ -375,7 +357,7 @@ async function confirmMove(trailer, v){
   ackMap[trailer] = v.updatedAt;
   localStorage.setItem("driver_ack", JSON.stringify(ackMap));
 
-  // driver marks departed
+  // mark departed
   await update(trailer, v.door || "", v.direction || "Inbound", "Departed");
 }
 

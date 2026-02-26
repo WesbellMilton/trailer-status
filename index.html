@@ -60,11 +60,16 @@
   <div class="card">
     <div id="controls" class="row">
       <input id="trailer" placeholder="Trailer #" />
+
+      <!-- NEW: Dock Door / Spot -->
+      <input id="door" placeholder="Dock Door / Spot" style="min-width:160px;" />
+
       <select id="direction">
         <option value="Inbound">Inbound</option>
         <option value="Outbound">Outbound</option>
         <option value="Cross Dock">Cross Dock</option>
       </select>
+
       <select id="status">
         <option value="Incoming">Incoming</option>
         <option value="Loading">Loading</option>
@@ -88,6 +93,7 @@
       <thead>
         <tr>
           <th>Trailer #</th>
+          <th>Door</th>
           <th>Direction</th>
           <th>Status</th>
           <th id="actionsHeader">Actions</th>
@@ -135,11 +141,11 @@
     render();
   }
 
-  async function apiUpsert(trailer, direction, status){
+  async function apiUpsert(trailer, door, direction, status){
     const res = await fetch("/api/upsert", {
       method: "POST",
       headers: { "Content-Type":"application/json" },
-      body: JSON.stringify({ trailer, direction, status })
+      body: JSON.stringify({ trailer, door, direction, status })
     });
 
     if (!res.ok){
@@ -184,8 +190,9 @@
 
     let rows = Object.entries(state).map(([trailer, v]) => ({
       trailer,
-      direction: v.direction,
-      status: v.status
+      door: v.door || "",
+      direction: v.direction || "Inbound",
+      status: v.status || "Incoming"
     }));
 
     if (activeFilter !== "All"){
@@ -202,7 +209,7 @@
 
     if (!rows.length){
       const tr = document.createElement("tr");
-      const cols = isDriver ? 3 : 4;
+      const cols = isDriver ? 4 : 5;
       tr.innerHTML = `<td colspan="${cols}" style="color:#a9b4d0;">No trailers.</td>`;
       tbody.appendChild(tr);
       return;
@@ -210,8 +217,10 @@
 
     for (const r of rows){
       const tr = document.createElement("tr");
+
       tr.innerHTML = `
         <td><strong>${escapeHtml(r.trailer)}</strong></td>
+        <td>${r.door ? escapeHtml(r.door) : "<span style='color:#a9b4d0;'>—</span>"}</td>
         <td>${escapeHtml(r.direction)}</td>
         <td><span class="pill ${statusClass(r.status)}">${escapeHtml(r.status)}</span></td>
       `;
@@ -219,6 +228,7 @@
       if (!isDriver){
         const td = document.createElement("td");
 
+        // quick status change
         const sel = document.createElement("select");
         ["Incoming","Loading","Ready"].forEach(s=>{
           const o = document.createElement("option");
@@ -227,7 +237,8 @@
           sel.appendChild(o);
         });
         sel.value = r.status;
-        sel.onchange = ()=> apiUpsert(r.trailer, r.direction, sel.value);
+        sel.style.marginRight = "6px";
+        sel.onchange = ()=> apiUpsert(r.trailer, r.door, r.direction, sel.value);
         td.appendChild(sel);
 
         const del = document.createElement("button");
@@ -259,16 +270,24 @@
       const trailer=document.getElementById("trailer").value.trim();
       if(!trailer) return;
 
+      const door=document.getElementById("door").value.trim();
+
       apiUpsert(
         trailer,
+        door,
         document.getElementById("direction").value,
         document.getElementById("status").value
       );
 
       document.getElementById("trailer").value="";
+      document.getElementById("door").value="";
     };
 
     document.getElementById("clearBtn").onclick=apiClear;
+
+    document.getElementById("trailer").addEventListener("keydown",(e)=>{
+      if (e.key === "Enter") document.getElementById("addBtn").click();
+    });
   }
 
   async function start(){
@@ -277,7 +296,7 @@
   }
 
   start().catch(err=>{
-    document.body.innerHTML="<pre style='color:white;padding:20px;'>Error: "+err+"</pre>";
+    document.body.innerHTML="<pre style='color:white;padding:20px;'>Error: "+escapeHtml(err)+"</pre>";
   });
 </script>
 </body>

@@ -1,13 +1,17 @@
 {
-  "name": "trailer-status-board",
+  "name": "trailer-status",
   "version": "1.0.0",
-  "description": "Inbound/Outbound Trailer Status Board with Driver View",
+  "description": "Inbound/Outbound/Cross Dock Trailer Status Board with Driver View",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
     "start": "node server.js"
   },
+  "engines": {
+    "node": "20.x"
+  },
   "dependencies": {
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "ws": "^8.17.0"
   }
 }

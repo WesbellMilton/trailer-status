@@ -10,7 +10,7 @@ const compression = require("compression");
 
 const app = express();
 
-// IMPORTANT: allow inline <script> in index.html (CSP off)
+// Allow inline <script> in index.html (CSP off)
 app.use(
   helmet({
     contentSecurityPolicy: false
@@ -74,7 +74,7 @@ function computeStats(board) {
   return stats;
 }
 
-// No-cache headers to prevent stale index.html on phones/Render
+// Prevent stale index.html from being cached
 function noCache(res) {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.setHeader("Pragma", "no-cache");
@@ -108,7 +108,6 @@ function dbAll(sql, params = []) {
 ================================ */
 
 async function initDb() {
-  // WAL improves reliability on Render/local
   await dbRun(`PRAGMA journal_mode = WAL;`);
   await dbRun(`PRAGMA synchronous = NORMAL;`);
 
@@ -168,19 +167,19 @@ async function reloadCachesFromDb() {
    ROUTES
 ================================ */
 
-// Dispatcher board
+// Dispatcher
 app.get("/", (req, res) => {
   noCache(res);
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
-// Driver board
+// Driver
 app.get("/driver", (req, res) => {
   noCache(res);
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
-// Dock board
+// Dock
 app.get("/dock", (req, res) => {
   noCache(res);
   res.sendFile(path.join(__dirname, "index.html"));
@@ -190,7 +189,7 @@ app.get("/health", (req, res) => {
   res.json({ ok: true, db: DB_PATH });
 });
 
-// API
+// APIs
 app.get("/api/state", (req, res) => res.json(trailers));
 app.get("/api/stats", (req, res) => res.json(computeStats(trailers)));
 app.get("/api/confirmations", (req, res) => res.json(confirmations));
@@ -201,8 +200,8 @@ app.get("/api/confirmations", (req, res) => res.json(confirmations));
 
 app.post("/api/confirm-safety", async (req, res) => {
   try {
-    const trailer = cleanStr(req.body?.trailer, 20); // optional
-    const door = cleanStr(req.body?.door, 20);       // optional
+    const trailer = cleanStr(req.body?.trailer, 20);
+    const door = cleanStr(req.body?.door, 20);
     const loadSecured = !!req.body?.loadSecured;
     const dockPlateUp = !!req.body?.dockPlateUp;
 
@@ -223,7 +222,6 @@ app.post("/api/confirm-safety", async (req, res) => {
       [at, trailer, door, ip, userAgent]
     );
 
-    // refresh confirmations cache only
     const confRows = await dbAll(`
       SELECT at, trailer, door, ip, userAgent
       FROM confirmations
@@ -261,8 +259,6 @@ app.post("/api/upsert", async (req, res) => {
     if (!trailer) return res.status(400).send("Trailer required");
 
     const allowedDir = ["Inbound", "Outbound", "Cross Dock"];
-
-    // ✅ 2-step ready supported
     const allowedStatus = ["Incoming", "Loading", "Dock Ready", "Ready", "Departed"];
 
     if (!allowedDir.includes(direction)) return res.status(400).send("Invalid direction");
@@ -282,7 +278,6 @@ app.post("/api/upsert", async (req, res) => {
       [trailer, direction, status, door, updatedAt]
     );
 
-    // update cache
     trailers[trailer] = { direction, status, door: door || "", updatedAt };
 
     broadcast("state", trailers);

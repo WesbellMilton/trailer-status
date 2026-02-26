@@ -1,14 +1,15 @@
 {
   "name": "trailer-status",
   "version": "1.0.0",
-  "description": "Inbound/Outbound/Cross Dock Trailer Status Board with Driver View",
+  "description": "Trailer Status Board with Dock Door, KPI Dashboard, Driver Safety Confirmation & Supervisor Log",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node --watch server.js"
   },
   "engines": {
-    "node": "20.x"
+    "node": ">=20.0.0"
   },
   "dependencies": {
     "express": "^4.19.2",

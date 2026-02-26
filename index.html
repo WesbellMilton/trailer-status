@@ -150,28 +150,28 @@
   }
 
   async function apiUpsert(trailer, direction, status){
-  try {
-    const res = await fetch("/api/upsert", {
-      method: "POST",
-      headers: { "Content-Type":"application/json" },
-      body: JSON.stringify({ trailer, direction, status })
-    });
+    try {
+      const res = await fetch("/api/upsert", {
+        method: "POST",
+        headers: { "Content-Type":"application/json" },
+        body: JSON.stringify({ trailer, direction, status })
+      });
 
-    const text = await res.text();
-    console.log("Upsert response:", res.status, text);
+      const text = await res.text();
+      console.log("Upsert response:", res.status, text);
 
-    if (!res.ok) {
-      alert("Add failed: " + text);
-      return;
+      if (!res.ok) {
+        alert("Add failed: " + text);
+        return;
+      }
+
+      await apiGetState();
+    } catch (err) {
+      alert("Network error: " + err);
+      console.error(err);
     }
-
-    await apiGetState();
-
-  } catch (err) {
-    alert("Network error: " + err);
-    console.error(err);
   }
-}
+
   async function apiDelete(trailer){
     const res = await fetch("/api/delete", {
       method: "POST",
@@ -228,7 +228,7 @@
     if (!rows.length){
       const tr = document.createElement("tr");
       const cols = isDriver ? 3 : 4;
-      tr.innerHTML = <td colspan="${cols}" style="color:var(--muted);">No trailers.</td>;
+      tr.innerHTML = `<td colspan="${cols}" style="color:var(--muted);">No trailers.</td>`;
       tbody.appendChild(tr);
       return;
     }
@@ -310,7 +310,7 @@
   }
 
   start().catch(err => {
-    document.body.innerHTML = "<pre style='color:white;padding:20px;'>Error: " + err + "</pre>";
+    document.body.innerHTML = "<pre style='color:white;padding:20px;'>Error: " + escapeHtml(err) + "</pre>";
   });
 </script>
 </body>

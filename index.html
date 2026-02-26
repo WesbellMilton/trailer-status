@@ -8,10 +8,8 @@
 <style>
   :root{
     --bg0:#050814;
-    --bg1:#070b18;
     --bg2:#0b1430;
     --card:rgba(14,20,44,.78);
-    --card2:rgba(14,20,44,.55);
     --line:rgba(120,145,220,.18);
     --text:#eaf0ff;
     --muted:#a7b2d3;
@@ -47,9 +45,7 @@
     box-shadow: var(--shadow);
     backdrop-filter: blur(10px);
   }
-  .brand{
-    display:flex;flex-direction:column;gap:2px;
-  }
+  .brand{display:flex;flex-direction:column;gap:2px;}
   .brand h1{margin:0;font-size:18px;letter-spacing:.2px;}
   .brand .sub{color:var(--muted);font-size:12px;}
 
@@ -161,6 +157,8 @@
   }
   tbody tr:hover{background: rgba(255,255,255,.03)}
   .mono{font-variant-numeric: tabular-nums;}
+  .muted{color:var(--muted)}
+  .dash{color: rgba(167,178,211,.55)}
 
   .tag{
     display:inline-flex;align-items:center;gap:6px;
@@ -170,9 +168,6 @@
   .good{background: rgba(34,197,94,.18); border:1px solid rgba(34,197,94,.35); color:#b9ffd0;}
   .warn{background: rgba(245,158,11,.16); border:1px solid rgba(245,158,11,.35); color:#ffe2b6;}
   .bad{background: rgba(239,68,68,.16); border:1px solid rgba(239,68,68,.35); color:#ffb9b9;}
-
-  .muted{color:var(--muted)}
-  .dash{color: rgba(167,178,211,.55)}
 
   /* Safety modal */
   .overlay{
@@ -243,7 +238,7 @@
         <button class="primary" id="addBtn">Add / Update</button>
         <button class="danger" id="clearBtn">Clear All</button>
 
-        <input id="search" class="right" placeholder="Search trailer…" style="min-width:240px;" />
+        <input id="search" class="right" placeholder="Search trailer or door…" style="min-width:240px;" />
       </div>
 
       <div class="filters" id="filters">
@@ -271,14 +266,18 @@
 
     <div class="card">
       <div class="cardHeader">
-        <div class="title">Quick Tips</div>
-        <div class="hint">Driver mode is read-only</div>
+        <div class="title">Info</div>
+        <div class="hint">Ops flow</div>
       </div>
       <div style="padding:14px 16px;color:var(--muted);font-size:13px;line-height:1.45;">
-        <div style="margin-bottom:10px;"><strong style="color:var(--text)">Dispatcher:</strong> Add trailers, set door, update status, delete when gone.</div>
-        <div style="margin-bottom:10px;"><strong style="color:var(--text)">Driver:</strong> Open <span class="mono">?mode=driver</span> to view.</div>
+        <div style="margin-bottom:10px;">
+          <strong style="color:var(--text)">Dispatcher:</strong> Set trailer + door, mark trailer <strong style="color:var(--text)">Ready</strong> when it can move.
+        </div>
+        <div style="margin-bottom:10px;">
+          <strong style="color:var(--text)">Driver:</strong> Open <span class="mono">?mode=driver</span> and click <strong style="color:var(--text)">Move Trailer</strong> on Ready trailers.
+        </div>
         <div style="opacity:.85">
-          Status order: <strong style="color:var(--text)">Ready</strong> → <strong style="color:var(--text)">Loading</strong> → <strong style="color:var(--text)">Incoming</strong>.
+          Safety prompt appears only when trailer is Ready and driver clicks Move.
         </div>
       </div>
     </div>
@@ -347,41 +346,54 @@
     document.getElementById("kpiCross").textContent = k["Cross Dock"];
   }
 
-  /* ================= DRIVER SAFETY PROMPT ================= */
+  // Driver mode: hide dispatcher controls; keep Actions column (Move button)
   if (isDriver){
     modeHint.textContent = "Driver view • Read-only";
     controls.style.display = "none";
-    actionsHeader.style.display = "none";
+    actionsHeader.textContent = "Move";
+  } else {
+    modeHint.textContent = "Dispatcher view • Shared board";
+    actionsHeader.textContent = "Actions";
+  }
 
+  function showSafetyPrompt(trailer, door){
     const overlay = document.createElement("div");
     overlay.className = "overlay";
+
     overlay.innerHTML = `
       <div class="modal">
         <h2>⚠ Safety Confirmation Required</h2>
-        <p>Before moving a trailer, confirm both checks below.</p>
+        <p>
+          Trailer <strong>${escapeHtml(trailer)}</strong>
+          ${door ? `at Door <strong>${escapeHtml(door)}</strong>` : ``}
+        </p>
 
         <div class="checkRow">
           <input type="checkbox" id="chkLoad" />
-          <div><strong>Load is secured</strong><div class="muted" style="font-size:12px;margin-top:2px;">Confirm freight is stable and safe to move.</div></div>
+          <div>
+            <strong>Load is secured</strong>
+            <div class="muted" style="font-size:12px;margin-top:2px;">Confirm freight is stable and safe to move.</div>
+          </div>
         </div>
 
         <div class="checkRow">
           <input type="checkbox" id="chkPlate" />
-          <div><strong>Dock plate is up</strong><div class="muted" style="font-size:12px;margin-top:2px;">Confirm dock plate is raised and clear.</div></div>
+          <div>
+            <strong>Dock plate is up</strong>
+            <div class="muted" style="font-size:12px;margin-top:2px;">Confirm dock plate is raised and clear.</div>
+          </div>
         </div>
 
         <div class="actions">
-          <button class="ghost" id="cancelSafety">Exit</button>
-          <button class="primary" id="confirmSafety">Confirm & Continue</button>
+          <button class="ghost" id="cancelSafety">Cancel</button>
+          <button class="primary" id="confirmSafety">Confirm</button>
         </div>
       </div>
     `;
+
     document.body.appendChild(overlay);
 
-    document.getElementById("cancelSafety").onclick = () => {
-      // just close the tab/page effect
-      location.href = "/";
-    };
+    document.getElementById("cancelSafety").onclick = () => overlay.remove();
 
     document.getElementById("confirmSafety").onclick = async () => {
       const load = document.getElementById("chkLoad").checked;
@@ -397,8 +409,8 @@
           method: "POST",
           headers: { "Content-Type":"application/json" },
           body: JSON.stringify({
-            trailer: "",
-            door: "",
+            trailer,
+            door,
             loadSecured: true,
             dockPlateUp: true
           })
@@ -410,14 +422,12 @@
         }
 
         overlay.remove();
+        alert("Confirmed. You may move the trailer.");
       } catch (e){
         alert("Network error logging confirmation: " + e);
       }
     };
-  } else {
-    modeHint.textContent = "Dispatcher view • Shared board";
   }
-  /* ======================================================== */
 
   async function apiGetState(){
     const res = await fetch("/api/state");
@@ -433,7 +443,6 @@
       headers: { "Content-Type":"application/json" },
       body: JSON.stringify({ trailer, door, direction, status })
     });
-
     if (!res.ok){
       alert(await res.text());
       return;
@@ -447,7 +456,6 @@
       headers: { "Content-Type":"application/json" },
       body: JSON.stringify({ trailer })
     });
-
     if (!res.ok){
       alert(await res.text());
       return;
@@ -458,7 +466,6 @@
   async function apiClear(){
     if (!confirm("Clear ALL trailers?")) return;
     const res = await fetch("/api/clear", { method: "POST" });
-
     if (!res.ok){
       alert(await res.text());
       return;
@@ -483,14 +490,17 @@
 
     if (searchText.trim()){
       const q = searchText.trim().toLowerCase();
-      rows = rows.filter(r => r.trailer.toLowerCase().includes(q) || r.door.toLowerCase().includes(q));
+      rows = rows.filter(r =>
+        r.trailer.toLowerCase().includes(q) ||
+        (r.door || "").toLowerCase().includes(q)
+      );
     }
 
     rows.sort((a,b)=> (statusRank(a.status)-statusRank(b.status)) || a.trailer.localeCompare(b.trailer));
 
     if (!rows.length){
       const tr = document.createElement("tr");
-      const cols = isDriver ? 4 : 5;
+      const cols = 5;
       tr.innerHTML = `<td colspan="${cols}" class="muted">No trailers found.</td>`;
       tbody.appendChild(tr);
       return;
@@ -507,9 +517,11 @@
         <td><span class="tag ${cls}">${escapeHtml(r.status)}</span></td>
       `;
 
-      if (!isDriver){
-        const td = document.createElement("td");
+      // Actions column
+      const tdActions = document.createElement("td");
 
+      if (!isDriver){
+        // Dispatcher actions: quick status dropdown + delete
         const sel = document.createElement("select");
         ["Incoming","Loading","Ready"].forEach(s=>{
           const o = document.createElement("option");
@@ -520,17 +532,27 @@
         sel.value = r.status;
         sel.style.marginRight = "8px";
         sel.onchange = ()=> apiUpsert(r.trailer, r.door, r.direction, sel.value);
-        td.appendChild(sel);
+        tdActions.appendChild(sel);
 
         const del = document.createElement("button");
         del.className = "danger";
         del.textContent = "Delete";
         del.onclick = ()=> apiDelete(r.trailer);
-        td.appendChild(del);
-
-        tr.appendChild(td);
+        tdActions.appendChild(del);
+      } else {
+        // Driver actions: ONLY allow Move Trailer when status is Ready
+        if (r.status === "Ready"){
+          const moveBtn = document.createElement("button");
+          moveBtn.className = "primary";
+          moveBtn.textContent = "Move Trailer";
+          moveBtn.onclick = ()=> showSafetyPrompt(r.trailer, r.door);
+          tdActions.appendChild(moveBtn);
+        } else {
+          tdActions.innerHTML = `<span class="muted">—</span>`;
+        }
       }
 
+      tr.appendChild(tdActions);
       tbody.appendChild(tr);
     }
   }
@@ -571,6 +593,10 @@
     document.getElementById("door").addEventListener("keydown", (e) => {
       if (e.key === "Enter") document.getElementById("addBtn").click();
     });
+  } else {
+    // In driver mode, hide Clear All button if it somehow appears
+    const clearBtn = document.getElementById("clearBtn");
+    if (clearBtn) clearBtn.style.display = "none";
   }
 
   // Refresh

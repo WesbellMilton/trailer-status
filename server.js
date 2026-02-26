@@ -139,7 +139,13 @@ async function reloadCachesFromDb() {
    ROUTES
 ================================ */
 
+// Main board (dispatcher)
 app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
+
+// NEW: Easy Driver Link
+app.get("/driver", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
@@ -156,8 +162,8 @@ app.get("/api/stats", (req, res) => {
 // Safety confirm endpoints (persisted)
 app.post("/api/confirm-safety", async (req, res) => {
   try {
-    const trailer = cleanStr(req.body?.trailer, 20); // optional
-    const door = cleanStr(req.body?.door, 20);       // optional
+    const trailer = cleanStr(req.body?.trailer, 20);
+    const door = cleanStr(req.body?.door, 20);
     const loadSecured = !!req.body?.loadSecured;
     const dockPlateUp = !!req.body?.dockPlateUp;
 
@@ -255,7 +261,6 @@ app.post("/api/delete", async (req, res) => {
     if (!trailer) return res.status(400).send("Trailer required");
 
     await dbRun(`DELETE FROM trailers WHERE trailer = ?`, [trailer]);
-
     delete trailers[trailer];
 
     broadcast("state", trailers);
@@ -378,6 +383,8 @@ initDb()
     server.listen(PORT, () => {
       console.log("Running on port", PORT);
       console.log("SQLite DB:", DB_PATH);
+      console.log("Driver link: /driver");
+      console.log("Supervisor link: /supervisor");
     });
   })
   .catch((err) => {

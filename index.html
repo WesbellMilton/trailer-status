@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Wesbell Trailer Status</title>
 
+<!-- Leaflet (Map) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <style>
 :root{
   --bg0:#050814;
@@ -12,13 +16,10 @@
   --line:rgba(120,145,220,.18);
   --text:#eaf0ff;
   --muted:#a7b2d3;
-
-  --ok:#22c55e;
-  --svc:#f59e0b;
+  --good:#22c55e;
+  --warn:#f59e0b;
   --bad:#ef4444;
-
-  --card:rgba(255,255,255,.04);
-  --chip:rgba(12,19,42,.55);
+  --cool:#94a3b8;
 }
 *{box-sizing:border-box}
 body{
@@ -29,51 +30,46 @@ body{
     radial-gradient(1000px 500px at 20% -10%, rgba(99,102,241,.35), transparent 60%),
     linear-gradient(180deg,var(--bg0),var(--bg2));
 }
-a{color:#b7c5ff;text-decoration:none}
-a:hover{text-decoration:underline}
-
-.wrap{max-width:1200px;margin:auto;padding:18px}
+.wrap{max-width:1200px;margin:auto;padding:20px}
 .topbar{
   display:flex;justify-content:space-between;align-items:center;gap:12px;
   padding:14px;border:1px solid var(--line);
-  border-radius:14px;background:var(--card)
+  border-radius:14px;background:rgba(255,255,255,.04)
 }
 .brand h1{margin:0;font-size:18px}
 .sub{font-size:12px;color:var(--muted)}
-.kpis{display:flex;flex-wrap:wrap;gap:12px;justify-content:flex-end}
-.kpi{font-size:12px;color:var(--muted);white-space:nowrap}
+.kpis{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;align-items:center}
+.kpi{font-size:13px;color:var(--muted);white-space:nowrap}
 .kpi strong{color:#fff}
+.badge{
+  display:inline-block;padding:2px 8px;border-radius:999px;
+  border:1px solid rgba(120,145,220,.25);
+  background:rgba(255,255,255,.04);color:#fff;font-size:12px
+}
 
 .card{
   margin-top:14px;
   border:1px solid var(--line);
   border-radius:14px;
-  background:var(--card);
+  background:rgba(255,255,255,.04);
   overflow:hidden;
 }
+
 .controls{
-  padding:14px;
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
-  align-items:center;
+  padding:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center
 }
 input,select,button{
-  padding:10px 10px;
+  padding:10px 12px;
   border-radius:10px;
   border:1px solid var(--line);
   background:#0c132a;
   color:#fff;
-  font-size:13px;
 }
-input{min-width:120px}
 button{cursor:pointer;font-weight:900}
 button.primary{background:rgba(99,102,241,.25)}
 button.danger{background:rgba(239,68,68,.25)}
 button.ghost{background:transparent}
-button.small{padding:7px 10px;font-weight:800;font-size:12px}
 
-.tableWrap{width:100%;overflow:auto}
 table{width:100%;border-collapse:collapse}
 thead th{
   font-size:12px;color:var(--muted);
@@ -82,180 +78,118 @@ thead th{
 }
 tbody td{
   padding:12px;
-  border-bottom:1px solid rgba(120,145,220,.12);
-  vertical-align:middle;
+  border-bottom:1px solid rgba(120,145,220,.12)
 }
 tbody tr:hover{background:rgba(255,255,255,.03)}
-.mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
 
 .tag{
-  padding:4px 9px;border-radius:999px;
-  font-size:12px;font-weight:950;
-  border:1px solid rgba(120,145,220,.22);
-  background:rgba(12,19,42,.35);
+  padding:4px 10px;border-radius:999px;
+  font-size:12px;font-weight:900;display:inline-block
 }
-.tIncoming{border-color:rgba(239,68,68,.35)}
-.tLoading{border-color:rgba(245,158,11,.35)}
-.tDockReady{border-color:rgba(99,102,241,.55)}
-.tReady{border-color:rgba(34,197,94,.45)}
-.tDeparted{border-color:rgba(148,163,184,.35); opacity:.9}
+.good{background:rgba(34,197,94,.18);border:1px solid rgba(34,197,94,.35)}
+.warn{background:rgba(245,158,11,.18);border:1px solid rgba(245,158,11,.35)}
+.bad{background:rgba(239,68,68,.18);border:1px solid rgba(239,68,68,.35)}
+.cool{background:rgba(148,163,184,.18);border:1px solid rgba(148,163,184,.35)}
 
-.btnRow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.btnOk{border-color:rgba(34,197,94,.55); background:rgba(34,197,94,.15)}
-.btnSvc{border-color:rgba(245,158,11,.55); background:rgba(245,158,11,.14)}
-.btnBad{border-color:rgba(239,68,68,.55); background:rgba(239,68,68,.12)}
-.btnMove{
-  border:1px solid rgba(34,197,94,.55);
-  background:rgba(34,197,94,.14);
-  font-weight:950;
+.readyBtn{
+  border:1px solid rgba(34,197,94,.45);
+  background:rgba(34,197,94,.18);
+  font-weight:900;
+  padding:10px 12px;
+  border-radius:12px;
 }
+
+/* FLASH green (new ready) */
 .flash{
   animation:flash 1s infinite;
-  background:rgba(34,197,94,.26)!important;
-  border-color:rgba(34,197,94,.85)!important;
+  background:rgba(34,197,94,.32)!important;
+  border-color:rgba(34,197,94,.75)!important;
 }
 @keyframes flash{
   0%{box-shadow:0 0 0 rgba(34,197,94,0)}
-  50%{box-shadow:0 0 12px rgba(34,197,94,.65)}
+  50%{box-shadow:0 0 14px rgba(34,197,94,.85)}
   100%{box-shadow:0 0 0 rgba(34,197,94,0)}
 }
 
-/* Toast */
 .toast{
-  position:fixed;
-  left:50%;
-  bottom:16px;
-  transform:translateX(-50%);
-  background:rgba(0,0,0,.55);
+  position:fixed;left:50%;bottom:18px;transform:translateX(-50%);
+  background:rgba(10,16,36,.92);
   border:1px solid rgba(120,145,220,.25);
-  color:#fff;
-  padding:10px 12px;
-  border-radius:12px;
-  font-size:12px;
-  display:none;
-  z-index:9999;
+  padding:10px 14px;border-radius:12px;
+  color:#fff;font-weight:900;
+  display:none;z-index:9999;
+  max-width:min(680px, 92vw);
 }
-
-/* Dock Plates panel (BOTTOM RIGHT) */
-.platePanel{
-  position:fixed;
-  right:14px;
-  bottom:14px;
-  width:min(520px, calc(100vw - 28px));
-  background:rgba(8,12,24,.78);
-  border:1px solid rgba(120,145,220,.22);
-  border-radius:14px;
-  overflow:hidden;
-  z-index:9998;
-  backdrop-filter: blur(8px);
-}
-.plateHead{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  padding:10px 12px;
-  border-bottom:1px solid rgba(120,145,220,.14);
-}
-.plateHead .title{
-  font-weight:950;
-  font-size:13px;
-}
-.pills{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.pill{
-  display:inline-flex;align-items:center;gap:6px;
-  padding:4px 9px;
-  border-radius:999px;
-  border:1px solid rgba(120,145,220,.22);
-  background:rgba(255,255,255,.03);
-  font-size:12px;
-  color:#fff;
-}
-.dot{width:8px;height:8px;border-radius:99px;background:#999}
-.dot.ok{background:var(--ok)}
-.dot.svc{background:var(--svc)}
-.dot.unk{background:#94a3b8}
-.plateBody{
-  padding:10px 12px;
-  max-height:240px;            /* prevents huge/distorted panel */
-  overflow:auto;               /* scroll if needed */
-}
-.plateHint{
-  font-size:12px;
-  color:rgba(167,178,211,.85);
-  margin:0 0 8px 0;
-}
-.grid{
-  display:grid;
-  grid-template-columns:repeat(5, minmax(0, 1fr)); /* compact + horizontal */
-  gap:8px;
-}
-@media (max-width: 520px){
-  .grid{grid-template-columns:repeat(4, minmax(0,1fr))}
-}
-.plateCard{
-  border:1px solid rgba(120,145,220,.18);
-  border-radius:12px;
-  background:rgba(12,19,42,.35);
-  padding:8px;
-  min-height:56px;
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-}
-.plateTop{
-  display:flex;justify-content:space-between;align-items:center;gap:6px;
-  font-size:12px;
-  font-weight:950;
-}
-.badge{
-  padding:2px 8px;
-  border-radius:999px;
-  border:1px solid rgba(120,145,220,.2);
-  background:rgba(255,255,255,.03);
-  font-size:11px;
-  font-weight:900;
-}
-.badge.ok{border-color:rgba(34,197,94,.45)}
-.badge.svc{border-color:rgba(245,158,11,.45)}
-.badge.unk{border-color:rgba(148,163,184,.35)}
-.plateNote{
-  font-size:11px;
-  color:rgba(167,178,211,.9);
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
-.plateActions{
-  display:flex;
-  gap:6px;
-  flex-wrap:wrap;
-}
-.plateActions button{
-  padding:6px 8px;
-  border-radius:10px;
-  font-size:11px;
-  font-weight:900;
-}
-.hidden{display:none !important}
+.toast.show{display:block}
 
 /* Footer */
 .footer{
-  margin-top:10px;
   text-align:center;
-  font-size:11px;
-  color:rgba(167,178,211,.65);
+  color:rgba(167,178,211,.9);
+  font-size:12px;
+  padding:12px 0 6px 0;
+}
+
+/* Dock plates bar bottom-right */
+.platesBar{
+  position:fixed;
+  right:14px;
+  bottom:14px;
+  background:rgba(10,16,36,.85);
+  border:1px solid rgba(120,145,220,.25);
+  border-radius:14px;
+  padding:10px 10px;
+  display:flex;
+  gap:8px;
+  align-items:center;
+  max-width:min(560px, 92vw);
+}
+.platesTitle{font-weight:900;font-size:12px;color:var(--muted);margin-right:6px;white-space:nowrap}
+.platePill{
+  padding:6px 9px;border-radius:999px;
+  border:1px solid rgba(120,145,220,.2);
+  font-weight:900;font-size:12px;
+  cursor:pointer;
+  user-select:none;
+  white-space:nowrap;
+}
+.plateOK{background:rgba(34,197,94,.20);border-color:rgba(34,197,94,.45)}
+.plateService{background:rgba(245,158,11,.20);border-color:rgba(245,158,11,.45)}
+.plateUnknown{background:rgba(148,163,184,.16);border-color:rgba(148,163,184,.30)}
+.platesHint{font-size:11px;color:var(--muted);margin-left:8px;white-space:nowrap}
+
+@media (max-width:720px){
+  .platesBar{left:10px;right:10px}
+  .platesHint{display:none}
+}
+
+/* Geotab panel */
+.geoWrap{
+  padding:14px;
+  border-top:1px solid rgba(120,145,220,.18);
+  display:none; /* shown only for dispatcher/dock */
+}
+.geoHead{
+  display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;
+}
+.geoTitle{font-weight:900}
+.geoStatus{color:rgba(167,178,211,.85);font-size:12px}
+#map{
+  height:320px;margin-top:10px;border-radius:12px;overflow:hidden;
+  border:1px solid rgba(120,145,220,.18);
+}
+.geoList{
+  margin-top:10px;color:rgba(167,178,211,.9);font-size:12px
 }
 </style>
 </head>
 
 <body>
 <div class="wrap">
-
   <div class="topbar">
     <div class="brand">
       <h1>Wesbell Logistics</h1>
-      <div class="sub" id="modeLabel">Trailer Status</div>
+      <div class="sub" id="modeLabel">Trailer Status Board</div>
     </div>
 
     <div class="kpis">
@@ -265,152 +199,88 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       <span class="kpi">Dock Ready <strong id="kDockReady">0</strong></span>
       <span class="kpi">Ready <strong id="kReady">0</strong></span>
       <span class="kpi">Departed <strong id="kDeparted">0</strong></span>
-      <span class="kpi"><span class="tag" id="liveTag">Live</span></span>
+      <span class="badge" id="liveBadge">● Live</span>
     </div>
   </div>
 
   <div class="card">
-    <!-- Dispatcher controls -->
-    <div class="controls" id="dispatcherControls">
-      <input id="trailerInp" placeholder="Trailer #" />
-      <input id="doorInp" placeholder="Door (18-42)" />
-      <select id="directionSel">
+
+    <!-- Dispatcher controls only -->
+    <div class="controls" id="controls">
+      <input id="trailer" placeholder="Trailer #" />
+      <input id="door" placeholder="Door (18-42)" />
+      <select id="direction">
         <option>Inbound</option>
         <option>Outbound</option>
         <option>Cross Dock</option>
       </select>
-      <select id="statusSel">
+      <select id="status">
         <option>Incoming</option>
         <option>Loading</option>
         <option>Dock Ready</option>
         <option>Ready</option>
       </select>
-      <input id="noteInp" placeholder="Trailer note (optional)" style="min-width:220px;flex:1" />
-      <button class="primary" id="addUpdateBtn">Add / Update</button>
-      <button class="danger" id="clearAllBtn">Clear All</button>
+      <input id="note" placeholder="Quick note (optional)" style="min-width:220px;flex:1" />
+      <button class="primary" id="addBtn">Add / Update</button>
+      <button class="danger" id="clearBtn">Clear All</button>
 
-      <span style="flex-basis:100%;height:0"></span>
-
-      <div class="btnRow" style="width:100%;justify-content:space-between;">
-        <div class="btnRow">
-          <a class="tag" href="/dock" id="dockLink">Dock</a>
-          <a class="tag" href="/driver" id="driverLink">Driver</a>
-          <a class="tag" href="/geotab" target="_blank" rel="noopener">Geotab</a>
-        </div>
-        <div class="btnRow">
-          <button class="ghost small" id="logoutBtn">Logout</button>
-        </div>
-      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-left:auto;align-items:center" id="links"></div>
     </div>
 
-    <!-- Dock controls -->
-    <div class="controls hidden" id="dockControls">
-      <div class="sub" style="width:100%">
-        Dock Mode: dispatch adds trailers/doors. Dock can update <b>Loading</b> → <b>Dock Ready</b>.
-        &nbsp; Driver link: <a href="/driver" class="mono" id="driverLinkDock"></a>
-      </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Trailer</th>
+          <th>Door</th>
+          <th>Direction</th>
+          <th>Status</th>
+          <th>Note</th>
+          <th id="actionHeader">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
 
-      <div class="btnRow" style="width:100%;justify-content:space-between;">
-        <div class="btnRow">
-          <a class="tag" href="/" id="dispatchLinkDock">Dispatcher</a>
-          <a class="tag" href="/driver">Driver</a>
-          <a class="tag" href="/geotab" target="_blank" rel="noopener">Geotab</a>
-        </div>
-        <div class="btnRow">
-          <button class="ghost small" id="logoutBtnDock">Logout</button>
-        </div>
+    <!-- Geotab (dispatcher + dock) -->
+    <div class="geoWrap" id="geoWrap">
+      <div class="geoHead">
+        <div class="geoTitle">Geotab Lite – Last GPS</div>
+        <div class="geoStatus" id="geoStatus">Loading…</div>
       </div>
+      <div id="map"></div>
+      <div class="geoList" id="geoList"></div>
     </div>
 
-    <!-- Driver header (no controls) -->
-    <div class="controls hidden" id="driverControls">
-      <div class="sub" style="width:100%">
-        Driver Mode: only trailers marked <b>Ready</b> can be moved. You must confirm both safety prompts.
-      </div>
-      <div class="btnRow" style="width:100%;justify-content:space-between;">
-        <div class="btnRow">
-          <a class="tag" href="/geotab" target="_blank" rel="noopener">Geotab</a>
-        </div>
-      </div>
-    </div>
-
-    <div class="tableWrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Trailer</th>
-            <th>Door</th>
-            <th>Direction</th>
-            <th>Status</th>
-            <th>Note</th>
-            <th id="actionsHeader">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="tbody"></tbody>
-      </table>
-    </div>
-
-    <div class="footer" id="footerText">© 2026 Christopher W Dhanraj • Version …</div>
-  </div>
-</div>
-
-<!-- Dock Plates Panel -->
-<div class="platePanel" id="platePanel">
-  <div class="plateHead">
-    <div class="title">Dock Plates (18–42)</div>
-    <div class="pills">
-      <span class="pill"><span class="dot ok"></span>OK <span class="mono" id="pOK">0</span></span>
-      <span class="pill"><span class="dot svc"></span>Service <span class="mono" id="pSvc">0</span></span>
-      <span class="pill"><span class="dot unk"></span>Unknown <span class="mono" id="pUnk">0</span></span>
-      <button class="small ghost" id="plateToggleBtn">Hide</button>
-    </div>
-  </div>
-  <div class="plateBody" id="plateBody">
-    <div class="plateHint" id="plateHint">Loading…</div>
-    <div class="grid" id="plateGrid"></div>
+    <div class="footer" id="footerText"></div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
+<!-- Dock plates bottom-right -->
+<div class="platesBar" id="platesBar" title="Click plate to change status (Dispatcher + Dock)">
+  <div class="platesTitle">Dock Plates (18–42)</div>
+  <div id="platesWrap" style="display:flex;gap:6px;align-items:center;overflow:auto"></div>
+  <div class="platesHint" id="platesHint"></div>
+</div>
+
 <script>
 (() => {
-  const REFRESH_MS = 5000; // auto refresh every 5 seconds
-  const APP_YEAR = "2026";
+  const APP_VERSION = "2.2.0";
 
-  // Detect page mode by path
   const pathLower = location.pathname.toLowerCase();
-  const isDockPage = pathLower === "/dock";
-  const isDriverPage = pathLower === "/driver";
-  const isDispatcherPage = !isDockPage && !isDriverPage;
+  const isDriver = pathLower.startsWith("/driver");
+  const isDock = pathLower.startsWith("/dock");
+  const isDispatcher = !isDriver && !isDock;
 
-  // UI refs
   const modeLabel = document.getElementById("modeLabel");
+  const controls = document.getElementById("controls");
+  const actionHeader = document.getElementById("actionHeader");
   const tbody = document.getElementById("tbody");
-  const actionsHeader = document.getElementById("actionsHeader");
-  const liveTag = document.getElementById("liveTag");
-
-  const dispatcherControls = document.getElementById("dispatcherControls");
-  const dockControls = document.getElementById("dockControls");
-  const driverControls = document.getElementById("driverControls");
-
-  const trailerInp = document.getElementById("trailerInp");
-  const doorInp = document.getElementById("doorInp");
-  const directionSel = document.getElementById("directionSel");
-  const statusSel = document.getElementById("statusSel");
-  const noteInp = document.getElementById("noteInp");
-  const addUpdateBtn = document.getElementById("addUpdateBtn");
-  const clearAllBtn = document.getElementById("clearAllBtn");
-
-  const logoutBtn = document.getElementById("logoutBtn");
-  const logoutBtnDock = document.getElementById("logoutBtnDock");
-
-  const driverLinkDock = document.getElementById("driverLinkDock");
-  const dispatchLinkDock = document.getElementById("dispatchLinkDock");
-
+  const toast = document.getElementById("toast");
   const footerText = document.getElementById("footerText");
+  const links = document.getElementById("links");
 
-  // KPIs
   const kTotal = document.getElementById("kTotal");
   const kIncoming = document.getElementById("kIncoming");
   const kLoading = document.getElementById("kLoading");
@@ -418,155 +288,174 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   const kReady = document.getElementById("kReady");
   const kDeparted = document.getElementById("kDeparted");
 
-  // Dock plates panel
-  const platePanel = document.getElementById("platePanel");
-  const plateBody = document.getElementById("plateBody");
-  const plateGrid = document.getElementById("plateGrid");
-  const plateHint = document.getElementById("plateHint");
-  const plateToggleBtn = document.getElementById("plateToggleBtn");
-  const pOK = document.getElementById("pOK");
-  const pSvc = document.getElementById("pSvc");
-  const pUnk = document.getElementById("pUnk");
+  const trailerInp = document.getElementById("trailer");
+  const doorInp = document.getElementById("door");
+  const directionSel = document.getElementById("direction");
+  const statusSel = document.getElementById("status");
+  const noteInp = document.getElementById("note");
+  const addBtn = document.getElementById("addBtn");
+  const clearBtn = document.getElementById("clearBtn");
 
-  const toast = document.getElementById("toast");
+  const platesWrap = document.getElementById("platesWrap");
+  const platesHint = document.getElementById("platesHint");
 
-  // State
-  let role = null; // "dispatcher" | "dock" | null
-  let state = {}; // trailers
-  let plates = {}; // dock plates
-  let version = "…";
+  const geoWrap = document.getElementById("geoWrap");
+  const geoStatus = document.getElementById("geoStatus");
+  const geoList = document.getElementById("geoList");
 
-  // Driver ready-ack map for flashing
+  let state = {};
+  let dockPlates = {};
   let ackMap = JSON.parse(localStorage.getItem("driver_ack") || "{}");
 
-  function showToast(msg){
+  // show mode
+  if (isDriver){
+    modeLabel.textContent = "Driver Mode";
+    controls.style.display = "none";
+    actionHeader.textContent = "Move";
+  } else if (isDock){
+    modeLabel.textContent = "Dock Mode";
+    controls.style.display = "none";
+    actionHeader.textContent = "Dock Actions";
+    geoWrap.style.display = "block";
+  } else {
+    modeLabel.textContent = "Dispatcher Mode";
+    geoWrap.style.display = "block";
+    links.innerHTML = `
+      <span class="badge">Dock: <a style="color:#b7c5ff" href="/dock">/dock</a></span>
+      <span class="badge">Driver: <a style="color:#b7c5ff" href="/driver">/driver</a></span>
+      <button class="ghost" id="logoutBtn">Logout</button>
+    `;
+    document.getElementById("logoutBtn").onclick = async () => {
+      await fetch("/api/logout", { method:"POST" });
+      location.href = "/login";
+    };
+  }
+
+  // footer
+  const year = new Date().getFullYear();
+  footerText.textContent = `© ${year} Christopher W Dhanraj • Version ${APP_VERSION}`;
+
+  function toastMsg(msg){
     toast.textContent = msg;
-    toast.style.display = "block";
-    clearTimeout(showToast._t);
-    showToast._t = setTimeout(()=> toast.style.display="none", 2200);
+    toast.classList.add("show");
+    setTimeout(()=> toast.classList.remove("show"), 2600);
   }
 
-  function esc(s){
-    return String(s ?? "")
-      .replaceAll("&","&amp;")
-      .replaceAll("<","&lt;")
-      .replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;")
-      .replaceAll("'","&#039;");
+  function statusClass(s){
+    if (s === "Ready") return "good";
+    if (s === "Dock Ready") return "warn";
+    if (s === "Loading") return "warn";
+    if (s === "Incoming") return "bad";
+    if (s === "Departed") return "cool";
+    return "cool";
   }
 
-  function statusTagClass(s){
-    if (s === "Incoming") return "tIncoming";
-    if (s === "Loading") return "tLoading";
-    if (s === "Dock Ready") return "tDockReady";
-    if (s === "Ready") return "tReady";
-    if (s === "Departed") return "tDeparted";
-    return "";
+  function updateKPIs(){
+    const c = { Incoming:0, Loading:0, "Dock Ready":0, Ready:0, Departed:0 };
+    Object.values(state).forEach(v => { if (c[v.status] !== undefined) c[v.status]++; });
+    kTotal.textContent = String(Object.keys(state).length);
+    kIncoming.textContent = String(c.Incoming);
+    kLoading.textContent = String(c.Loading);
+    kDockReady.textContent = String(c["Dock Ready"]);
+    kReady.textContent = String(c.Ready);
+    kDeparted.textContent = String(c.Departed);
   }
 
-  function normalizeDoor(v){
-    const raw = String(v ?? "").trim();
+  // normalize door
+  function normDoor(v){
+    const raw = String(v||"").trim();
+    if (!raw) return "";
     const m = raw.match(/(\d{1,3})/);
     return m ? m[1] : raw;
   }
 
-  async function apiText(url, opts){
-    const res = await fetch(url, opts);
-    const txt = await res.text();
-    if (!res.ok) throw new Error(txt || "Request failed");
-    return txt;
+  async function loadState(){
+    const res = await fetch("/api/state");
+    state = await res.json();
+    render();
   }
 
-  async function apiJson(url, opts){
-    const res = await fetch(url, opts);
-    const txt = await res.text();
-    let json = null;
-    try{ json = txt ? JSON.parse(txt) : null; }catch{}
-    if (!res.ok) throw new Error((txt || "Request failed"));
-    return json;
-  }
-
-  async function whoami(){
-    return apiJson("/api/whoami");
-  }
-
-  function requireLoginForThisPage(){
-    // Driver does NOT require login
-    if (isDriverPage) return;
-
-    // Dispatcher/Dock require correct role
-    if (!role){
-      location.href = "/login";
-      return;
-    }
-    if (isDispatcherPage && role !== "dispatcher"){
-      location.href = "/dock";
-      return;
-    }
-    if (isDockPage && role !== "dock"){
-      location.href = "/";
-      return;
-    }
-  }
-
-  function setupModeUI(){
-    // Fill driver link text in dock header
-    driverLinkDock.textContent = location.origin + "/driver";
-    driverLinkDock.href = "/driver";
-
-    if (isDispatcherPage){
-      modeLabel.textContent = "Dispatcher Mode";
-      dispatcherControls.classList.remove("hidden");
-      dockControls.classList.add("hidden");
-      driverControls.classList.add("hidden");
-      actionsHeader.textContent = "Actions";
-    } else if (isDockPage){
-      modeLabel.textContent = "Dock Mode";
-      dispatcherControls.classList.add("hidden");
-      dockControls.classList.remove("hidden");
-      driverControls.classList.add("hidden");
-      actionsHeader.textContent = "Actions";
-    } else {
-      modeLabel.textContent = "Driver Mode";
-      dispatcherControls.classList.add("hidden");
-      dockControls.classList.add("hidden");
-      driverControls.classList.remove("hidden");
-      actionsHeader.textContent = "Move";
-    }
-  }
-
-  function updateKPIs(){
-    const c = { "Incoming":0, "Loading":0, "Dock Ready":0, "Ready":0, "Departed":0 };
-    Object.values(state).forEach(v => { if (c[v.status] !== undefined) c[v.status]++; });
-
-    kTotal.textContent = String(Object.keys(state).length);
-    kIncoming.textContent = String(c["Incoming"]);
-    kLoading.textContent = String(c["Loading"]);
-    kDockReady.textContent = String(c["Dock Ready"]);
-    kReady.textContent = String(c["Ready"]);
-    kDeparted.textContent = String(c["Departed"]);
-  }
-
-  function sortTrailers(entries){
-    const rank = (s) => {
-      // Most actionable first
-      if (s === "Ready") return 0;
-      if (s === "Dock Ready") return 1;
-      if (s === "Loading") return 2;
-      if (s === "Incoming") return 3;
-      if (s === "Departed") return 4;
-      return 9;
-    };
-    return entries.sort((a,b) => {
-      const av = a[1] || {}, bv = b[1] || {};
-      return (rank(av.status)-rank(bv.status)) || String(a[0]).localeCompare(String(b[0]));
+  async function updateTrailer(trailer, payload){
+    // NOTE: server checks permissions by cookie/role
+    const body = Object.assign({ trailer }, payload);
+    const res = await fetch("/api/upsert", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify(body)
     });
+    if (!res.ok){
+      const txt = await res.text();
+      toastMsg("Update failed: " + txt);
+      return false;
+    }
+    await loadState();
+    return true;
   }
 
-  function renderTable(){
+  async function deleteTrailer(trailer){
+    const res = await fetch("/api/delete", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ trailer })
+    });
+    if (!res.ok){
+      toastMsg("Delete failed: " + (await res.text()));
+      return;
+    }
+    toastMsg("Deleted " + trailer);
+    await loadState();
+  }
+
+  async function clearAll(){
+    const ok = confirm("Clear ALL trailers for everyone?");
+    if (!ok) return;
+    const res = await fetch("/api/clear", { method:"POST" });
+    if (!res.ok){
+      toastMsg("Clear failed: " + (await res.text()));
+      return;
+    }
+    toastMsg("Cleared all");
+    await loadState();
+  }
+
+  async function confirmMove(trailer, v){
+    const ok1 = confirm("STEP 1/2: Confirm the LOAD is SECURED.");
+    if (!ok1) return;
+
+    const ok2 = confirm("STEP 2/2: Confirm the DOCK PLATE is UP.");
+    if (!ok2) return;
+
+    const res = await fetch("/api/confirm-safety", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({
+        trailer,
+        door: v.door || "",
+        loadSecured: true,
+        dockPlateUp: true
+      })
+    });
+    if (!res.ok){
+      toastMsg("Confirm failed: " + (await res.text()));
+      return;
+    }
+
+    ackMap[trailer] = v.updatedAt;
+    localStorage.setItem("driver_ack", JSON.stringify(ackMap));
+
+    // Mark departed (dispatcher-only on server? your server allows dispatcher only, so driver won't call /api/upsert)
+    // In your server, driver role is public but cannot upsert. So we just show "Confirmed" and dispatcher can mark departed if desired.
+    toastMsg("Safety confirmed ✅ (dispatch can mark Departed)");
+  }
+
+  function render(){
     tbody.innerHTML = "";
 
-    const entries = sortTrailers(Object.entries(state || {}));
+    const entries = Object.entries(state);
+
+    // Sort: Ready first, then Dock Ready, then Loading, Incoming, Departed, then trailer #
+    const rank = (s) => s==="Ready" ? 0 : (s==="Dock Ready" ? 1 : (s==="Loading" ? 2 : (s==="Incoming" ? 3 : 4)));
+    entries.sort((a,b) => (rank(a[1].status)-rank(b[1].status)) || String(a[0]).localeCompare(String(b[0])));
 
     if (!entries.length){
       const tr = document.createElement("tr");
@@ -577,125 +466,72 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     }
 
     for (const [t, v] of entries){
-      const door = normalizeDoor(v.door || "");
-      const direction = v.direction || "";
-      const status = v.status || "";
+      const door = v.door || "-";
+      const dir = v.direction || "Inbound";
+      const st = v.status || "Incoming";
       const note = v.note || "";
 
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td><b class="mono">${esc(t)}</b></td>
-        <td class="mono">${esc(door || "-")}</td>
-        <td>${esc(direction || "-")}</td>
-        <td><span class="tag ${statusTagClass(status)}">${esc(status)}</span></td>
-        <td>${esc(note || "")}</td>
+        <td><b>${t}</b></td>
+        <td>${door}</td>
+        <td>${dir}</td>
+        <td><span class="tag ${statusClass(st)}">${st}</span></td>
+        <td>${note ? note : "-"}</td>
       `;
 
       const td = document.createElement("td");
-      td.className = "btnRow";
 
-      // Dispatcher actions
-      if (isDispatcherPage){
-        // Status select (includes Departed? keep mostly dispatcher statuses)
+      if (isDispatcher){
         const sel = document.createElement("select");
-        ["Incoming","Loading","Dock Ready","Ready"].forEach(s=>{
+        ["Incoming","Loading","Dock Ready","Ready","Departed"].forEach(s=>{
           const o = document.createElement("option");
-          o.value = s; o.textContent = s;
+          o.value=s; o.textContent=s;
           sel.appendChild(o);
         });
-        sel.value = (status === "Departed") ? "Ready" : status;
+        sel.value = st;
         sel.onchange = async () => {
-          try{
-            await apiJson("/api/upsert", {
-              method:"POST",
-              headers:{ "Content-Type":"application/json" },
-              body: JSON.stringify({
-                trailer: t,
-                door: door,
-                direction: direction || "Inbound",
-                status: sel.value,
-                note: note || ""
-              })
-            });
-            showToast("Updated");
-            await loadAll();
-          }catch(e){
-            showToast(String(e.message || e));
-            sel.value = status;
-          }
+          // send direction/door/note always (prevents server rejecting)
+          await updateTrailer(t, {
+            direction: dir,
+            door: door === "-" ? "" : normDoor(door),
+            note,
+            status: sel.value
+          });
         };
         td.appendChild(sel);
 
-        const editNoteBtn = document.createElement("button");
-        editNoteBtn.className = "small primary";
-        editNoteBtn.textContent = "Edit Note";
-        editNoteBtn.onclick = async () => {
-          const newNote = prompt("Trailer note:", note || "");
-          if (newNote === null) return;
-          try{
-            await apiJson("/api/upsert", {
-              method:"POST",
-              headers:{ "Content-Type":"application/json" },
-              body: JSON.stringify({
-                trailer: t,
-                door: door,
-                direction: direction || "Inbound",
-                status: status || "Incoming",
-                note: String(newNote).trim()
-              })
-            });
-            showToast("Saved");
-            await loadAll();
-          }catch(e){
-            showToast(String(e.message || e));
-          }
-        };
-        td.appendChild(editNoteBtn);
-
-        const delBtn = document.createElement("button");
-        delBtn.className = "small danger";
-        delBtn.textContent = "Delete";
-        delBtn.onclick = async () => {
-          const ok = confirm("Delete trailer " + t + "?");
-          if (!ok) return;
-          try{
-            await apiJson("/api/delete", {
-              method:"POST",
-              headers:{ "Content-Type":"application/json" },
-              body: JSON.stringify({ trailer: t })
-            });
-            showToast("Deleted");
-            await loadAll();
-          }catch(e){
-            showToast(String(e.message || e));
-          }
-        };
-        td.appendChild(delBtn);
+        const del = document.createElement("button");
+        del.className = "danger";
+        del.style.marginLeft = "8px";
+        del.textContent = "Delete";
+        del.onclick = () => deleteTrailer(t);
+        td.appendChild(del);
       }
 
-      // Dock actions (ONLY Loading / Dock Ready)
-      else if (isDockPage){
-        const btnLoading = document.createElement("button");
-        btnLoading.className = "small btnSvc";
-        btnLoading.textContent = "Mark Loading";
-        btnLoading.onclick = () => dockSetStatus(t, "Loading");
-        td.appendChild(btnLoading);
+      else if (isDock){
+        const btnLoad = document.createElement("button");
+        btnLoad.className = "primary";
+        btnLoad.textContent = "Loading";
+        btnLoad.onclick = async () => updateTrailer(t, { status:"Loading" });
 
-        const btnDockReady = document.createElement("button");
-        btnDockReady.className = "small primary";
-        btnDockReady.textContent = "Mark Dock Ready";
-        btnDockReady.onclick = () => dockSetStatus(t, "Dock Ready");
-        td.appendChild(btnDockReady);
+        const btnDR = document.createElement("button");
+        btnDR.className = "primary";
+        btnDR.style.marginLeft = "8px";
+        btnDR.textContent = "Dock Ready";
+        btnDR.onclick = async () => updateTrailer(t, { status:"Dock Ready" });
+
+        td.appendChild(btnLoad);
+        td.appendChild(btnDR);
       }
 
-      // Driver actions
-      else {
-        if (status === "Ready"){
+      else if (isDriver){
+        if (st === "Ready"){
           const btn = document.createElement("button");
-          const isNewReady = ackMap[t] !== v.updatedAt;
-          btn.className = "btnMove" + (isNewReady ? " flash" : "");
-          btn.textContent = isNewReady ? "NEW READY • MOVE" : "READY • MOVE";
-          btn.onclick = () => driverMove(t, v);
+          const isNew = ackMap[t] !== v.updatedAt;
+          btn.className = "readyBtn" + (isNew ? " flash" : "");
+          btn.textContent = isNew ? "NEW READY • MOVE" : "READY • MOVE";
+          btn.onclick = () => confirmMove(t, v);
           td.appendChild(btn);
         } else {
           td.textContent = "-";
@@ -709,311 +545,201 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     updateKPIs();
   }
 
-  async function dockSetStatus(trailer, newStatus){
-    try{
-      await apiJson("/api/upsert", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ trailer, status: newStatus })
-      });
-      showToast("Updated");
-      await loadAll();
-    }catch(e){
-      showToast(String(e.message || e));
-    }
-  }
+  // Dispatcher: add/update + clear
+  if (isDispatcher){
+    addBtn.onclick = async () => {
+      const t = trailerInp.value.trim();
+      if (!t) return;
 
-  async function driverMove(trailer, v){
-    const ok1 = confirm("STEP 1/2: Confirm the LOAD is SECURED.");
-    if (!ok1) return;
-
-    const ok2 = confirm("STEP 2/2: Confirm the DOCK PLATE is UP.");
-    if (!ok2) return;
-
-    try{
-      await apiJson("/api/confirm-safety", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({
-          trailer,
-          door: normalizeDoor(v.door || ""),
-          loadSecured: true,
-          dockPlateUp: true
-        })
-      });
-
-      // Mark departed (dispatcher server allows Departed only via dispatcher,
-      // but driver mode in our earlier setup used dispatcher upsert.
-      // If your server blocks Departed, keep this as-is and we’ll add a driver endpoint later.)
-      await apiJson("/api/upsert", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({
-          trailer,
-          status: "Departed",
-          door: normalizeDoor(v.door || ""),
-          direction: v.direction || "Inbound",
-          note: v.note || ""
-        })
-      });
-
-      ackMap[trailer] = v.updatedAt;
-      localStorage.setItem("driver_ack", JSON.stringify(ackMap));
-
-      showToast("Departed");
-      await loadAll();
-    }catch(e){
-      showToast(String(e.message || e));
-    }
-  }
-
-  /* ===== Dock plates ===== */
-
-  function plateStatusLabel(door){
-    const p = plates[String(door)];
-    if (!p) return "Unknown";
-    return p.status || "Unknown";
-  }
-
-  function renderPlates(){
-    // counts
-    let ok=0, svc=0, unk=0;
-    for (let d=18; d<=42; d++){
-      const s = plateStatusLabel(d);
-      if (s === "OK") ok++;
-      else if (s === "Service") svc++;
-      else unk++;
-    }
-    pOK.textContent = String(ok);
-    pSvc.textContent = String(svc);
-    pUnk.textContent = String(unk);
-
-    // hint text
-    if (isDriverPage){
-      plateHint.textContent = "Driver: view-only.";
-    } else if (isDockPage){
-      plateHint.textContent = "Dock: click a plate to set OK/Service (optional note).";
-    } else {
-      plateHint.textContent = "Dispatcher: click a plate to set OK/Service (optional note).";
-    }
-
-    plateGrid.innerHTML = "";
-
-    for (let door=18; door<=42; door++){
-      const key = String(door);
-      const p = plates[key] || null;
-
-      const status = p?.status || "Unknown";
-      const note = p?.note || "";
-
-      const card = document.createElement("div");
-      card.className = "plateCard";
-
-      const top = document.createElement("div");
-      top.className = "plateTop";
-      top.innerHTML = `<span>Plate <span class="mono">${door}</span></span>`;
-
-      const badge = document.createElement("span");
-      badge.className = "badge " + (status === "OK" ? "ok" : status === "Service" ? "svc" : "unk");
-      badge.textContent = status;
-      top.appendChild(badge);
-
-      const noteDiv = document.createElement("div");
-      noteDiv.className = "plateNote";
-      noteDiv.textContent = note ? note : "—";
-
-      const actions = document.createElement("div");
-      actions.className = "plateActions";
-
-      // View-only for driver
-      if (!isDriverPage){
-        const okBtn = document.createElement("button");
-        okBtn.className = "btnOk";
-        okBtn.textContent = "OK";
-        okBtn.onclick = () => setPlate(key, "OK");
-        actions.appendChild(okBtn);
-
-        const svcBtn = document.createElement("button");
-        svcBtn.className = "btnSvc";
-        svcBtn.textContent = "Service";
-        svcBtn.onclick = () => setPlate(key, "Service");
-        actions.appendChild(svcBtn);
-
-        const noteBtn = document.createElement("button");
-        noteBtn.className = "ghost";
-        noteBtn.textContent = "Note";
-        noteBtn.onclick = () => setPlateNote(key, status);
-        actions.appendChild(noteBtn);
-      }
-
-      card.appendChild(top);
-      card.appendChild(noteDiv);
-      card.appendChild(actions);
-      plateGrid.appendChild(card);
-    }
-  }
-
-  async function setPlate(door, status){
-    try{
-      await apiJson("/api/dockplates/set", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ door, status, note: (plates[door]?.note || "") })
-      });
-      showToast("Plate " + door + " → " + status);
-      await loadAll();
-    }catch(e){
-      showToast(String(e.message || e));
-    }
-  }
-
-  async function setPlateNote(door, currentStatus){
-    const existing = plates[door]?.note || "";
-    const note = prompt("Plate " + door + " note:", existing);
-    if (note === null) return;
-
-    const status = plates[door]?.status || currentStatus || "Service";
-    // If currently unknown, default note edit sets status to Service unless user already chose something
-    const finalStatus = (status === "Unknown") ? "Service" : status;
-
-    try{
-      await apiJson("/api/dockplates/set", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ door, status: finalStatus, note: String(note).trim() })
-      });
-      showToast("Saved note");
-      await loadAll();
-    }catch(e){
-      showToast(String(e.message || e));
-    }
-  }
-
-  /* ===== Loaders ===== */
-
-  async function loadVersion(){
-    try{
-      const v = await apiJson("/api/version");
-      version = v?.version || "…";
-    }catch{
-      version = "…";
-    }
-    footerText.textContent = `© ${APP_YEAR} Christopher W Dhanraj • Version ${version}`;
-  }
-
-  async function loadState(){
-    state = await apiJson("/api/state");
-  }
-
-  async function loadPlates(){
-    plates = await apiJson("/api/dockplates");
-  }
-
-  async function loadAll(){
-    // live tag pulse
-    liveTag.style.opacity = "0.75";
-    setTimeout(()=> liveTag.style.opacity="1", 150);
-
-    await Promise.allSettled([loadState(), loadPlates()]);
-    renderTable();
-    renderPlates();
-  }
-
-  /* ===== Wire events ===== */
-
-  plateToggleBtn.onclick = () => {
-    if (plateBody.classList.contains("hidden")){
-      plateBody.classList.remove("hidden");
-      plateToggleBtn.textContent = "Hide";
-    } else {
-      plateBody.classList.add("hidden");
-      plateToggleBtn.textContent = "Show";
-    }
-  };
-
-  if (logoutBtn){
-    logoutBtn.onclick = async () => {
-      try{ await apiJson("/api/logout", { method:"POST" }); }catch{}
-      location.href = "/login";
-    };
-  }
-  if (logoutBtnDock){
-    logoutBtnDock.onclick = async () => {
-      try{ await apiJson("/api/logout", { method:"POST" }); }catch{}
-      location.href = "/login";
-    };
-  }
-
-  if (addUpdateBtn){
-    addUpdateBtn.onclick = async () => {
-      const trailer = String(trailerInp.value || "").trim();
-      const door = normalizeDoor(String(doorInp.value || "").trim());
+      const door = normDoor(doorInp.value.trim());
       const direction = directionSel.value;
       const status = statusSel.value;
-      const note = String(noteInp.value || "").trim();
+      const note = noteInp.value.trim();
 
-      if (!trailer) return showToast("Trailer # required");
+      await updateTrailer(t, { door, direction, status, note });
 
-      try{
-        await apiJson("/api/upsert", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          body: JSON.stringify({ trailer, door, direction, status, note })
-        });
-        trailerInp.value = "";
-        doorInp.value = "";
-        noteInp.value = "";
-        showToast("Saved");
-        await loadAll();
-      }catch(e){
-        showToast(String(e.message || e));
-      }
+      trailerInp.value="";
+      doorInp.value="";
+      noteInp.value="";
     };
+
+    clearBtn.onclick = clearAll;
   }
 
-  if (clearAllBtn){
-    clearAllBtn.onclick = async () => {
-      const ok = confirm("Clear ALL trailers for everyone?");
-      if (!ok) return;
-      try{
-        await apiJson("/api/clear", { method:"POST" });
-        showToast("Cleared");
-        await loadAll();
-      }catch(e){
-        showToast(String(e.message || e));
-      }
-    };
+  /* =========================
+     Dock plates bar
+  ========================= */
+  function plateClass(st){
+    if (st === "OK") return "platePill plateOK";
+    if (st === "Service") return "platePill plateService";
+    return "platePill plateUnknown";
   }
 
-  /* ===== Boot ===== */
+  async function loadDockPlates(){
+    const res = await fetch("/api/dockplates");
+    if (!res.ok) return;
+    dockPlates = await res.json();
+    renderPlatesBar();
+  }
 
-  async function boot(){
-    await loadVersion();
+  async function setPlate(door, nextStatus){
+    const note = prompt(`Plate ${door} note (optional):`, (dockPlates[door]?.note || ""));
+    const res = await fetch("/api/dockplates/set", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ door, status: nextStatus, note: (note||"").trim() })
+    });
+    if (!res.ok){
+      toastMsg("Plate update failed: " + (await res.text()));
+      return;
+    }
+    toastMsg(`Plate ${door} → ${nextStatus}`);
+    await loadDockPlates();
+  }
 
-    // Determine role (only needed for dispatcher/dock)
-    try{
-      const me = await whoami();
-      role = me?.role || null;
-    }catch{
-      role = null;
+  function renderPlatesBar(){
+    platesWrap.innerHTML = "";
+    let ok=0, svc=0, unk=0;
+
+    for (let d=18; d<=42; d++){
+      const key = String(d);
+      const st = dockPlates[key]?.status || "Unknown";
+      if (st === "OK") ok++; else if (st === "Service") svc++; else unk++;
+
+      const pill = document.createElement("div");
+      pill.className = plateClass(st);
+      pill.textContent = key;
+
+      pill.onclick = () => {
+        // Toggle: OK -> Service -> Unknown -> OK
+        const cur = dockPlates[key]?.status || "Unknown";
+        const next = cur === "OK" ? "Service" : (cur === "Service" ? "Unknown" : "OK");
+        setPlate(key, next);
+      };
+
+      platesWrap.appendChild(pill);
     }
 
-    // Enforce auth rules
-    requireLoginForThisPage();
-
-    setupModeUI();
-
-    // If dock page but role mismatch, redirect already handled above
-    // If driver page, role is irrelevant (no auth)
-
-    await loadAll();
-    setInterval(loadAll, REFRESH_MS);
+    platesHint.textContent = `OK ${ok} • Service ${svc} • Unknown ${unk}`;
   }
 
-  boot().catch(err => {
-    document.body.innerHTML =
-      "<pre style='color:white;padding:20px;white-space:pre-wrap;'>Error: " + esc(err?.message || err) + "</pre>";
-  });
+  /* =========================
+     Geotab Lite Map (Dispatcher + Dock)
+  ========================= */
+  let map, markersLayer, mapReady = false;
+
+  function initMap(){
+    if (mapReady) return;
+    mapReady = true;
+
+    // Default GTA center (adjust if you want)
+    map = L.map("map").setView([43.65, -79.38], 9);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19
+    }).addTo(map);
+
+    markersLayer = L.layerGroup().addTo(map);
+  }
+
+  function fmtTime(t){
+    try { return new Date(t).toLocaleString(); } catch { return String(t||""); }
+  }
+
+  async function loadGeotabPositions(){
+    if (!(isDispatcher || isDock)) return;
+    initMap();
+
+    try{
+      const res = await fetch("/api/geotab/positions");
+      if (!res.ok) {
+        const txt = await res.text();
+        geoStatus.textContent = "Geotab Lite unavailable";
+        geoList.innerHTML = `<div>${txt}</div>`;
+        markersLayer.clearLayers();
+        return;
+      }
+
+      const data = await res.json();
+      geoStatus.textContent = `Last refresh: ${new Date().toLocaleTimeString()}`;
+
+      markersLayer.clearLayers();
+
+      if (!data.length){
+        geoList.innerHTML = "No GPS positions returned.";
+        return;
+      }
+
+      const bounds = [];
+      const lines = [];
+
+      for (const v of data){
+        const lat = v.latitude;
+        const lng = v.longitude;
+        bounds.push([lat, lng]);
+
+        const popup = `
+          <div style="font-weight:900">${v.name || "Vehicle"}</div>
+          <div>Speed: ${Number.isFinite(v.speed) ? v.speed : "-"} km/h</div>
+          <div>Time: ${fmtTime(v.dateTime)}</div>
+        `;
+
+        L.marker([lat, lng]).addTo(markersLayer).bindPopup(popup);
+
+        lines.push(
+          `<div style="padding:6px 0;border-bottom:1px solid rgba(120,145,220,.12)">
+            <b>${v.name || "-"}</b> • ${Number.isFinite(v.speed) ? v.speed : "-"} km/h • ${fmtTime(v.dateTime)}
+          </div>`
+        );
+      }
+
+      geoList.innerHTML = lines.slice(0, 25).join("") + (lines.length > 25 ? `<div style="padding-top:6px;">+${lines.length-25} more…</div>` : "");
+
+      if (bounds.length) map.fitBounds(bounds, { padding:[30,30] });
+
+    } catch (err){
+      geoStatus.textContent = "Geotab Lite error";
+      geoList.textContent = String(err?.message || err);
+      markersLayer?.clearLayers?.();
+    }
+  }
+
+  /* =========================
+     Live updates
+  ========================= */
+  // Websocket for instant refresh + Ready notify
+  try{
+    const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(`${wsProto}//${location.host}`);
+
+    ws.onmessage = (evt) => {
+      try{
+        const msg = JSON.parse(evt.data);
+        if (msg.type === "state"){
+          state = msg.payload || {};
+          render();
+        }
+        if (msg.type === "dockplates"){
+          dockPlates = msg.payload || {};
+          renderPlatesBar();
+        }
+        if (msg.type === "notify" && msg.payload?.kind === "ready"){
+          // Driver toast + flash is handled by ackMap check
+          if (isDriver){
+            toastMsg(`Trailer ${msg.payload.trailer} READY at Door ${msg.payload.door || "-"}`);
+          }
+        }
+      } catch {}
+    };
+  } catch {}
+
+  // Initial load + refresh every 5s
+  loadState();
+  loadDockPlates();
+  loadGeotabPositions();
+
+  setInterval(loadState, 5000);
+  setInterval(loadDockPlates, 5000);
+  setInterval(loadGeotabPositions, 30000);
 })();
 </script>
 </body>

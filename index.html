@@ -26,7 +26,7 @@ body{
     radial-gradient(1000px 500px at 20% -10%, rgba(99,102,241,.35), transparent 60%),
     linear-gradient(180deg,var(--bg0),var(--bg2));
 }
-.wrap{max-width:1300px;margin:auto;padding:20px}
+.wrap{max-width:1400px;margin:auto;padding:20px}
 .topbar{
   display:flex;justify-content:space-between;align-items:center;gap:12px;
   padding:14px;border:1px solid var(--line);
@@ -110,29 +110,20 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 .dockBtn.dockready{border-color:rgba(148,163,184,.45);background:rgba(148,163,184,.18)}
 .dockBtn:active{transform:scale(.98)}
 
-.tips{
-  padding:14px;
-  border-top:1px solid var(--line);
-  display:flex;gap:16px;flex-wrap:wrap
-}
-.tipBox{
-  flex:1;
-  min-width:260px;
-  border:1px solid rgba(120,145,220,.14);
-  border-radius:12px;
-  background:rgba(12,19,42,.45);
-  padding:12px;
-}
-.tipBox h4{
-  margin:0 0 8px 0;
-  font-size:12px;
+.noteCell{
+  max-width:260px;
   color:var(--muted);
-  text-transform:uppercase;
-  letter-spacing:.6px;
+  font-size:12px;
+  white-space:pre-wrap;
+  word-break:break-word;
 }
-.tipBox ul{margin:0;padding-left:18px;font-size:13px;color:var(--muted)}
-.tipBox li{margin:6px 0}
-.mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+.plateCell{
+  font-size:12px;
+  font-weight:950;
+}
+.plateOK{color:var(--good)}
+.plateSvc{color:var(--warn)}
+.smallHint{color:var(--muted);font-size:12px}
 .badge{
   display:inline-block;
   padding:2px 8px;
@@ -141,34 +132,72 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   background:rgba(255,255,255,.04);
   color:#fff;
 }
-.driverInfo{
-  padding:0 14px 14px 14px;
-  color:var(--muted);
+.mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+
+/* ============================
+   STICKY DOCK PLATE VISUAL AID
+   ============================ */
+.plateAid{
+  position:sticky;
+  top:10px;
+  z-index:50;
+  margin-top:12px;
+  padding:12px;
+  border:1px solid rgba(120,145,220,.22);
+  border-radius:14px;
+  background:rgba(8,12,26,.88);
+  backdrop-filter: blur(10px);
+}
+.plateAidHeader{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  margin-bottom:10px;
+}
+.plateAidTitle{
+  font-weight:950;
   font-size:13px;
 }
-.smallHint{color:var(--muted);font-size:12px}
-
-.deleteBtn{
-  margin-left:8px;
-  background:rgba(239,68,68,.25);
-  border:1px solid rgba(239,68,68,.45);
-  font-weight:950;
+.plateAidCounts{
+  display:flex;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:12px;
 }
-.deleteBtn:active{transform:scale(.98)}
-
-.noteCell{
-  max-width:240px;
-  color:var(--muted);
-  font-size:12px;
-  white-space:pre-wrap;
-  word-break:break-word;
+.pill{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  border-radius:999px;
+  padding:3px 10px;
+  border:1px solid rgba(120,145,220,.18);
+  background:rgba(255,255,255,.03);
 }
-.plateCell{
-  font-size:12px;
+.dot{width:8px;height:8px;border-radius:50%}
+.dotOK{background:var(--good)}
+.dotSvc{background:var(--warn)}
+.dotNone{background:var(--cool)}
+.plateAidRow{
+  display:flex;gap:8px;flex-wrap:wrap;
+}
+.doorChip{
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid rgba(120,145,220,.18);
+  background:rgba(255,255,255,.03);
   font-weight:900;
+  font-size:12px;
 }
-.plateOK{color:var(--good)}
-.plateSvc{color:var(--warn)}
+.doorOK{border-color:rgba(34,197,94,.45); background:rgba(34,197,94,.12)}
+.doorSvc{border-color:rgba(245,158,11,.55); background:rgba(245,158,11,.14)}
+.doorNone{border-color:rgba(148,163,184,.35); background:rgba(148,163,184,.10)}
+.doorChip small{
+  display:block;
+  color:var(--muted);
+  font-weight:700;
+  margin-top:2px;
+  max-width:220px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+/* Hide this aid in Driver mode */
+.hide{display:none !important;}
 </style>
 </head>
 
@@ -188,6 +217,22 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       <span class="kpi">Loading <strong id="kLoading">0</strong></span>
       <span class="kpi">Incoming <strong id="kIncoming">0</strong></span>
       <span class="kpi">Departed <strong id="kDeparted">0</strong></span>
+    </div>
+  </div>
+
+  <!-- Sticky Dock Plate Visual Aid (Dispatcher + Dock only) -->
+  <div id="plateAid" class="plateAid">
+    <div class="plateAidHeader">
+      <div class="plateAidTitle">Dock Plate Status (by Door)</div>
+      <div class="plateAidCounts">
+        <span class="pill"><span class="dot dotOK"></span> OK: <b id="okCount">0</b></span>
+        <span class="pill"><span class="dot dotSvc"></span> Service: <b id="svcCount">0</b></span>
+        <span class="pill"><span class="dot dotNone"></span> Unknown: <b id="unkCount">0</b></span>
+      </div>
+    </div>
+    <div class="plateAidRow" id="plateAidRow"></div>
+    <div class="smallHint" style="margin-top:8px;">
+      Dock updates these in <span class="badge mono">/dock</span>. Management view: <span class="badge mono">/maintenance</span>
     </div>
   </div>
 
@@ -211,10 +256,12 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       <input id="note" placeholder="Trailer quick note (optional)" style="min-width:220px;" />
       <button class="primary" id="addBtn">Add / Update</button>
       <button class="danger" id="clearBtn">Clear All</button>
-      <span class="smallHint">Dock: <span class="badge mono">/dock</span> • Driver: <span class="badge mono">/driver</span> • Maintenance: <span class="badge mono">/maintenance</span></span>
+      <span class="smallHint">
+        Dock: <span class="badge mono">/dock</span> • Driver: <span class="badge mono">/driver</span>
+      </span>
     </div>
 
-    <!-- Dock Plate reporting (Dock mode only) -->
+    <!-- Dock plate panel (dock only) -->
     <div class="controls" id="dockPlatePanel" style="display:none;">
       <input id="plateDoor" placeholder="Door (ex: D12)" />
       <button class="primary" id="plateOkBtn">Plate OK</button>
@@ -230,7 +277,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       <span class="smallHint">Saved on this device.</span>
     </div>
 
-    <div class="driverInfo" id="driverInfo" style="display:none;"></div>
+    <div class="smallHint" id="driverInfo" style="display:none;padding:0 14px 14px 14px;"></div>
 
     <table>
       <thead>
@@ -248,17 +295,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       <tbody id="tbody"></tbody>
     </table>
 
-    <div class="tips">
-      <div class="tipBox">
-        <h4>Quick Tips</h4>
-        <ul id="tipsLeft"></ul>
-      </div>
-      <div class="tipBox">
-        <h4>Workflow</h4>
-        <ul id="tipsRight"></ul>
-      </div>
-    </div>
-
   </div>
 </div>
 
@@ -275,15 +311,19 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   const actionHeader = document.getElementById("actionHeader");
   const tbody = document.getElementById("tbody");
 
+  // Sticky aid refs
+  const plateAid = document.getElementById("plateAid");
+  const plateAidRow = document.getElementById("plateAidRow");
+  const okCount = document.getElementById("okCount");
+  const svcCount = document.getElementById("svcCount");
+  const unkCount = document.getElementById("unkCount");
+
   const kTotal = document.getElementById("kTotal");
   const kReady = document.getElementById("kReady");
   const kDockReady = document.getElementById("kDockReady");
   const kLoading = document.getElementById("kLoading");
   const kIncoming = document.getElementById("kIncoming");
   const kDeparted = document.getElementById("kDeparted");
-
-  const tipsLeft = document.getElementById("tipsLeft");
-  const tipsRight = document.getElementById("tipsRight");
 
   const trailerInp = document.getElementById("trailer");
   const doorInp = document.getElementById("door");
@@ -313,6 +353,9 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
   let ws;
   let pollFallbackTimer = null;
+
+  // Only show plate aid for Dock + Dispatcher, hide for Driver
+  if (isDriver) plateAid.classList.add("hide");
 
   if (isDriver){
     controls.style.display = "none";
@@ -357,41 +400,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     return "cool"; // Dock Ready / Departed
   }
 
-  function setTips(){
-    const base = location.origin;
-
-    if (!isDriver && !isDock){
-      tipsLeft.innerHTML = `
-        <li><b>2-step Ready:</b> Dock sets <b>Dock Ready</b>, Dispatch sets <b>Ready</b>.</li>
-        <li>Plate status comes from Dock Plate reporting.</li>
-        <li>Driver link: <span class="badge mono">${base}/driver</span></li>
-      `;
-      tipsRight.innerHTML = `
-        <li>Dock link: <span class="badge mono">${base}/dock</span></li>
-        <li>Maintenance: <span class="badge mono">${base}/maintenance</span></li>
-        <li>Incoming → Loading → Dock Ready → <b>Ready</b> → Departed</li>
-      `;
-    } else if (isDock){
-      tipsLeft.innerHTML = `
-        <li>Dock can set <b>Loading</b> or <b>Dock Ready</b>.</li>
-        <li>Update Dock Plates using the panel above.</li>
-      `;
-      tipsRight.innerHTML = `
-        <li>Plate status is tied to the <b>Door</b> number.</li>
-        <li>Notes go to <b>Management</b> on /maintenance.</li>
-      `;
-    } else {
-      tipsLeft.innerHTML = `
-        <li>MOVE only when dispatch sets <b>Ready</b>.</li>
-        <li>Flashing green = <b>NEW READY</b>.</li>
-      `;
-      tipsRight.innerHTML = `
-        <li>Confirm Load Secured</li>
-        <li>Confirm Dock Plate Up → Departed</li>
-      `;
-    }
-  }
-
   function updateKPIs(){
     const c = { Incoming:0, Loading:0, "Dock Ready":0, Ready:0, Departed:0 };
     Object.values(state).forEach(v => { if (c[v.status] !== undefined) c[v.status]++; });
@@ -402,6 +410,60 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     kLoading.textContent = String(c.Loading);
     kIncoming.textContent = String(c.Incoming);
     kDeparted.textContent = String(c.Departed);
+  }
+
+  function normalizeDoor(d){
+    return String(d || "").trim().toUpperCase();
+  }
+
+  function buildPlateAid(){
+    if (isDriver) return;
+
+    // Doors seen on board (so "Unknown" makes sense)
+    const doorsOnBoard = new Set();
+    Object.values(state).forEach(v => {
+      const d = normalizeDoor(v.door);
+      if (d) doorsOnBoard.add(d);
+    });
+
+    const okDoors = [];
+    const svcDoors = [];
+    const unkDoors = [];
+
+    // First list doors on board
+    const list = Array.from(doorsOnBoard).sort((a,b)=>a.localeCompare(b));
+    for (const d of list){
+      const p = dockPlates[d];
+      if (!p) {
+        unkDoors.push({ door:d, note:"" });
+      } else if (p.status === "OK") {
+        okDoors.push({ door:d, note:p.note || "" });
+      } else {
+        svcDoors.push({ door:d, note:p.note || "" });
+      }
+    }
+
+    okCount.textContent = String(okDoors.length);
+    svcCount.textContent = String(svcDoors.length);
+    unkCount.textContent = String(unkDoors.length);
+
+    // Render chips: Service first, then Unknown, then OK
+    plateAidRow.innerHTML = "";
+
+    const addChip = (door, type, note) => {
+      const div = document.createElement("div");
+      div.className = "doorChip " + (type === "svc" ? "doorSvc" : type === "ok" ? "doorOK" : "doorNone");
+      div.innerHTML = `${door}${note ? `<small title="${note.replaceAll('"','&quot;')}">${note}</small>` : `<small> </small>`}`;
+      plateAidRow.appendChild(div);
+    };
+
+    svcDoors.forEach(x => addChip(x.door, "svc", x.note));
+    unkDoors.forEach(x => addChip(x.door, "none", ""));
+    okDoors.forEach(x => addChip(x.door, "ok", x.note));
+
+    if (list.length === 0){
+      plateAidRow.innerHTML = `<div class="smallHint">No doors on board yet.</div>`;
+    }
   }
 
   async function loadOnce(){
@@ -425,28 +487,11 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       const t = await res.text();
       alert("Update failed: " + t);
     }
-    await loadOnce(); // safe fallback, WS will also push
-  }
-
-  async function deleteTrailer(trailer){
-    const ok = confirm(`Delete trailer ${trailer}?`);
-    if (!ok) return;
-
-    const res = await fetch("/api/delete", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ trailer })
-    });
-
-    if (!res.ok){
-      const t = await res.text();
-      alert("Delete failed: " + t);
-    }
-    await loadOnce();
+    await loadOnce(); // safe fallback
   }
 
   async function setDockPlate(door, status){
-    const d = String(door || "").trim().toUpperCase();
+    const d = normalizeDoor(door);
     if (!d) return alert("Enter a door (ex: D12)");
 
     const note = prompt(`Dock Plate note for ${d} (${status}):`, "") ?? "";
@@ -502,7 +547,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   }
 
   function plateForDoor(door){
-    const key = String(door || "").trim().toUpperCase();
+    const key = normalizeDoor(door);
     if (!key) return null;
     return dockPlates[key] || null;
   }
@@ -587,24 +632,18 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         sel.value = (v.status === "Departed") ? "Ready" : v.status;
         sel.onchange = () => update(t, v.door || "", v.direction || "Inbound", sel.value, v.note || "");
 
-        const editNoteBtn = document.createElement("button");
-        editNoteBtn.className = "primary";
-        editNoteBtn.textContent = "Edit Note";
-        editNoteBtn.style.marginLeft = "8px";
-        editNoteBtn.onclick = () => {
+        const noteBtn = document.createElement("button");
+        noteBtn.className = "primary";
+        noteBtn.textContent = "Edit Note";
+        noteBtn.style.marginLeft = "8px";
+        noteBtn.onclick = () => {
           const newNote = prompt(`Trailer note for ${t}:`, v.note || "");
           if (newNote === null) return;
           update(t, v.door || "", v.direction || "Inbound", v.status || "Incoming", String(newNote).trim());
         };
 
-        const del = document.createElement("button");
-        del.className = "deleteBtn";
-        del.textContent = "Delete";
-        del.onclick = () => deleteTrailer(t);
-
         tdAction.appendChild(sel);
-        tdAction.appendChild(editNoteBtn);
-        tdAction.appendChild(del);
+        tdAction.appendChild(noteBtn);
       }
 
       // Dock
@@ -659,6 +698,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     }
 
     updateKPIs();
+    buildPlateAid(); // <-- keeps aid updated + visible
   }
 
   // Dispatcher add/update + clear
@@ -728,7 +768,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   }
 
   // Start
-  setTips();
   loadOnce();
   startWebSocket();
 })();

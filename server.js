@@ -313,7 +313,7 @@ app.get("/geotab",(req,res)=>{
       </style>
     </head>
     <body>
-      <iframe src="YOUR_GEOTAB_URL_HERE"></iframe>
+      <iframe src="https://my.geotab.com/login.html"></iframe>
     </body>
     </html>
   `);

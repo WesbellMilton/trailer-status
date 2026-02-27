@@ -9,7 +9,7 @@ const app = express();
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// Request logging
+// Simple request logging
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
@@ -19,20 +19,20 @@ const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
 /**
- * DB_PATH:
+ * SQLite DB path:
  * - Local default: ./data.db
- * - Render persistent disk: /var/data/data.db
+ * - Render persistent disk: set DB_PATH=/var/data/data.db
  */
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data.db");
 const db = new sqlite3.Database(DB_PATH);
 
-// ===== Pins (hard-set as requested) =====
+// ===== Pins (as requested) =====
 const PINS = {
   dispatcher: "1234",
   dock: "789",
 };
 
-// In-memory caches (fast rendering)
+// In-memory caches
 let trailers = {};        // trailer -> {direction,status,door,note,updatedAt}
 let confirmations = [];   // latest 200
 let dockPlates = {};      // "18".."42" -> {status:"OK"|"Service", note, updatedAt}
@@ -161,8 +161,8 @@ async function initDb() {
 
   await dbRun(`
     CREATE TABLE IF NOT EXISTS dockplates (
-      door TEXT PRIMARY KEY,          -- "18".."42"
-      status TEXT NOT NULL,           -- "OK" or "Service"
+      door TEXT PRIMARY KEY,     -- "18".."42"
+      status TEXT NOT NULL,      -- "OK" or "Service"
       note TEXT NOT NULL DEFAULT '',
       updatedAt INTEGER NOT NULL
     )
@@ -236,8 +236,7 @@ app.get("/api/dockplates", (req, res) => res.json(dockPlates));
 app.get("/api/confirmations", (req, res) => res.json(confirmations));
 
 /* ================================
-   API: DOCK PLATES WRITE
-   ✅ Dock + Dispatcher
+   API: DOCK PLATES WRITE (Dock + Dispatcher)
 ================================ */
 app.post("/api/dockplates/set", requireAnyRole(["dock", "dispatcher"]), async (req, res) => {
   try {
@@ -326,70 +325,63 @@ app.post("/api/confirm-safety", async (req, res) => {
 
 /* ================================
    API: UPSERT TRAILER
-   ✅ Dispatcher: full control
-   ✅ Dock: ONLY Loading / Dock Ready (no edits to door/direction/note)
+   - Dispatcher: full control
+   - Dock: ONLY Loading / Dock Ready (no direction/door/note edits, no create)
 ================================ */
 app.post("/api/upsert", requireAnyRole(["dispatcher", "dock"]), async (req, res) => {
   try {
     const role = req.role;
 
     const trailer = cleanStr(req.body?.trailer, 20);
-    const directionIn = cleanStr(req.body?.direction, 30);
     const statusIn = normalizeStatus(cleanStr(req.body?.status, 30));
+    const directionIn = cleanStr(req.body?.direction, 30);
     const doorRaw = cleanStr(req.body?.door, 20);
     const noteIn = cleanStr(req.body?.note, 200);
 
     if (!trailer) return res.status(400).send("Trailer required");
 
-    const allowedDir = ["Inbound", "Outbound", "Cross Dock"];
     const allowedStatus = ["Incoming", "Loading", "Dock Ready", "Ready", "Departed"];
-
     if (!allowedStatus.includes(statusIn)) return res.status(400).send("Invalid status");
 
-    const prev = trailers[trailer] || {};
+    const prev = trailers[trailer];
 
-    // Dock restriction
+    // Dock rules
     if (role === "dock") {
+      if (!prev) return res.status(403).send("Dock cannot add new trailers. Dispatch must create trailer first.");
+
       const dockAllowed = ["Loading", "Dock Ready"];
       if (!dockAllowed.includes(statusIn)) {
         return res.status(403).send('Dock can only set status to "Loading" or "Dock Ready".');
       }
+
+      const updatedAt = Date.now();
+
+      await dbRun(
+        `UPDATE trailers SET status=?, updatedAt=? WHERE trailer=?`,
+        [statusIn, updatedAt, trailer]
+      );
+
+      trailers[trailer] = { ...prev, status: statusIn, updatedAt };
+
+      broadcast("state", trailers);
+      broadcast("stats", computeStats(trailers));
+      return res.json({ ok: true });
     }
 
-    // Direction: dispatcher only
-    let finalDirection = prev.direction || "Inbound";
-    if (role === "dispatcher") {
-      if (!allowedDir.includes(directionIn)) return res.status(400).send("Invalid direction");
-      finalDirection = directionIn;
-    }
+    // Dispatcher rules
+    const allowedDir = ["Inbound", "Outbound", "Cross Dock"];
+    if (!allowedDir.includes(directionIn)) return res.status(400).send("Invalid direction");
 
-    // Door: dispatcher only
-    let finalDoor = prev.door || "";
-    if (role === "dispatcher") {
-      if (doorRaw !== "") {
-        const parsed = normalizeDoorPlate(doorRaw);
-        if (parsed && !isPlateInRange(parsed)) return res.status(400).send("Door must be 18-42");
-        finalDoor = parsed;
-      }
-    }
+    const door = doorRaw ? normalizeDoorPlate(doorRaw) : (prev?.door || "");
+    if (door && !isPlateInRange(door)) return res.status(400).send("Door must be 18-42");
 
-    // Note: dispatcher only
-    let finalNote = prev.note || "";
-    if (role === "dispatcher") {
-      finalNote = (noteIn !== "") ? noteIn : finalNote;
-    }
-
-    // Approval rule
-    if (role === "dispatcher" && statusIn === "Ready" && prev.status !== "Dock Ready") {
+    // Approval rule: Ready requires Dock Ready
+    if (statusIn === "Ready" && prev && prev.status !== "Dock Ready") {
       return res.status(400).send('Approval rule: "Ready" requires prior "Dock Ready".');
     }
 
-    // If trailer does not exist and dock tries to update, block (dock cannot add trailers)
-    if (role === "dock" && !prev.status) {
-      return res.status(403).send("Dock cannot add new trailers. Dispatch must create trailer first.");
-    }
-
     const updatedAt = Date.now();
+    const finalNote = noteIn !== "" ? noteIn : (prev?.note || "");
 
     await dbRun(
       `INSERT INTO trailers (trailer, direction, status, door, note, updatedAt)
@@ -400,14 +392,14 @@ app.post("/api/upsert", requireAnyRole(["dispatcher", "dock"]), async (req, res)
          door=excluded.door,
          note=excluded.note,
          updatedAt=excluded.updatedAt`,
-      [trailer, finalDirection, statusIn, finalDoor, finalNote, updatedAt]
+      [trailer, directionIn, statusIn, door || "", finalNote, updatedAt]
     );
 
     trailers[trailer] = {
-      direction: finalDirection,
+      direction: directionIn,
       status: statusIn,
-      door: finalDoor || "",
-      note: finalNote || "",
+      door: door || "",
+      note: finalNote,
       updatedAt,
     };
 

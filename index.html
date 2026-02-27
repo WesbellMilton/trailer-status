@@ -28,8 +28,8 @@ body{
 }
 .wrap{max-width:1400px;margin:auto;padding:20px}
 
-/* leave space so bottom-right panel doesn't cover table */
-.padForPanel{padding-bottom:340px;}
+/* leave space so bottom-right strip doesn't cover table */
+.padForStrip{padding-bottom:170px;}
 
 .topbar{
   display:flex;justify-content:space-between;align-items:center;gap:12px;
@@ -121,10 +121,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   white-space:pre-wrap;
   word-break:break-word;
 }
-.plateCell{
-  font-size:12px;
-  font-weight:950;
-}
+.plateCell{font-size:12px;font-weight:950}
 .plateOK{color:var(--good)}
 .plateSvc{color:var(--warn)}
 .smallHint{color:var(--muted);font-size:12px}
@@ -140,141 +137,120 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 .hide{display:none !important;}
 
 /* ================================
-   DOCK PLATES PANEL (BOTTOM RIGHT)
+   THIN HORIZONTAL DOCK STRIP (BOTTOM RIGHT)
+   - dispatcher + dock can see
+   - dock can click plates to set OK/Service + note
 ================================ */
-.platePanel{
+.plateStrip{
   position:fixed;
   right:14px;
   bottom:14px;
   z-index:9999;
-  width:min(560px, calc(100vw - 28px));
-  border:1px solid rgba(120,145,220,.22);
-  border-radius:16px;
-  background:rgba(8,12,26,.92);
-  backdrop-filter: blur(12px);
+  width:min(760px, calc(100vw - 28px));
+  border:1px solid rgba(120,145,220,.25);
+  border-radius:12px;
+  background:rgba(10,14,28,.95);
+  backdrop-filter: blur(8px);
   box-shadow:0 10px 30px rgba(0,0,0,.35);
   overflow:hidden;
 }
-.platePanelHeader{
+.stripHead{
   display:flex;
   justify-content:space-between;
   align-items:center;
   gap:10px;
-  padding:10px 12px;
-  border-bottom:1px solid rgba(120,145,220,.18);
+  padding:8px 10px;
+  border-bottom:1px solid rgba(120,145,220,.16);
 }
-.platePanelTitle{
+.stripTitle{
   font-weight:950;
-  font-size:13px;
+  font-size:12px;
+  display:flex;
+  align-items:center;
+  gap:10px;
 }
-.platePanelCounts{
+.stripSubtitle{
+  color:var(--muted);
+  font-weight:700;
+  font-size:11px;
+}
+.stripCounts{
   display:flex;
   gap:10px;
+  align-items:center;
   flex-wrap:wrap;
   color:var(--muted);
-  font-size:12px;
+  font-size:11px;
 }
 .pill{
   display:inline-flex;
   align-items:center;
   gap:6px;
   border-radius:999px;
-  padding:3px 10px;
+  padding:2px 8px;
   border:1px solid rgba(120,145,220,.18);
   background:rgba(255,255,255,.03);
 }
-.dot{width:9px;height:9px;border-radius:50%}
+.dot{width:8px;height:8px;border-radius:50%}
 .dotOK{background:var(--good)}
 .dotSvc{background:var(--warn)}
 .dotUnk{background:var(--cool)}
-
-.platePanelBody{
-  padding:12px;
-}
-.platePanelSub{
-  color:var(--muted);
-  font-size:12px;
-  margin-bottom:10px;
-  display:flex;
-  gap:8px;
-  flex-wrap:wrap;
-  align-items:center;
-}
-.plateGrid{
-  display:grid;
-  grid-template-columns:repeat(5, minmax(0, 1fr));
-  gap:10px;
-}
-@media (max-width: 800px){
-  .plateGrid{grid-template-columns:repeat(3, minmax(0, 1fr));}
-}
-.plateCard{
-  border:1px solid rgba(120,145,220,.18);
-  border-radius:12px;
-  padding:10px;
-  background:rgba(255,255,255,.03);
-}
-.plateTop{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:8px;
-  margin-bottom:6px;
-}
-.plateNum{font-weight:950}
-.statusPill{
-  padding:3px 8px;
-  border-radius:999px;
-  font-size:11px;
-  font-weight:950;
-  border:1px solid rgba(120,145,220,.18);
-}
-.statusOK{border-color:rgba(34,197,94,.45); background:rgba(34,197,94,.14); color:#d8ffe7}
-.statusSvc{border-color:rgba(245,158,11,.60); background:rgba(245,158,11,.14); color:#ffe9c6}
-.statusUnk{border-color:rgba(148,163,184,.35); background:rgba(148,163,184,.10); color:#eaf0ff}
-
-.plateNote{
-  color:var(--muted);
-  font-size:12px;
-  min-height:16px;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
-
-.plateBtns{
-  margin-top:10px;
-  display:flex;
-  gap:8px;
-}
-.plateBtns button{
-  flex:1;
-  padding:8px 10px;
-  border-radius:10px;
-  font-weight:950;
-}
-.okBtn{
-  border:1px solid rgba(34,197,94,.45);
-  background:rgba(34,197,94,.16);
-}
-.svcBtn{
-  border:1px solid rgba(245,158,11,.60);
-  background:rgba(245,158,11,.16);
-}
-
-.panelToggle{
+.stripToggle{
   border:1px solid rgba(120,145,220,.25);
   background:rgba(255,255,255,.04);
   border-radius:10px;
-  padding:6px 10px;
+  padding:5px 10px;
   font-weight:950;
+  font-size:11px;
 }
-.panelCollapsed .platePanelBody{display:none;}
+.stripBody{padding:8px 10px;}
+.stripBodyCollapsed{display:none;}
+
+.plateGridMini{
+  display:grid;
+  grid-template-columns: repeat(25, minmax(0, 1fr));
+  gap:6px;
+}
+@media (max-width: 920px){
+  .plateGridMini{grid-template-columns: repeat(13, minmax(0, 1fr));}
+}
+@media (max-width: 520px){
+  .plateGridMini{grid-template-columns: repeat(9, minmax(0, 1fr));}
+}
+
+.plateMini{
+  height:26px;
+  border-radius:8px;
+  border:1px solid rgba(120,145,220,.18);
+  background:rgba(255,255,255,.03);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:950;
+  font-size:11px;
+  letter-spacing:.2px;
+  user-select:none;
+}
+.plateMini.ok{
+  border-color:rgba(34,197,94,.55);
+  background:rgba(34,197,94,.14);
+}
+.plateMini.svc{
+  border-color:rgba(245,158,11,.70);
+  background:rgba(245,158,11,.14);
+}
+.plateMini.unk{
+  border-color:rgba(148,163,184,.35);
+  background:rgba(148,163,184,.08);
+  color:#eaf0ff;
+}
+.plateMini.clickable{cursor:pointer}
+.plateMini:active{transform:scale(.98)}
 </style>
 </head>
 
 <body>
-<div class="wrap padForPanel">
+<div class="wrap padForStrip">
 
   <div class="topbar">
     <div class="brand">
@@ -297,7 +273,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     <!-- Dispatcher controls -->
     <div class="controls" id="controls">
       <input id="trailer" placeholder="Trailer #" />
-      <input id="door" placeholder="Door (Dock Plate) ex: 18" />
+      <input id="door" placeholder="Door (Plate #) 18–42" />
       <select id="direction">
         <option>Inbound</option>
         <option>Outbound</option>
@@ -313,13 +289,15 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       <button class="primary" id="addBtn">Add / Update</button>
       <button class="danger" id="clearBtn">Clear All</button>
       <span class="smallHint">
-        Dock: <span class="badge mono">/dock</span> • Driver: <span class="badge mono">/driver</span> • Mgmt: <span class="badge mono">/maintenance</span>
+        Dock: <span class="badge mono">/dock</span> • Driver: <span class="badge mono">/driver</span>
       </span>
     </div>
 
-    <!-- Dock-only trailer actions hint -->
+    <!-- Dock-only hint -->
     <div class="controls" id="dockHint" style="display:none;">
-      <span class="smallHint">Dock Mode: update trailer status with the buttons in the table. Update plate status in the bottom-right panel.</span>
+      <span class="smallHint">
+        Dock Mode: use the buttons in the table to set Loading / Dock Ready. Use the bottom-right strip to set plate OK/Service.
+      </span>
     </div>
 
     <!-- Driver check-in -->
@@ -351,24 +329,24 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   </div>
 </div>
 
-<!-- Bottom-right Dock Plates Panel (Dispatcher + Dock only) -->
-<div id="platePanel" class="platePanel">
-  <div class="platePanelHeader">
-    <div class="platePanelTitle">Dock Plates (18–42)</div>
+<!-- Thin bottom-right strip (Dispatcher + Dock). Hidden for Driver -->
+<div id="plateStrip" class="plateStrip">
+  <div class="stripHead">
+    <div class="stripTitle">
+      <span>Dock Plates 18–42</span>
+      <span class="stripSubtitle" id="stripModeText">Dispatcher view (read-only)</span>
+    </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
-      <div class="platePanelCounts">
+      <div class="stripCounts">
         <span class="pill"><span class="dot dotOK"></span> OK <b id="okCount">0</b></span>
         <span class="pill"><span class="dot dotSvc"></span> Service <b id="svcCount">0</b></span>
         <span class="pill"><span class="dot dotUnk"></span> Unknown <b id="unkCount">0</b></span>
       </div>
-      <button id="panelToggle" class="panelToggle" type="button">Hide</button>
+      <button id="stripToggle" class="stripToggle" type="button">Hide</button>
     </div>
   </div>
-  <div class="platePanelBody">
-    <div class="platePanelSub" id="plateSub">
-      <span class="smallHint">Dispatcher = view-only • Dock = tap OK/Service</span>
-    </div>
-    <div id="plateGrid" class="plateGrid"></div>
+  <div id="stripBody" class="stripBody">
+    <div id="plateGridMini" class="plateGridMini"></div>
   </div>
 </div>
 
@@ -386,14 +364,15 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   const actionHeader = document.getElementById("actionHeader");
   const tbody = document.getElementById("tbody");
 
-  // Bottom-right panel refs
-  const platePanel = document.getElementById("platePanel");
-  const plateGrid = document.getElementById("plateGrid");
-  const plateSub = document.getElementById("plateSub");
+  // strip refs
+  const plateStrip = document.getElementById("plateStrip");
+  const stripBody = document.getElementById("stripBody");
+  const plateGridMini = document.getElementById("plateGridMini");
   const okCount = document.getElementById("okCount");
   const svcCount = document.getElementById("svcCount");
   const unkCount = document.getElementById("unkCount");
-  const panelToggle = document.getElementById("panelToggle");
+  const stripToggle = document.getElementById("stripToggle");
+  const stripModeText = document.getElementById("stripModeText");
 
   const kTotal = document.getElementById("kTotal");
   const kReady = document.getElementById("kReady");
@@ -410,7 +389,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   const addBtn = document.getElementById("addBtn");
   const clearBtn = document.getElementById("clearBtn");
 
-  // Driver check-in
+  // driver check-in
   const driverCheckin = document.getElementById("driverCheckin");
   const driverTrailerInp = document.getElementById("driverTrailer");
   const driverSetBtn = document.getElementById("driverSetBtn");
@@ -422,31 +401,34 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   let dockPlates = {};
   let ackMap = JSON.parse(localStorage.getItem("driver_ack") || "{}");
 
-  let ws;
-  let pollFallbackTimer = null;
-
-  // Panel collapse state
-  const collapsedKey = "plate_panel_collapsed";
+  // strip collapse state
+  const collapsedKey = "plate_strip_collapsed";
   const collapsed = localStorage.getItem(collapsedKey) === "1";
-  if (collapsed) platePanel.classList.add("panelCollapsed");
-  panelToggle.textContent = platePanel.classList.contains("panelCollapsed") ? "Show" : "Hide";
-  panelToggle.onclick = () => {
-    platePanel.classList.toggle("panelCollapsed");
-    const isC = platePanel.classList.contains("panelCollapsed");
-    localStorage.setItem(collapsedKey, isC ? "1" : "0");
-    panelToggle.textContent = isC ? "Show" : "Hide";
+  if (collapsed) stripBody.style.display = "none";
+  stripToggle.textContent = (stripBody.style.display === "none") ? "Show" : "Hide";
+  stripToggle.onclick = () => {
+    const hidden = stripBody.style.display === "none";
+    stripBody.style.display = hidden ? "block" : "none";
+    localStorage.setItem(collapsedKey, hidden ? "0" : "1");
+    stripToggle.textContent = hidden ? "Hide" : "Show";
   };
 
-  // Driver should NOT see the plate panel
-  if (isDriver) {
-    platePanel.classList.add("hide");
-  } else {
-    plateSub.innerHTML = isDock
-      ? `<span class="smallHint">Dock Mode: tap <b>OK</b> or <b>Service</b> to update plates. (Optional note pops up.)</span>`
-      : `<span class="smallHint">Dispatcher Mode: view-only. Dock updates plates.</span>`;
+  function normalizeDoor(d){
+    const raw = String(d || "").trim().toUpperCase();
+    if (!raw) return "";
+    const m = raw.match(/(\d{1,3})/);
+    return m ? m[1] : raw;
+  }
+  function inRange18to42(doorStr){
+    const n = Number(doorStr);
+    return Number.isFinite(n) && n >= 18 && n <= 42;
   }
 
-  // Mode UI
+  // hide strip for drivers
+  if (isDriver) plateStrip.classList.add("hide");
+  stripModeText.textContent = isDock ? "Dock view (tap plates)" : "Dispatcher view (read-only)";
+
+  // mode UI
   if (isDriver){
     controls.style.display = "none";
     dockHint.style.display = "none";
@@ -463,7 +445,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       localStorage.setItem("driver_trailer", driverTrailer);
       render();
     };
-
     driverClearBtn.onclick = () => {
       localStorage.removeItem("driver_trailer");
       driverTrailer = "";
@@ -472,7 +453,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       render();
     };
   } else if (isDock){
-    // keep dispatcher controls hidden in dock mode (your preference)
     controls.style.display = "none";
     dockHint.style.display = "flex";
     driverCheckin.style.display = "none";
@@ -491,14 +471,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     if (s === "Loading") return "warn";
     if (s === "Incoming") return "bad";
     return "cool"; // Dock Ready / Departed
-  }
-
-  function normalizeDoor(d){
-    // plates are numbers 18-42, but accept input like "D18" too
-    const raw = String(d || "").trim().toUpperCase();
-    if (!raw) return "";
-    const m = raw.match(/(\d{1,3})/);
-    return m ? m[1] : raw; // store as "18", "19", etc
   }
 
   function updateKPIs(){
@@ -521,7 +493,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     state = await sRes.json();
     dockPlates = await pRes.json();
     render();
-    renderPlates();
+    renderPlatesStrip();
   }
 
   async function update(trailer, door, direction, status, note){
@@ -537,9 +509,15 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     await loadOnce();
   }
 
-  async function setDockPlate(plateNumber, status){
-    const door = String(plateNumber); // store exactly "18".."42"
-    const note = (prompt(`Plate ${door} note (${status}):`, "") ?? "").trim();
+  // Dock sets plate status
+  async function setDockPlate(plateNumber){
+    const door = String(plateNumber);
+
+    // quick choice without big buttons
+    const ok = confirm(`Plate ${door}: Press OK for "OK".\nPress Cancel to choose "Needs Service".`);
+    const status = ok ? "OK" : "Service";
+
+    const note = (prompt(`Plate ${door} note (${status}) (optional):`, dockPlates[door]?.note || "") ?? "").trim();
 
     const res = await fetch("/api/dockplates/set", {
       method:"POST",
@@ -555,6 +533,15 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     await loadOnce();
   }
 
+  // OPTION 4: Dispatcher can only set READY after DOCK READY
+  function guardReadyChange(currentStatus, newStatus){
+    if (newStatus === "Ready" && currentStatus !== "Dock Ready"){
+      alert('Approval rule: Dispatcher can only set "Ready" after Dock sets "Dock Ready".');
+      return false;
+    }
+    return true;
+  }
+
   async function confirmMove(trailer, v){
     const ok1 = confirm("STEP 1/2: Confirm the LOAD is SECURED.");
     if (!ok1) return;
@@ -565,12 +552,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     const res = await fetch("/api/confirm-safety", {
       method:"POST",
       headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({
-        trailer,
-        door: v.door || "",
-        loadSecured: true,
-        dockPlateUp: true
-      })
+      body: JSON.stringify({ trailer, door: v.door || "", loadSecured:true, dockPlateUp:true })
     });
 
     if (!res.ok){
@@ -596,21 +578,20 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
     let entries = Object.entries(state);
 
-    // Dock mode: show only actionable statuses (optional)
+    // Dock mode: show the stuff they work on
     if (isDock){
       entries = entries.filter(([_, v]) => v.status === "Loading" || v.status === "Dock Ready");
     }
 
-    // Driver mode: must check in + only see own trailer
+    // Driver mode: only see their trailer
     if (isDriver){
       if (!driverTrailer){
         tbody.innerHTML = `<tr><td colspan="8" style="color:var(--muted);padding:14px;">
-          Enter your trailer # above to see your dock door.
+          Enter your trailer # above to see your door + status.
         </td></tr>`;
         updateKPIs();
         return;
       }
-
       entries = entries.filter(([t]) => t === driverTrailer);
 
       if (entries.length === 0){
@@ -622,7 +603,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       }
     }
 
-    // Sort
+    // sort by status importance, then trailer
     const rank = (s)=> s==="Ready" ? 0 : (s==="Dock Ready" ? 1 : (s==="Loading" ? 2 : (s==="Incoming" ? 3 : 4)));
     entries.sort((a,b)=>{
       const av=a[1], bv=b[1];
@@ -636,8 +617,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     }
 
     for (const [t, v] of entries){
-      const tr = document.createElement("tr");
-
       const plate = plateStatusForDoor(v.door);
       const plateStatus = plate ? plate.status : "-";
       const plateNote = plate ? (plate.note || "-") : "-";
@@ -648,6 +627,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
             ? `<span class="plateCell plateSvc">Service</span>`
             : `<span class="plateCell" style="color:var(--muted)">-</span>`);
 
+      const tr = document.createElement("tr");
       tr.innerHTML = `
         <td><b>${t}</b></td>
         <td>${v.door || "-"}</td>
@@ -660,7 +640,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
       const tdAction = document.createElement("td");
 
-      // Dispatcher
+      // Dispatcher actions
       if (!isDriver && !isDock){
         const sel = document.createElement("select");
         ["Incoming","Loading","Dock Ready","Ready"].forEach(s=>{
@@ -669,7 +649,15 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
           sel.appendChild(o);
         });
         sel.value = (v.status === "Departed") ? "Ready" : v.status;
-        sel.onchange = () => update(t, v.door || "", v.direction || "Inbound", sel.value, v.note || "");
+
+        sel.onchange = () => {
+          const next = sel.value;
+          if (!guardReadyChange(v.status, next)){
+            sel.value = v.status;
+            return;
+          }
+          update(t, v.door || "", v.direction || "Inbound", next, v.note || "");
+        };
 
         const noteBtn = document.createElement("button");
         noteBtn.className = "primary";
@@ -685,7 +673,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         tdAction.appendChild(noteBtn);
       }
 
-      // Dock
+      // Dock actions
       if (isDock){
         const wrap = document.createElement("div");
         wrap.className = "dockBtns";
@@ -700,22 +688,12 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         btnDockReady.textContent = "Dock Ready";
         btnDockReady.onclick = () => update(t, v.door || "", v.direction || "Inbound", "Dock Ready", v.note || "");
 
-        const noteBtn = document.createElement("button");
-        noteBtn.className = "primary";
-        noteBtn.textContent = "Trailer Note";
-        noteBtn.onclick = () => {
-          const newNote = prompt(`Trailer note for ${t}:`, v.note || "");
-          if (newNote === null) return;
-          update(t, v.door || "", v.direction || "Inbound", v.status || "Loading", String(newNote).trim());
-        };
-
         wrap.appendChild(btnLoading);
         wrap.appendChild(btnDockReady);
-        wrap.appendChild(noteBtn);
         tdAction.appendChild(wrap);
       }
 
-      // Driver
+      // Driver actions (only when dispatch approved Ready)
       if (isDriver){
         driverInfo.innerHTML =
           `Checked in: <b>${t}</b> &nbsp; | &nbsp; Door: <b>${v.door || "NOT SET"}</b> &nbsp; | &nbsp; Status: <b>${v.status}</b>`;
@@ -739,58 +717,34 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     updateKPIs();
   }
 
-  function renderPlates(){
+  function renderPlatesStrip(){
     if (isDriver) return;
 
     const start = 18, end = 42;
     let ok = 0, svc = 0, unk = 0;
 
-    plateGrid.innerHTML = "";
+    plateGridMini.innerHTML = "";
 
     for (let p = start; p <= end; p++){
       const key = String(p);
-      const rec = dockPlates[key]; // {status, note, updatedAt}
+      const rec = dockPlates[key];
       const status = rec?.status || "Unknown";
-      const note = rec?.note || "";
 
-      let pillClass = "statusUnk";
-      let pillText = "Unknown";
-      if (status === "OK") { pillClass = "statusOK"; pillText = "OK"; ok++; }
-      else if (status === "Service") { pillClass = "statusSvc"; pillText = "Service"; svc++; }
+      let cls = "unk";
+      if (status === "OK"){ cls = "ok"; ok++; }
+      else if (status === "Service"){ cls = "svc"; svc++; }
       else { unk++; }
 
-      const card = document.createElement("div");
-      card.className = "plateCard";
+      const cell = document.createElement("div");
+      cell.className = "plateMini " + cls + (isDock ? " clickable" : "");
+      cell.title = rec?.note ? `Plate ${p}: ${status}\n${rec.note}` : `Plate ${p}: ${status}`;
+      cell.textContent = String(p);
 
-      card.innerHTML = `
-        <div class="plateTop">
-          <div class="plateNum">Plate ${p}</div>
-          <div class="statusPill ${pillClass}">${pillText}</div>
-        </div>
-        <div class="plateNote" title="${note.replaceAll('"','&quot;')}">${note || "—"}</div>
-      `;
-
-      // Dock mode: add buttons
       if (isDock){
-        const btns = document.createElement("div");
-        btns.className = "plateBtns";
-
-        const okBtn = document.createElement("button");
-        okBtn.className = "okBtn";
-        okBtn.textContent = "OK";
-        okBtn.onclick = () => setDockPlate(p, "OK");
-
-        const svcBtn = document.createElement("button");
-        svcBtn.className = "svcBtn";
-        svcBtn.textContent = "Service";
-        svcBtn.onclick = () => setDockPlate(p, "Service");
-
-        btns.appendChild(okBtn);
-        btns.appendChild(svcBtn);
-        card.appendChild(btns);
+        cell.onclick = () => setDockPlate(p);
       }
 
-      plateGrid.appendChild(card);
+      plateGridMini.appendChild(cell);
     }
 
     okCount.textContent = String(ok);
@@ -804,13 +758,21 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       const t = trailerInp.value.trim();
       if (!t) return;
 
-      update(
-        t,
-        normalizeDoor(doorInp.value.trim()), // store as number string if possible
-        directionSel.value,
-        statusSel.value,
-        noteInp.value.trim()
-      );
+      const door = normalizeDoor(doorInp.value.trim());
+      if (door && !inRange18to42(door)){
+        alert("Door / Plate must be between 18 and 42.");
+        return;
+      }
+
+      const chosenStatus = statusSel.value;
+
+      // approval rule for new entries: don't allow dispatcher to create as Ready unless it was Dock Ready first
+      if (chosenStatus === "Ready"){
+        alert('Approval rule: Dock must set "Dock Ready" first. Dispatcher cannot create directly as "Ready".');
+        return;
+      }
+
+      update(t, door, directionSel.value, chosenStatus, noteInp.value.trim());
 
       trailerInp.value = "";
       doorInp.value = "";
@@ -825,6 +787,9 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   }
 
   // WebSocket live updates + fallback polling every 5s
+  let ws;
+  let pollFallbackTimer = null;
+
   function startWebSocket(){
     const proto = (location.protocol === "https:") ? "wss" : "ws";
     const wsUrl = `${proto}://${location.host}`;
@@ -836,14 +801,14 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     ws.onmessage = (ev) => {
       try {
         const msg = JSON.parse(ev.data);
-        if (msg.type === "state") {
+        if (msg.type === "state"){
           state = msg.payload || {};
           render();
         }
-        if (msg.type === "dockplates") {
+        if (msg.type === "dockplates"){
           dockPlates = msg.payload || {};
-          renderPlates();
-          render(); // update plate status cells in table too
+          renderPlatesStrip();
+          render(); // update plate columns in table too
         }
       } catch {}
     };
@@ -858,14 +823,13 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     if (pollFallbackTimer) return;
     pollFallbackTimer = setInterval(loadOnce, 5000);
   }
-
   function stopFallbackPolling(){
     if (!pollFallbackTimer) return;
     clearInterval(pollFallbackTimer);
     pollFallbackTimer = null;
   }
 
-  // Start
+  // start
   loadOnce();
   startWebSocket();
 })();

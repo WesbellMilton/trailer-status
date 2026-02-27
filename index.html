@@ -26,7 +26,7 @@ body{
     radial-gradient(1000px 500px at 20% -10%, rgba(99,102,241,.35), transparent 60%),
     linear-gradient(180deg,var(--bg0),var(--bg2));
 }
-.wrap{max-width:1200px;margin:auto;padding:20px}
+.wrap{max-width:1300px;margin:auto;padding:20px}
 .topbar{
   display:flex;justify-content:space-between;align-items:center;gap:12px;
   padding:14px;border:1px solid var(--line);
@@ -157,12 +157,18 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 .deleteBtn:active{transform:scale(.98)}
 
 .noteCell{
-  max-width:260px;
+  max-width:240px;
   color:var(--muted);
   font-size:12px;
   white-space:pre-wrap;
   word-break:break-word;
 }
+.plateCell{
+  font-size:12px;
+  font-weight:900;
+}
+.plateOK{color:var(--good)}
+.plateSvc{color:var(--warn)}
 </style>
 </head>
 
@@ -187,6 +193,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
   <div class="card">
 
+    <!-- Dispatcher controls -->
     <div class="controls" id="controls">
       <input id="trailer" placeholder="Trailer #" />
       <input id="door" placeholder="Dock Door" />
@@ -201,12 +208,21 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         <option>Dock Ready</option>
         <option>Ready</option>
       </select>
-      <input id="note" placeholder="Quick note (optional)" style="min-width:220px;" />
+      <input id="note" placeholder="Trailer quick note (optional)" style="min-width:220px;" />
       <button class="primary" id="addBtn">Add / Update</button>
       <button class="danger" id="clearBtn">Clear All</button>
-      <span class="smallHint">Dock: <span class="badge mono">/dock</span> • Driver: <span class="badge mono">/driver</span></span>
+      <span class="smallHint">Dock: <span class="badge mono">/dock</span> • Driver: <span class="badge mono">/driver</span> • Maintenance: <span class="badge mono">/maintenance</span></span>
     </div>
 
+    <!-- Dock Plate reporting (Dock mode only) -->
+    <div class="controls" id="dockPlatePanel" style="display:none;">
+      <input id="plateDoor" placeholder="Door (ex: D12)" />
+      <button class="primary" id="plateOkBtn">Plate OK</button>
+      <button class="danger" id="plateSvcBtn">Needs Service</button>
+      <span class="smallHint">Optional note will pop up.</span>
+    </div>
+
+    <!-- Driver check-in -->
     <div class="controls" id="driverCheckin" style="display:none;">
       <input id="driverTrailer" placeholder="Enter your Trailer # (ex: 1850)" />
       <button class="primary" id="driverSetBtn">Check In</button>
@@ -223,7 +239,9 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
           <th>Door</th>
           <th>Direction</th>
           <th>Status</th>
-          <th>Note</th>
+          <th>Dock Plate</th>
+          <th>Plate Note</th>
+          <th>Trailer Note</th>
           <th id="actionHeader">Actions</th>
         </tr>
       </thead>
@@ -275,6 +293,13 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   const addBtn = document.getElementById("addBtn");
   const clearBtn = document.getElementById("clearBtn");
 
+  // Dock plate panel (dock only)
+  const dockPlatePanel = document.getElementById("dockPlatePanel");
+  const plateDoor = document.getElementById("plateDoor");
+  const plateOkBtn = document.getElementById("plateOkBtn");
+  const plateSvcBtn = document.getElementById("plateSvcBtn");
+
+  // Driver check-in
   const driverCheckin = document.getElementById("driverCheckin");
   const driverTrailerInp = document.getElementById("driverTrailer");
   const driverSetBtn = document.getElementById("driverSetBtn");
@@ -283,14 +308,15 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
   let driverTrailer = localStorage.getItem("driver_trailer") || "";
   let state = {};
+  let dockPlates = {};
   let ackMap = JSON.parse(localStorage.getItem("driver_ack") || "{}");
 
-  // Live WS state (optional, server sends stats too but we compute locally)
   let ws;
   let pollFallbackTimer = null;
 
   if (isDriver){
     controls.style.display = "none";
+    dockPlatePanel.style.display = "none";
     driverCheckin.style.display = "flex";
     driverInfo.style.display = "block";
     actionHeader.textContent = "Move";
@@ -315,9 +341,12 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   } else if (isDock){
     controls.style.display = "none";
     driverInfo.style.display = "none";
+    driverCheckin.style.display = "none";
+    dockPlatePanel.style.display = "flex";
     actionHeader.textContent = "Dock Update";
     modeLabel.textContent = "Dock Mode";
   } else {
+    dockPlatePanel.style.display = "none";
     modeLabel.textContent = "Dispatcher Mode";
   }
 
@@ -334,28 +363,27 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     if (!isDriver && !isDock){
       tipsLeft.innerHTML = `
         <li><b>2-step Ready:</b> Dock sets <b>Dock Ready</b>, Dispatch sets <b>Ready</b>.</li>
-        <li>Use <b>Quick note</b> for issues: seal missing, paperwork, etc.</li>
+        <li>Plate status comes from Dock Plate reporting.</li>
         <li>Driver link: <span class="badge mono">${base}/driver</span></li>
       `;
       tipsRight.innerHTML = `
         <li>Dock link: <span class="badge mono">${base}/dock</span></li>
+        <li>Maintenance: <span class="badge mono">${base}/maintenance</span></li>
         <li>Incoming → Loading → Dock Ready → <b>Ready</b> → Departed</li>
-        <li>Live updates enabled (WebSocket).</li>
       `;
     } else if (isDock){
       tipsLeft.innerHTML = `
         <li>Dock can set <b>Loading</b> or <b>Dock Ready</b>.</li>
-        <li>Dispatcher must set <b>Ready</b> for driver to move.</li>
+        <li>Update Dock Plates using the panel above.</li>
       `;
       tipsRight.innerHTML = `
-        <li>Tap <b>Add Note</b> to leave an issue for dispatch/driver.</li>
-        <li>Live updates enabled (WebSocket).</li>
+        <li>Plate status is tied to the <b>Door</b> number.</li>
+        <li>Notes go to <b>Management</b> on /maintenance.</li>
       `;
     } else {
       tipsLeft.innerHTML = `
-        <li>You only get MOVE when dispatch sets <b>Ready</b>.</li>
+        <li>MOVE only when dispatch sets <b>Ready</b>.</li>
         <li>Flashing green = <b>NEW READY</b>.</li>
-        <li>Notes show in your trailer row.</li>
       `;
       tipsRight.innerHTML = `
         <li>Confirm Load Secured</li>
@@ -376,6 +404,17 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     kDeparted.textContent = String(c.Departed);
   }
 
+  async function loadOnce(){
+    const [sRes, pRes] = await Promise.all([
+      fetch("/api/state"),
+      fetch("/api/dockplates")
+    ]);
+
+    state = await sRes.json();
+    dockPlates = await pRes.json();
+    render();
+  }
+
   async function update(trailer, door, direction, status, note){
     const res = await fetch("/api/upsert", {
       method:"POST",
@@ -386,8 +425,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       const t = await res.text();
       alert("Update failed: " + t);
     }
-    // No need to reload; WS will push. Still safe to refresh once.
-    await loadOnce();
+    await loadOnce(); // safe fallback, WS will also push
   }
 
   async function deleteTrailer(trailer){
@@ -405,6 +443,32 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       alert("Delete failed: " + t);
     }
     await loadOnce();
+  }
+
+  async function setDockPlate(door, status){
+    const d = String(door || "").trim().toUpperCase();
+    if (!d) return alert("Enter a door (ex: D12)");
+
+    const note = prompt(`Dock Plate note for ${d} (${status}):`, "") ?? "";
+    const res = await fetch("/api/dockplates/set", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ door: d, status, note })
+    });
+
+    if (!res.ok){
+      const t = await res.text();
+      alert("Dock plate update failed: " + t);
+      return;
+    }
+
+    plateDoor.value = "";
+    await loadOnce();
+  }
+
+  if (isDock){
+    plateOkBtn.onclick = () => setDockPlate(plateDoor.value, "OK");
+    plateSvcBtn.onclick = () => setDockPlate(plateDoor.value, "Service");
   }
 
   async function confirmMove(trailer, v){
@@ -437,20 +501,26 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     await update(trailer, v.door || "", v.direction || "Inbound", "Departed", v.note || "");
   }
 
+  function plateForDoor(door){
+    const key = String(door || "").trim().toUpperCase();
+    if (!key) return null;
+    return dockPlates[key] || null;
+  }
+
   function render(){
     tbody.innerHTML = "";
 
     let entries = Object.entries(state);
 
-    // Dock mode: only actionable statuses
+    // Dock mode: show only actionable statuses
     if (isDock){
       entries = entries.filter(([_, v]) => v.status === "Loading" || v.status === "Dock Ready");
     }
 
-    // Driver mode: must check in and only see own trailer
+    // Driver mode: must check in + only see own trailer
     if (isDriver){
       if (!driverTrailer){
-        tbody.innerHTML = `<tr><td colspan="6" style="color:var(--muted);padding:14px;">
+        tbody.innerHTML = `<tr><td colspan="8" style="color:var(--muted);padding:14px;">
           Enter your trailer # above to see your dock door.
         </td></tr>`;
         updateKPIs();
@@ -460,7 +530,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       entries = entries.filter(([t]) => t === driverTrailer);
 
       if (entries.length === 0){
-        tbody.innerHTML = `<tr><td colspan="6" style="color:var(--muted);padding:14px;">
+        tbody.innerHTML = `<tr><td colspan="8" style="color:var(--muted);padding:14px;">
           Trailer "${driverTrailer}" not found on board. Call dispatch.
         </td></tr>`;
         updateKPIs();
@@ -468,6 +538,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       }
     }
 
+    // Sort
     const rank = (s)=> s==="Ready" ? 0 : (s==="Dock Ready" ? 1 : (s==="Loading" ? 2 : (s==="Incoming" ? 3 : 4)));
     entries.sort((a,b)=>{
       const av=a[1], bv=b[1];
@@ -475,7 +546,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     });
 
     if (entries.length === 0){
-      tbody.innerHTML = `<tr><td colspan="6" style="color:var(--muted);padding:14px;">No trailers.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" style="color:var(--muted);padding:14px;">No trailers.</td></tr>`;
       updateKPIs();
       return;
     }
@@ -483,11 +554,23 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     for (const [t, v] of entries){
       const tr = document.createElement("tr");
 
+      const plate = plateForDoor(v.door);
+      const plateStatus = plate ? plate.status : "-";
+      const plateNote = plate ? (plate.note || "-") : "-";
+
+      const plateStatusHtml = plateStatus === "OK"
+        ? `<span class="plateCell plateOK">OK</span>`
+        : (plateStatus === "Service"
+            ? `<span class="plateCell plateSvc">Service</span>`
+            : `<span class="plateCell" style="color:var(--muted)">-</span>`);
+
       tr.innerHTML = `
         <td><b>${t}</b></td>
         <td>${v.door || "-"}</td>
         <td>${v.direction || ""}</td>
         <td><span class="tag ${statusClass(v.status)}">${v.status || ""}</span></td>
+        <td>${plateStatusHtml}</td>
+        <td class="noteCell">${plateNote}</td>
         <td class="noteCell">${(v.note && v.note.trim()) ? v.note : "-"}</td>
       `;
 
@@ -509,7 +592,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         editNoteBtn.textContent = "Edit Note";
         editNoteBtn.style.marginLeft = "8px";
         editNoteBtn.onclick = () => {
-          const newNote = prompt(`Quick note for ${t}:`, v.note || "");
+          const newNote = prompt(`Trailer note for ${t}:`, v.note || "");
           if (newNote === null) return;
           update(t, v.door || "", v.direction || "Inbound", v.status || "Incoming", String(newNote).trim());
         };
@@ -541,9 +624,9 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
         const noteBtn = document.createElement("button");
         noteBtn.className = "primary";
-        noteBtn.textContent = "Add Note";
+        noteBtn.textContent = "Trailer Note";
         noteBtn.onclick = () => {
-          const newNote = prompt(`Quick note for ${t}:`, v.note || "");
+          const newNote = prompt(`Trailer note for ${t}:`, v.note || "");
           if (newNote === null) return;
           update(t, v.door || "", v.direction || "Inbound", v.status || "Loading", String(newNote).trim());
         };
@@ -578,14 +661,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     updateKPIs();
   }
 
-  // One-time fetch (used for initial boot + WS fallback)
-  async function loadOnce(){
-    const res = await fetch("/api/state");
-    state = await res.json();
-    render();
-  }
-
-  // Dispatcher controls
+  // Dispatcher add/update + clear
   if (!isDriver && !isDock){
     addBtn.onclick = () => {
       const t = trailerInp.value.trim();
@@ -611,51 +687,38 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     };
   }
 
-  // WebSocket live updates + auto reconnect
+  // WebSocket live updates + fallback
   function startWebSocket(){
     const proto = (location.protocol === "https:") ? "wss" : "ws";
     const wsUrl = `${proto}://${location.host}`;
 
-    try {
-      ws = new WebSocket(wsUrl);
-    } catch (e) {
-      console.warn("WS create failed, using fallback polling.", e);
-      startFallbackPolling();
-      return;
-    }
+    ws = new WebSocket(wsUrl);
 
-    ws.onopen = () => {
-      console.log("WS connected");
-      stopFallbackPolling();
-    };
+    ws.onopen = () => stopFallbackPolling();
 
     ws.onmessage = (ev) => {
       try {
         const msg = JSON.parse(ev.data);
-        if (msg.type === "state" && msg.payload) {
-          state = msg.payload;
+        if (msg.type === "state") {
+          state = msg.payload || {};
           render();
         }
-        // If you later add other message types, you can handle them here.
-      } catch (e) {
-        console.warn("WS bad message", e);
-      }
+        if (msg.type === "dockplates") {
+          dockPlates = msg.payload || {};
+          render();
+        }
+      } catch {}
     };
 
     ws.onclose = () => {
-      console.warn("WS disconnected. Reconnecting…");
       startFallbackPolling();
       setTimeout(startWebSocket, 1500);
-    };
-
-    ws.onerror = () => {
-      // onclose will handle reconnect; keep this quiet
     };
   }
 
   function startFallbackPolling(){
     if (pollFallbackTimer) return;
-    pollFallbackTimer = setInterval(loadOnce, 5000); // fallback 5s
+    pollFallbackTimer = setInterval(loadOnce, 5000);
   }
 
   function stopFallbackPolling(){
@@ -666,8 +729,8 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
   // Start
   setTips();
-  loadOnce();       // initial render
-  startWebSocket(); // live mode
+  loadOnce();
+  startWebSocket();
 })();
 </script>
 

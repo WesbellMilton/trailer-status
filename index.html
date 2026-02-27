@@ -86,12 +86,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 .bad{background:rgba(239,68,68,.18);border:1px solid rgba(239,68,68,.35)}
 .cool{background:rgba(148,163,184,.18);border:1px solid rgba(148,163,184,.35)}
 
-.readyBtn{
-  border:1px solid rgba(34,197,94,.45);
-  background:rgba(34,197,94,.18);
-  font-weight:950;
-}
-.flash{animation:flash 1s infinite}
+.readyGlow{animation:flash 1s infinite}
 @keyframes flash{50%{box-shadow:0 0 12px rgba(34,197,94,.65)}}
 
 /* Dock plate strip bottom-right */
@@ -211,9 +206,6 @@ hr.sep{border:none;border-top:1px solid rgba(120,145,220,.18);margin:12px 0}
   font-size:12px;
   color:#fff;
 }
-.readyGlow{
-  animation:flash 1s infinite;
-}
 .readyList{
   display:flex;flex-direction:column;gap:10px;
 }
@@ -247,10 +239,11 @@ hr.sep{border:none;border-top:1px solid rgba(120,145,220,.18);margin:12px 0}
       <span class="kpi">Dock Ready <strong id="kDockReady">0</strong></span>
       <span class="kpi">Ready <strong id="kReady">0</strong></span>
       <span class="badge ok" id="liveDot">● Live</span>
+      <button class="ghost small" id="logoutBtn" style="display:none;">Logout</button>
     </div>
   </div>
 
-  <!-- DRIVER UI (separate, only in /driver) -->
+  <!-- DRIVER UI -->
   <div class="driverWrap" id="driverUI" style="display:none;">
     <div class="driverTop">
       <h2>Driver Move</h2>
@@ -290,7 +283,7 @@ hr.sep{border:none;border-top:1px solid rgba(120,145,220,.18);margin:12px 0}
     </div>
   </div>
 
-  <!-- MAIN BOARD (dispatcher + dock) -->
+  <!-- MAIN BOARD -->
   <div class="card" id="mainBoard">
 
     <div class="controls" id="controls">
@@ -310,10 +303,8 @@ hr.sep{border:none;border-top:1px solid rgba(120,145,220,.18);margin:12px 0}
       <input id="note" placeholder="Quick note (optional)" style="min-width:220px;" />
       <button class="primary" id="addBtn">Add / Update</button>
       <button class="danger" id="clearBtn">Clear All</button>
-      <button class="ghost small" id="pinBtn">Change PIN</button>
 
-      <!-- Geotab (safe fallback: open in new tab) -->
-      <button class="primary small" id="geotabBtn" style="display:none;">Open Geotab</button>
+      <button class="primary small" id="geotabBtn">Geotab</button>
     </div>
 
     <table>
@@ -337,13 +328,9 @@ hr.sep{border:none;border-top:1px solid rgba(120,145,220,.18);margin:12px 0}
   </div>
 </div>
 
-<!-- Dock plate strip -->
 <div class="platePanel" id="platePanel"></div>
-
-<!-- Toast -->
 <div id="toast"></div>
 
-<!-- Modal -->
 <div id="modal">
   <div id="modalCard">
     <div id="modalTitle">Modal</div>
@@ -360,43 +347,16 @@ hr.sep{border:none;border-top:1px solid rgba(120,145,220,.18);margin:12px 0}
   const isDriver = pathLower.includes("/driver");
   const isDispatcher = !isDock && !isDriver;
 
-  // ===== Footer year + version =====
   document.getElementById("year").textContent = new Date().getFullYear();
-  fetch("/api/version").then(r=>r.json()).then(d=>{
-    document.getElementById("appVersion").textContent = d.version || "...";
-  }).catch(()=>{ document.getElementById("appVersion").textContent = "..."; });
-
-  // Driver link display
   document.getElementById("driverLink").textContent = location.origin + "/driver";
 
-  // Mode label
   document.getElementById("modeLabel").textContent =
     isDispatcher ? "Dispatcher Mode" : isDock ? "Dock Mode" : "Driver Mode";
 
-  // Show driver UI and hide main board + KPIs when in driver mode
-  if (isDriver){
-    document.getElementById("driverUI").style.display = "block";
-    document.getElementById("mainBoard").style.display = "none";
-    document.getElementById("kpiBar").style.display = "none";
-  }
-
-  // Hide controls for Dock + Driver (dock should not add/edit trailers)
-  if (isDock || isDriver){
-    const controls = document.getElementById("controls");
-    if (controls) controls.style.display = "none";
-  }
-
-  // Geotab button (Dispatcher only). Replace URL if you have one.
-  const geotabBtn = document.getElementById("geotabBtn");
-  if (geotabBtn && isDispatcher){
-    geotabBtn.style.display = "inline-block";
-    geotabBtn.onclick = () => {
-      // Put your Geotab URL here (opens in new tab). If iframe embedding is allowed later, we can embed.
-      const GEOTAB_URL = ""; // <-- paste your geotab link if you want
-      if (!GEOTAB_URL) return alert("https://my.geotab.com/login.html");
-      window.open(GEOTAB_URL, "_blank", "noopener,noreferrer");
-    };
-  }
+  // Version
+  fetch("/api/version").then(r=>r.json()).then(d=>{
+    document.getElementById("appVersion").textContent = d.version || "...";
+  }).catch(()=>{ document.getElementById("appVersion").textContent = "..."; });
 
   // ===== Toast =====
   function toast(msg, ms=1800){
@@ -407,7 +367,7 @@ hr.sep{border:none;border-top:1px solid rgba(120,145,220,.18);margin:12px 0}
     el._t = setTimeout(()=> el.style.display="none", ms);
   }
 
-  // ===== Modal framework =====
+  // ===== Modal =====
   function escapeHtml(str){
     return String(str ?? "")
       .replaceAll("&","&amp;")
@@ -457,75 +417,93 @@ hr.sep{border:none;border-top:1px solid rgba(120,145,220,.18);margin:12px 0}
     });
   }
 
-  // ===== PIN handling (separate keys per mode) =====
-  const PIN_KEY = isDock ? "role_pin_dock" : "role_pin_dispatcher";
-  function getSavedPin(){ return localStorage.getItem(PIN_KEY) || ""; }
-  function setSavedPin(pin){ localStorage.setItem(PIN_KEY, String(pin||"").trim()); }
-  function getPinHeader(){
-    const pin = getSavedPin();
-    return pin ? { "x-role-pin": pin } : {};
+  // ===== Auth (cookie session) =====
+  async function whoami(){
+    const r = await fetch("/api/whoami");
+    return await r.json(); // { role: "dispatcher"|"dock"|null }
   }
 
-  async function ensurePinIfNeeded(){
-    if (isDriver) return true;
-    let pin = getSavedPin();
-    if (!pin){
-      const hint = isDock ? "Enter DOCK PIN" : "Enter DISPATCHER PIN";
-      const entered = await new Promise((resolve)=>{
-        showModal({
-          title: "Enter PIN",
-          bodyHTML: `
-            <div style="margin-bottom:10px;color:rgba(167,178,211,.92);">${escapeHtml(hint)}</div>
-            <input id="pinInput" placeholder="PIN" inputmode="numeric" style="width:100%;" />
-            <div class="sub" style="margin-top:8px;">PIN is stored on this device.</div>
-          `,
-          actions: [
-            { label:"Cancel", className:"ghost", onClick:()=>{ closeModal(); resolve(null); } },
-            { label:"Save", className:"primary", onClick:()=>{ 
-                const v = document.getElementById("pinInput").value.trim();
-                closeModal();
-                resolve(v || null);
-              } 
-            }
-          ]
-        });
-      });
-      if (!entered) return false;
-      setSavedPin(entered);
-    }
-    return true;
-  }
+  async function loginFlow(requiredRole){
+    const existing = await whoami().catch(()=>({role:null}));
+    if (existing.role === requiredRole) return true;
 
-  // Change PIN button (dispatcher UI only shows controls anyway)
-  const pinBtn = document.getElementById("pinBtn");
-  if (pinBtn){
-    pinBtn.onclick = async () => {
-      const entered = await new Promise((resolve)=>{
-        showModal({
-          title: "Change PIN",
-          bodyHTML: `
-            <div style="margin-bottom:10px;color:rgba(167,178,211,.92);">Enter a new PIN for this device:</div>
-            <input id="pinInput2" placeholder="PIN" inputmode="numeric" style="width:100%;" />
-          `,
-          actions: [
-            { label:"Cancel", className:"ghost", onClick:()=>{ closeModal(); resolve(null); } },
-            { label:"Save", className:"primary", onClick:()=>{
-                const v = document.getElementById("pinInput2").value.trim();
+    return await new Promise((resolve)=>{
+      showModal({
+        title: "Login Required",
+        bodyHTML: `
+          <div style="margin-bottom:10px;color:rgba(167,178,211,.92);">
+            Enter ${requiredRole.toUpperCase()} PIN to continue.
+          </div>
+          <input id="pinInput" placeholder="PIN" inputmode="numeric" style="width:100%;padding:12px;border-radius:12px;" />
+          <div class="sub" style="margin-top:8px;">This login stays active on this device.</div>
+        `,
+        actions: [
+          { label:"Cancel", className:"ghost", onClick:()=>{ closeModal(); resolve(false); } },
+          { label:"Login", className:"primary", onClick: async ()=>{
+              const pin = (document.getElementById("pinInput").value || "").trim();
+              if (!pin){ toast("PIN required", 1600); return; }
+              try{
+                const res = await fetch("/api/login", {
+                  method:"POST",
+                  headers:{ "Content-Type":"application/json" },
+                  body: JSON.stringify({ pin })
+                });
+                if(!res.ok){
+                  const txt = await res.text();
+                  toast("Login failed: " + txt, 2400);
+                  return;
+                }
+                const data = await res.json();
+                if (data.role !== requiredRole){
+                  toast("Wrong role PIN for this page.", 2400);
+                  return;
+                }
                 closeModal();
-                resolve(v || null);
+                resolve(true);
+              }catch{
+                toast("Network error", 2000);
               }
             }
-          ]
-        });
+          }
+        ]
       });
-      if (!entered) return;
-      setSavedPin(entered);
-      toast("PIN updated ✅");
-    };
+    });
   }
 
-  const pinOk = await ensurePinIfNeeded();
-  if (!pinOk) return;
+  // Require auth for dock + dispatcher
+  if (!isDriver){
+    const ok = await loginFlow(isDock ? "dock" : "dispatcher");
+    if (!ok) {
+      document.getElementById("mainBoard").style.display = "none";
+      toast("Login required to use this page.", 3000);
+      return;
+    }
+    document.getElementById("logoutBtn").style.display = "inline-block";
+  }
+
+  // Logout
+  document.getElementById("logoutBtn").onclick = async () => {
+    await fetch("/api/logout", { method:"POST" }).catch(()=>{});
+    location.reload();
+  };
+
+  // ===== Driver UI show/hide =====
+  if (isDriver){
+    document.getElementById("driverUI").style.display = "block";
+    document.getElementById("mainBoard").style.display = "none";
+    document.getElementById("kpiBar").style.display = "none";
+  }
+
+  // Dock should not see dispatcher controls
+  if (isDock){
+    document.getElementById("controls").style.display = "none";
+  }
+
+  // Geotab button → your embedded route
+  const geotabBtn = document.getElementById("geotabBtn");
+  if (geotabBtn){
+    geotabBtn.onclick = () => window.open("/geotab", "_blank", "noopener,noreferrer");
+  }
 
   // ===== State =====
   const tbody = document.getElementById("tbody");
@@ -577,46 +555,27 @@ hr.sep{border:none;border-top:1px solid rgba(120,145,220,.18);margin:12px 0}
     renderPlates();
   }
 
-  async function apiUpsertDispatcher(payload){
+  async function apiUpsert(payload){
     const res = await fetch("/api/upsert", {
       method:"POST",
-      headers: { "Content-Type":"application/json", ...getPinHeader() },
+      headers: { "Content-Type":"application/json" },
       body: JSON.stringify(payload)
     });
     if (!res.ok){
       const txt = await res.text();
-      toast("Update blocked: " + txt, 2600);
+      toast("Blocked: " + txt, 2600);
       return false;
     }
     return true;
   }
 
-  // Dock sends ONLY trailer + status
-  async function apiUpsertDock(trailer, status){
-    const res = await fetch("/api/upsert", {
-      method:"POST",
-      headers: { "Content-Type":"application/json", ...getPinHeader() },
-      body: JSON.stringify({ trailer, status })
-    });
-    if (!res.ok){
-      const txt = await res.text();
-      toast("Dock update blocked: " + txt, 2600);
-      return false;
-    }
-    return true;
-  }
-
-  async function apiClearDispatcher(){
+  async function apiClear(){
     const ok = await confirmModal("Clear All", "This clears ALL trailers for everyone. Continue?");
     if (!ok) return false;
-
-    const res = await fetch("/api/clear", {
-      method:"POST",
-      headers: { ...getPinHeader() }
-    });
+    const res = await fetch("/api/clear", { method:"POST" });
     if (!res.ok){
       const txt = await res.text();
-      toast("Clear blocked: " + txt, 2600);
+      toast("Blocked: " + txt, 2600);
       return false;
     }
     return true;
@@ -625,12 +584,12 @@ hr.sep{border:none;border-top:1px solid rgba(120,145,220,.18);margin:12px 0}
   async function apiSetDockPlate(door, status, note){
     const res = await fetch("/api/dockplates/set", {
       method:"POST",
-      headers: { "Content-Type":"application/json", ...getPinHeader() },
+      headers: { "Content-Type":"application/json" },
       body: JSON.stringify({ door, status, note })
     });
     if (!res.ok){
       const txt = await res.text();
-      toast("Plate update blocked: " + txt, 2600);
+      toast("Blocked: " + txt, 2600);
       return false;
     }
     return true;
@@ -669,12 +628,8 @@ hr.sep{border:none;border-top:1px solid rgba(120,145,220,.18);margin:12px 0}
           b.className = "primary small";
           b.textContent = "Mark Loading";
           b.onclick = async () => {
-            const prev = state[t];
-            state[t] = { ...prev, status:"Loading", updatedAt: Date.now() };
-            render();
-            const ok = await apiUpsertDock(t, "Loading");
-            if (!ok) { state[t] = prev; render(); }
-            else { toast("Marked Loading ✅"); await loadBoard(); }
+            const ok = await apiUpsert({ trailer: t, status:"Loading" });
+            if (ok){ toast("Loading ✅"); await loadBoard(); }
           };
           td.appendChild(b);
         } else if (v.status === "Loading"){
@@ -682,12 +637,8 @@ hr.sep{border:none;border-top:1px solid rgba(120,145,220,.18);margin:12px 0}
           b.className = "primary small";
           b.textContent = "Mark Dock Ready";
           b.onclick = async () => {
-            const prev = state[t];
-            state[t] = { ...prev, status:"Dock Ready", updatedAt: Date.now() };
-            render();
-            const ok = await apiUpsertDock(t, "Dock Ready");
-            if (!ok) { state[t] = prev; render(); }
-            else { toast("Dock Ready ✅"); await loadBoard(); }
+            const ok = await apiUpsert({ trailer: t, status:"Dock Ready" });
+            if (ok){ toast("Dock Ready ✅"); await loadBoard(); }
           };
           td.appendChild(b);
         } else {
@@ -704,7 +655,7 @@ hr.sep{border:none;border-top:1px solid rgba(120,145,220,.18);margin:12px 0}
         });
         sel.value = v.status || "Incoming";
         sel.onchange = async () => {
-          const ok = await apiUpsertDispatcher({
+          const ok = await apiUpsert({
             trailer: t,
             door: v.door || "",
             direction: v.direction || "Inbound",
@@ -725,10 +676,7 @@ hr.sep{border:none;border-top:1px solid rgba(120,145,220,.18);margin:12px 0}
 
   // ===== Dispatcher add/update controls =====
   if (isDispatcher){
-    const addBtn = document.getElementById("addBtn");
-    const clearBtn = document.getElementById("clearBtn");
-
-    addBtn.onclick = async () => {
+    document.getElementById("addBtn").onclick = async () => {
       const trailer = document.getElementById("trailer").value.trim();
       if (!trailer) return toast("Trailer # required", 1800);
 
@@ -737,7 +685,7 @@ hr.sep{border:none;border-top:1px solid rgba(120,145,220,.18);margin:12px 0}
       const status = document.getElementById("status").value;
       const note = document.getElementById("note").value.trim();
 
-      const ok = await apiUpsertDispatcher({ trailer, door, direction, status, note });
+      const ok = await apiUpsert({ trailer, door, direction, status, note });
       if (ok){
         toast("Added/Updated ✅");
         document.getElementById("trailer").value = "";
@@ -747,12 +695,9 @@ hr.sep{border:none;border-top:1px solid rgba(120,145,220,.18);margin:12px 0}
       }
     };
 
-    clearBtn.onclick = async () => {
-      const ok = await apiClearDispatcher();
-      if (ok){
-        toast("Cleared ✅");
-        await loadBoard();
-      }
+    document.getElementById("clearBtn").onclick = async () => {
+      const ok = await apiClear();
+      if (ok){ toast("Cleared ✅"); await loadBoard(); }
     };
   }
 
@@ -774,7 +719,6 @@ hr.sep{border:none;border-top:1px solid rgba(120,145,220,.18);margin:12px 0}
   function renderDriver(){
     if (!isDriver) return;
 
-    // ready list
     const ready = Object.entries(state)
       .filter(([,v]) => v.status === "Ready")
       .sort((a,b)=> String(a[0]).localeCompare(String(b[0])));
@@ -862,11 +806,11 @@ hr.sep{border:none;border-top:1px solid rgba(120,145,220,.18);margin:12px 0}
 
       ackMap[selectedTrailer] = v.updatedAt;
       localStorage.setItem("driver_ack", JSON.stringify(ackMap));
-      toast("Safety confirmed ✅ Call dispatch to depart.", 2600);
+      toast("Safety confirmed ✅", 2200);
     };
   }
 
-  // ===== Dock plate strip (18-42), clickable in dispatcher + dock with MODAL =====
+  // ===== Dock plate strip (18-42) =====
   function renderPlates(){
     const panel = document.getElementById("platePanel");
     panel.innerHTML = "";
@@ -937,7 +881,7 @@ hr.sep{border:none;border-top:1px solid rgba(120,145,220,.18);margin:12px 0}
     });
   }
 
-  // ===== Connection indicator (polling) =====
+  // ===== Polling refresh (5 seconds) =====
   async function safePoll(){
     try{
       if (!isDriver){
@@ -953,7 +897,6 @@ hr.sep{border:none;border-top:1px solid rgba(120,145,220,.18);margin:12px 0}
     }
   }
 
-  // ===== Initial load + 5s refresh =====
   await safePoll();
   setInterval(safePoll, 5000);
 

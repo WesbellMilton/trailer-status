@@ -10,6 +10,12 @@ const app = express();
 app.use(express.json());
 app.use(express.static(__dirname));
 
+// Simple request logging (optional)
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
@@ -17,27 +23,32 @@ const wss = new WebSocket.Server({ server });
    CONFIG
 ================================ */
 
+// Render persistent disk recommended:
+// DB_PATH=/var/data/data.db
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data.db");
 
-// Pins (as requested)
+// Pins (as you provided)
 const PINS = {
   dispatcher: "1234",
   dock: "789",
 };
 
-// Session config
+// Cookie session signing secret (set this in Render ENV for stability)
 const SESSION_SECRET =
   process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
 
-// 7 days session
+// Session TTL: 7 days
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Geotab target URL (put your company-specific URL here via ENV)
+const GEOTAB_URL = process.env.GEOTAB_URL || "https://my.geotab.com";
 
 const db = new sqlite3.Database(DB_PATH);
 
 // In-memory caches
-let trailers = {};        // trailer -> {direction,status,door,note,updatedAt}
-let confirmations = [];   // latest 200
-let dockPlates = {};      // "18".."42" -> {status:"OK"|"Service", note, updatedAt}
+let trailers = {};       // trailer -> {direction,status,door,note,updatedAt}
+let confirmations = [];  // latest 200
+let dockPlates = {};     // "18".."42" -> {status:"OK"|"Service", note, updatedAt}
 
 /* ================================
    HELPERS
@@ -116,7 +127,6 @@ function verifyToken(token) {
   const expected = crypto.createHmac("sha256", SESSION_SECRET).update(payload).digest("base64");
   const expectedUrl = expected.replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 
-  // timing safe compare
   const a = Buffer.from(sig);
   const b = Buffer.from(expectedUrl);
   if (a.length !== b.length) return null;
@@ -163,35 +173,17 @@ function setSessionCookie(res, token) {
 
 function clearSessionCookie(res) {
   const isProd = (process.env.NODE_ENV || "").toLowerCase() === "production";
-  const pieces = [
-    "session=",
-    "Path=/",
-    "HttpOnly",
-    "SameSite=Lax",
-    "Max-Age=0",
-  ];
+  const pieces = ["session=", "Path=/", "HttpOnly", "SameSite=Lax", "Max-Age=0"];
   if (isProd) pieces.push("Secure");
   res.setHeader("Set-Cookie", pieces.join("; "));
 }
 
-// Backward compatible (old header PIN)
-function getRoleFromPinHeader(req) {
-  const pin = String(req.headers["x-role-pin"] || "").trim();
-  if (!pin) return null;
-  if (pin === PINS.dispatcher) return "dispatcher";
-  if (pin === PINS.dock) return "dock";
-  return null;
-}
-
-// Primary: session cookie
 function getRole(req) {
   const cookies = parseCookies(req);
   const token = cookies.session;
   const verified = verifyToken(token);
   if (verified?.r) return verified.r;
-
-  // fallback
-  return getRoleFromPinHeader(req);
+  return null;
 }
 
 function requireAnyRole(roles) {
@@ -247,8 +239,6 @@ async function initDb() {
       updatedAt INTEGER NOT NULL
     )
   `);
-
-  await dbRun(`ALTER TABLE trailers ADD COLUMN note TEXT NOT NULL DEFAULT ''`).catch(() => {});
 
   await dbRun(`
     CREATE TABLE IF NOT EXISTS confirmations (
@@ -323,40 +313,28 @@ async function reloadCachesFromDb() {
 app.get("/", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.get("/dock", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.get("/driver", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
+
+// NEW: real login page (create login.html in repo root)
+app.get("/login", (req, res) => res.sendFile(path.join(__dirname, "login.html")));
+
+// Geotab: DO NOT iframe (Geotab blocks embedding). Redirect/open in new tab.
 app.get("/geotab", (req, res) => {
-  res.send(`
-    <!doctype html>
-    <html>
-    <head>
-      <meta charset="UTF-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <title>Geotab</title>
-      <style>
-        body{margin:0;background:#0b1430;}
-        iframe{width:100vw;height:100vh;border:0;}
-      </style>
-    </head>
-    <body>
-      <iframe src="https://my.geotab.com/wesbell1/#dashboard"></iframe>
-    </body>
-    </html>
-  `);
+  res.redirect(GEOTAB_URL);
 });
 
 /* ================================
    AUTH API
 ================================ */
 
-// Front-end calls this to check if already logged in
 app.get("/api/whoami", (req, res) => {
   const role = getRole(req);
   res.json({ role: role || null });
 });
 
-// Login once → sets session cookie
 app.post("/api/login", (req, res) => {
   const pin = String(req.body?.pin || "").trim();
   let role = null;
+
   if (pin === PINS.dispatcher) role = "dispatcher";
   else if (pin === PINS.dock) role = "dock";
 
@@ -373,7 +351,7 @@ app.post("/api/logout", (req, res) => {
 });
 
 /* ================================
-   API: READ (PUBLIC)
+   READ APIs (PUBLIC)
 ================================ */
 
 app.get("/health", (req, res) => res.json({ ok: true, db: DB_PATH }));
@@ -385,7 +363,7 @@ app.get("/api/dockplates", (req, res) => res.json(dockPlates));
 app.get("/api/confirmations", (req, res) => res.json(confirmations));
 
 /* ================================
-   API: DOCK PLATES WRITE (Dock + Dispatcher)
+   DOCK PLATES WRITE (Dock + Dispatcher)
 ================================ */
 
 app.post("/api/dockplates/set", requireAnyRole(["dock", "dispatcher"]), async (req, res) => {
@@ -423,7 +401,7 @@ app.post("/api/dockplates/set", requireAnyRole(["dock", "dispatcher"]), async (r
 });
 
 /* ================================
-   API: SAFETY CONFIRM (PUBLIC)
+   SAFETY CONFIRM (PUBLIC)
 ================================ */
 
 app.post("/api/confirm-safety", async (req, res) => {
@@ -475,9 +453,9 @@ app.post("/api/confirm-safety", async (req, res) => {
 });
 
 /* ================================
-   API: UPSERT TRAILER
+   TRAILER UPSERT
    - Dispatcher: full control
-   - Dock: ONLY Loading / Dock Ready (no direction/door/note edits, no create)
+   - Dock: ONLY Loading / Dock Ready (no add, no edits)
 ================================ */
 
 app.post("/api/upsert", requireAnyRole(["dispatcher", "dock"]), async (req, res) => {
@@ -499,7 +477,7 @@ app.post("/api/upsert", requireAnyRole(["dispatcher", "dock"]), async (req, res)
 
     // Dock rules
     if (role === "dock") {
-      if (!prev) return res.status(403).send("Dock cannot add new trailers. Dispatch must create trailer first.");
+      if (!prev) return res.status(403).send("Dock cannot add new trailers. Dispatch must add trailer first.");
 
       const dockAllowed = ["Loading", "Dock Ready"];
       if (!dockAllowed.includes(statusIn)) {
@@ -508,10 +486,11 @@ app.post("/api/upsert", requireAnyRole(["dispatcher", "dock"]), async (req, res)
 
       const updatedAt = Date.now();
 
-      await dbRun(
-        `UPDATE trailers SET status=?, updatedAt=? WHERE trailer=?`,
-        [statusIn, updatedAt, trailer]
-      );
+      await dbRun(`UPDATE trailers SET status=?, updatedAt=? WHERE trailer=?`, [
+        statusIn,
+        updatedAt,
+        trailer,
+      ]);
 
       trailers[trailer] = { ...prev, status: statusIn, updatedAt };
 
@@ -527,7 +506,7 @@ app.post("/api/upsert", requireAnyRole(["dispatcher", "dock"]), async (req, res)
     const door = doorRaw ? normalizeDoorPlate(doorRaw) : (prev?.door || "");
     if (door && !isPlateInRange(door)) return res.status(400).send("Door must be 18-42");
 
-    // Approval rule: Ready requires Dock Ready
+    // Approval rule: Ready requires Dock Ready first
     if (statusIn === "Ready" && prev && prev.status !== "Dock Ready") {
       return res.status(400).send('Approval rule: "Ready" requires prior "Dock Ready".');
     }
@@ -574,7 +553,6 @@ app.post("/api/delete", requireRole("dispatcher"), async (req, res) => {
     if (!trailer) return res.status(400).send("Trailer required");
 
     await dbRun(`DELETE FROM trailers WHERE trailer = ?`, [trailer]);
-
     delete trailers[trailer];
 
     broadcast("state", trailers);
@@ -621,10 +599,11 @@ initDb()
   .then(() => {
     server.listen(PORT, () => {
       console.log("Running on port", PORT);
+      console.log("Login: /login");
       console.log("Dispatcher: /  (PIN 1234)");
       console.log("Dock: /dock       (PIN 789)");
       console.log("Driver: /driver   (no PIN)");
-      console.log("Geotab: /geotab");
+      console.log("Geotab: /geotab (redirect)");
       console.log("SQLite DB:", DB_PATH);
     });
   })

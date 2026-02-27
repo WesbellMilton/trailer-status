@@ -29,7 +29,7 @@ body{
 .wrap{max-width:1400px;margin:auto;padding:20px}
 
 /* leave space so bottom-right strip doesn't cover table */
-.padForStrip{padding-bottom:170px;}
+.padForStrip{padding-bottom:140px;}
 
 .topbar{
   display:flex;justify-content:space-between;align-items:center;gap:12px;
@@ -61,6 +61,7 @@ input,select,button{
 button{cursor:pointer;font-weight:900}
 button.primary{background:rgba(99,102,241,.25)}
 button.danger{background:rgba(239,68,68,.25)}
+button.ghost{background:rgba(255,255,255,.04)}
 
 table{width:100%;border-collapse:collapse}
 thead th{
@@ -135,45 +136,43 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 }
 .mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
 .hide{display:none !important;}
+.rowRight{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 
 /* ================================
-   THIN HORIZONTAL DOCK STRIP (BOTTOM RIGHT)
-   - dispatcher + dock can see
-   - dock can click plates to set OK/Service + note
+   COMPACT HORIZONTAL DOCK STRIP
+   - stays small, scrolls horizontally
 ================================ */
 .plateStrip{
   position:fixed;
   right:14px;
   bottom:14px;
   z-index:9999;
-  width:min(760px, calc(100vw - 28px));
+  width:700px;
+  max-width:95vw;
   border:1px solid rgba(120,145,220,.25);
   border-radius:12px;
-  background:rgba(10,14,28,.95);
-  backdrop-filter: blur(8px);
-  box-shadow:0 10px 30px rgba(0,0,0,.35);
+  background:rgba(10,14,28,.96);
+  backdrop-filter: blur(6px);
   overflow:hidden;
+  box-shadow:0 10px 30px rgba(0,0,0,.35);
 }
 .stripHead{
   display:flex;
   justify-content:space-between;
   align-items:center;
-  gap:10px;
-  padding:8px 10px;
-  border-bottom:1px solid rgba(120,145,220,.16);
-}
-.stripTitle{
-  font-weight:950;
+  padding:8px 12px;
+  border-bottom:1px solid rgba(120,145,220,.15);
   font-size:12px;
+  gap:10px;
+}
+.stripLeft{
   display:flex;
   align-items:center;
   gap:10px;
+  flex-wrap:wrap;
 }
-.stripSubtitle{
-  color:var(--muted);
-  font-weight:700;
-  font-size:11px;
-}
+.stripTitle{font-weight:950}
+.stripSubtitle{color:var(--muted);font-weight:700;font-size:11px}
 .stripCounts{
   display:flex;
   gap:10px;
@@ -203,48 +202,34 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   font-weight:950;
   font-size:11px;
 }
-.stripBody{padding:8px 10px;}
-.stripBodyCollapsed{display:none;}
-
+.stripBody{
+  padding:8px 10px;
+  max-height:70px;
+  overflow-x:auto;
+  overflow-y:hidden;
+}
 .plateGridMini{
-  display:grid;
-  grid-template-columns: repeat(25, minmax(0, 1fr));
+  display:flex;
   gap:6px;
+  flex-wrap:nowrap;
 }
-@media (max-width: 920px){
-  .plateGridMini{grid-template-columns: repeat(13, minmax(0, 1fr));}
-}
-@media (max-width: 520px){
-  .plateGridMini{grid-template-columns: repeat(9, minmax(0, 1fr));}
-}
-
 .plateMini{
-  height:26px;
-  border-radius:8px;
-  border:1px solid rgba(120,145,220,.18);
-  background:rgba(255,255,255,.03);
+  min-width:34px;
+  height:28px;
+  border-radius:6px;
+  font-size:11px;
+  font-weight:900;
   display:flex;
   align-items:center;
   justify-content:center;
-  font-weight:950;
-  font-size:11px;
-  letter-spacing:.2px;
+  border:1px solid rgba(120,145,220,.25);
+  background:rgba(255,255,255,.04);
   user-select:none;
 }
-.plateMini.ok{
-  border-color:rgba(34,197,94,.55);
-  background:rgba(34,197,94,.14);
-}
-.plateMini.svc{
-  border-color:rgba(245,158,11,.70);
-  background:rgba(245,158,11,.14);
-}
-.plateMini.unk{
-  border-color:rgba(148,163,184,.35);
-  background:rgba(148,163,184,.08);
-  color:#eaf0ff;
-}
 .plateMini.clickable{cursor:pointer}
+.plateMini.ok{border-color:rgba(34,197,94,.55);background:rgba(34,197,94,.18)}
+.plateMini.svc{border-color:rgba(245,158,11,.65);background:rgba(245,158,11,.18)}
+.plateMini.unk{border-color:rgba(148,163,184,.35);background:rgba(148,163,184,.10)}
 .plateMini:active{transform:scale(.98)}
 </style>
 </head>
@@ -288,16 +273,23 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       <input id="note" placeholder="Trailer quick note (optional)" style="min-width:220px;" />
       <button class="primary" id="addBtn">Add / Update</button>
       <button class="danger" id="clearBtn">Clear All</button>
-      <span class="smallHint">
-        Dock: <span class="badge mono">/dock</span> • Driver: <span class="badge mono">/driver</span>
-      </span>
+
+      <div class="rowRight">
+        <span class="smallHint">
+          Dock: <span class="badge mono">/dock</span> • Driver: <span class="badge mono">/driver</span>
+        </span>
+        <button class="ghost" id="switchPinBtn" type="button">Switch PIN</button>
+      </div>
     </div>
 
     <!-- Dock-only hint -->
     <div class="controls" id="dockHint" style="display:none;">
       <span class="smallHint">
-        Dock Mode: use the buttons in the table to set Loading / Dock Ready. Use the bottom-right strip to set plate OK/Service.
+        Dock Mode: use table buttons for Loading / Dock Ready. Use bottom-right strip to set plate OK/Service.
       </span>
+      <div class="rowRight">
+        <button class="ghost" id="switchPinBtnDock" type="button">Switch PIN</button>
+      </div>
     </div>
 
     <!-- Driver check-in -->
@@ -329,13 +321,14 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   </div>
 </div>
 
-<!-- Thin bottom-right strip (Dispatcher + Dock). Hidden for Driver -->
+<!-- Bottom-right plate strip (Dispatcher + Dock). Hidden in Driver mode -->
 <div id="plateStrip" class="plateStrip">
   <div class="stripHead">
-    <div class="stripTitle">
-      <span>Dock Plates 18–42</span>
+    <div class="stripLeft">
+      <span class="stripTitle">Dock Plates 18–42</span>
       <span class="stripSubtitle" id="stripModeText">Dispatcher view (read-only)</span>
     </div>
+
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
       <div class="stripCounts">
         <span class="pill"><span class="dot dotOK"></span> OK <b id="okCount">0</b></span>
@@ -345,6 +338,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       <button id="stripToggle" class="stripToggle" type="button">Hide</button>
     </div>
   </div>
+
   <div id="stripBody" class="stripBody">
     <div id="plateGridMini" class="plateGridMini"></div>
   </div>
@@ -357,6 +351,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
   const isDriver = pathMode.includes("/driver") || qsMode === "driver";
   const isDock   = pathMode.includes("/dock")   || qsMode === "dock";
+  const isDispatcher = !isDriver && !isDock;
 
   const modeLabel = document.getElementById("modeLabel");
   const controls = document.getElementById("controls");
@@ -389,6 +384,10 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   const addBtn = document.getElementById("addBtn");
   const clearBtn = document.getElementById("clearBtn");
 
+  // switch PIN buttons (one may not exist based on mode)
+  const switchPinBtn = document.getElementById("switchPinBtn");
+  const switchPinBtnDock = document.getElementById("switchPinBtnDock");
+
   // driver check-in
   const driverCheckin = document.getElementById("driverCheckin");
   const driverTrailerInp = document.getElementById("driverTrailer");
@@ -400,6 +399,52 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   let state = {};
   let dockPlates = {};
   let ackMap = JSON.parse(localStorage.getItem("driver_ack") || "{}");
+
+  // ===== Permissions (PIN) =====
+  // Store separate pins so Dock and Dispatcher don't fight each other
+  let dispatcherPin = localStorage.getItem("pin_dispatcher") || "";
+  let dockPin = localStorage.getItem("pin_dock") || "";
+
+  function requirePinNow(){
+    if (isDriver) return true;
+    if (isDock){
+      if (dockPin) return true;
+      const entered = prompt("DOCK PIN required:");
+      if (!entered) return false;
+      dockPin = entered.trim();
+      localStorage.setItem("pin_dock", dockPin);
+      return true;
+    }
+    // dispatcher
+    if (dispatcherPin) return true;
+    const entered = prompt("DISPATCHER PIN required:");
+    if (!entered) return false;
+    dispatcherPin = entered.trim();
+    localStorage.setItem("pin_dispatcher", dispatcherPin);
+    return true;
+  }
+
+  function getRolePinHeader(){
+    if (isDriver) return null;
+    return isDock ? dockPin : dispatcherPin;
+  }
+
+  function clearPins(){
+    localStorage.removeItem("pin_dispatcher");
+    localStorage.removeItem("pin_dock");
+    dispatcherPin = "";
+    dockPin = "";
+    alert("Pins cleared. Refresh the page to re-enter PIN.");
+  }
+
+  if (switchPinBtn) switchPinBtn.onclick = clearPins;
+  if (switchPinBtnDock) switchPinBtnDock.onclick = clearPins;
+
+  // Require pin on load for dispatcher/dock
+  if (!requirePinNow() && !isDriver){
+    document.body.innerHTML = "<div style='color:white;padding:20px;font-family:system-ui;'>Access denied (PIN required).</div>";
+    return;
+  }
 
   // strip collapse state
   const collapsedKey = "plate_strip_collapsed";
@@ -485,52 +530,92 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     kDeparted.textContent = String(c.Departed);
   }
 
-  async function loadOnce(){
+  function plateStatusForDoor(door){
+    const key = normalizeDoor(door);
+    if (!key) return null;
+    return dockPlates[key] || null;
+  }
+
+  async function apiGetAll(){
     const [sRes, pRes] = await Promise.all([
       fetch("/api/state"),
       fetch("/api/dockplates")
     ]);
     state = await sRes.json();
     dockPlates = await pRes.json();
-    render();
-    renderPlatesStrip();
   }
 
-  async function update(trailer, door, direction, status, note){
+  async function apiUpsert(payload){
+    const headers = { "Content-Type":"application/json" };
+    const pin = getRolePinHeader();
+    if (pin) headers["x-role-pin"] = pin;
+
     const res = await fetch("/api/upsert", {
       method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ trailer, door, direction, status, note })
+      headers,
+      body: JSON.stringify(payload)
     });
+
     if (!res.ok){
       const t = await res.text();
       alert("Update failed: " + t);
+      return false;
     }
-    await loadOnce();
+    return true;
   }
 
-  // Dock sets plate status
-  async function setDockPlate(plateNumber){
-    const door = String(plateNumber);
+  async function apiClear(){
+    const headers = {};
+    const pin = getRolePinHeader();
+    if (pin) headers["x-role-pin"] = pin;
 
-    // quick choice without big buttons
-    const ok = confirm(`Plate ${door}: Press OK for "OK".\nPress Cancel to choose "Needs Service".`);
-    const status = ok ? "OK" : "Service";
+    const ok = confirm("Clear ALL trailers for everyone?");
+    if (!ok) return;
 
-    const note = (prompt(`Plate ${door} note (${status}) (optional):`, dockPlates[door]?.note || "") ?? "").trim();
+    const res = await fetch("/api/clear", { method:"POST", headers });
+    if (!res.ok){
+      const t = await res.text();
+      alert("Clear failed: " + t);
+    }
+  }
+
+  async function apiSetDockPlate(door, status, note){
+    const headers = { "Content-Type":"application/json" };
+    const pin = getRolePinHeader();
+    if (pin) headers["x-role-pin"] = pin;
 
     const res = await fetch("/api/dockplates/set", {
       method:"POST",
-      headers:{ "Content-Type":"application/json" },
+      headers,
       body: JSON.stringify({ door, status, note })
     });
 
     if (!res.ok){
       const t = await res.text();
       alert("Plate update failed: " + t);
-      return;
+      return false;
     }
-    await loadOnce();
+    return true;
+  }
+
+  async function apiConfirmSafety(trailer, door){
+    const res = await fetch("/api/confirm-safety", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({
+        trailer,
+        door: door || "",
+        loadSecured:true,
+        dockPlateUp:true
+      })
+    });
+
+    if (!res.ok){
+      const t = await res.text();
+      alert("Safety confirm failed: " + t);
+      return false;
+    }
+    return true;
   }
 
   // OPTION 4: Dispatcher can only set READY after DOCK READY
@@ -542,6 +627,18 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     return true;
   }
 
+  async function loadOnce(){
+    await apiGetAll();
+    render();
+    renderPlatesStrip();
+  }
+
+  async function updateTrailer(trailer, door, direction, status, note){
+    const ok = await apiUpsert({ trailer, door, direction, status, note });
+    if (!ok) return;
+    await loadOnce();
+  }
+
   async function confirmMove(trailer, v){
     const ok1 = confirm("STEP 1/2: Confirm the LOAD is SECURED.");
     if (!ok1) return;
@@ -549,28 +646,31 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     const ok2 = confirm("STEP 2/2: Confirm the DOCK PLATE is UP.");
     if (!ok2) return;
 
-    const res = await fetch("/api/confirm-safety", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ trailer, door: v.door || "", loadSecured:true, dockPlateUp:true })
-    });
-
-    if (!res.ok){
-      const t = await res.text();
-      alert("Safety confirm failed: " + t);
-      return;
-    }
+    const ok = await apiConfirmSafety(trailer, v.door || "");
+    if (!ok) return;
 
     ackMap[trailer] = v.updatedAt;
     localStorage.setItem("driver_ack", JSON.stringify(ackMap));
 
-    await update(trailer, v.door || "", v.direction || "Inbound", "Departed", v.note || "");
+    await updateTrailer(trailer, v.door || "", v.direction || "Inbound", "Departed", v.note || "");
   }
 
-  function plateStatusForDoor(door){
-    const key = normalizeDoor(door);
-    if (!key) return null;
-    return dockPlates[key] || null;
+  async function setDockPlate(plateNumber){
+    if (!isDock){
+      alert("Dispatcher is view-only for plates. Use /dock to update plates.");
+      return;
+    }
+
+    const door = String(plateNumber);
+
+    const ok = confirm(`Plate ${door}: Press OK for "OK".\nPress Cancel to choose "Needs Service".`);
+    const status = ok ? "OK" : "Service";
+
+    const note = (prompt(`Plate ${door} note (${status}) (optional):`, dockPlates[door]?.note || "") ?? "").trim();
+
+    const done = await apiSetDockPlate(door, status, note);
+    if (!done) return;
+    await loadOnce();
   }
 
   function render(){
@@ -578,12 +678,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
     let entries = Object.entries(state);
 
-    // Dock mode: show the stuff they work on
-    if (isDock){
-      entries = entries.filter(([_, v]) => v.status === "Loading" || v.status === "Dock Ready");
-    }
-
-    // Driver mode: only see their trailer
+    // Driver: only their trailer
     if (isDriver){
       if (!driverTrailer){
         tbody.innerHTML = `<tr><td colspan="8" style="color:var(--muted);padding:14px;">
@@ -634,14 +729,14 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         <td>${v.direction || ""}</td>
         <td><span class="tag ${statusClass(v.status)}">${v.status || ""}</span></td>
         <td>${plateStatusHtml}</td>
-        <td class="noteCell" title="${(plate && plate.note) ? String(plate.note).replaceAll('"','&quot;') : ''}">${plateNote}</td>
-        <td class="noteCell" title="${(v.note) ? String(v.note).replaceAll('"','&quot;') : ''}">${(v.note && v.note.trim()) ? v.note : "-"}</td>
+        <td class="noteCell">${plateNote}</td>
+        <td class="noteCell">${(v.note && v.note.trim()) ? v.note : "-"}</td>
       `;
 
       const tdAction = document.createElement("td");
 
       // Dispatcher actions
-      if (!isDriver && !isDock){
+      if (isDispatcher){
         const sel = document.createElement("select");
         ["Incoming","Loading","Dock Ready","Ready"].forEach(s=>{
           const o = document.createElement("option");
@@ -656,7 +751,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
             sel.value = v.status;
             return;
           }
-          update(t, v.door || "", v.direction || "Inbound", next, v.note || "");
+          updateTrailer(t, v.door || "", v.direction || "Inbound", next, v.note || "");
         };
 
         const noteBtn = document.createElement("button");
@@ -666,7 +761,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         noteBtn.onclick = () => {
           const newNote = prompt(`Trailer note for ${t}:`, v.note || "");
           if (newNote === null) return;
-          update(t, v.door || "", v.direction || "Inbound", v.status || "Incoming", String(newNote).trim());
+          updateTrailer(t, v.door || "", v.direction || "Inbound", v.status || "Incoming", String(newNote).trim());
         };
 
         tdAction.appendChild(sel);
@@ -681,12 +776,12 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         const btnLoading = document.createElement("button");
         btnLoading.className = "dockBtn loading";
         btnLoading.textContent = "Loading";
-        btnLoading.onclick = () => update(t, v.door || "", v.direction || "Inbound", "Loading", v.note || "");
+        btnLoading.onclick = () => updateTrailer(t, v.door || "", v.direction || "Inbound", "Loading", v.note || "");
 
         const btnDockReady = document.createElement("button");
         btnDockReady.className = "dockBtn dockready";
         btnDockReady.textContent = "Dock Ready";
-        btnDockReady.onclick = () => update(t, v.door || "", v.direction || "Inbound", "Dock Ready", v.note || "");
+        btnDockReady.onclick = () => updateTrailer(t, v.door || "", v.direction || "Inbound", "Dock Ready", v.note || "");
 
         wrap.appendChild(btnLoading);
         wrap.appendChild(btnDockReady);
@@ -753,7 +848,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   }
 
   // Dispatcher add/update + clear
-  if (!isDriver && !isDock){
+  if (isDispatcher){
     addBtn.onclick = () => {
       const t = trailerInp.value.trim();
       if (!t) return;
@@ -766,24 +861,20 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
       const chosenStatus = statusSel.value;
 
-      // approval rule for new entries: don't allow dispatcher to create as Ready unless it was Dock Ready first
+      // rule: don't allow dispatcher to create as Ready directly
       if (chosenStatus === "Ready"){
         alert('Approval rule: Dock must set "Dock Ready" first. Dispatcher cannot create directly as "Ready".');
         return;
       }
 
-      update(t, door, directionSel.value, chosenStatus, noteInp.value.trim());
+      updateTrailer(t, door, directionSel.value, chosenStatus, noteInp.value.trim());
 
       trailerInp.value = "";
       doorInp.value = "";
       noteInp.value = "";
     };
 
-    clearBtn.onclick = () => {
-      const ok = confirm("Clear ALL trailers for everyone?");
-      if (!ok) return;
-      fetch("/api/clear", { method:"POST" }).then(loadOnce);
-    };
+    clearBtn.onclick = () => apiClear().then(loadOnce);
   }
 
   // WebSocket live updates + fallback polling every 5s
@@ -808,7 +899,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         if (msg.type === "dockplates"){
           dockPlates = msg.payload || {};
           renderPlatesStrip();
-          render(); // update plate columns in table too
+          render();
         }
       } catch {}
     };

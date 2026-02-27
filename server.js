@@ -1,3 +1,12 @@
+// server.js
+// Wesbell Trailer Status Board
+// Modes:
+//  - Dispatcher: /
+//  - Dock:       /dock
+//  - Driver:     /driver
+//  - Supervisor confirmations: /supervisor
+//  - Maintenance plate list:   /maintenance
+
 require("dotenv").config();
 
 const express = require("express");
@@ -10,10 +19,10 @@ const compression = require("compression");
 
 const app = express();
 
-// Allow inline <script> in index.html (CSP off)
+// allow inline scripts in index.html
 app.use(
   helmet({
-    contentSecurityPolicy: false
+    contentSecurityPolicy: false,
   })
 );
 
@@ -21,7 +30,7 @@ app.use(compression());
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// Simple request logging
+// simple request logging
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
@@ -38,10 +47,10 @@ const wss = new WebSocket.Server({ server });
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data.db");
 const db = new sqlite3.Database(DB_PATH);
 
-// In-memory caches (fast rendering + websocket payload)
-let trailers = {};
-let confirmations = [];
-let dockPlates = {}; // door -> {status, note, updatedAt}
+// in-memory caches
+let trailers = {};        // trailer -> {direction,status,door,note,updatedAt}
+let confirmations = [];   // latest 200
+let dockPlates = {};      // "18".."42" -> {status:"OK"|"Service", note, updatedAt}
 
 /* ================================
    HELPERS
@@ -60,11 +69,24 @@ function cleanStr(v, maxLen) {
   return s.length > maxLen ? s.slice(0, maxLen) : s;
 }
 
+function normalizePlateDoor(input) {
+  // Accept "18", "D18", "Door 18" -> "18"
+  const raw = String(input ?? "").trim().toUpperCase();
+  if (!raw) return "";
+  const m = raw.match(/(\d{1,3})/);
+  return m ? m[1] : raw;
+}
+
+function isPlateInRange(doorStr) {
+  const n = Number(doorStr);
+  return Number.isFinite(n) && n >= 18 && n <= 42;
+}
+
 function computeStats(board) {
   const stats = {
     total: 0,
     byStatus: { Incoming: 0, Loading: 0, "Dock Ready": 0, Ready: 0, Departed: 0 },
-    byDirection: { Inbound: 0, Outbound: 0, "Cross Dock": 0 }
+    byDirection: { Inbound: 0, Outbound: 0, "Cross Dock": 0 },
   };
 
   for (const [, v] of Object.entries(board)) {
@@ -75,7 +97,6 @@ function computeStats(board) {
   return stats;
 }
 
-// Prevent stale index.html from being cached
 function noCache(res) {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.setHeader("Pragma", "no-cache");
@@ -112,7 +133,6 @@ async function initDb() {
   await dbRun(`PRAGMA journal_mode = WAL;`);
   await dbRun(`PRAGMA synchronous = NORMAL;`);
 
-  // Trailers (with trailer note)
   await dbRun(`
     CREATE TABLE IF NOT EXISTS trailers (
       trailer TEXT PRIMARY KEY,
@@ -124,10 +144,9 @@ async function initDb() {
     )
   `);
 
-  // Upgrade older DBs safely
+  // upgrade older DBs safely
   await dbRun(`ALTER TABLE trailers ADD COLUMN note TEXT NOT NULL DEFAULT ''`).catch(() => {});
 
-  // Driver confirmations
   await dbRun(`
     CREATE TABLE IF NOT EXISTS confirmations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -139,10 +158,9 @@ async function initDb() {
     )
   `);
 
-  // Dock plate maintenance (door-level)
   await dbRun(`
     CREATE TABLE IF NOT EXISTS dockplates (
-      door TEXT PRIMARY KEY,
+      door TEXT PRIMARY KEY,         -- "18".."42"
       status TEXT NOT NULL,          -- "OK" or "Service"
       note TEXT NOT NULL DEFAULT '',
       updatedAt INTEGER NOT NULL
@@ -165,7 +183,7 @@ async function reloadCachesFromDb() {
       status: r.status,
       door: r.door || "",
       note: r.note || "",
-      updatedAt: r.updatedAt || 0
+      updatedAt: r.updatedAt || 0,
     };
   }
 
@@ -176,21 +194,22 @@ async function reloadCachesFromDb() {
     LIMIT 200
   `);
 
-  confirmations = confRows.map(r => ({
+  confirmations = confRows.map((r) => ({
     at: r.at,
     trailer: r.trailer || "",
     door: r.door || "",
     ip: r.ip || "",
-    userAgent: r.userAgent || ""
+    userAgent: r.userAgent || "",
   }));
 
   const plateRows = await dbAll(`SELECT door, status, note, updatedAt FROM dockplates`);
   dockPlates = {};
   for (const r of plateRows) {
-    dockPlates[String(r.door || "").toUpperCase()] = {
+    const door = normalizePlateDoor(r.door);
+    dockPlates[door] = {
       status: r.status,
       note: r.note || "",
-      updatedAt: r.updatedAt || 0
+      updatedAt: r.updatedAt || 0,
     };
   }
 }
@@ -199,20 +218,17 @@ async function reloadCachesFromDb() {
    ROUTES
 ================================ */
 
-// Dispatcher
 app.get("/", (req, res) => {
   noCache(res);
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
-// Driver
-app.get("/driver", (req, res) => {
+app.get("/dock", (req, res) => {
   noCache(res);
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
-// Dock
-app.get("/dock", (req, res) => {
+app.get("/driver", (req, res) => {
   noCache(res);
   res.sendFile(path.join(__dirname, "index.html"));
 });
@@ -224,20 +240,24 @@ app.get("/health", (req, res) => {
 // APIs
 app.get("/api/state", (req, res) => res.json(trailers));
 app.get("/api/stats", (req, res) => res.json(computeStats(trailers)));
+
 app.get("/api/confirmations", (req, res) => res.json(confirmations));
+
 app.get("/api/dockplates", (req, res) => res.json(dockPlates));
 
 /* ================================
-   DOCK PLATES (MAINTENANCE)
+   DOCK PLATES: set OK / Service
+   door range enforced 18..42
 ================================ */
 
 app.post("/api/dockplates/set", async (req, res) => {
   try {
-    const door = cleanStr(req.body?.door, 20).toUpperCase();
+    const door = normalizePlateDoor(cleanStr(req.body?.door, 20));
     const status = cleanStr(req.body?.status, 20);
     const note = cleanStr(req.body?.note, 200);
 
     if (!door) return res.status(400).send("Door required");
+    if (!isPlateInRange(door)) return res.status(400).send("Door must be 18-42");
 
     const allowed = ["OK", "Service"];
     if (!allowed.includes(status)) return res.status(400).send("Invalid status");
@@ -262,65 +282,6 @@ app.post("/api/dockplates/set", async (req, res) => {
     console.error("dockplates/set error:", err);
     res.status(500).send("Server error");
   }
-});
-
-// Management view (read-only)
-app.get("/maintenance", (req, res) => {
-  res.send(`
-    <html>
-    <head>
-      <meta name="viewport" content="width=device-width,initial-scale=1"/>
-      <title>Maintenance - Dock Plates</title>
-      <style>
-        body{font-family:system-ui;background:#0b1220;color:#eaf0ff;margin:0;padding:20px}
-        h1{margin:0 0 8px 0}
-        .muted{color:#a9b4d0;font-size:13px}
-        table{width:100%;border-collapse:collapse;margin-top:12px}
-        th,td{padding:10px;border-bottom:1px solid #263454;text-align:left;font-size:13px}
-        th{color:#a9b4d0;font-size:12px}
-        .ok{color:#22c55e;font-weight:900}
-        .svc{color:#f59e0b;font-weight:900}
-      </style>
-    </head>
-    <body>
-      <h1>Dock Plate Status</h1>
-      <div class="muted">Door-level plate status + notes (latest). Auto refresh every 5s.</div>
-
-      <table>
-        <thead>
-          <tr><th>Door</th><th>Status</th><th>Plate Note</th><th>Last Updated</th></tr>
-        </thead>
-        <tbody id="tb"></tbody>
-      </table>
-
-      <script>
-        async function load(){
-          const res = await fetch('/api/dockplates');
-          const data = await res.json();
-          const rows = Object.entries(data).sort((a,b)=>a[0].localeCompare(b[0]));
-          const tb = document.getElementById('tb');
-          tb.innerHTML = '';
-          rows.forEach(([door, v])=>{
-            const tr = document.createElement('tr');
-            const when = v.updatedAt ? new Date(v.updatedAt).toLocaleString() : '';
-            const cls = v.status === 'OK' ? 'ok' : 'svc';
-            tr.innerHTML =
-              '<td><b>'+door+'</b></td>'+
-              '<td class="'+cls+'">'+v.status+'</td>'+
-              '<td>'+(v.note||'')+'</td>'+
-              '<td>'+when+'</td>';
-            tb.appendChild(tr);
-          });
-          if(rows.length===0){
-            tb.innerHTML = '<tr><td colspan="4" style="color:#a9b4d0;">No dock plate reports yet.</td></tr>';
-          }
-        }
-        load();
-        setInterval(load, 5000);
-      </script>
-    </body>
-    </html>
-  `);
 });
 
 /* ================================
@@ -358,12 +319,12 @@ app.post("/api/confirm-safety", async (req, res) => {
       LIMIT 200
     `);
 
-    confirmations = confRows.map(r => ({
+    confirmations = confRows.map((r) => ({
       at: r.at,
       trailer: r.trailer || "",
       door: r.door || "",
       ip: r.ip || "",
-      userAgent: r.userAgent || ""
+      userAgent: r.userAgent || "",
     }));
 
     broadcast("confirmations", confirmations);
@@ -375,7 +336,8 @@ app.post("/api/confirm-safety", async (req, res) => {
 });
 
 /* ================================
-   UPSERT TRAILER (PERSISTED + NOTE)
+   UPSERT TRAILER (PERSISTED)
+   - preserves door/note if not provided
 ================================ */
 
 app.post("/api/upsert", async (req, res) => {
@@ -383,7 +345,11 @@ app.post("/api/upsert", async (req, res) => {
     const trailer = cleanStr(req.body?.trailer, 20);
     const direction = cleanStr(req.body?.direction, 30);
     const status = cleanStr(req.body?.status, 30);
-    const door = cleanStr(req.body?.door, 20);
+
+    // door is the SAME concept as dock plate number (18-42)
+    const doorRaw = cleanStr(req.body?.door, 20);
+    const door = doorRaw ? normalizePlateDoor(doorRaw) : "";
+
     const note = cleanStr(req.body?.note, 200);
 
     if (!trailer) return res.status(400).send("Trailer required");
@@ -394,12 +360,16 @@ app.post("/api/upsert", async (req, res) => {
     if (!allowedDir.includes(direction)) return res.status(400).send("Invalid direction");
     if (!allowedStatus.includes(status)) return res.status(400).send("Invalid status");
 
-    // Preserve old note if caller sends empty (so dropdown changes don't wipe notes)
     const prev = trailers[trailer] || {};
+
+    // preserve old note if empty string
     const finalNote = (note !== "") ? note : (prev.note || "");
 
-    // Preserve old door if caller sends empty
-    const finalDoor = (door !== "") ? door : (prev.door || "");
+    // preserve old door if empty string, otherwise validate range
+    let finalDoor = (door !== "") ? door : (prev.door || "");
+    if (finalDoor && !isPlateInRange(finalDoor)) {
+      return res.status(400).send("Door must be 18-42");
+    }
 
     const updatedAt = Date.now();
 
@@ -420,7 +390,7 @@ app.post("/api/upsert", async (req, res) => {
       status,
       door: finalDoor || "",
       note: finalNote || "",
-      updatedAt
+      updatedAt,
     };
 
     broadcast("state", trailers);
@@ -468,7 +438,7 @@ app.post("/api/clear", async (req, res) => {
 });
 
 /* ================================
-   SUPERVISOR PAGE
+   SUPERVISOR PAGE (CONFIRMATIONS)
 ================================ */
 
 app.get("/supervisor", (req, res) => {
@@ -523,7 +493,73 @@ app.get("/supervisor", (req, res) => {
 });
 
 /* ================================
-   AUTO-ARCHIVE DEPARTED
+   MAINTENANCE PAGE (PLATES)
+================================ */
+
+app.get("/maintenance", (req, res) => {
+  res.send(`
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width,initial-scale=1"/>
+      <title>Maintenance - Dock Plates</title>
+      <style>
+        body{font-family:system-ui;background:#0b1220;color:#eaf0ff;margin:0;padding:20px}
+        h1{margin:0 0 8px 0}
+        .muted{color:#a9b4d0;font-size:13px}
+        table{width:100%;border-collapse:collapse;margin-top:12px}
+        th,td{padding:10px;border-bottom:1px solid #263454;text-align:left;font-size:13px}
+        th{color:#a9b4d0;font-size:12px}
+        .ok{color:#22c55e;font-weight:900}
+        .svc{color:#f59e0b;font-weight:900}
+      </style>
+    </head>
+    <body>
+      <h1>Dock Plate Status (18–42)</h1>
+      <div class="muted">Door-level plate status + notes. Auto refresh every 5s.</div>
+
+      <table>
+        <thead>
+          <tr><th>Plate</th><th>Status</th><th>Note</th><th>Last Updated</th></tr>
+        </thead>
+        <tbody id="tb"></tbody>
+      </table>
+
+      <script>
+        function plateRange(){
+          const a=[]; for(let i=18;i<=42;i++) a.push(String(i)); return a;
+        }
+        async function load(){
+          const res = await fetch('/api/dockplates');
+          const data = await res.json();
+          const tb = document.getElementById('tb');
+          tb.innerHTML = '';
+
+          const plates = plateRange();
+          plates.forEach(p=>{
+            const v = data[p];
+            const when = v?.updatedAt ? new Date(v.updatedAt).toLocaleString() : '';
+            const status = v?.status || 'Unknown';
+            const note = v?.note || '';
+            const cls = status === 'OK' ? 'ok' : (status === 'Service' ? 'svc' : '');
+            const tr = document.createElement('tr');
+            tr.innerHTML =
+              '<td><b>'+p+'</b></td>'+
+              '<td class="'+cls+'">'+status+'</td>'+
+              '<td>'+(note||'')+'</td>'+
+              '<td>'+when+'</td>';
+            tb.appendChild(tr);
+          });
+        }
+        load();
+        setInterval(load, 5000);
+      </script>
+    </body>
+    </html>
+  `);
+});
+
+/* ================================
+   AUTO-CLEAN DEPARTED
 ================================ */
 
 setInterval(async () => {
@@ -536,7 +572,7 @@ setInterval(async () => {
     broadcast("stats", computeStats(trailers));
     broadcast("dockplates", dockPlates);
   } catch (err) {
-    console.error("Auto-archive error:", err);
+    console.error("Auto-clean error:", err);
   }
 }, 60 * 1000);
 

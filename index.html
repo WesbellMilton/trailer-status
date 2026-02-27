@@ -27,6 +27,10 @@ body{
     linear-gradient(180deg,var(--bg0),var(--bg2));
 }
 .wrap{max-width:1400px;margin:auto;padding:20px}
+
+/* leave space so bottom-right panel doesn't cover table */
+.padForPanel{padding-bottom:340px;}
+
 .topbar{
   display:flex;justify-content:space-between;align-items:center;gap:12px;
   padding:14px;border:1px solid var(--line);
@@ -133,31 +137,42 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   color:#fff;
 }
 .mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+.hide{display:none !important;}
 
-/* ============================
-   STICKY DOCK PLATE VISUAL AID
-   ============================ */
-.plateAid{
-  position:sticky;
-  top:10px;
-  z-index:50;
-  margin-top:12px;
-  padding:12px;
+/* ================================
+   DOCK PLATES PANEL (BOTTOM RIGHT)
+================================ */
+.platePanel{
+  position:fixed;
+  right:14px;
+  bottom:14px;
+  z-index:9999;
+  width:min(560px, calc(100vw - 28px));
   border:1px solid rgba(120,145,220,.22);
-  border-radius:14px;
-  background:rgba(8,12,26,.88);
-  backdrop-filter: blur(10px);
+  border-radius:16px;
+  background:rgba(8,12,26,.92);
+  backdrop-filter: blur(12px);
+  box-shadow:0 10px 30px rgba(0,0,0,.35);
+  overflow:hidden;
 }
-.plateAidHeader{
-  display:flex;align-items:center;justify-content:space-between;gap:10px;
-  margin-bottom:10px;
+.platePanelHeader{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  padding:10px 12px;
+  border-bottom:1px solid rgba(120,145,220,.18);
 }
-.plateAidTitle{
+.platePanelTitle{
   font-weight:950;
   font-size:13px;
 }
-.plateAidCounts{
-  display:flex;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:12px;
+.platePanelCounts{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  color:var(--muted);
+  font-size:12px;
 }
 .pill{
   display:inline-flex;
@@ -168,41 +183,98 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   border:1px solid rgba(120,145,220,.18);
   background:rgba(255,255,255,.03);
 }
-.dot{width:8px;height:8px;border-radius:50%}
+.dot{width:9px;height:9px;border-radius:50%}
 .dotOK{background:var(--good)}
 .dotSvc{background:var(--warn)}
-.dotNone{background:var(--cool)}
-.plateAidRow{
-  display:flex;gap:8px;flex-wrap:wrap;
+.dotUnk{background:var(--cool)}
+
+.platePanelBody{
+  padding:12px;
 }
-.doorChip{
-  padding:6px 10px;
-  border-radius:999px;
-  border:1px solid rgba(120,145,220,.18);
-  background:rgba(255,255,255,.03);
-  font-weight:900;
-  font-size:12px;
-}
-.doorOK{border-color:rgba(34,197,94,.45); background:rgba(34,197,94,.12)}
-.doorSvc{border-color:rgba(245,158,11,.55); background:rgba(245,158,11,.14)}
-.doorNone{border-color:rgba(148,163,184,.35); background:rgba(148,163,184,.10)}
-.doorChip small{
-  display:block;
+.platePanelSub{
   color:var(--muted);
-  font-weight:700;
-  margin-top:2px;
-  max-width:220px;
+  font-size:12px;
+  margin-bottom:10px;
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+.plateGrid{
+  display:grid;
+  grid-template-columns:repeat(5, minmax(0, 1fr));
+  gap:10px;
+}
+@media (max-width: 800px){
+  .plateGrid{grid-template-columns:repeat(3, minmax(0, 1fr));}
+}
+.plateCard{
+  border:1px solid rgba(120,145,220,.18);
+  border-radius:12px;
+  padding:10px;
+  background:rgba(255,255,255,.03);
+}
+.plateTop{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:8px;
+  margin-bottom:6px;
+}
+.plateNum{font-weight:950}
+.statusPill{
+  padding:3px 8px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:950;
+  border:1px solid rgba(120,145,220,.18);
+}
+.statusOK{border-color:rgba(34,197,94,.45); background:rgba(34,197,94,.14); color:#d8ffe7}
+.statusSvc{border-color:rgba(245,158,11,.60); background:rgba(245,158,11,.14); color:#ffe9c6}
+.statusUnk{border-color:rgba(148,163,184,.35); background:rgba(148,163,184,.10); color:#eaf0ff}
+
+.plateNote{
+  color:var(--muted);
+  font-size:12px;
+  min-height:16px;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
 }
-/* Hide this aid in Driver mode */
-.hide{display:none !important;}
+
+.plateBtns{
+  margin-top:10px;
+  display:flex;
+  gap:8px;
+}
+.plateBtns button{
+  flex:1;
+  padding:8px 10px;
+  border-radius:10px;
+  font-weight:950;
+}
+.okBtn{
+  border:1px solid rgba(34,197,94,.45);
+  background:rgba(34,197,94,.16);
+}
+.svcBtn{
+  border:1px solid rgba(245,158,11,.60);
+  background:rgba(245,158,11,.16);
+}
+
+.panelToggle{
+  border:1px solid rgba(120,145,220,.25);
+  background:rgba(255,255,255,.04);
+  border-radius:10px;
+  padding:6px 10px;
+  font-weight:950;
+}
+.panelCollapsed .platePanelBody{display:none;}
 </style>
 </head>
 
 <body>
-<div class="wrap">
+<div class="wrap padForPanel">
 
   <div class="topbar">
     <div class="brand">
@@ -220,28 +292,12 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     </div>
   </div>
 
-  <!-- Sticky Dock Plate Visual Aid (Dispatcher + Dock only) -->
-  <div id="plateAid" class="plateAid">
-    <div class="plateAidHeader">
-      <div class="plateAidTitle">Dock Plate Status (by Door)</div>
-      <div class="plateAidCounts">
-        <span class="pill"><span class="dot dotOK"></span> OK: <b id="okCount">0</b></span>
-        <span class="pill"><span class="dot dotSvc"></span> Service: <b id="svcCount">0</b></span>
-        <span class="pill"><span class="dot dotNone"></span> Unknown: <b id="unkCount">0</b></span>
-      </div>
-    </div>
-    <div class="plateAidRow" id="plateAidRow"></div>
-    <div class="smallHint" style="margin-top:8px;">
-      Dock updates these in <span class="badge mono">/dock</span>. Management view: <span class="badge mono">/maintenance</span>
-    </div>
-  </div>
-
   <div class="card">
 
     <!-- Dispatcher controls -->
     <div class="controls" id="controls">
       <input id="trailer" placeholder="Trailer #" />
-      <input id="door" placeholder="Dock Door" />
+      <input id="door" placeholder="Door (Dock Plate) ex: 18" />
       <select id="direction">
         <option>Inbound</option>
         <option>Outbound</option>
@@ -257,16 +313,13 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       <button class="primary" id="addBtn">Add / Update</button>
       <button class="danger" id="clearBtn">Clear All</button>
       <span class="smallHint">
-        Dock: <span class="badge mono">/dock</span> • Driver: <span class="badge mono">/driver</span>
+        Dock: <span class="badge mono">/dock</span> • Driver: <span class="badge mono">/driver</span> • Mgmt: <span class="badge mono">/maintenance</span>
       </span>
     </div>
 
-    <!-- Dock plate panel (dock only) -->
-    <div class="controls" id="dockPlatePanel" style="display:none;">
-      <input id="plateDoor" placeholder="Door (ex: D12)" />
-      <button class="primary" id="plateOkBtn">Plate OK</button>
-      <button class="danger" id="plateSvcBtn">Needs Service</button>
-      <span class="smallHint">Optional note will pop up.</span>
+    <!-- Dock-only trailer actions hint -->
+    <div class="controls" id="dockHint" style="display:none;">
+      <span class="smallHint">Dock Mode: update trailer status with the buttons in the table. Update plate status in the bottom-right panel.</span>
     </div>
 
     <!-- Driver check-in -->
@@ -286,7 +339,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
           <th>Door</th>
           <th>Direction</th>
           <th>Status</th>
-          <th>Dock Plate</th>
+          <th>Plate Status</th>
           <th>Plate Note</th>
           <th>Trailer Note</th>
           <th id="actionHeader">Actions</th>
@@ -295,6 +348,27 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       <tbody id="tbody"></tbody>
     </table>
 
+  </div>
+</div>
+
+<!-- Bottom-right Dock Plates Panel (Dispatcher + Dock only) -->
+<div id="platePanel" class="platePanel">
+  <div class="platePanelHeader">
+    <div class="platePanelTitle">Dock Plates (18–42)</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+      <div class="platePanelCounts">
+        <span class="pill"><span class="dot dotOK"></span> OK <b id="okCount">0</b></span>
+        <span class="pill"><span class="dot dotSvc"></span> Service <b id="svcCount">0</b></span>
+        <span class="pill"><span class="dot dotUnk"></span> Unknown <b id="unkCount">0</b></span>
+      </div>
+      <button id="panelToggle" class="panelToggle" type="button">Hide</button>
+    </div>
+  </div>
+  <div class="platePanelBody">
+    <div class="platePanelSub" id="plateSub">
+      <span class="smallHint">Dispatcher = view-only • Dock = tap OK/Service</span>
+    </div>
+    <div id="plateGrid" class="plateGrid"></div>
   </div>
 </div>
 
@@ -308,15 +382,18 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
   const modeLabel = document.getElementById("modeLabel");
   const controls = document.getElementById("controls");
+  const dockHint = document.getElementById("dockHint");
   const actionHeader = document.getElementById("actionHeader");
   const tbody = document.getElementById("tbody");
 
-  // Sticky aid refs
-  const plateAid = document.getElementById("plateAid");
-  const plateAidRow = document.getElementById("plateAidRow");
+  // Bottom-right panel refs
+  const platePanel = document.getElementById("platePanel");
+  const plateGrid = document.getElementById("plateGrid");
+  const plateSub = document.getElementById("plateSub");
   const okCount = document.getElementById("okCount");
   const svcCount = document.getElementById("svcCount");
   const unkCount = document.getElementById("unkCount");
+  const panelToggle = document.getElementById("panelToggle");
 
   const kTotal = document.getElementById("kTotal");
   const kReady = document.getElementById("kReady");
@@ -333,12 +410,6 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   const addBtn = document.getElementById("addBtn");
   const clearBtn = document.getElementById("clearBtn");
 
-  // Dock plate panel (dock only)
-  const dockPlatePanel = document.getElementById("dockPlatePanel");
-  const plateDoor = document.getElementById("plateDoor");
-  const plateOkBtn = document.getElementById("plateOkBtn");
-  const plateSvcBtn = document.getElementById("plateSvcBtn");
-
   // Driver check-in
   const driverCheckin = document.getElementById("driverCheckin");
   const driverTrailerInp = document.getElementById("driverTrailer");
@@ -354,12 +425,31 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
   let ws;
   let pollFallbackTimer = null;
 
-  // Only show plate aid for Dock + Dispatcher, hide for Driver
-  if (isDriver) plateAid.classList.add("hide");
+  // Panel collapse state
+  const collapsedKey = "plate_panel_collapsed";
+  const collapsed = localStorage.getItem(collapsedKey) === "1";
+  if (collapsed) platePanel.classList.add("panelCollapsed");
+  panelToggle.textContent = platePanel.classList.contains("panelCollapsed") ? "Show" : "Hide";
+  panelToggle.onclick = () => {
+    platePanel.classList.toggle("panelCollapsed");
+    const isC = platePanel.classList.contains("panelCollapsed");
+    localStorage.setItem(collapsedKey, isC ? "1" : "0");
+    panelToggle.textContent = isC ? "Show" : "Hide";
+  };
 
+  // Driver should NOT see the plate panel
+  if (isDriver) {
+    platePanel.classList.add("hide");
+  } else {
+    plateSub.innerHTML = isDock
+      ? `<span class="smallHint">Dock Mode: tap <b>OK</b> or <b>Service</b> to update plates. (Optional note pops up.)</span>`
+      : `<span class="smallHint">Dispatcher Mode: view-only. Dock updates plates.</span>`;
+  }
+
+  // Mode UI
   if (isDriver){
     controls.style.display = "none";
-    dockPlatePanel.style.display = "none";
+    dockHint.style.display = "none";
     driverCheckin.style.display = "flex";
     driverInfo.style.display = "block";
     actionHeader.textContent = "Move";
@@ -382,14 +472,17 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       render();
     };
   } else if (isDock){
+    // keep dispatcher controls hidden in dock mode (your preference)
     controls.style.display = "none";
-    driverInfo.style.display = "none";
+    dockHint.style.display = "flex";
     driverCheckin.style.display = "none";
-    dockPlatePanel.style.display = "flex";
+    driverInfo.style.display = "none";
     actionHeader.textContent = "Dock Update";
     modeLabel.textContent = "Dock Mode";
   } else {
-    dockPlatePanel.style.display = "none";
+    dockHint.style.display = "none";
+    driverCheckin.style.display = "none";
+    driverInfo.style.display = "none";
     modeLabel.textContent = "Dispatcher Mode";
   }
 
@@ -398,6 +491,14 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     if (s === "Loading") return "warn";
     if (s === "Incoming") return "bad";
     return "cool"; // Dock Ready / Departed
+  }
+
+  function normalizeDoor(d){
+    // plates are numbers 18-42, but accept input like "D18" too
+    const raw = String(d || "").trim().toUpperCase();
+    if (!raw) return "";
+    const m = raw.match(/(\d{1,3})/);
+    return m ? m[1] : raw; // store as "18", "19", etc
   }
 
   function updateKPIs(){
@@ -412,69 +513,15 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     kDeparted.textContent = String(c.Departed);
   }
 
-  function normalizeDoor(d){
-    return String(d || "").trim().toUpperCase();
-  }
-
-  function buildPlateAid(){
-    if (isDriver) return;
-
-    // Doors seen on board (so "Unknown" makes sense)
-    const doorsOnBoard = new Set();
-    Object.values(state).forEach(v => {
-      const d = normalizeDoor(v.door);
-      if (d) doorsOnBoard.add(d);
-    });
-
-    const okDoors = [];
-    const svcDoors = [];
-    const unkDoors = [];
-
-    // First list doors on board
-    const list = Array.from(doorsOnBoard).sort((a,b)=>a.localeCompare(b));
-    for (const d of list){
-      const p = dockPlates[d];
-      if (!p) {
-        unkDoors.push({ door:d, note:"" });
-      } else if (p.status === "OK") {
-        okDoors.push({ door:d, note:p.note || "" });
-      } else {
-        svcDoors.push({ door:d, note:p.note || "" });
-      }
-    }
-
-    okCount.textContent = String(okDoors.length);
-    svcCount.textContent = String(svcDoors.length);
-    unkCount.textContent = String(unkDoors.length);
-
-    // Render chips: Service first, then Unknown, then OK
-    plateAidRow.innerHTML = "";
-
-    const addChip = (door, type, note) => {
-      const div = document.createElement("div");
-      div.className = "doorChip " + (type === "svc" ? "doorSvc" : type === "ok" ? "doorOK" : "doorNone");
-      div.innerHTML = `${door}${note ? `<small title="${note.replaceAll('"','&quot;')}">${note}</small>` : `<small> </small>`}`;
-      plateAidRow.appendChild(div);
-    };
-
-    svcDoors.forEach(x => addChip(x.door, "svc", x.note));
-    unkDoors.forEach(x => addChip(x.door, "none", ""));
-    okDoors.forEach(x => addChip(x.door, "ok", x.note));
-
-    if (list.length === 0){
-      plateAidRow.innerHTML = `<div class="smallHint">No doors on board yet.</div>`;
-    }
-  }
-
   async function loadOnce(){
     const [sRes, pRes] = await Promise.all([
       fetch("/api/state"),
       fetch("/api/dockplates")
     ]);
-
     state = await sRes.json();
     dockPlates = await pRes.json();
     render();
+    renderPlates();
   }
 
   async function update(trailer, door, direction, status, note){
@@ -487,33 +534,25 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       const t = await res.text();
       alert("Update failed: " + t);
     }
-    await loadOnce(); // safe fallback
+    await loadOnce();
   }
 
-  async function setDockPlate(door, status){
-    const d = normalizeDoor(door);
-    if (!d) return alert("Enter a door (ex: D12)");
+  async function setDockPlate(plateNumber, status){
+    const door = String(plateNumber); // store exactly "18".."42"
+    const note = (prompt(`Plate ${door} note (${status}):`, "") ?? "").trim();
 
-    const note = prompt(`Dock Plate note for ${d} (${status}):`, "") ?? "";
     const res = await fetch("/api/dockplates/set", {
       method:"POST",
       headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ door: d, status, note })
+      body: JSON.stringify({ door, status, note })
     });
 
     if (!res.ok){
       const t = await res.text();
-      alert("Dock plate update failed: " + t);
+      alert("Plate update failed: " + t);
       return;
     }
-
-    plateDoor.value = "";
     await loadOnce();
-  }
-
-  if (isDock){
-    plateOkBtn.onclick = () => setDockPlate(plateDoor.value, "OK");
-    plateSvcBtn.onclick = () => setDockPlate(plateDoor.value, "Service");
   }
 
   async function confirmMove(trailer, v){
@@ -546,7 +585,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     await update(trailer, v.door || "", v.direction || "Inbound", "Departed", v.note || "");
   }
 
-  function plateForDoor(door){
+  function plateStatusForDoor(door){
     const key = normalizeDoor(door);
     if (!key) return null;
     return dockPlates[key] || null;
@@ -557,7 +596,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
     let entries = Object.entries(state);
 
-    // Dock mode: show only actionable statuses
+    // Dock mode: show only actionable statuses (optional)
     if (isDock){
       entries = entries.filter(([_, v]) => v.status === "Loading" || v.status === "Dock Ready");
     }
@@ -599,7 +638,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     for (const [t, v] of entries){
       const tr = document.createElement("tr");
 
-      const plate = plateForDoor(v.door);
+      const plate = plateStatusForDoor(v.door);
       const plateStatus = plate ? plate.status : "-";
       const plateNote = plate ? (plate.note || "-") : "-";
 
@@ -615,8 +654,8 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         <td>${v.direction || ""}</td>
         <td><span class="tag ${statusClass(v.status)}">${v.status || ""}</span></td>
         <td>${plateStatusHtml}</td>
-        <td class="noteCell">${plateNote}</td>
-        <td class="noteCell">${(v.note && v.note.trim()) ? v.note : "-"}</td>
+        <td class="noteCell" title="${(plate && plate.note) ? String(plate.note).replaceAll('"','&quot;') : ''}">${plateNote}</td>
+        <td class="noteCell" title="${(v.note) ? String(v.note).replaceAll('"','&quot;') : ''}">${(v.note && v.note.trim()) ? v.note : "-"}</td>
       `;
 
       const tdAction = document.createElement("td");
@@ -698,7 +737,65 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     }
 
     updateKPIs();
-    buildPlateAid(); // <-- keeps aid updated + visible
+  }
+
+  function renderPlates(){
+    if (isDriver) return;
+
+    const start = 18, end = 42;
+    let ok = 0, svc = 0, unk = 0;
+
+    plateGrid.innerHTML = "";
+
+    for (let p = start; p <= end; p++){
+      const key = String(p);
+      const rec = dockPlates[key]; // {status, note, updatedAt}
+      const status = rec?.status || "Unknown";
+      const note = rec?.note || "";
+
+      let pillClass = "statusUnk";
+      let pillText = "Unknown";
+      if (status === "OK") { pillClass = "statusOK"; pillText = "OK"; ok++; }
+      else if (status === "Service") { pillClass = "statusSvc"; pillText = "Service"; svc++; }
+      else { unk++; }
+
+      const card = document.createElement("div");
+      card.className = "plateCard";
+
+      card.innerHTML = `
+        <div class="plateTop">
+          <div class="plateNum">Plate ${p}</div>
+          <div class="statusPill ${pillClass}">${pillText}</div>
+        </div>
+        <div class="plateNote" title="${note.replaceAll('"','&quot;')}">${note || "—"}</div>
+      `;
+
+      // Dock mode: add buttons
+      if (isDock){
+        const btns = document.createElement("div");
+        btns.className = "plateBtns";
+
+        const okBtn = document.createElement("button");
+        okBtn.className = "okBtn";
+        okBtn.textContent = "OK";
+        okBtn.onclick = () => setDockPlate(p, "OK");
+
+        const svcBtn = document.createElement("button");
+        svcBtn.className = "svcBtn";
+        svcBtn.textContent = "Service";
+        svcBtn.onclick = () => setDockPlate(p, "Service");
+
+        btns.appendChild(okBtn);
+        btns.appendChild(svcBtn);
+        card.appendChild(btns);
+      }
+
+      plateGrid.appendChild(card);
+    }
+
+    okCount.textContent = String(ok);
+    svcCount.textContent = String(svc);
+    unkCount.textContent = String(unk);
   }
 
   // Dispatcher add/update + clear
@@ -709,7 +806,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
       update(
         t,
-        doorInp.value.trim(),
+        normalizeDoor(doorInp.value.trim()), // store as number string if possible
         directionSel.value,
         statusSel.value,
         noteInp.value.trim()
@@ -727,7 +824,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     };
   }
 
-  // WebSocket live updates + fallback
+  // WebSocket live updates + fallback polling every 5s
   function startWebSocket(){
     const proto = (location.protocol === "https:") ? "wss" : "ws";
     const wsUrl = `${proto}://${location.host}`;
@@ -745,7 +842,8 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
         }
         if (msg.type === "dockplates") {
           dockPlates = msg.payload || {};
-          render();
+          renderPlates();
+          render(); // update plate status cells in table too
         }
       } catch {}
     };

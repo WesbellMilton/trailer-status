@@ -1,4 +1,3 @@
-// server.js
 const express = require("express");
 const http = require("http");
 const path = require("path");
@@ -10,7 +9,7 @@ const app = express();
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// Simple request logging
+// Request logging
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
@@ -20,22 +19,20 @@ const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
 /**
- * SQLite DB path:
+ * DB_PATH:
  * - Local default: ./data.db
- * - Render persistent disk: set DB_PATH=/var/data/data.db
+ * - Render persistent disk: /var/data/data.db
  */
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data.db");
 const db = new sqlite3.Database(DB_PATH);
 
-// ===== ROLE PINS (Render Env Vars recommended) =====
-// DISPATCHER_PIN=1234
-// DOCK_PIN=2222
+// ===== Pins (hard-set as requested) =====
 const PINS = {
-  dispatcher: String(process.env.DISPATCHER_PIN || "1234"),
-  dock: String(process.env.DOCK_PIN || "2222"),
+  dispatcher: "1234",
+  dock: "789",
 };
 
-// In-memory caches
+// In-memory caches (fast rendering)
 let trailers = {};        // trailer -> {direction,status,door,note,updatedAt}
 let confirmations = [];   // latest 200
 let dockPlates = {};      // "18".."42" -> {status:"OK"|"Service", note, updatedAt}
@@ -64,9 +61,7 @@ function normalizeDoorPlate(input) {
 }
 
 function normalizeStatus(input) {
-  return String(input ?? "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return String(input ?? "").replace(/\s+/g, " ").trim();
 }
 
 function isPlateInRange(doorStr) {
@@ -89,9 +84,9 @@ function computeStats(board) {
   return stats;
 }
 
-// ===== Permissions helpers =====
+// ===== Permissions =====
 function getRoleFromPin(req) {
-  const pin = String(req.headers["x-role-pin"] || "");
+  const pin = String(req.headers["x-role-pin"] || "").trim();
   if (!pin) return null;
   if (pin === PINS.dispatcher) return "dispatcher";
   if (pin === PINS.dock) return "dock";
@@ -150,7 +145,7 @@ async function initDb() {
     )
   `);
 
-  // Safe upgrades
+  // Safe upgrade for older DBs
   await dbRun(`ALTER TABLE trailers ADD COLUMN note TEXT NOT NULL DEFAULT ''`).catch(() => {});
 
   await dbRun(`
@@ -166,8 +161,8 @@ async function initDb() {
 
   await dbRun(`
     CREATE TABLE IF NOT EXISTS dockplates (
-      door TEXT PRIMARY KEY,
-      status TEXT NOT NULL,
+      door TEXT PRIMARY KEY,          -- "18".."42"
+      status TEXT NOT NULL,           -- "OK" or "Service"
       note TEXT NOT NULL DEFAULT '',
       updatedAt INTEGER NOT NULL
     )
@@ -228,21 +223,22 @@ async function reloadCachesFromDb() {
 app.get("/", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.get("/dock", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.get("/driver", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
+
 app.get("/health", (req, res) => res.json({ ok: true, db: DB_PATH }));
 app.get("/api/version", (req, res) => res.json({ version: pkg.version }));
 
 /* ================================
-   API: STATE + STATS (PUBLIC VIEW)
+   API: READ (PUBLIC)
 ================================ */
 app.get("/api/state", (req, res) => res.json(trailers));
 app.get("/api/stats", (req, res) => res.json(computeStats(trailers)));
+app.get("/api/dockplates", (req, res) => res.json(dockPlates));
+app.get("/api/confirmations", (req, res) => res.json(confirmations));
 
 /* ================================
-   API: DOCK PLATES
-   ✅ Dispatcher AND Dock can update
+   API: DOCK PLATES WRITE
+   ✅ Dock + Dispatcher
 ================================ */
-app.get("/api/dockplates", (req, res) => res.json(dockPlates));
-
 app.post("/api/dockplates/set", requireAnyRole(["dock", "dispatcher"]), async (req, res) => {
   try {
     const door = normalizeDoorPlate(cleanStr(req.body?.door, 20));
@@ -269,6 +265,7 @@ app.post("/api/dockplates/set", requireAnyRole(["dock", "dispatcher"]), async (r
 
     dockPlates[door] = { status, note, updatedAt };
     broadcast("dockplates", dockPlates);
+
     res.json({ ok: true });
   } catch (err) {
     console.error("dockplates/set error:", err);
@@ -277,7 +274,7 @@ app.post("/api/dockplates/set", requireAnyRole(["dock", "dispatcher"]), async (r
 });
 
 /* ================================
-   SAFETY CONFIRM (PUBLIC)
+   API: SAFETY CONFIRM (PUBLIC)
 ================================ */
 app.post("/api/confirm-safety", async (req, res) => {
   try {
@@ -299,7 +296,8 @@ app.post("/api/confirm-safety", async (req, res) => {
     const userAgent = req.headers["user-agent"] || "";
 
     await dbRun(
-      `INSERT INTO confirmations (at, trailer, door, ip, userAgent) VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO confirmations (at, trailer, door, ip, userAgent)
+       VALUES (?, ?, ?, ?, ?)`,
       [at, trailer, door, ip, userAgent]
     );
 
@@ -326,13 +324,10 @@ app.post("/api/confirm-safety", async (req, res) => {
   }
 });
 
-app.get("/api/confirmations", (req, res) => res.json(confirmations));
-
 /* ================================
    API: UPSERT TRAILER
-   ✅ Dispatcher can do all
-   ✅ Dock can ONLY set status to Loading / Dock Ready
-   ✅ Dock cannot change door/direction/note (server-enforced)
+   ✅ Dispatcher: full control
+   ✅ Dock: ONLY Loading / Dock Ready (no edits to door/direction/note)
 ================================ */
 app.post("/api/upsert", requireAnyRole(["dispatcher", "dock"]), async (req, res) => {
   try {
@@ -353,7 +348,7 @@ app.post("/api/upsert", requireAnyRole(["dispatcher", "dock"]), async (req, res)
 
     const prev = trailers[trailer] || {};
 
-    // Dock restrictions
+    // Dock restriction
     if (role === "dock") {
       const dockAllowed = ["Loading", "Dock Ready"];
       if (!dockAllowed.includes(statusIn)) {
@@ -361,14 +356,14 @@ app.post("/api/upsert", requireAnyRole(["dispatcher", "dock"]), async (req, res)
       }
     }
 
-    // Direction
+    // Direction: dispatcher only
     let finalDirection = prev.direction || "Inbound";
     if (role === "dispatcher") {
       if (!allowedDir.includes(directionIn)) return res.status(400).send("Invalid direction");
       finalDirection = directionIn;
     }
 
-    // Door (plate number 18-42)
+    // Door: dispatcher only
     let finalDoor = prev.door || "";
     if (role === "dispatcher") {
       if (doorRaw !== "") {
@@ -378,15 +373,20 @@ app.post("/api/upsert", requireAnyRole(["dispatcher", "dock"]), async (req, res)
       }
     }
 
-    // Note
+    // Note: dispatcher only
     let finalNote = prev.note || "";
     if (role === "dispatcher") {
       finalNote = (noteIn !== "") ? noteIn : finalNote;
     }
 
-    // Approval rule: Dispatcher can only set Ready after Dock Ready
+    // Approval rule
     if (role === "dispatcher" && statusIn === "Ready" && prev.status !== "Dock Ready") {
       return res.status(400).send('Approval rule: "Ready" requires prior "Dock Ready".');
+    }
+
+    // If trailer does not exist and dock tries to update, block (dock cannot add trailers)
+    if (role === "dock" && !prev.status) {
+      return res.status(403).send("Dock cannot add new trailers. Dispatch must create trailer first.");
     }
 
     const updatedAt = Date.now();
@@ -455,7 +455,7 @@ app.post("/api/clear", requireRole("dispatcher"), async (req, res) => {
 });
 
 /* ================================
-   WEBSOCKET
+   WEBSOCKET (optional)
 ================================ */
 wss.on("connection", (ws) => {
   ws.send(JSON.stringify({ type: "state", payload: trailers }));
@@ -473,9 +473,9 @@ initDb()
   .then(() => {
     server.listen(PORT, () => {
       console.log("Running on port", PORT);
-      console.log("Dispatcher: /");
-      console.log("Dock: /dock");
-      console.log("Driver: /driver");
+      console.log("Dispatcher: /  (PIN 1234)");
+      console.log("Dock: /dock       (PIN 789)");
+      console.log("Driver: /driver   (no PIN)");
       console.log("SQLite DB:", DB_PATH);
     });
   })

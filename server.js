@@ -124,7 +124,7 @@ async function initDb() {
     )
   `);
 
-  // Upgrade older DBs safely (no crash if already exists)
+  // Upgrade older DBs safely
   await dbRun(`ALTER TABLE trailers ADD COLUMN note TEXT NOT NULL DEFAULT ''`).catch(() => {});
 
   // Driver confirmations
@@ -255,8 +255,8 @@ app.post("/api/dockplates/set", async (req, res) => {
     );
 
     dockPlates[door] = { status, note, updatedAt };
-
     broadcast("dockplates", dockPlates);
+
     res.json({ ok: true });
   } catch (err) {
     console.error("dockplates/set error:", err);
@@ -284,7 +284,7 @@ app.get("/maintenance", (req, res) => {
     </head>
     <body>
       <h1>Dock Plate Status</h1>
-      <div class="muted">Door-level plate status + notes (latest).</div>
+      <div class="muted">Door-level plate status + notes (latest). Auto refresh every 5s.</div>
 
       <table>
         <thead>
@@ -528,7 +528,7 @@ app.get("/supervisor", (req, res) => {
 
 setInterval(async () => {
   try {
-    const cutoff = Date.now() - 15 * 60 * 1000; // 15 min
+    const cutoff = Date.now() - 15 * 60 * 1000; // 15 minutes
     await dbRun(`DELETE FROM trailers WHERE status='Departed' AND updatedAt < ?`, [cutoff]);
 
     await reloadCachesFromDb();

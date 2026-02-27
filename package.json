@@ -1,10 +1,9 @@
 {
-  "name": "wesbell-trailer-system",
+  "name": "trailer-status",
   "version": "2.0.0",
-  "description": "Enterprise Trailer Status & Dock Management System with Role Permissions, Dock Plates, Safety Confirmation & Real-Time Updates",
+  "description": "Enterprise Trailer Status Board (Dispatcher + Dock + Driver) with Dock Plates (18-42), PIN Permissions, Safety Confirmations, SQLite persistence",
   "main": "server.js",
   "type": "commonjs",
-  "private": true,
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js"
@@ -14,7 +13,7 @@
   },
   "dependencies": {
     "express": "^4.19.2",
-    "ws": "^8.17.0",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^5.1.7",
+    "ws": "^8.17.0"
   }
 }

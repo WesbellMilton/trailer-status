@@ -112,7 +112,7 @@ async function initDb() {
   await dbRun(`PRAGMA journal_mode = WAL;`);
   await dbRun(`PRAGMA synchronous = NORMAL;`);
 
-  // Trailers (with note)
+  // Trailers (with trailer note)
   await dbRun(`
     CREATE TABLE IF NOT EXISTS trailers (
       trailer TEXT PRIMARY KEY,
@@ -124,7 +124,7 @@ async function initDb() {
     )
   `);
 
-  // Upgrade older DBs safely
+  // Upgrade older DBs safely (no crash if already exists)
   await dbRun(`ALTER TABLE trailers ADD COLUMN note TEXT NOT NULL DEFAULT ''`).catch(() => {});
 
   // Driver confirmations
@@ -139,11 +139,11 @@ async function initDb() {
     )
   `);
 
-  // Dock plate maintenance
+  // Dock plate maintenance (door-level)
   await dbRun(`
     CREATE TABLE IF NOT EXISTS dockplates (
       door TEXT PRIMARY KEY,
-      status TEXT NOT NULL,
+      status TEXT NOT NULL,          -- "OK" or "Service"
       note TEXT NOT NULL DEFAULT '',
       updatedAt INTEGER NOT NULL
     )
@@ -187,7 +187,7 @@ async function reloadCachesFromDb() {
   const plateRows = await dbAll(`SELECT door, status, note, updatedAt FROM dockplates`);
   dockPlates = {};
   for (const r of plateRows) {
-    dockPlates[r.door] = {
+    dockPlates[String(r.door || "").toUpperCase()] = {
       status: r.status,
       note: r.note || "",
       updatedAt: r.updatedAt || 0
@@ -255,8 +255,8 @@ app.post("/api/dockplates/set", async (req, res) => {
     );
 
     dockPlates[door] = { status, note, updatedAt };
-    broadcast("dockplates", dockPlates);
 
+    broadcast("dockplates", dockPlates);
     res.json({ ok: true });
   } catch (err) {
     console.error("dockplates/set error:", err);
@@ -264,7 +264,7 @@ app.post("/api/dockplates/set", async (req, res) => {
   }
 });
 
-// Management view
+// Management view (read-only)
 app.get("/maintenance", (req, res) => {
   res.send(`
     <html>
@@ -284,11 +284,11 @@ app.get("/maintenance", (req, res) => {
     </head>
     <body>
       <h1>Dock Plate Status</h1>
-      <div class="muted">Live list (doors marked by Dock). Refreshes every 5s.</div>
+      <div class="muted">Door-level plate status + notes (latest).</div>
 
       <table>
         <thead>
-          <tr><th>Door</th><th>Status</th><th>Note</th><th>Last Updated</th></tr>
+          <tr><th>Door</th><th>Status</th><th>Plate Note</th><th>Last Updated</th></tr>
         </thead>
         <tbody id="tb"></tbody>
       </table>
@@ -311,7 +311,6 @@ app.get("/maintenance", (req, res) => {
               '<td>'+when+'</td>';
             tb.appendChild(tr);
           });
-
           if(rows.length===0){
             tb.innerHTML = '<tr><td colspan="4" style="color:#a9b4d0;">No dock plate reports yet.</td></tr>';
           }
@@ -399,6 +398,9 @@ app.post("/api/upsert", async (req, res) => {
     const prev = trailers[trailer] || {};
     const finalNote = (note !== "") ? note : (prev.note || "");
 
+    // Preserve old door if caller sends empty
+    const finalDoor = (door !== "") ? door : (prev.door || "");
+
     const updatedAt = Date.now();
 
     await dbRun(
@@ -410,10 +412,16 @@ app.post("/api/upsert", async (req, res) => {
          door=excluded.door,
          note=excluded.note,
          updatedAt=excluded.updatedAt`,
-      [trailer, direction, status, door, finalNote, updatedAt]
+      [trailer, direction, status, finalDoor, finalNote, updatedAt]
     );
 
-    trailers[trailer] = { direction, status, door: door || "", note: finalNote || "", updatedAt };
+    trailers[trailer] = {
+      direction,
+      status,
+      door: finalDoor || "",
+      note: finalNote || "",
+      updatedAt
+    };
 
     broadcast("state", trailers);
     broadcast("stats", computeStats(trailers));
@@ -502,6 +510,9 @@ app.get("/supervisor", (req, res) => {
               '<td>'+(x.ip||'')+'</td>';
             tb.appendChild(tr);
           });
+          if(data.length===0){
+            tb.innerHTML = '<tr><td colspan="4" style="color:#a9b4d0;">No confirmations yet.</td></tr>';
+          }
         }
         load();
         setInterval(load, 3000);
@@ -517,7 +528,7 @@ app.get("/supervisor", (req, res) => {
 
 setInterval(async () => {
   try {
-    const cutoff = Date.now() - 15 * 60 * 1000;
+    const cutoff = Date.now() - 15 * 60 * 1000; // 15 min
     await dbRun(`DELETE FROM trailers WHERE status='Departed' AND updatedAt < ?`, [cutoff]);
 
     await reloadCachesFromDb();

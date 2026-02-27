@@ -26,6 +26,14 @@ const wss = new WebSocket.Server({ server });
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data.db");
 const db = new sqlite3.Database(DB_PATH);
 
+// ===== SIMPLE ROLE PINS (set these in Render env vars) =====
+// DISPATCHER_PIN=1234
+// DOCK_PIN=2222
+const PINS = {
+  dispatcher: String(process.env.DISPATCHER_PIN || "1234"),
+  dock: String(process.env.DOCK_PIN || "2222"),
+};
+
 // In-memory caches
 let trailers = {};        // trailer -> {direction,status,door,note,updatedAt}
 let confirmations = [];   // latest 200
@@ -48,7 +56,6 @@ function cleanStr(v, maxLen) {
 }
 
 function normalizeDoorPlate(input) {
-  // Accept "18", "D18", "Door 18" -> "18"
   const raw = String(input ?? "").trim().toUpperCase();
   if (!raw) return "";
   const m = raw.match(/(\d{1,3})/);
@@ -64,7 +71,7 @@ function computeStats(board) {
   const stats = {
     total: 0,
     byStatus: { Incoming: 0, Loading: 0, "Dock Ready": 0, Ready: 0, Departed: 0 },
-    byDirection: { Inbound: 0, Outbound: 0, "Cross Dock": 0 }
+    byDirection: { Inbound: 0, Outbound: 0, "Cross Dock": 0 },
   };
 
   for (const [, v] of Object.entries(board)) {
@@ -75,6 +82,31 @@ function computeStats(board) {
   return stats;
 }
 
+// ===== Permissions helpers =====
+function getRoleFromPin(req) {
+  const pin = String(req.headers["x-role-pin"] || "");
+  if (!pin) return null;
+  if (pin === PINS.dispatcher) return "dispatcher";
+  if (pin === PINS.dock) return "dock";
+  return null;
+}
+
+function requireAnyRole(roles) {
+  return (req, res, next) => {
+    const role = getRoleFromPin(req);
+    if (!role || !roles.includes(role)) return res.status(403).send("Unauthorized");
+    req.role = role;
+    next();
+  };
+}
+
+function requireRole(role) {
+  return requireAnyRole([role]);
+}
+
+/* ================================
+   SQLITE PROMISE HELPERS
+================================ */
 function dbRun(sql, params = []) {
   return new Promise((resolve, reject) => {
     db.run(sql, params, function (err) {
@@ -150,7 +182,7 @@ async function reloadCachesFromDb() {
       status: r.status,
       door: r.door || "",
       note: r.note || "",
-      updatedAt: r.updatedAt || 0
+      updatedAt: r.updatedAt || 0,
     };
   }
 
@@ -161,12 +193,12 @@ async function reloadCachesFromDb() {
     ORDER BY id DESC
     LIMIT 200
   `);
-  confirmations = confRows.map(r => ({
+  confirmations = confRows.map((r) => ({
     at: r.at,
     trailer: r.trailer || "",
     door: r.door || "",
     ip: r.ip || "",
-    userAgent: r.userAgent || ""
+    userAgent: r.userAgent || "",
   }));
 
   // dock plates
@@ -178,7 +210,7 @@ async function reloadCachesFromDb() {
     dockPlates[door] = {
       status: r.status,
       note: r.note || "",
-      updatedAt: r.updatedAt || 0
+      updatedAt: r.updatedAt || 0,
     };
   }
 }
@@ -189,21 +221,21 @@ async function reloadCachesFromDb() {
 app.get("/", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.get("/dock", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.get("/driver", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
-
 app.get("/health", (req, res) => res.json({ ok: true, db: DB_PATH }));
 
 /* ================================
-   API: STATE + STATS
+   API: STATE + STATS (PUBLIC VIEW)
 ================================ */
 app.get("/api/state", (req, res) => res.json(trailers));
 app.get("/api/stats", (req, res) => res.json(computeStats(trailers)));
 
 /* ================================
-   API: DOCK PLATES (18–42)
+   API: DOCK PLATES
+   ✅ Dispatcher AND Dock can update
 ================================ */
 app.get("/api/dockplates", (req, res) => res.json(dockPlates));
 
-app.post("/api/dockplates/set", async (req, res) => {
+app.post("/api/dockplates/set", requireAnyRole(["dock", "dispatcher"]), async (req, res) => {
   try {
     const door = normalizeDoorPlate(cleanStr(req.body?.door, 20));
     const status = cleanStr(req.body?.status, 20);
@@ -238,7 +270,7 @@ app.post("/api/dockplates/set", async (req, res) => {
 });
 
 /* ================================
-   SAFETY CONFIRM (LOG)
+   SAFETY CONFIRM (PUBLIC)
 ================================ */
 app.post("/api/confirm-safety", async (req, res) => {
   try {
@@ -271,12 +303,12 @@ app.post("/api/confirm-safety", async (req, res) => {
       LIMIT 200
     `);
 
-    confirmations = confRows.map(r => ({
+    confirmations = confRows.map((r) => ({
       at: r.at,
       trailer: r.trailer || "",
       door: r.door || "",
       ip: r.ip || "",
-      userAgent: r.userAgent || ""
+      userAgent: r.userAgent || "",
     }));
 
     broadcast("confirmations", confirmations);
@@ -290,41 +322,66 @@ app.post("/api/confirm-safety", async (req, res) => {
 app.get("/api/confirmations", (req, res) => res.json(confirmations));
 
 /* ================================
-   API: UPSERT TRAILER (WITH RULES)
-   - Dock sets: Loading / Dock Ready
-   - Dispatcher can set Ready ONLY after Dock Ready
+   API: UPSERT TRAILER
+   ✅ Dispatcher can do all
+   ✅ Dock can ONLY set status to Loading / Dock Ready
+   ✅ Dock cannot change door/direction/note (server-enforced)
 ================================ */
-app.post("/api/upsert", async (req, res) => {
+app.post("/api/upsert", requireAnyRole(["dispatcher", "dock"]), async (req, res) => {
   try {
+    const role = req.role; // injected by middleware
+
     const trailer = cleanStr(req.body?.trailer, 20);
-    const direction = cleanStr(req.body?.direction, 30);
-    const status = cleanStr(req.body?.status, 30);
+    const directionIn = cleanStr(req.body?.direction, 30);
+    const statusIn = cleanStr(req.body?.status, 30);
     const doorRaw = cleanStr(req.body?.door, 20);
-    const note = cleanStr(req.body?.note, 200);
+    const noteIn = cleanStr(req.body?.note, 200);
 
     if (!trailer) return res.status(400).send("Trailer required");
 
     const allowedDir = ["Inbound", "Outbound", "Cross Dock"];
     const allowedStatus = ["Incoming", "Loading", "Dock Ready", "Ready", "Departed"];
 
-    if (!allowedDir.includes(direction)) return res.status(400).send("Invalid direction");
-    if (!allowedStatus.includes(status)) return res.status(400).send("Invalid status");
+    if (!allowedStatus.includes(statusIn)) return res.status(400).send("Invalid status");
+    if (role === "dispatcher" && !allowedDir.includes(directionIn)) {
+      return res.status(400).send("Invalid direction");
+    }
 
     const prev = trailers[trailer] || {};
 
-    // door is plate number (18-42), preserve if blank
-    let finalDoor = prev.door || "";
-    if (doorRaw !== "") {
-      const parsed = normalizeDoorPlate(doorRaw);
-      if (parsed && !isPlateInRange(parsed)) return res.status(400).send("Door must be 18-42");
-      finalDoor = parsed;
+    // ===== Dock restrictions (server enforced) =====
+    // Dock can ONLY set status to Loading or Dock Ready
+    if (role === "dock") {
+      const dockAllowed = ["Loading", "Dock Ready"];
+      if (!dockAllowed.includes(statusIn)) {
+        return res.status(403).send('Dock can only set status to "Loading" or "Dock Ready".');
+      }
     }
 
-    // note: if missing, preserve previous
-    const finalNote = (note !== "") ? note : (prev.note || "");
+    // door is plate number (18-42)
+    let finalDoor = prev.door || "";
+    if (role === "dispatcher") {
+      if (doorRaw !== "") {
+        const parsed = normalizeDoorPlate(doorRaw);
+        if (parsed && !isPlateInRange(parsed)) return res.status(400).send("Door must be 18-42");
+        finalDoor = parsed;
+      }
+    } // dock cannot change door
 
-    // RULE: Ready only allowed if previously Dock Ready
-    if (status === "Ready" && prev.status !== "Dock Ready") {
+    // direction
+    let finalDirection = prev.direction || "Inbound";
+    if (role === "dispatcher") {
+      finalDirection = directionIn;
+    } // dock cannot change direction
+
+    // note
+    let finalNote = prev.note || "";
+    if (role === "dispatcher") {
+      finalNote = (noteIn !== "") ? noteIn : finalNote;
+    } // dock cannot change trailer note
+
+    // RULE: Dispatcher can only set Ready if previously Dock Ready
+    if (role === "dispatcher" && statusIn === "Ready" && prev.status !== "Dock Ready") {
       return res.status(400).send('Approval rule: "Ready" requires prior "Dock Ready".');
     }
 
@@ -339,15 +396,15 @@ app.post("/api/upsert", async (req, res) => {
          door=excluded.door,
          note=excluded.note,
          updatedAt=excluded.updatedAt`,
-      [trailer, direction, status, finalDoor, finalNote, updatedAt]
+      [trailer, finalDirection, statusIn, finalDoor, finalNote, updatedAt]
     );
 
     trailers[trailer] = {
-      direction,
-      status,
+      direction: finalDirection,
+      status: statusIn,
       door: finalDoor || "",
       note: finalNote || "",
-      updatedAt
+      updatedAt,
     };
 
     broadcast("state", trailers);
@@ -360,9 +417,9 @@ app.post("/api/upsert", async (req, res) => {
 });
 
 /* ================================
-   DELETE / CLEAR
+   DELETE / CLEAR (DISPATCHER ONLY)
 ================================ */
-app.post("/api/delete", async (req, res) => {
+app.post("/api/delete", requireRole("dispatcher"), async (req, res) => {
   try {
     const trailer = cleanStr(req.body?.trailer, 20);
     if (!trailer) return res.status(400).send("Trailer required");
@@ -379,7 +436,7 @@ app.post("/api/delete", async (req, res) => {
   }
 });
 
-app.post("/api/clear", async (req, res) => {
+app.post("/api/clear", requireRole("dispatcher"), async (req, res) => {
   try {
     await dbRun(`DELETE FROM trailers`);
     trailers = {};
@@ -391,61 +448,6 @@ app.post("/api/clear", async (req, res) => {
     console.error("clear error:", err);
     res.status(500).send("Server error");
   }
-});
-
-/* ================================
-   SUPERVISOR PAGE (CONFIRMATIONS)
-================================ */
-app.get("/supervisor", (req, res) => {
-  res.send(`
-    <html>
-    <head>
-      <meta name="viewport" content="width=device-width,initial-scale=1"/>
-      <title>Supervisor - Confirmations</title>
-      <style>
-        body{font-family:system-ui;background:#0b1220;color:#eaf0ff;margin:0;padding:20px}
-        h1{margin:0 0 10px 0}
-        table{width:100%;border-collapse:collapse;margin-top:12px}
-        th,td{padding:10px;border-bottom:1px solid #263454;text-align:left;font-size:13px}
-        th{color:#a9b4d0;font-size:12px}
-      </style>
-    </head>
-    <body>
-      <h1>Driver Safety Confirmations</h1>
-      <div style="color:#a9b4d0;font-size:13px;">Live log (latest first)</div>
-      <table>
-        <thead>
-          <tr><th>Time</th><th>Trailer</th><th>Door</th><th>IP</th></tr>
-        </thead>
-        <tbody id="tb"></tbody>
-      </table>
-      <script>
-        async function load(){
-          const res = await fetch('/api/confirmations');
-          const data = await res.json();
-          const tb = document.getElementById('tb');
-          tb.innerHTML = '';
-          if(data.length===0){
-            tb.innerHTML = '<tr><td colspan="4" style="color:#a9b4d0;">No confirmations yet.</td></tr>';
-            return;
-          }
-          data.forEach(x=>{
-            const tr = document.createElement('tr');
-            const t = new Date(x.at).toLocaleString();
-            tr.innerHTML =
-              '<td>'+t+'</td>'+
-              '<td>'+(x.trailer||'')+'</td>'+
-              '<td>'+(x.door||'')+'</td>'+
-              '<td>'+(x.ip||'')+'</td>';
-            tb.appendChild(tr);
-          });
-        }
-        load();
-        setInterval(load, 3000);
-      </script>
-    </body>
-    </html>
-  `);
 });
 
 /* ================================
@@ -487,7 +489,6 @@ initDb()
       console.log("Dispatcher: /");
       console.log("Dock: /dock");
       console.log("Driver: /driver");
-      console.log("Supervisor: /supervisor");
       console.log("SQLite DB:", DB_PATH);
     });
   })

@@ -4,6 +4,7 @@ const path = require("path");
 const WebSocket = require("ws");
 const sqlite3 = require("sqlite3").verbose();
 const crypto = require("crypto");
+const axios = require("axios");
 
 const app = express();
 app.use(express.json());
@@ -34,6 +35,96 @@ const db = new sqlite3.Database(DB_PATH);
 let trailers = {};       // { trailer: {direction,status,door,note,updatedAt} }
 let confirmations = [];  // latest first
 let dockPlates = {};     // { "18": {status:"OK|Service|Unknown", note:"", updatedAt} }
+
+/* =========================
+   GEOTAB LITE (Last GPS)
+========================= */
+let geotabCreds = null;
+let geotabLastAuth = 0;
+
+let geotabPositionsCache = [];
+let geotabPositionsLastFetch = 0;
+
+const GEOTAB_CACHE_MS = Number(process.env.GEOTAB_CACHE_MS || 30000);
+
+function geotabConfigured() {
+  return !!(
+    process.env.GEOTAB_SERVER &&
+    process.env.GEOTAB_DB &&
+    process.env.GEOTAB_USER &&
+    process.env.GEOTAB_PASS
+  );
+}
+
+async function geotabAuthenticate() {
+  if (!geotabConfigured()) throw new Error("Geotab not configured");
+
+  // Re-auth every 30 mins (safe)
+  const now = Date.now();
+  if (geotabCreds && (now - geotabLastAuth) < (30 * 60 * 1000)) return geotabCreds;
+
+  const serverUrl = String(process.env.GEOTAB_SERVER).replace(/\/+$/, "");
+  const database = process.env.GEOTAB_DB;
+  const userName = process.env.GEOTAB_USER;
+  const password = process.env.GEOTAB_PASS;
+
+  const resp = await axios.post(
+    `${serverUrl}/apiv1`,
+    { method: "Authenticate", params: { database, userName, password } },
+    { timeout: 15000 }
+  );
+
+  geotabCreds = resp.data?.result;
+  geotabLastAuth = now;
+
+  if (!geotabCreds) throw new Error("Geotab auth failed");
+  return geotabCreds;
+}
+
+async function geotabGet(typeName, search = null) {
+  const serverUrl = String(process.env.GEOTAB_SERVER).replace(/\/+$/, "");
+  const credentials = await geotabAuthenticate();
+
+  const payload = {
+    method: "Get",
+    params: { typeName, credentials }
+  };
+  if (search) payload.params.search = search;
+
+  const resp = await axios.post(`${serverUrl}/apiv1`, payload, { timeout: 15000 });
+  return Array.isArray(resp.data?.result) ? resp.data.result : [];
+}
+
+/**
+ * Pull last known GPS per vehicle.
+ * DeviceStatusInfo often contains latitude/longitude/dateTime/speed/isDriving
+ */
+async function fetchGeotabLastPositions() {
+  const now = Date.now();
+
+  if ((now - geotabPositionsLastFetch) < GEOTAB_CACHE_MS && geotabPositionsCache.length) {
+    return geotabPositionsCache;
+  }
+
+  const rows = await geotabGet("DeviceStatusInfo");
+
+  const cleaned = rows
+    .map(r => ({
+      deviceId: r.device?.id || "",
+      name: r.device?.name || "",
+      dateTime: r.dateTime || "",
+      latitude: r.latitude,
+      longitude: r.longitude,
+      speed: r.speed,
+      isDriving: r.isDriving
+    }))
+    .filter(x => Number.isFinite(x.latitude) && Number.isFinite(x.longitude));
+
+  geotabPositionsCache = cleaned;
+  geotabPositionsLastFetch = now;
+
+  return cleaned;
+}
 
 /* =========================
    HELPERS
@@ -95,7 +186,7 @@ function clearAuthCookie(res) {
 }
 
 function getRoleFromReq(req) {
-  // Driver is public
+  // Driver is public (no cookie needed)
   if (String(req.path || "").toLowerCase().startsWith("/driver")) return "driver";
 
   const cookies = parseCookies(req.headers.cookie);
@@ -111,10 +202,11 @@ function getRoleFromReq(req) {
   const sig = parts[2];
 
   if (role !== "dispatcher" && role !== "dock") return null;
+
   const base = `${role}|${ts}`;
   if (sign(base) !== sig) return null;
 
-  // optional: expire after 12 hours
+  // expire after 12 hours
   const ageMs = Date.now() - Number(ts || 0);
   if (!Number.isFinite(ageMs) || ageMs > 12 * 60 * 60 * 1000) return null;
 
@@ -343,7 +435,6 @@ app.get("/api/version", (req, res) => {
 
 // Main pages
 app.get("/", (req, res) => {
-  // dispatcher page requires dispatcher role
   const role = getRoleFromReq(req);
   if (role !== "dispatcher") return res.redirect("/login");
   res.sendFile(path.join(__dirname, "index.html"));
@@ -359,21 +450,9 @@ app.get("/driver", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
-// Geotab placeholder (iframe will fail, but page exists)
-app.get("/geotab", (req, res) => {
-  res.send(`
-    <html>
-      <head><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Geotab</title></head>
-      <body style="font-family:system-ui;background:#0b1220;color:#eaf0ff;padding:20px">
-        <h2>Geotab</h2>
-        <div style="color:#a7b2d3">Embedding my.geotab.com is blocked. Use Geotab Lite API integration instead.</div>
-        <a href="/" style="color:#b7c5ff">Back</a>
-      </body>
-    </html>
-  `);
-});
-
-app.get("/health", (req, res) => res.json({ ok: true, db: DB_PATH, version: APP_VERSION }));
+app.get("/health", (req, res) =>
+  res.json({ ok: true, db: DB_PATH, version: APP_VERSION })
+);
 
 /* =========================
    APIs: STATE
@@ -384,7 +463,6 @@ app.get("/api/state", (req, res) => {
 
 /* =========================
    APIs: DOCK PLATES
-   Both dispatcher + dock can update
 ========================= */
 app.get("/api/dockplates", (req, res) => {
   res.json(dockPlates);
@@ -433,6 +511,23 @@ app.post("/api/dockplates/set", requireAnyRole(["dispatcher", "dock"]), async (r
 });
 
 /* =========================
+   APIs: GEOTAB LITE
+   (Dispatcher + Dock only)
+========================= */
+app.get("/api/geotab/positions", requireAnyRole(["dispatcher", "dock"]), async (req, res) => {
+  try {
+    if (!geotabConfigured()) {
+      return res.status(400).send("Geotab not configured (missing env vars)");
+    }
+    const data = await fetchGeotabLastPositions();
+    res.json(data);
+  } catch (err) {
+    console.error("Geotab positions error:", err?.response?.data || err.message);
+    res.status(500).send("Geotab positions failed");
+  }
+});
+
+/* =========================
    APIs: CONFIRM SAFETY (driver)
 ========================= */
 app.post("/api/confirm-safety", async (req, res) => {
@@ -455,7 +550,6 @@ app.post("/api/confirm-safety", async (req, res) => {
       [at, trailer || "", door || "", ip, userAgent]
     );
 
-    // refresh confirmations cache
     const crows = await dbAll(`
       SELECT at, trailer, door, ip, userAgent
       FROM confirmations
@@ -490,29 +584,25 @@ app.post("/api/confirm-safety", async (req, res) => {
 
 /* =========================
    APIs: UPSERT TRAILER
-   - Dispatcher: can add/update everything + any status
-   - Dock: can ONLY change status to Loading or Dock Ready
-           cannot change door/direction/note
-   - Driver: not allowed (except safety confirm endpoint)
+   - Dispatcher: full control
+   - Dock: can ONLY set status Loading / Dock Ready (cannot add trailer)
 ========================= */
 app.post("/api/upsert", async (req, res) => {
   try {
     const role = getRoleFromReq(req); // dispatcher | dock | driver | null
     if (!role) return res.status(401).send("Unauthorized");
+    if (role === "driver") return res.status(403).send("Drivers cannot update trailers");
 
     const trailer = cleanStr(req.body?.trailer, 20);
     if (!trailer) return res.status(400).send("Trailer required");
 
     const prev = trailers[trailer] || null;
-    if (!prev) {
-      // Dock cannot create new trailers
-      if (role === "dock") return res.status(403).send("Dock cannot add trailers");
-    }
+    if (!prev && role === "dock") return res.status(403).send("Dock cannot add trailers");
 
     const allowedDir = ["Inbound", "Outbound", "Cross Dock"];
     const allowedStatus = ["Incoming", "Loading", "Dock Ready", "Ready", "Departed"];
 
-    // Dock role: ONLY change status Loading/Dock Ready
+    // Dock: ONLY status Loading / Dock Ready
     if (role === "dock") {
       const status = cleanStr(req.body?.status, 30);
       if (!["Loading", "Dock Ready"].includes(status)) {
@@ -552,24 +642,21 @@ app.post("/api/upsert", async (req, res) => {
         userAgent: req.headers["user-agent"] || ""
       });
 
-      // notify if becomes Dock Ready? (optional)
       broadcast("state", trailers);
       res.json({ ok: true });
       return;
     }
 
-    // Dispatcher role: full upsert
-    if (role !== "dispatcher") return res.status(403).send("Forbidden");
-
+    // Dispatcher: full upsert
     const direction = cleanStr(req.body?.direction, 30) || (prev?.direction || "Inbound");
     const status = cleanStr(req.body?.status, 30) || (prev?.status || "Incoming");
     const door = normalizeDoor(req.body?.door ?? prev?.door ?? "");
-    const note = cleanStr(req.body?.note, 160) ?? (prev?.note || "");
+    const note = cleanStr(req.body?.note, 160) || (prev?.note || "");
 
     if (!allowedDir.includes(direction)) return res.status(400).send("Invalid direction");
     if (!allowedStatus.includes(status)) return res.status(400).send("Invalid status");
 
-    // Optional: enforce door range when provided
+    // enforce door range when provided
     if (door) {
       if (!/^\d+$/.test(door)) return res.status(400).send("Invalid door");
       const dn = Number(door);
@@ -594,7 +681,7 @@ app.post("/api/upsert", async (req, res) => {
     trailers[trailer] = next;
 
     await auditLog({
-      actorRole: role,
+      actorRole: "dispatcher",
       action: prev ? "trailer_update" : "trailer_create",
       entityType: "trailer",
       entityId: trailer,
@@ -605,7 +692,7 @@ app.post("/api/upsert", async (req, res) => {
 
     broadcast("state", trailers);
 
-    // Websocket notification for Ready
+    // notify when becomes Ready
     if (prev?.status !== "Ready" && status === "Ready") {
       broadcast("notify", { kind: "ready", trailer, door: next.door || "" });
     }
@@ -688,7 +775,7 @@ app.get("/api/audit", requireRole("dispatcher"), async (req, res) => {
       action: r.action,
       entityType: r.entityType,
       entityId: r.entityId,
-      details: (()=>{ try{return JSON.parse(r.details||"{}")}catch{return {}} })()
+      details: (() => { try { return JSON.parse(r.details || "{}"); } catch { return {}; } })()
     })));
   } catch (err) {
     console.error("audit error:", err);
@@ -717,6 +804,7 @@ initDb()
       console.log("Running on port", PORT);
       console.log("SQLite DB:", DB_PATH);
       console.log("Version:", APP_VERSION);
+      console.log("Geotab configured:", geotabConfigured());
     });
   })
   .catch((err) => {

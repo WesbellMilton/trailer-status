@@ -1,32 +1,11 @@
 // server.js
-// Wesbell Trailer Status Board
-// Modes:
-//  - Dispatcher: /
-//  - Dock:       /dock
-//  - Driver:     /driver
-//  - Supervisor confirmations: /supervisor
-//  - Maintenance plate list:   /maintenance
-
-require("dotenv").config();
-
 const express = require("express");
 const http = require("http");
 const path = require("path");
 const WebSocket = require("ws");
 const sqlite3 = require("sqlite3").verbose();
-const helmet = require("helmet");
-const compression = require("compression");
 
 const app = express();
-
-// allow inline scripts in index.html
-app.use(
-  helmet({
-    contentSecurityPolicy: false,
-  })
-);
-
-app.use(compression());
 app.use(express.json());
 app.use(express.static(__dirname));
 
@@ -47,7 +26,7 @@ const wss = new WebSocket.Server({ server });
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data.db");
 const db = new sqlite3.Database(DB_PATH);
 
-// in-memory caches
+// In-memory caches
 let trailers = {};        // trailer -> {direction,status,door,note,updatedAt}
 let confirmations = [];   // latest 200
 let dockPlates = {};      // "18".."42" -> {status:"OK"|"Service", note, updatedAt}
@@ -55,7 +34,6 @@ let dockPlates = {};      // "18".."42" -> {status:"OK"|"Service", note, updated
 /* ================================
    HELPERS
 ================================ */
-
 function broadcast(type, payload) {
   const msg = JSON.stringify({ type, payload });
   for (const client of wss.clients) {
@@ -69,7 +47,7 @@ function cleanStr(v, maxLen) {
   return s.length > maxLen ? s.slice(0, maxLen) : s;
 }
 
-function normalizePlateDoor(input) {
+function normalizeDoorPlate(input) {
   // Accept "18", "D18", "Door 18" -> "18"
   const raw = String(input ?? "").trim().toUpperCase();
   if (!raw) return "";
@@ -86,7 +64,7 @@ function computeStats(board) {
   const stats = {
     total: 0,
     byStatus: { Incoming: 0, Loading: 0, "Dock Ready": 0, Ready: 0, Departed: 0 },
-    byDirection: { Inbound: 0, Outbound: 0, "Cross Dock": 0 },
+    byDirection: { Inbound: 0, Outbound: 0, "Cross Dock": 0 }
   };
 
   for (const [, v] of Object.entries(board)) {
@@ -96,16 +74,6 @@ function computeStats(board) {
   }
   return stats;
 }
-
-function noCache(res) {
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-  res.setHeader("Pragma", "no-cache");
-  res.setHeader("Expires", "0");
-}
-
-/* ================================
-   SQLITE PROMISE HELPERS
-================================ */
 
 function dbRun(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -126,9 +94,8 @@ function dbAll(sql, params = []) {
 }
 
 /* ================================
-   DB INIT + CACHE RELOAD
+   DB INIT + CACHE LOAD
 ================================ */
-
 async function initDb() {
   await dbRun(`PRAGMA journal_mode = WAL;`);
   await dbRun(`PRAGMA synchronous = NORMAL;`);
@@ -144,7 +111,7 @@ async function initDb() {
     )
   `);
 
-  // upgrade older DBs safely
+  // Safe upgrade for older DBs
   await dbRun(`ALTER TABLE trailers ADD COLUMN note TEXT NOT NULL DEFAULT ''`).catch(() => {});
 
   await dbRun(`
@@ -160,8 +127,8 @@ async function initDb() {
 
   await dbRun(`
     CREATE TABLE IF NOT EXISTS dockplates (
-      door TEXT PRIMARY KEY,         -- "18".."42"
-      status TEXT NOT NULL,          -- "OK" or "Service"
+      door TEXT PRIMARY KEY,      -- "18".."42"
+      status TEXT NOT NULL,       -- "OK" or "Service"
       note TEXT NOT NULL DEFAULT '',
       updatedAt INTEGER NOT NULL
     )
@@ -171,11 +138,11 @@ async function initDb() {
 }
 
 async function reloadCachesFromDb() {
+  // trailers
   const trailerRows = await dbAll(`
     SELECT trailer, direction, status, door, note, updatedAt
     FROM trailers
   `);
-
   trailers = {};
   for (const r of trailerRows) {
     trailers[r.trailer] = {
@@ -183,76 +150,62 @@ async function reloadCachesFromDb() {
       status: r.status,
       door: r.door || "",
       note: r.note || "",
-      updatedAt: r.updatedAt || 0,
+      updatedAt: r.updatedAt || 0
     };
   }
 
+  // confirmations
   const confRows = await dbAll(`
     SELECT at, trailer, door, ip, userAgent
     FROM confirmations
     ORDER BY id DESC
     LIMIT 200
   `);
-
-  confirmations = confRows.map((r) => ({
+  confirmations = confRows.map(r => ({
     at: r.at,
     trailer: r.trailer || "",
     door: r.door || "",
     ip: r.ip || "",
-    userAgent: r.userAgent || "",
+    userAgent: r.userAgent || ""
   }));
 
+  // dock plates
   const plateRows = await dbAll(`SELECT door, status, note, updatedAt FROM dockplates`);
   dockPlates = {};
   for (const r of plateRows) {
-    const door = normalizePlateDoor(r.door);
+    const door = normalizeDoorPlate(r.door);
+    if (!door) continue;
     dockPlates[door] = {
       status: r.status,
       note: r.note || "",
-      updatedAt: r.updatedAt || 0,
+      updatedAt: r.updatedAt || 0
     };
   }
 }
 
 /* ================================
-   ROUTES
+   PAGES
 ================================ */
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
+app.get("/dock", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
+app.get("/driver", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 
-app.get("/", (req, res) => {
-  noCache(res);
-  res.sendFile(path.join(__dirname, "index.html"));
-});
+app.get("/health", (req, res) => res.json({ ok: true, db: DB_PATH }));
 
-app.get("/dock", (req, res) => {
-  noCache(res);
-  res.sendFile(path.join(__dirname, "index.html"));
-});
-
-app.get("/driver", (req, res) => {
-  noCache(res);
-  res.sendFile(path.join(__dirname, "index.html"));
-});
-
-app.get("/health", (req, res) => {
-  res.json({ ok: true, db: DB_PATH });
-});
-
-// APIs
+/* ================================
+   API: STATE + STATS
+================================ */
 app.get("/api/state", (req, res) => res.json(trailers));
 app.get("/api/stats", (req, res) => res.json(computeStats(trailers)));
 
-app.get("/api/confirmations", (req, res) => res.json(confirmations));
-
-app.get("/api/dockplates", (req, res) => res.json(dockPlates));
-
 /* ================================
-   DOCK PLATES: set OK / Service
-   door range enforced 18..42
+   API: DOCK PLATES (18–42)
 ================================ */
+app.get("/api/dockplates", (req, res) => res.json(dockPlates));
 
 app.post("/api/dockplates/set", async (req, res) => {
   try {
-    const door = normalizePlateDoor(cleanStr(req.body?.door, 20));
+    const door = normalizeDoorPlate(cleanStr(req.body?.door, 20));
     const status = cleanStr(req.body?.status, 20);
     const note = cleanStr(req.body?.note, 200);
 
@@ -285,9 +238,8 @@ app.post("/api/dockplates/set", async (req, res) => {
 });
 
 /* ================================
-   SAFETY CONFIRM (PERSISTED)
+   SAFETY CONFIRM (LOG)
 ================================ */
-
 app.post("/api/confirm-safety", async (req, res) => {
   try {
     const trailer = cleanStr(req.body?.trailer, 20);
@@ -319,12 +271,12 @@ app.post("/api/confirm-safety", async (req, res) => {
       LIMIT 200
     `);
 
-    confirmations = confRows.map((r) => ({
+    confirmations = confRows.map(r => ({
       at: r.at,
       trailer: r.trailer || "",
       door: r.door || "",
       ip: r.ip || "",
-      userAgent: r.userAgent || "",
+      userAgent: r.userAgent || ""
     }));
 
     broadcast("confirmations", confirmations);
@@ -335,21 +287,19 @@ app.post("/api/confirm-safety", async (req, res) => {
   }
 });
 
-/* ================================
-   UPSERT TRAILER (PERSISTED)
-   - preserves door/note if not provided
-================================ */
+app.get("/api/confirmations", (req, res) => res.json(confirmations));
 
+/* ================================
+   API: UPSERT TRAILER (WITH RULES)
+   - Dock sets: Loading / Dock Ready
+   - Dispatcher can set Ready ONLY after Dock Ready
+================================ */
 app.post("/api/upsert", async (req, res) => {
   try {
     const trailer = cleanStr(req.body?.trailer, 20);
     const direction = cleanStr(req.body?.direction, 30);
     const status = cleanStr(req.body?.status, 30);
-
-    // door is the SAME concept as dock plate number (18-42)
     const doorRaw = cleanStr(req.body?.door, 20);
-    const door = doorRaw ? normalizePlateDoor(doorRaw) : "";
-
     const note = cleanStr(req.body?.note, 200);
 
     if (!trailer) return res.status(400).send("Trailer required");
@@ -362,13 +312,20 @@ app.post("/api/upsert", async (req, res) => {
 
     const prev = trailers[trailer] || {};
 
-    // preserve old note if empty string
+    // door is plate number (18-42), preserve if blank
+    let finalDoor = prev.door || "";
+    if (doorRaw !== "") {
+      const parsed = normalizeDoorPlate(doorRaw);
+      if (parsed && !isPlateInRange(parsed)) return res.status(400).send("Door must be 18-42");
+      finalDoor = parsed;
+    }
+
+    // note: if missing, preserve previous
     const finalNote = (note !== "") ? note : (prev.note || "");
 
-    // preserve old door if empty string, otherwise validate range
-    let finalDoor = (door !== "") ? door : (prev.door || "");
-    if (finalDoor && !isPlateInRange(finalDoor)) {
-      return res.status(400).send("Door must be 18-42");
+    // RULE: Ready only allowed if previously Dock Ready
+    if (status === "Ready" && prev.status !== "Dock Ready") {
+      return res.status(400).send('Approval rule: "Ready" requires prior "Dock Ready".');
     }
 
     const updatedAt = Date.now();
@@ -390,7 +347,7 @@ app.post("/api/upsert", async (req, res) => {
       status,
       door: finalDoor || "",
       note: finalNote || "",
-      updatedAt,
+      updatedAt
     };
 
     broadcast("state", trailers);
@@ -405,7 +362,6 @@ app.post("/api/upsert", async (req, res) => {
 /* ================================
    DELETE / CLEAR
 ================================ */
-
 app.post("/api/delete", async (req, res) => {
   try {
     const trailer = cleanStr(req.body?.trailer, 20);
@@ -440,7 +396,6 @@ app.post("/api/clear", async (req, res) => {
 /* ================================
    SUPERVISOR PAGE (CONFIRMATIONS)
 ================================ */
-
 app.get("/supervisor", (req, res) => {
   res.send(`
     <html>
@@ -470,6 +425,10 @@ app.get("/supervisor", (req, res) => {
           const data = await res.json();
           const tb = document.getElementById('tb');
           tb.innerHTML = '';
+          if(data.length===0){
+            tb.innerHTML = '<tr><td colspan="4" style="color:#a9b4d0;">No confirmations yet.</td></tr>';
+            return;
+          }
           data.forEach(x=>{
             const tr = document.createElement('tr');
             const t = new Date(x.at).toLocaleString();
@@ -480,9 +439,6 @@ app.get("/supervisor", (req, res) => {
               '<td>'+(x.ip||'')+'</td>';
             tb.appendChild(tr);
           });
-          if(data.length===0){
-            tb.innerHTML = '<tr><td colspan="4" style="color:#a9b4d0;">No confirmations yet.</td></tr>';
-          }
         }
         load();
         setInterval(load, 3000);
@@ -493,75 +449,8 @@ app.get("/supervisor", (req, res) => {
 });
 
 /* ================================
-   MAINTENANCE PAGE (PLATES)
-================================ */
-
-app.get("/maintenance", (req, res) => {
-  res.send(`
-    <html>
-    <head>
-      <meta name="viewport" content="width=device-width,initial-scale=1"/>
-      <title>Maintenance - Dock Plates</title>
-      <style>
-        body{font-family:system-ui;background:#0b1220;color:#eaf0ff;margin:0;padding:20px}
-        h1{margin:0 0 8px 0}
-        .muted{color:#a9b4d0;font-size:13px}
-        table{width:100%;border-collapse:collapse;margin-top:12px}
-        th,td{padding:10px;border-bottom:1px solid #263454;text-align:left;font-size:13px}
-        th{color:#a9b4d0;font-size:12px}
-        .ok{color:#22c55e;font-weight:900}
-        .svc{color:#f59e0b;font-weight:900}
-      </style>
-    </head>
-    <body>
-      <h1>Dock Plate Status (18–42)</h1>
-      <div class="muted">Door-level plate status + notes. Auto refresh every 5s.</div>
-
-      <table>
-        <thead>
-          <tr><th>Plate</th><th>Status</th><th>Note</th><th>Last Updated</th></tr>
-        </thead>
-        <tbody id="tb"></tbody>
-      </table>
-
-      <script>
-        function plateRange(){
-          const a=[]; for(let i=18;i<=42;i++) a.push(String(i)); return a;
-        }
-        async function load(){
-          const res = await fetch('/api/dockplates');
-          const data = await res.json();
-          const tb = document.getElementById('tb');
-          tb.innerHTML = '';
-
-          const plates = plateRange();
-          plates.forEach(p=>{
-            const v = data[p];
-            const when = v?.updatedAt ? new Date(v.updatedAt).toLocaleString() : '';
-            const status = v?.status || 'Unknown';
-            const note = v?.note || '';
-            const cls = status === 'OK' ? 'ok' : (status === 'Service' ? 'svc' : '');
-            const tr = document.createElement('tr');
-            tr.innerHTML =
-              '<td><b>'+p+'</b></td>'+
-              '<td class="'+cls+'">'+status+'</td>'+
-              '<td>'+(note||'')+'</td>'+
-              '<td>'+when+'</td>';
-            tb.appendChild(tr);
-          });
-        }
-        load();
-        setInterval(load, 5000);
-      </script>
-    </body>
-    </html>
-  `);
-});
-
-/* ================================
    AUTO-CLEAN DEPARTED
 ================================ */
-
 setInterval(async () => {
   try {
     const cutoff = Date.now() - 15 * 60 * 1000; // 15 minutes
@@ -579,7 +468,6 @@ setInterval(async () => {
 /* ================================
    WEBSOCKET
 ================================ */
-
 wss.on("connection", (ws) => {
   ws.send(JSON.stringify({ type: "state", payload: trailers }));
   ws.send(JSON.stringify({ type: "confirmations", payload: confirmations }));
@@ -590,7 +478,6 @@ wss.on("connection", (ws) => {
 /* ================================
    START
 ================================ */
-
 const PORT = process.env.PORT || 3000;
 
 initDb()
@@ -601,7 +488,6 @@ initDb()
       console.log("Dock: /dock");
       console.log("Driver: /driver");
       console.log("Supervisor: /supervisor");
-      console.log("Maintenance: /maintenance");
       console.log("SQLite DB:", DB_PATH);
     });
   })

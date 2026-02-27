@@ -4,12 +4,13 @@ const http = require("http");
 const path = require("path");
 const WebSocket = require("ws");
 const sqlite3 = require("sqlite3").verbose();
+const pkg = require("./package.json");
 
 const app = express();
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// simple request logging
+// Simple request logging
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
@@ -26,7 +27,7 @@ const wss = new WebSocket.Server({ server });
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data.db");
 const db = new sqlite3.Database(DB_PATH);
 
-// ===== SIMPLE ROLE PINS (set these in Render env vars) =====
+// ===== ROLE PINS (Render Env Vars recommended) =====
 // DISPATCHER_PIN=1234
 // DOCK_PIN=2222
 const PINS = {
@@ -60,6 +61,12 @@ function normalizeDoorPlate(input) {
   if (!raw) return "";
   const m = raw.match(/(\d{1,3})/);
   return m ? m[1] : raw;
+}
+
+function normalizeStatus(input) {
+  return String(input ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function isPlateInRange(doorStr) {
@@ -143,7 +150,7 @@ async function initDb() {
     )
   `);
 
-  // Safe upgrade for older DBs
+  // Safe upgrades
   await dbRun(`ALTER TABLE trailers ADD COLUMN note TEXT NOT NULL DEFAULT ''`).catch(() => {});
 
   await dbRun(`
@@ -159,8 +166,8 @@ async function initDb() {
 
   await dbRun(`
     CREATE TABLE IF NOT EXISTS dockplates (
-      door TEXT PRIMARY KEY,      -- "18".."42"
-      status TEXT NOT NULL,       -- "OK" or "Service"
+      door TEXT PRIMARY KEY,
+      status TEXT NOT NULL,
       note TEXT NOT NULL DEFAULT '',
       updatedAt INTEGER NOT NULL
     )
@@ -222,6 +229,7 @@ app.get("/", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.get("/dock", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.get("/driver", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.get("/health", (req, res) => res.json({ ok: true, db: DB_PATH }));
+app.get("/api/version", (req, res) => res.json({ version: pkg.version }));
 
 /* ================================
    API: STATE + STATS (PUBLIC VIEW)
@@ -238,7 +246,7 @@ app.get("/api/dockplates", (req, res) => res.json(dockPlates));
 app.post("/api/dockplates/set", requireAnyRole(["dock", "dispatcher"]), async (req, res) => {
   try {
     const door = normalizeDoorPlate(cleanStr(req.body?.door, 20));
-    const status = cleanStr(req.body?.status, 20);
+    const status = normalizeStatus(cleanStr(req.body?.status, 20));
     const note = cleanStr(req.body?.note, 200);
 
     if (!door) return res.status(400).send("Door required");
@@ -261,7 +269,6 @@ app.post("/api/dockplates/set", requireAnyRole(["dock", "dispatcher"]), async (r
 
     dockPlates[door] = { status, note, updatedAt };
     broadcast("dockplates", dockPlates);
-
     res.json({ ok: true });
   } catch (err) {
     console.error("dockplates/set error:", err);
@@ -329,11 +336,11 @@ app.get("/api/confirmations", (req, res) => res.json(confirmations));
 ================================ */
 app.post("/api/upsert", requireAnyRole(["dispatcher", "dock"]), async (req, res) => {
   try {
-    const role = req.role; // injected by middleware
+    const role = req.role;
 
     const trailer = cleanStr(req.body?.trailer, 20);
     const directionIn = cleanStr(req.body?.direction, 30);
-    const statusIn = cleanStr(req.body?.status, 30);
+    const statusIn = normalizeStatus(cleanStr(req.body?.status, 30));
     const doorRaw = cleanStr(req.body?.door, 20);
     const noteIn = cleanStr(req.body?.note, 200);
 
@@ -343,14 +350,10 @@ app.post("/api/upsert", requireAnyRole(["dispatcher", "dock"]), async (req, res)
     const allowedStatus = ["Incoming", "Loading", "Dock Ready", "Ready", "Departed"];
 
     if (!allowedStatus.includes(statusIn)) return res.status(400).send("Invalid status");
-    if (role === "dispatcher" && !allowedDir.includes(directionIn)) {
-      return res.status(400).send("Invalid direction");
-    }
 
     const prev = trailers[trailer] || {};
 
-    // ===== Dock restrictions (server enforced) =====
-    // Dock can ONLY set status to Loading or Dock Ready
+    // Dock restrictions
     if (role === "dock") {
       const dockAllowed = ["Loading", "Dock Ready"];
       if (!dockAllowed.includes(statusIn)) {
@@ -358,7 +361,14 @@ app.post("/api/upsert", requireAnyRole(["dispatcher", "dock"]), async (req, res)
       }
     }
 
-    // door is plate number (18-42)
+    // Direction
+    let finalDirection = prev.direction || "Inbound";
+    if (role === "dispatcher") {
+      if (!allowedDir.includes(directionIn)) return res.status(400).send("Invalid direction");
+      finalDirection = directionIn;
+    }
+
+    // Door (plate number 18-42)
     let finalDoor = prev.door || "";
     if (role === "dispatcher") {
       if (doorRaw !== "") {
@@ -366,21 +376,15 @@ app.post("/api/upsert", requireAnyRole(["dispatcher", "dock"]), async (req, res)
         if (parsed && !isPlateInRange(parsed)) return res.status(400).send("Door must be 18-42");
         finalDoor = parsed;
       }
-    } // dock cannot change door
+    }
 
-    // direction
-    let finalDirection = prev.direction || "Inbound";
-    if (role === "dispatcher") {
-      finalDirection = directionIn;
-    } // dock cannot change direction
-
-    // note
+    // Note
     let finalNote = prev.note || "";
     if (role === "dispatcher") {
       finalNote = (noteIn !== "") ? noteIn : finalNote;
-    } // dock cannot change trailer note
+    }
 
-    // RULE: Dispatcher can only set Ready if previously Dock Ready
+    // Approval rule: Dispatcher can only set Ready after Dock Ready
     if (role === "dispatcher" && statusIn === "Ready" && prev.status !== "Dock Ready") {
       return res.status(400).send('Approval rule: "Ready" requires prior "Dock Ready".');
     }
@@ -449,23 +453,6 @@ app.post("/api/clear", requireRole("dispatcher"), async (req, res) => {
     res.status(500).send("Server error");
   }
 });
-
-/* ================================
-   AUTO-CLEAN DEPARTED
-================================ */
-setInterval(async () => {
-  try {
-    const cutoff = Date.now() - 15 * 60 * 1000; // 15 minutes
-    await dbRun(`DELETE FROM trailers WHERE status='Departed' AND updatedAt < ?`, [cutoff]);
-
-    await reloadCachesFromDb();
-    broadcast("state", trailers);
-    broadcast("stats", computeStats(trailers));
-    broadcast("dockplates", dockPlates);
-  } catch (err) {
-    console.error("Auto-clean error:", err);
-  }
-}, 60 * 1000);
 
 /* ================================
    WEBSOCKET

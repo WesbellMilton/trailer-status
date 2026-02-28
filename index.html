@@ -1,745 +1,1184 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Wesbell Trailer Status</title>
-
-<!-- Leaflet (Map) -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-<style>
-:root{
-  --bg0:#050814;
-  --bg2:#0b1430;
-  --line:rgba(120,145,220,.18);
-  --text:#eaf0ff;
-  --muted:#a7b2d3;
-  --good:#22c55e;
-  --warn:#f59e0b;
-  --bad:#ef4444;
-  --cool:#94a3b8;
-}
-*{box-sizing:border-box}
-body{
-  margin:0;
-  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
-  color:var(--text);
-  background:
-    radial-gradient(1000px 500px at 20% -10%, rgba(99,102,241,.35), transparent 60%),
-    linear-gradient(180deg,var(--bg0),var(--bg2));
-}
-.wrap{max-width:1200px;margin:auto;padding:20px}
-.topbar{
-  display:flex;justify-content:space-between;align-items:center;gap:12px;
-  padding:14px;border:1px solid var(--line);
-  border-radius:14px;background:rgba(255,255,255,.04)
-}
-.brand h1{margin:0;font-size:18px}
-.sub{font-size:12px;color:var(--muted)}
-.kpis{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;align-items:center}
-.kpi{font-size:13px;color:var(--muted);white-space:nowrap}
-.kpi strong{color:#fff}
-.badge{
-  display:inline-block;padding:2px 8px;border-radius:999px;
-  border:1px solid rgba(120,145,220,.25);
-  background:rgba(255,255,255,.04);color:#fff;font-size:12px
-}
-
-.card{
-  margin-top:14px;
-  border:1px solid var(--line);
-  border-radius:14px;
-  background:rgba(255,255,255,.04);
-  overflow:hidden;
-}
-
-.controls{
-  padding:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center
-}
-input,select,button{
-  padding:10px 12px;
-  border-radius:10px;
-  border:1px solid var(--line);
-  background:#0c132a;
-  color:#fff;
-}
-button{cursor:pointer;font-weight:900}
-button.primary{background:rgba(99,102,241,.25)}
-button.danger{background:rgba(239,68,68,.25)}
-button.ghost{background:transparent}
-
-table{width:100%;border-collapse:collapse}
-thead th{
-  font-size:12px;color:var(--muted);
-  padding:12px;text-align:left;
-  border-bottom:1px solid var(--line)
-}
-tbody td{
-  padding:12px;
-  border-bottom:1px solid rgba(120,145,220,.12)
-}
-tbody tr:hover{background:rgba(255,255,255,.03)}
-
-.tag{
-  padding:4px 10px;border-radius:999px;
-  font-size:12px;font-weight:900;display:inline-block
-}
-.good{background:rgba(34,197,94,.18);border:1px solid rgba(34,197,94,.35)}
-.warn{background:rgba(245,158,11,.18);border:1px solid rgba(245,158,11,.35)}
-.bad{background:rgba(239,68,68,.18);border:1px solid rgba(239,68,68,.35)}
-.cool{background:rgba(148,163,184,.18);border:1px solid rgba(148,163,184,.35)}
-
-.readyBtn{
-  border:1px solid rgba(34,197,94,.45);
-  background:rgba(34,197,94,.18);
-  font-weight:900;
-  padding:10px 12px;
-  border-radius:12px;
-}
-
-/* FLASH green (new ready) */
-.flash{
-  animation:flash 1s infinite;
-  background:rgba(34,197,94,.32)!important;
-  border-color:rgba(34,197,94,.75)!important;
-}
-@keyframes flash{
-  0%{box-shadow:0 0 0 rgba(34,197,94,0)}
-  50%{box-shadow:0 0 14px rgba(34,197,94,.85)}
-  100%{box-shadow:0 0 0 rgba(34,197,94,0)}
-}
-
-.toast{
-  position:fixed;left:50%;bottom:18px;transform:translateX(-50%);
-  background:rgba(10,16,36,.92);
-  border:1px solid rgba(120,145,220,.25);
-  padding:10px 14px;border-radius:12px;
-  color:#fff;font-weight:900;
-  display:none;z-index:9999;
-  max-width:min(680px, 92vw);
-}
-.toast.show{display:block}
-
-/* Footer */
-.footer{
-  text-align:center;
-  color:rgba(167,178,211,.9);
-  font-size:12px;
-  padding:12px 0 6px 0;
-}
-
-/* Dock plates bar bottom-right */
-.platesBar{
-  position:fixed;
-  right:14px;
-  bottom:14px;
-  background:rgba(10,16,36,.85);
-  border:1px solid rgba(120,145,220,.25);
-  border-radius:14px;
-  padding:10px 10px;
-  display:flex;
-  gap:8px;
-  align-items:center;
-  max-width:min(560px, 92vw);
-}
-.platesTitle{font-weight:900;font-size:12px;color:var(--muted);margin-right:6px;white-space:nowrap}
-.platePill{
-  padding:6px 9px;border-radius:999px;
-  border:1px solid rgba(120,145,220,.2);
-  font-weight:900;font-size:12px;
-  cursor:pointer;
-  user-select:none;
-  white-space:nowrap;
-}
-.plateOK{background:rgba(34,197,94,.20);border-color:rgba(34,197,94,.45)}
-.plateService{background:rgba(245,158,11,.20);border-color:rgba(245,158,11,.45)}
-.plateUnknown{background:rgba(148,163,184,.16);border-color:rgba(148,163,184,.30)}
-.platesHint{font-size:11px;color:var(--muted);margin-left:8px;white-space:nowrap}
-
-@media (max-width:720px){
-  .platesBar{left:10px;right:10px}
-  .platesHint{display:none}
-}
-
-/* Geotab panel */
-.geoWrap{
-  padding:14px;
-  border-top:1px solid rgba(120,145,220,.18);
-  display:none; /* shown only for dispatcher/dock */
-}
-.geoHead{
-  display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;
-}
-.geoTitle{font-weight:900}
-.geoStatus{color:rgba(167,178,211,.85);font-size:12px}
-#map{
-  height:320px;margin-top:10px;border-radius:12px;overflow:hidden;
-  border:1px solid rgba(120,145,220,.18);
-}
-.geoList{
-  margin-top:10px;color:rgba(167,178,211,.9);font-size:12px
-}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Trailer Status Board</title>
+  <style>
+    :root{
+      --bg:#0b1220;
+      --card:rgba(255,255,255,.04);
+      --card2:rgba(255,255,255,.06);
+      --border:rgba(120,145,220,.18);
+      --muted:#a7b2d3;
+      --text:#eaf0ff;
+      --good:rgba(34,197,94,.22);
+      --warn:rgba(245,158,11,.22);
+      --bad:rgba(239,68,68,.22);
+      --btn:rgba(99,102,241,.25);
+      --btn2:rgba(56,189,248,.18);
+      --shadow:0 12px 40px rgba(0,0,0,.35);
+      --radius:14px;
+      --radius2:12px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      background:radial-gradient(1200px 800px at 20% 10%, rgba(99,102,241,.14), transparent 60%),
+                 radial-gradient(900px 700px at 90% 30%, rgba(56,189,248,.10), transparent 60%),
+                 var(--bg);
+      color:var(--text);
+      font-family:var(--sans);
+    }
+    a{color:#b7c5ff}
+    .topbar{
+      position:sticky; top:0; z-index:50;
+      background:rgba(11,18,32,.88);
+      backdrop-filter: blur(10px);
+      border-bottom:1px solid var(--border);
+    }
+    .topbar-inner{
+      max-width:1200px;
+      margin:0 auto;
+      padding:10px 14px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .brand{
+      display:flex; align-items:center; gap:10px;
+      font-weight:900;
+      letter-spacing:.2px;
+    }
+    .pill{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:6px 10px;
+      border:1px solid var(--border);
+      border-radius:999px;
+      background:rgba(255,255,255,.03);
+      color:var(--muted);
+      font-size:12px;
+      white-space:nowrap;
+    }
+    .dot{
+      width:8px; height:8px; border-radius:999px;
+      background:#999;
+    }
+    .dot.ok{ background:#22c55e;}
+    .dot.bad{ background:#ef4444;}
+    .dot.warn{ background:#f59e0b;}
+    .actions{
+      display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end;
+    }
+    button, .btn{
+      cursor:pointer;
+      border:1px solid var(--border);
+      background:var(--btn);
+      color:var(--text);
+      border-radius:12px;
+      padding:10px 12px;
+      font-weight:800;
+      box-shadow:none;
+    }
+    button.secondary{
+      background:rgba(255,255,255,.03);
+      font-weight:800;
+    }
+    button.ghost{
+      background:transparent;
+    }
+    button:disabled{
+      opacity:.55; cursor:not-allowed;
+    }
+    .wrap{
+      max-width:1200px;
+      margin:0 auto;
+      padding:14px;
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:14px;
+    }
+    .grid-2{
+      display:grid;
+      grid-template-columns: 1.15fr .85fr;
+      gap:14px;
+    }
+    @media (max-width: 980px){
+      .grid-2{ grid-template-columns:1fr; }
+    }
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+    .card h3{
+      margin:0;
+      padding:12px 14px;
+      border-bottom:1px solid var(--border);
+      font-size:14px;
+      letter-spacing:.2px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .card .body{
+      padding:14px;
+    }
+    .muted{color:var(--muted)}
+    .row{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .row > *{ flex: 1 1 auto; }
+    .row .tight{ flex:0 0 auto; }
+    input, select, textarea{
+      width:100%;
+      padding:10px 10px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:#0c132a;
+      color:var(--text);
+      outline:none;
+      font-size:14px;
+    }
+    textarea{ min-height: 76px; resize: vertical; }
+    label{
+      display:block;
+      font-size:12px;
+      color:var(--muted);
+      margin:10px 0 6px;
+    }
+    .hint{
+      margin-top:8px;
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.35;
+    }
+    .table-wrap{ overflow:auto; }
+    table{
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0;
+      min-width:860px;
+    }
+    th, td{
+      text-align:left;
+      padding:10px 10px;
+      border-bottom:1px solid rgba(120,145,220,.12);
+      vertical-align:middle;
+      font-size:13px;
+    }
+    th{
+      position:sticky; top:0;
+      background:rgba(12,19,42,.9);
+      backdrop-filter: blur(10px);
+      z-index:1;
+      font-size:12px;
+      color:var(--muted);
+      text-transform:uppercase;
+      letter-spacing:.08em;
+    }
+    tr:hover td{ background:rgba(255,255,255,.02); }
+    .tag{
+      display:inline-flex;
+      align-items:center;
+      padding:5px 9px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.03);
+      font-size:12px;
+      white-space:nowrap;
+      gap:6px;
+    }
+    .tag.good{ background:var(--good); }
+    .tag.warn{ background:var(--warn); }
+    .tag.bad{ background:var(--bad); }
+    .mono{ font-family:var(--mono); }
+    .small{ font-size:12px; }
+    .split{
+      display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap;
+    }
+    .mini{
+      font-size:12px;
+      padding:6px 10px;
+      border-radius:999px;
+      background:rgba(255,255,255,.03);
+      border:1px solid var(--border);
+      color:var(--muted);
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+    }
+    .toast{
+      position:fixed;
+      right:14px;
+      bottom:14px;
+      width:min(420px, calc(100vw - 28px));
+      background:rgba(12,19,42,.92);
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:12px 12px;
+      box-shadow:var(--shadow);
+      display:none;
+      z-index:200;
+    }
+    .toast strong{ display:block; margin-bottom:4px; }
+    .toast .muted{ font-size:12px; }
+    .divider{
+      height:1px; background:rgba(120,145,220,.14); margin:12px 0;
+    }
+    .plate-grid{
+      display:grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap:10px;
+    }
+    @media (max-width: 980px){
+      .plate-grid{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    @media (max-width: 520px){
+      .plate-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    .plate{
+      border:1px solid var(--border);
+      border-radius:14px;
+      background:rgba(255,255,255,.03);
+      padding:10px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      min-height:108px;
+    }
+    .plate .top{
+      display:flex; justify-content:space-between; align-items:center; gap:10px;
+    }
+    .plate .door{
+      font-weight:900;
+      font-size:14px;
+    }
+    .plate .note{
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.25;
+      min-height: 30px;
+      word-break:break-word;
+    }
+    .plate select, .plate input{
+      padding:8px 10px;
+      border-radius:12px;
+    }
+    .checkline{
+      display:flex; align-items:center; gap:10px;
+      padding:10px;
+      border:1px solid rgba(120,145,220,.16);
+      border-radius:12px;
+      background:rgba(255,255,255,.02);
+    }
+    .checkline input[type="checkbox"]{ width:18px; height:18px; }
+    .right{
+      text-align:right;
+    }
+    .danger{
+      background:rgba(239,68,68,.18);
+    }
+    .info{
+      background:rgba(56,189,248,.12);
+    }
+  </style>
 </head>
-
 <body>
-<div class="wrap">
   <div class="topbar">
-    <div class="brand">
-      <h1>Wesbell Logistics</h1>
-      <div class="sub" id="modeLabel">Trailer Status Board</div>
-    </div>
-
-    <div class="kpis">
-      <span class="kpi">Total <strong id="kTotal">0</strong></span>
-      <span class="kpi">Incoming <strong id="kIncoming">0</strong></span>
-      <span class="kpi">Loading <strong id="kLoading">0</strong></span>
-      <span class="kpi">Dock Ready <strong id="kDockReady">0</strong></span>
-      <span class="kpi">Ready <strong id="kReady">0</strong></span>
-      <span class="kpi">Departed <strong id="kDeparted">0</strong></span>
-      <span class="badge" id="liveBadge">● Live</span>
-    </div>
-  </div>
-
-  <div class="card">
-
-    <!-- Dispatcher controls only -->
-    <div class="controls" id="controls">
-      <input id="trailer" placeholder="Trailer #" />
-      <input id="door" placeholder="Door (18-42)" />
-      <select id="direction">
-        <option>Inbound</option>
-        <option>Outbound</option>
-        <option>Cross Dock</option>
-      </select>
-      <select id="status">
-        <option>Incoming</option>
-        <option>Loading</option>
-        <option>Dock Ready</option>
-        <option>Ready</option>
-      </select>
-      <input id="note" placeholder="Quick note (optional)" style="min-width:220px;flex:1" />
-      <button class="primary" id="addBtn">Add / Update</button>
-      <button class="danger" id="clearBtn">Clear All</button>
-
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-left:auto;align-items:center" id="links"></div>
-    </div>
-
-    <table>
-      <thead>
-        <tr>
-          <th>Trailer</th>
-          <th>Door</th>
-          <th>Direction</th>
-          <th>Status</th>
-          <th>Note</th>
-          <th id="actionHeader">Actions</th>
-        </tr>
-      </thead>
-      <tbody id="tbody"></tbody>
-    </table>
-
-    <!-- Geotab (dispatcher + dock) -->
-    <div class="geoWrap" id="geoWrap">
-      <div class="geoHead">
-        <div class="geoTitle">Geotab Lite – Last GPS</div>
-        <div class="geoStatus" id="geoStatus">Loading…</div>
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="mono">WESBELL</span>
+        <span class="pill"><span class="dot" id="wsDot"></span><span id="wsText">Connecting…</span></span>
+        <span class="pill">Role: <strong id="roleText">…</strong></span>
+        <span class="pill">v<span id="verText">…</span></span>
       </div>
-      <div id="map"></div>
-      <div class="geoList" id="geoList"></div>
+      <div class="actions">
+        <button class="secondary" id="btnRefresh">Refresh</button>
+        <button class="secondary" id="btnLogout" style="display:none;">Logout</button>
+        <a class="btn ghost" href="/driver" id="driverLink">Driver</a>
+        <a class="btn ghost" href="/" id="dispLink">Dispatcher</a>
+        <a class="btn ghost" href="/dock" id="dockLink">Dock</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="grid-2">
+      <!-- LEFT: Trailer Board -->
+      <div class="card">
+        <h3>
+          <span>Trailer Board</span>
+          <span class="mini" id="countsPill">0 trailers</span>
+        </h3>
+        <div class="body">
+          <div class="row">
+            <div>
+              <label>Search (Trailer / Door / Note)</label>
+              <input id="search" placeholder="e.g. 5312 or door 21 or 'paperwork'">
+            </div>
+            <div>
+              <label>Direction Filter</label>
+              <select id="filterDir">
+                <option value="">All</option>
+                <option>Inbound</option>
+                <option>Outbound</option>
+                <option>Cross Dock</option>
+              </select>
+            </div>
+            <div>
+              <label>Status Filter</label>
+              <select id="filterStatus">
+                <option value="">All</option>
+                <option>Incoming</option>
+                <option>Dropped</option>
+                <option>Loading</option>
+                <option>Dock Ready</option>
+                <option>Ready</option>
+                <option>Departed</option>
+              </select>
+            </div>
+            <div class="tight">
+              <label>&nbsp;</label>
+              <button id="btnClearFilters" class="secondary">Clear</button>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:120px;">Trailer</th>
+                  <th style="width:110px;">Direction</th>
+                  <th style="width:140px;">Status</th>
+                  <th style="width:80px;">Door</th>
+                  <th style="width:110px;">Drop Type</th>
+                  <th>Note</th>
+                  <th style="width:160px;">Updated</th>
+                  <th style="width:220px;" id="actionsColHead">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="tbody">
+                <tr><td colspan="8" class="muted">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="hint">
+            Live updates are instant via WebSocket. Dispatcher can add/edit/delete/clear. Dock can only set status
+            (Loading / Dock Ready) for existing trailers. Driver can drop + safety confirm.
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Role Panels -->
+      <div class="card">
+        <h3><span id="panelTitle">Controls</span><span class="mini" id="panelSub">—</span></h3>
+        <div class="body" id="panelBody">
+          <!-- injected -->
+        </div>
+      </div>
     </div>
 
-    <div class="footer" id="footerText"></div>
+    <!-- Dock Plates -->
+    <div class="card">
+      <h3>
+        <span>Dock Plates (18–42)</span>
+        <span class="mini">Dispatcher + Dock can edit</span>
+      </h3>
+      <div class="body">
+        <div class="plate-grid" id="platesGrid"></div>
+        <div class="hint">Set plate status: <strong>OK</strong> / <strong>Service</strong> / <strong>Unknown</strong>. Notes are short and visible to all roles.</div>
+      </div>
+    </div>
+
+    <!-- Confirmations -->
+    <div class="card">
+      <h3>
+        <span>Driver Safety Confirmations (latest 200)</span>
+        <span class="mini" id="confCount">0</span>
+      </h3>
+      <div class="body">
+        <div class="table-wrap">
+          <table style="min-width:760px;">
+            <thead>
+              <tr>
+                <th style="width:200px;">Time</th>
+                <th style="width:120px;">Trailer</th>
+                <th style="width:90px;">Door</th>
+                <th>IP / UserAgent</th>
+              </tr>
+            </thead>
+            <tbody id="confBody">
+              <tr><td colspan="4" class="muted">No confirmations yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Audit Log (dispatcher only) -->
+    <div class="card" id="auditCard" style="display:none;">
+      <h3>
+        <span>Audit Log (latest 250)</span>
+        <span class="mini">Dispatcher only</span>
+      </h3>
+      <div class="body">
+        <div class="row">
+          <div class="tight">
+            <button id="btnLoadAudit" class="secondary">Load Audit</button>
+          </div>
+          <div class="muted small" id="auditHint">Shows changes made by dispatcher/dock/driver.</div>
+        </div>
+        <div class="divider"></div>
+        <div class="table-wrap">
+          <table style="min-width:980px;">
+            <thead>
+              <tr>
+                <th style="width:200px;">Time</th>
+                <th style="width:110px;">Actor</th>
+                <th style="width:170px;">Action</th>
+                <th style="width:120px;">Entity</th>
+                <th style="width:120px;">ID</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody id="auditBody">
+              <tr><td colspan="6" class="muted">Click “Load Audit”.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
-</div>
 
-<div class="toast" id="toast"></div>
-
-<!-- Dock plates bottom-right -->
-<div class="platesBar" id="platesBar" title="Click plate to change status (Dispatcher + Dock)">
-  <div class="platesTitle">Dock Plates (18–42)</div>
-  <div id="platesWrap" style="display:flex;gap:6px;align-items:center;overflow:auto"></div>
-  <div class="platesHint" id="platesHint"></div>
-</div>
+  <div class="toast" id="toast">
+    <strong id="toastTitle">Notification</strong>
+    <div class="muted" id="toastBody"></div>
+  </div>
 
 <script>
 (() => {
-  const APP_VERSION = "2.2.0";
+  // ---------- State ----------
+  let ROLE = null; // dispatcher | dock | driver | null
+  let VERSION = "";
+  let trailers = {};      // from /api/state or websocket
+  let dockPlates = {};    // from /api/dockplates or websocket
+  let confirmations = []; // from websocket
 
-  const pathLower = location.pathname.toLowerCase();
-  const isDriver = pathLower.startsWith("/driver");
-  const isDock = pathLower.startsWith("/dock");
-  const isDispatcher = !isDriver && !isDock;
+  // ---------- Elements ----------
+  const el = (id) => document.getElementById(id);
+  const tbody = el("tbody");
+  const platesGrid = el("platesGrid");
+  const confBody = el("confBody");
+  const confCount = el("confCount");
+  const roleText = el("roleText");
+  const verText = el("verText");
+  const wsDot = el("wsDot");
+  const wsText = el("wsText");
+  const countsPill = el("countsPill");
+  const panelTitle = el("panelTitle");
+  const panelSub = el("panelSub");
+  const panelBody = el("panelBody");
+  const btnLogout = el("btnLogout");
+  const btnRefresh = el("btnRefresh");
+  const auditCard = el("auditCard");
+  const btnLoadAudit = el("btnLoadAudit");
+  const auditBody = el("auditBody");
 
-  const modeLabel = document.getElementById("modeLabel");
-  const controls = document.getElementById("controls");
-  const actionHeader = document.getElementById("actionHeader");
-  const tbody = document.getElementById("tbody");
-  const toast = document.getElementById("toast");
-  const footerText = document.getElementById("footerText");
-  const links = document.getElementById("links");
+  const search = el("search");
+  const filterDir = el("filterDir");
+  const filterStatus = el("filterStatus");
+  const btnClearFilters = el("btnClearFilters");
 
-  const kTotal = document.getElementById("kTotal");
-  const kIncoming = document.getElementById("kIncoming");
-  const kLoading = document.getElementById("kLoading");
-  const kDockReady = document.getElementById("kDockReady");
-  const kReady = document.getElementById("kReady");
-  const kDeparted = document.getElementById("kDeparted");
+  // ---------- Helpers ----------
+  const fmtTime = (ms) => {
+    if (!ms) return "";
+    try {
+      return new Date(ms).toLocaleString(undefined, {
+        year:"numeric", month:"short", day:"2-digit",
+        hour:"2-digit", minute:"2-digit", second:"2-digit"
+      });
+    } catch { return String(ms); }
+  };
 
-  const trailerInp = document.getElementById("trailer");
-  const doorInp = document.getElementById("door");
-  const directionSel = document.getElementById("direction");
-  const statusSel = document.getElementById("status");
-  const noteInp = document.getElementById("note");
-  const addBtn = document.getElementById("addBtn");
-  const clearBtn = document.getElementById("clearBtn");
+  const escapeHtml = (s) => String(s ?? "")
+    .replaceAll("&","&amp;").replaceAll("<","&lt;")
+    .replaceAll(">","&gt;").replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
 
-  const platesWrap = document.getElementById("platesWrap");
-  const platesHint = document.getElementById("platesHint");
-
-  const geoWrap = document.getElementById("geoWrap");
-  const geoStatus = document.getElementById("geoStatus");
-  const geoList = document.getElementById("geoList");
-
-  let state = {};
-  let dockPlates = {};
-  let ackMap = JSON.parse(localStorage.getItem("driver_ack") || "{}");
-
-  // show mode
-  if (isDriver){
-    modeLabel.textContent = "Driver Mode";
-    controls.style.display = "none";
-    actionHeader.textContent = "Move";
-  } else if (isDock){
-    modeLabel.textContent = "Dock Mode";
-    controls.style.display = "none";
-    actionHeader.textContent = "Dock Actions";
-    geoWrap.style.display = "block";
-  } else {
-    modeLabel.textContent = "Dispatcher Mode";
-    geoWrap.style.display = "block";
-    links.innerHTML = `
-      <span class="badge">Dock: <a style="color:#b7c5ff" href="/dock">/dock</a></span>
-      <span class="badge">Driver: <a style="color:#b7c5ff" href="/driver">/driver</a></span>
-      <button class="ghost" id="logoutBtn">Logout</button>
-    `;
-    document.getElementById("logoutBtn").onclick = async () => {
-      await fetch("/api/logout", { method:"POST" });
-      location.href = "/login";
-    };
+  function statusTag(status){
+    const s = String(status || "");
+    const good = ["Ready","Departed","Dock Ready"];
+    const warn = ["Incoming","Loading","Dropped"];
+    let cls = "";
+    if (good.includes(s)) cls = "good";
+    else if (warn.includes(s)) cls = "warn";
+    else cls = "";
+    return `<span class="tag ${cls}">${escapeHtml(s || "—")}</span>`;
   }
 
-  // footer
-  const year = new Date().getFullYear();
-  footerText.textContent = `© ${year} Christopher W Dhanraj • Version ${APP_VERSION}`;
-
-  function toastMsg(msg){
-    toast.textContent = msg;
-    toast.classList.add("show");
-    setTimeout(()=> toast.classList.remove("show"), 2600);
+  function plateTag(status){
+    const s = String(status || "Unknown");
+    let cls = "";
+    if (s === "OK") cls = "good";
+    else if (s === "Service") cls = "bad";
+    else cls = "";
+    return `<span class="tag ${cls}">${escapeHtml(s)}</span>`;
   }
 
-  function statusClass(s){
-    if (s === "Ready") return "good";
-    if (s === "Dock Ready") return "warn";
-    if (s === "Loading") return "warn";
-    if (s === "Incoming") return "bad";
-    if (s === "Departed") return "cool";
-    return "cool";
+  async function apiJson(url, opts){
+    const res = await fetch(url, opts);
+    if (!res.ok) {
+      const t = await res.text().catch(()=> "");
+      throw new Error(t || ("HTTP " + res.status));
+    }
+    return res.json();
   }
 
-  function updateKPIs(){
-    const c = { Incoming:0, Loading:0, "Dock Ready":0, Ready:0, Departed:0 };
-    Object.values(state).forEach(v => { if (c[v.status] !== undefined) c[v.status]++; });
-    kTotal.textContent = String(Object.keys(state).length);
-    kIncoming.textContent = String(c.Incoming);
-    kLoading.textContent = String(c.Loading);
-    kDockReady.textContent = String(c["Dock Ready"]);
-    kReady.textContent = String(c.Ready);
-    kDeparted.textContent = String(c.Departed);
+  function toast(title, body){
+    const t = el("toast");
+    el("toastTitle").textContent = title;
+    el("toastBody").textContent = body;
+    t.style.display = "block";
+    clearTimeout(toast._tm);
+    toast._tm = setTimeout(() => { t.style.display = "none"; }, 4500);
   }
 
-  // normalize door
-  function normDoor(v){
-    const raw = String(v||"").trim();
-    if (!raw) return "";
-    const m = raw.match(/(\d{1,3})/);
-    return m ? m[1] : raw;
-  }
+  // ---------- Rendering ----------
+  function renderBoard(){
+    const q = (search.value || "").trim().toLowerCase();
+    const dirF = (filterDir.value || "").trim();
+    const stF = (filterStatus.value || "").trim();
 
-  async function loadState(){
-    const res = await fetch("/api/state");
-    state = await res.json();
-    render();
-  }
+    const rows = Object.entries(trailers).map(([trailer, r]) => ({
+      trailer,
+      ...r
+    }));
 
-  async function updateTrailer(trailer, payload){
-    // NOTE: server checks permissions by cookie/role
-    const body = Object.assign({ trailer }, payload);
-    const res = await fetch("/api/upsert", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify(body)
+    // newest first
+    rows.sort((a,b) => (b.updatedAt||0) - (a.updatedAt||0));
+
+    const filtered = rows.filter(r => {
+      if (dirF && r.direction !== dirF) return false;
+      if (stF && r.status !== stF) return false;
+      if (q) {
+        const hay = `${r.trailer} ${r.door||""} ${r.note||""} ${r.direction||""} ${r.status||""} ${r.dropType||""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
     });
-    if (!res.ok){
-      const txt = await res.text();
-      toastMsg("Update failed: " + txt);
-      return false;
-    }
-    await loadState();
-    return true;
-  }
 
-  async function deleteTrailer(trailer){
-    const res = await fetch("/api/delete", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ trailer })
-    });
-    if (!res.ok){
-      toastMsg("Delete failed: " + (await res.text()));
-      return;
-    }
-    toastMsg("Deleted " + trailer);
-    await loadState();
-  }
+    countsPill.textContent = `${filtered.length} trailer${filtered.length===1?"":"s"}`;
 
-  async function clearAll(){
-    const ok = confirm("Clear ALL trailers for everyone?");
-    if (!ok) return;
-    const res = await fetch("/api/clear", { method:"POST" });
-    if (!res.ok){
-      toastMsg("Clear failed: " + (await res.text()));
-      return;
-    }
-    toastMsg("Cleared all");
-    await loadState();
-  }
-
-  async function confirmMove(trailer, v){
-    const ok1 = confirm("STEP 1/2: Confirm the LOAD is SECURED.");
-    if (!ok1) return;
-
-    const ok2 = confirm("STEP 2/2: Confirm the DOCK PLATE is UP.");
-    if (!ok2) return;
-
-    const res = await fetch("/api/confirm-safety", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({
-        trailer,
-        door: v.door || "",
-        loadSecured: true,
-        dockPlateUp: true
-      })
-    });
-    if (!res.ok){
-      toastMsg("Confirm failed: " + (await res.text()));
+    if (!filtered.length) {
+      tbody.innerHTML = `<tr><td colspan="8" class="muted">No trailers match your filters.</td></tr>`;
       return;
     }
 
-    ackMap[trailer] = v.updatedAt;
-    localStorage.setItem("driver_ack", JSON.stringify(ackMap));
+    const canEdit = (ROLE === "dispatcher");
+    const canDockSet = (ROLE === "dock");
+    const showActions = (ROLE === "dispatcher" || ROLE === "dock");
+    el("actionsColHead").textContent = showActions ? "Actions" : "";
 
-    // Mark departed (dispatcher-only on server? your server allows dispatcher only, so driver won't call /api/upsert)
-    // In your server, driver role is public but cannot upsert. So we just show "Confirmed" and dispatcher can mark departed if desired.
-    toastMsg("Safety confirmed ✅ (dispatch can mark Departed)");
-  }
+    tbody.innerHTML = filtered.map(r => {
+      const updated = fmtTime(r.updatedAt);
+      const door = r.door ? `<span class="mono">${escapeHtml(r.door)}</span>` : `<span class="muted">—</span>`;
+      const dropType = r.dropType ? `<span class="tag">${escapeHtml(r.dropType)}</span>` : `<span class="muted">—</span>`;
+      const note = r.note ? escapeHtml(r.note) : `<span class="muted">—</span>`;
 
-  function render(){
-    tbody.innerHTML = "";
+      let actions = "";
+      if (canEdit) {
+        actions = `
+          <button class="secondary" data-act="edit" data-trailer="${escapeHtml(r.trailer)}">Edit</button>
+          <button class="secondary danger" data-act="delete" data-trailer="${escapeHtml(r.trailer)}">Delete</button>
+        `;
+      } else if (canDockSet) {
+        actions = `
+          <button class="secondary" data-act="dockSet" data-to="Loading" data-trailer="${escapeHtml(r.trailer)}">Loading</button>
+          <button class="secondary" data-act="dockSet" data-to="Dock Ready" data-trailer="${escapeHtml(r.trailer)}">Dock Ready</button>
+        `;
+      } else {
+        actions = `<span class="muted">—</span>`;
+      }
 
-    const entries = Object.entries(state);
-
-    // Sort: Ready first, then Dock Ready, then Loading, Incoming, Departed, then trailer #
-    const rank = (s) => s==="Ready" ? 0 : (s==="Dock Ready" ? 1 : (s==="Loading" ? 2 : (s==="Incoming" ? 3 : 4)));
-    entries.sort((a,b) => (rank(a[1].status)-rank(b[1].status)) || String(a[0]).localeCompare(String(b[0])));
-
-    if (!entries.length){
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td colspan="6" style="color:var(--muted);padding:14px;">No trailers.</td>`;
-      tbody.appendChild(tr);
-      updateKPIs();
-      return;
-    }
-
-    for (const [t, v] of entries){
-      const door = v.door || "-";
-      const dir = v.direction || "Inbound";
-      const st = v.status || "Incoming";
-      const note = v.note || "";
-
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td><b>${t}</b></td>
-        <td>${door}</td>
-        <td>${dir}</td>
-        <td><span class="tag ${statusClass(st)}">${st}</span></td>
-        <td>${note ? note : "-"}</td>
+      return `
+        <tr>
+          <td class="mono"><strong>${escapeHtml(r.trailer)}</strong></td>
+          <td>${escapeHtml(r.direction || "—")}</td>
+          <td>${statusTag(r.status)}</td>
+          <td>${door}</td>
+          <td>${dropType}</td>
+          <td>${note}</td>
+          <td class="small muted">${escapeHtml(updated)}</td>
+          <td>${actions}</td>
+        </tr>
       `;
-
-      const td = document.createElement("td");
-
-      if (isDispatcher){
-        const sel = document.createElement("select");
-        ["Incoming","Loading","Dock Ready","Ready","Departed"].forEach(s=>{
-          const o = document.createElement("option");
-          o.value=s; o.textContent=s;
-          sel.appendChild(o);
-        });
-        sel.value = st;
-        sel.onchange = async () => {
-          // send direction/door/note always (prevents server rejecting)
-          await updateTrailer(t, {
-            direction: dir,
-            door: door === "-" ? "" : normDoor(door),
-            note,
-            status: sel.value
-          });
-        };
-        td.appendChild(sel);
-
-        const del = document.createElement("button");
-        del.className = "danger";
-        del.style.marginLeft = "8px";
-        del.textContent = "Delete";
-        del.onclick = () => deleteTrailer(t);
-        td.appendChild(del);
-      }
-
-      else if (isDock){
-        const btnLoad = document.createElement("button");
-        btnLoad.className = "primary";
-        btnLoad.textContent = "Loading";
-        btnLoad.onclick = async () => updateTrailer(t, { status:"Loading" });
-
-        const btnDR = document.createElement("button");
-        btnDR.className = "primary";
-        btnDR.style.marginLeft = "8px";
-        btnDR.textContent = "Dock Ready";
-        btnDR.onclick = async () => updateTrailer(t, { status:"Dock Ready" });
-
-        td.appendChild(btnLoad);
-        td.appendChild(btnDR);
-      }
-
-      else if (isDriver){
-        if (st === "Ready"){
-          const btn = document.createElement("button");
-          const isNew = ackMap[t] !== v.updatedAt;
-          btn.className = "readyBtn" + (isNew ? " flash" : "");
-          btn.textContent = isNew ? "NEW READY • MOVE" : "READY • MOVE";
-          btn.onclick = () => confirmMove(t, v);
-          td.appendChild(btn);
-        } else {
-          td.textContent = "-";
-        }
-      }
-
-      tr.appendChild(td);
-      tbody.appendChild(tr);
-    }
-
-    updateKPIs();
+    }).join("");
   }
 
-  // Dispatcher: add/update + clear
-  if (isDispatcher){
-    addBtn.onclick = async () => {
-      const t = trailerInp.value.trim();
-      if (!t) return;
+  function renderPlates(){
+    // Always show; only allow edits if dispatcher/dock
+    const canEdit = (ROLE === "dispatcher" || ROLE === "dock");
+    const doors = [];
+    for (let d=18; d<=42; d++) doors.push(String(d));
 
-      const door = normDoor(doorInp.value.trim());
-      const direction = directionSel.value;
-      const status = statusSel.value;
-      const note = noteInp.value.trim();
-
-      await updateTrailer(t, { door, direction, status, note });
-
-      trailerInp.value="";
-      doorInp.value="";
-      noteInp.value="";
-    };
-
-    clearBtn.onclick = clearAll;
+    platesGrid.innerHTML = doors.map(door => {
+      const p = dockPlates[door] || { status:"Unknown", note:"", updatedAt:0 };
+      const note = p.note || "";
+      const updated = p.updatedAt ? fmtTime(p.updatedAt) : "";
+      return `
+        <div class="plate">
+          <div class="top">
+            <div class="door">Door <span class="mono">${escapeHtml(door)}</span></div>
+            ${plateTag(p.status)}
+          </div>
+          <div class="note">${note ? escapeHtml(note) : `<span class="muted">No note</span>`}</div>
+          <div class="muted small">${updated ? "Updated: " + escapeHtml(updated) : ""}</div>
+          <div class="row">
+            <div>
+              <select ${canEdit ? "" : "disabled"} data-plate-status="${escapeHtml(door)}">
+                <option ${p.status==="OK"?"selected":""}>OK</option>
+                <option ${p.status==="Service"?"selected":""}>Service</option>
+                <option ${p.status==="Unknown"?"selected":""}>Unknown</option>
+              </select>
+            </div>
+            <div>
+              <input ${canEdit ? "" : "disabled"} data-plate-note="${escapeHtml(door)}" placeholder="Note" value="${escapeHtml(note)}" />
+            </div>
+          </div>
+          <button ${canEdit ? "" : "disabled"} class="secondary" data-plate-save="${escapeHtml(door)}">Save</button>
+        </div>
+      `;
+    }).join("");
   }
 
-  /* =========================
-     Dock plates bar
-  ========================= */
-  function plateClass(st){
-    if (st === "OK") return "platePill plateOK";
-    if (st === "Service") return "platePill plateService";
-    return "platePill plateUnknown";
-  }
-
-  async function loadDockPlates(){
-    const res = await fetch("/api/dockplates");
-    if (!res.ok) return;
-    dockPlates = await res.json();
-    renderPlatesBar();
-  }
-
-  async function setPlate(door, nextStatus){
-    const note = prompt(`Plate ${door} note (optional):`, (dockPlates[door]?.note || ""));
-    const res = await fetch("/api/dockplates/set", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ door, status: nextStatus, note: (note||"").trim() })
-    });
-    if (!res.ok){
-      toastMsg("Plate update failed: " + (await res.text()));
+  function renderConfirmations(){
+    confCount.textContent = `${confirmations.length}`;
+    if (!confirmations.length) {
+      confBody.innerHTML = `<tr><td colspan="4" class="muted">No confirmations yet.</td></tr>`;
       return;
     }
-    toastMsg(`Plate ${door} → ${nextStatus}`);
-    await loadDockPlates();
+    confBody.innerHTML = confirmations.map(c => {
+      const t = fmtTime(c.at);
+      const trailer = c.trailer || "";
+      const door = c.door || "";
+      const meta = `${c.ip || ""} ${c.userAgent || ""}`.trim();
+      return `
+        <tr>
+          <td class="muted small">${escapeHtml(t)}</td>
+          <td class="mono"><strong>${escapeHtml(trailer || "—")}</strong></td>
+          <td class="mono">${escapeHtml(door || "—")}</td>
+          <td class="muted small">${escapeHtml(meta || "—")}</td>
+        </tr>
+      `;
+    }).join("");
   }
 
-  function renderPlatesBar(){
-    platesWrap.innerHTML = "";
-    let ok=0, svc=0, unk=0;
+  function renderRolePanel(){
+    // Panel switches by ROLE and by path
+    const path = location.pathname.toLowerCase();
 
-    for (let d=18; d<=42; d++){
-      const key = String(d);
-      const st = dockPlates[key]?.status || "Unknown";
-      if (st === "OK") ok++; else if (st === "Service") svc++; else unk++;
-
-      const pill = document.createElement("div");
-      pill.className = plateClass(st);
-      pill.textContent = key;
-
-      pill.onclick = () => {
-        // Toggle: OK -> Service -> Unknown -> OK
-        const cur = dockPlates[key]?.status || "Unknown";
-        const next = cur === "OK" ? "Service" : (cur === "Service" ? "Unknown" : "OK");
-        setPlate(key, next);
-      };
-
-      platesWrap.appendChild(pill);
+    if (ROLE === "dispatcher") {
+      panelTitle.textContent = "Dispatcher Controls";
+      panelSub.textContent = "Add / Update trailers • Clear board • Audit";
+      panelBody.innerHTML = dispatcherPanelHtml();
+      auditCard.style.display = "";
+      btnLogout.style.display = "";
+      return;
+    }
+    if (ROLE === "dock") {
+      panelTitle.textContent = "Dock Controls";
+      panelSub.textContent = "Set Loading / Dock Ready • Plates";
+      panelBody.innerHTML = dockPanelHtml();
+      auditCard.style.display = "none";
+      btnLogout.style.display = "";
+      return;
+    }
+    // Driver is public on /driver (no cookie needed)
+    if (path.startsWith("/driver")) {
+      panelTitle.textContent = "Driver View";
+      panelSub.textContent = "Drop trailer • Safety confirm";
+      panelBody.innerHTML = driverPanelHtml();
+      auditCard.style.display = "none";
+      btnLogout.style.display = "none";
+      return;
     }
 
-    platesHint.textContent = `OK ${ok} • Service ${svc} • Unknown ${unk}`;
+    // Not authorized
+    panelTitle.textContent = "Not Logged In";
+    panelSub.textContent = "Go to /login";
+    panelBody.innerHTML = `
+      <div class="hint">
+        You’re not logged in for this page.<br/>
+        <a href="/login">Go to Login</a> • or open <a href="/driver">Driver view</a>.
+      </div>
+    `;
+    auditCard.style.display = "none";
+    btnLogout.style.display = "none";
   }
 
-  /* =========================
-     Geotab Lite Map (Dispatcher + Dock)
-  ========================= */
-  let map, markersLayer, mapReady = false;
+  function dispatcherPanelHtml(){
+    return `
+      <div class="info" style="padding:10px;border-radius:12px;border:1px solid rgba(120,145,220,.18);">
+        <div style="font-weight:900;margin-bottom:4px;">Add / Update Trailer</div>
+        <div class="muted small">Tip: Use “Dropped” + door + drop type when a driver drops, or set “Ready” to trigger notification.</div>
+      </div>
 
-  function initMap(){
-    if (mapReady) return;
-    mapReady = true;
+      <label>Trailer #</label>
+      <input id="d_trailer" placeholder="e.g. 5312" />
 
-    // Default GTA center (adjust if you want)
-    map = L.map("map").setView([43.65, -79.38], 9);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19
-    }).addTo(map);
+      <div class="row">
+        <div>
+          <label>Direction</label>
+          <select id="d_direction">
+            <option>Inbound</option>
+            <option>Outbound</option>
+            <option>Cross Dock</option>
+          </select>
+        </div>
+        <div>
+          <label>Status</label>
+          <select id="d_status">
+            <option>Incoming</option>
+            <option>Dropped</option>
+            <option>Loading</option>
+            <option>Dock Ready</option>
+            <option>Ready</option>
+            <option>Departed</option>
+          </select>
+        </div>
+      </div>
 
-    markersLayer = L.layerGroup().addTo(map);
+      <div class="row">
+        <div>
+          <label>Door (18–42)</label>
+          <input id="d_door" placeholder="e.g. 21" />
+        </div>
+        <div>
+          <label>Drop Type</label>
+          <select id="d_dropType">
+            <option value="">—</option>
+            <option>Empty</option>
+            <option>Loaded</option>
+          </select>
+        </div>
+      </div>
+
+      <label>Note</label>
+      <textarea id="d_note" placeholder="Short note (paperwork, product, carrier, etc.)"></textarea>
+
+      <div class="row" style="margin-top:10px;">
+        <button id="btnSaveTrailer">Save</button>
+        <button class="secondary" id="btnFillFromSelected" disabled>Load Selected</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row">
+        <button class="secondary danger" id="btnClearAll">Clear All Trailers</button>
+      </div>
+
+      <div class="hint">
+        “Clear All” removes all trailers from the board (dispatcher only).
+      </div>
+    `;
   }
 
-  function fmtTime(t){
-    try { return new Date(t).toLocaleString(); } catch { return String(t||""); }
+  function dockPanelHtml(){
+    return `
+      <div class="info" style="padding:10px;border-radius:12px;border:1px solid rgba(120,145,220,.18);">
+        <div style="font-weight:900;margin-bottom:4px;">Dock can only update existing trailers</div>
+        <div class="muted small">Use the buttons in the table: <strong>Loading</strong> / <strong>Dock Ready</strong>.</div>
+      </div>
+      <div class="divider"></div>
+      <div class="hint">
+        You can also update Dock Plates below. Trailer creation/editing is restricted to dispatcher.
+      </div>
+    `;
   }
 
-  async function loadGeotabPositions(){
-    if (!(isDispatcher || isDock)) return;
-    initMap();
+  function driverPanelHtml(){
+    return `
+      <div class="info" style="padding:10px;border-radius:12px;border:1px solid rgba(120,145,220,.18);">
+        <div style="font-weight:900;margin-bottom:4px;">Drop a Trailer</div>
+        <div class="muted small">This sets status to <strong>Dropped</strong> and updates everyone instantly.</div>
+      </div>
+
+      <label>Trailer #</label>
+      <input id="v_trailer" placeholder="e.g. 5312" />
+
+      <div class="row">
+        <div>
+          <label>Door (18–42)</label>
+          <input id="v_door" placeholder="e.g. 21" />
+        </div>
+        <div>
+          <label>Drop Type</label>
+          <select id="v_dropType">
+            <option>Empty</option>
+            <option>Loaded</option>
+          </select>
+        </div>
+      </div>
+
+      <button style="margin-top:10px;" id="btnDriverDrop">Submit Drop</button>
+
+      <div class="divider"></div>
+
+      <div class="info" style="padding:10px;border-radius:12px;border:1px solid rgba(120,145,220,.18);">
+        <div style="font-weight:900;margin-bottom:4px;">Safety Confirmation</div>
+        <div class="muted small">Both boxes must be checked before submitting.</div>
+      </div>
+
+      <label>Trailer # (optional)</label>
+      <input id="c_trailer" placeholder="Optional but recommended" />
+
+      <label>Door (optional)</label>
+      <input id="c_door" placeholder="Optional" />
+
+      <div style="margin-top:10px;">
+        <div class="checkline">
+          <input id="c_loadSecured" type="checkbox" />
+          <div>
+            <div style="font-weight:900;">Load secured</div>
+            <div class="muted small">Straps/locks set, nothing shifting.</div>
+          </div>
+        </div>
+        <div style="height:10px;"></div>
+        <div class="checkline">
+          <input id="c_dockPlateUp" type="checkbox" />
+          <div>
+            <div style="font-weight:900;">Dock plate up</div>
+            <div class="muted small">Plate raised before pulling away.</div>
+          </div>
+        </div>
+      </div>
+
+      <button style="margin-top:10px;" id="btnConfirmSafety">Submit Safety Confirm</button>
+
+      <div class="hint">
+        Safety confirmations are logged with timestamp + IP + user agent.
+      </div>
+    `;
+  }
+
+  // ---------- Actions ----------
+  let selectedTrailer = null;
+
+  async function loadInitial(){
+    // whoami -> role + version
+    try {
+      const who = await apiJson("/api/whoami");
+      ROLE = who.role;
+      VERSION = who.version || "";
+    } catch (e) {
+      // If whoami fails, still allow driver on /driver
+      ROLE = null;
+      VERSION = "";
+    }
+    roleText.textContent = ROLE || (location.pathname.toLowerCase().startsWith("/driver") ? "driver" : "none");
+    verText.textContent = VERSION || "—";
+
+    // state + plates
+    try { trailers = await apiJson("/api/state"); } catch(e){ trailers = {}; }
+    try { dockPlates = await apiJson("/api/dockplates"); } catch(e){ dockPlates = {}; }
+
+    renderRolePanel();
+    renderBoard();
+    renderPlates();
+    renderConfirmations();
+  }
+
+  async function doLogout(){
+    try {
+      await apiJson("/api/logout", { method:"POST", headers:{ "Content-Type":"application/json" } });
+    } catch {}
+    location.href = "/login";
+  }
+
+  async function dispatcherSave(){
+    const trailer = (el("d_trailer")?.value || "").trim();
+    const direction = (el("d_direction")?.value || "").trim();
+    const status = (el("d_status")?.value || "").trim();
+    const door = (el("d_door")?.value || "").trim();
+    const note = (el("d_note")?.value || "").trim();
+    const dropType = (el("d_dropType")?.value || "").trim();
+
+    if (!trailer) return toast("Missing trailer", "Enter a trailer number.");
+
+    try {
+      await apiJson("/api/upsert", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ trailer, direction, status, door, note, dropType })
+      });
+      toast("Saved", `Trailer ${trailer} updated.`);
+      // Optimistic refresh; websocket will also update
+      trailers = await apiJson("/api/state");
+      renderBoard();
+    } catch(e) {
+      toast("Save failed", e.message || String(e));
+    }
+  }
+
+  async function dispatcherDelete(trailer){
+    if (!confirm(`Delete trailer ${trailer}?`)) return;
+    try {
+      await apiJson("/api/delete", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ trailer })
+      });
+      toast("Deleted", `Trailer ${trailer} removed.`);
+    } catch(e){
+      toast("Delete failed", e.message || String(e));
+    }
+  }
+
+  async function dispatcherClearAll(){
+    if (!confirm("Clear ALL trailers? This cannot be undone.")) return;
+    try {
+      await apiJson("/api/clear", { method:"POST", headers:{ "Content-Type":"application/json" } });
+      toast("Cleared", "All trailers removed.");
+    } catch(e){
+      toast("Clear failed", e.message || String(e));
+    }
+  }
+
+  async function dockSetStatus(trailer, toStatus){
+    try{
+      await apiJson("/api/upsert", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ trailer, status: toStatus })
+      });
+      toast("Updated", `${trailer} → ${toStatus}`);
+    } catch(e){
+      toast("Update failed", e.message || String(e));
+    }
+  }
+
+  async function plateSave(door){
+    const statusSel = document.querySelector(`[data-plate-status="${CSS.escape(door)}"]`);
+    const noteInp = document.querySelector(`[data-plate-note="${CSS.escape(door)}"]`);
+    const status = (statusSel?.value || "").trim();
+    const note = (noteInp?.value || "").trim();
 
     try{
-      const res = await fetch("/api/geotab/positions");
-      if (!res.ok) {
-        const txt = await res.text();
-        geoStatus.textContent = "Geotab Lite unavailable";
-        geoList.innerHTML = `<div>${txt}</div>`;
-        markersLayer.clearLayers();
-        return;
-      }
-
-      const data = await res.json();
-      geoStatus.textContent = `Last refresh: ${new Date().toLocaleTimeString()}`;
-
-      markersLayer.clearLayers();
-
-      if (!data.length){
-        geoList.innerHTML = "No GPS positions returned.";
-        return;
-      }
-
-      const bounds = [];
-      const lines = [];
-
-      for (const v of data){
-        const lat = v.latitude;
-        const lng = v.longitude;
-        bounds.push([lat, lng]);
-
-        const popup = `
-          <div style="font-weight:900">${v.name || "Vehicle"}</div>
-          <div>Speed: ${Number.isFinite(v.speed) ? v.speed : "-"} km/h</div>
-          <div>Time: ${fmtTime(v.dateTime)}</div>
-        `;
-
-        L.marker([lat, lng]).addTo(markersLayer).bindPopup(popup);
-
-        lines.push(
-          `<div style="padding:6px 0;border-bottom:1px solid rgba(120,145,220,.12)">
-            <b>${v.name || "-"}</b> • ${Number.isFinite(v.speed) ? v.speed : "-"} km/h • ${fmtTime(v.dateTime)}
-          </div>`
-        );
-      }
-
-      geoList.innerHTML = lines.slice(0, 25).join("") + (lines.length > 25 ? `<div style="padding-top:6px;">+${lines.length-25} more…</div>` : "");
-
-      if (bounds.length) map.fitBounds(bounds, { padding:[30,30] });
-
-    } catch (err){
-      geoStatus.textContent = "Geotab Lite error";
-      geoList.textContent = String(err?.message || err);
-      markersLayer?.clearLayers?.();
+      await apiJson("/api/dockplates/set", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ door, status, note })
+      });
+      toast("Plate saved", `Door ${door} → ${status}`);
+    } catch(e){
+      toast("Plate save failed", e.message || String(e));
     }
   }
 
-  /* =========================
-     Live updates
-  ========================= */
-  // Websocket for instant refresh + Ready notify
-  try{
-    const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${wsProto}//${location.host}`);
+  async function driverDrop(){
+    const trailer = (el("v_trailer")?.value || "").trim();
+    const door = (el("v_door")?.value || "").trim();
+    const dropType = (el("v_dropType")?.value || "").trim();
+
+    if (!trailer) return toast("Missing trailer", "Enter trailer number.");
+    if (!door) return toast("Missing door", "Enter door 18–42.");
+
+    try{
+      await apiJson("/api/driver/drop", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ trailer, door, dropType })
+      });
+      toast("Drop submitted", `${trailer} dropped at door ${door} (${dropType}).`);
+      el("v_trailer").value = "";
+      el("v_door").value = "";
+      el("v_dropType").value = "Empty";
+    } catch(e){
+      toast("Drop failed", e.message || String(e));
+    }
+  }
+
+  async function confirmSafety(){
+    const trailer = (el("c_trailer")?.value || "").trim();
+    const door = (el("c_door")?.value || "").trim();
+    const loadSecured = !!el("c_loadSecured")?.checked;
+    const dockPlateUp = !!el("c_dockPlateUp")?.checked;
+
+    if (!loadSecured || !dockPlateUp) {
+      return toast("Missing confirmations", "Both checkboxes must be checked.");
+    }
+
+    try{
+      await apiJson("/api/confirm-safety", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ trailer, door, loadSecured, dockPlateUp })
+      });
+      toast("Confirmed", "Safety confirmation submitted.");
+      el("c_loadSecured").checked = false;
+      el("c_dockPlateUp").checked = false;
+    } catch(e){
+      toast("Confirm failed", e.message || String(e));
+    }
+  }
+
+  async function loadAudit(){
+    try{
+      const rows = await apiJson("/api/audit");
+      if (!rows.length) {
+        auditBody.innerHTML = `<tr><td colspan="6" class="muted">No audit entries yet.</td></tr>`;
+        return;
+      }
+      auditBody.innerHTML = rows.map(r => `
+        <tr>
+          <td class="muted small">${escapeHtml(fmtTime(r.at))}</td>
+          <td>${escapeHtml(r.actorRole)}</td>
+          <td class="mono">${escapeHtml(r.action)}</td>
+          <td>${escapeHtml(r.entityType)}</td>
+          <td class="mono">${escapeHtml(r.entityId)}</td>
+          <td class="muted small"><pre style="margin:0;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);">${escapeHtml(JSON.stringify(r.details||{}, null, 0))}</pre></td>
+        </tr>
+      `).join("");
+    } catch(e){
+      toast("Audit failed", e.message || String(e));
+    }
+  }
+
+  // ---------- Events ----------
+  document.addEventListener("click", async (ev) => {
+    const t = ev.target;
+
+    if (t?.id === "btnLogout") return doLogout();
+    if (t?.id === "btnRefresh") return loadInitial();
+    if (t?.id === "btnClearFilters") {
+      search.value = ""; filterDir.value = ""; filterStatus.value = "";
+      renderBoard(); return;
+    }
+    if (t?.id === "btnSaveTrailer") return dispatcherSave();
+    if (t?.id === "btnClearAll") return dispatcherClearAll();
+    if (t?.id === "btnDriverDrop") return driverDrop();
+    if (t?.id === "btnConfirmSafety") return confirmSafety();
+    if (t?.id === "btnLoadAudit") return loadAudit();
+
+    const act = t?.getAttribute?.("data-act");
+    if (act === "delete") {
+      const trailer = t.getAttribute("data-trailer");
+      if (trailer) return dispatcherDelete(trailer);
+    }
+    if (act === "edit") {
+      const trailer = t.getAttribute("data-trailer");
+      if (!trailer) return;
+      const r = trailers[trailer];
+      if (!r) return;
+      selectedTrailer = trailer;
+
+      el("d_trailer").value = trailer;
+      el("d_direction").value = r.direction || "Inbound";
+      el("d_status").value = r.status || "Incoming";
+      el("d_door").value = r.door || "";
+      el("d_note").value = r.note || "";
+      el("d_dropType").value = r.dropType || "";
+
+      const btnLoad = el("btnFillFromSelected");
+      if (btnLoad) btnLoad.disabled = false;
+
+      toast("Loaded", `Editing trailer ${trailer}`);
+      return;
+    }
+    if (act === "dockSet") {
+      const trailer = t.getAttribute("data-trailer");
+      const to = t.getAttribute("data-to");
+      if (trailer && to) return dockSetStatus(trailer, to);
+    }
+
+    const plateDoor = t?.getAttribute?.("data-plate-save");
+    if (plateDoor) return plateSave(plateDoor);
+  });
+
+  ["input","change"].forEach(evtName => {
+    search.addEventListener(evtName, renderBoard);
+    filterDir.addEventListener(evtName, renderBoard);
+    filterStatus.addEventListener(evtName, renderBoard);
+  });
+
+  // ---------- WebSocket ----------
+  let ws = null;
+  let wsRetry = 0;
+
+  function wsSetStatus(state){
+    if (state === "ok"){
+      wsDot.className = "dot ok";
+      wsText.textContent = "Live";
+    } else if (state === "bad"){
+      wsDot.className = "dot bad";
+      wsText.textContent = "Offline";
+    } else {
+      wsDot.className = "dot warn";
+      wsText.textContent = "Connecting…";
+    }
+  }
+
+  function connectWs(){
+    wsSetStatus("warn");
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    ws = new WebSocket(`${proto}://${location.host}`);
+
+    ws.onopen = () => {
+      wsRetry = 0;
+      wsSetStatus("ok");
+    };
+
+    ws.onclose = () => {
+      wsSetStatus("bad");
+      const wait = Math.min(8000, 500 + wsRetry * 650);
+      wsRetry++;
+      setTimeout(connectWs, wait);
+    };
+
+    ws.onerror = () => {
+      // let onclose handle retry
+    };
 
     ws.onmessage = (evt) => {
-      try{
-        const msg = JSON.parse(evt.data);
-        if (msg.type === "state"){
-          state = msg.payload || {};
-          render();
+      let msg;
+      try { msg = JSON.parse(evt.data); } catch { return; }
+      const { type, payload } = msg || {};
+      if (type === "state") {
+        trailers = payload || {};
+        renderBoard();
+      } else if (type === "dockplates") {
+        dockPlates = payload || {};
+        renderPlates();
+      } else if (type === "confirmations") {
+        confirmations = Array.isArray(payload) ? payload : [];
+        renderConfirmations();
+      } else if (type === "version") {
+        VERSION = payload?.version || VERSION;
+        verText.textContent = VERSION || "—";
+      } else if (type === "notify") {
+        if (payload?.kind === "ready") {
+          toast("Trailer Ready", `${payload.trailer} is READY${payload.door ? " at door " + payload.door : ""}.`);
         }
-        if (msg.type === "dockplates"){
-          dockPlates = msg.payload || {};
-          renderPlatesBar();
-        }
-        if (msg.type === "notify" && msg.payload?.kind === "ready"){
-          // Driver toast + flash is handled by ackMap check
-          if (isDriver){
-            toastMsg(`Trailer ${msg.payload.trailer} READY at Door ${msg.payload.door || "-"}`);
-          }
-        }
-      } catch {}
+      }
     };
-  } catch {}
+  }
 
-  // Initial load + refresh every 5s
-  loadState();
-  loadDockPlates();
-  loadGeotabPositions();
+  // ---------- Boot ----------
+  loadInitial().then(connectWs);
 
-  setInterval(loadState, 5000);
-  setInterval(loadDockPlates, 5000);
-  setInterval(loadGeotabPositions, 30000);
 })();
 </script>
 </body>

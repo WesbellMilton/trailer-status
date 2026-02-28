@@ -1,352 +1,671 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Wesbell Trailer Board</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Wesbell Dispatch</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;700;900&display=swap" rel="stylesheet"/>
   <style>
     :root{
-      --bg:#0b1220;--card:rgba(255,255,255,.04);--border:rgba(120,145,220,.18);
-      --muted:#a7b2d3;--text:#eaf0ff;
-      --good:rgba(34,197,94,.22);--warn:rgba(245,158,11,.22);--bad:rgba(239,68,68,.22);
-      --shadow:0 12px 40px rgba(0,0,0,.35);--radius:14px;
-      --mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
-      --sans:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      --bg:#080d18;
+      --bg2:#0d1525;
+      --bg3:#111c30;
+      --card:#0f1a2e;
+      --border:#1e2d4a;
+      --border2:#263756;
+      --text:#e8f0ff;
+      --muted:#5a7099;
+      --muted2:#3d5175;
+      --mono:'IBM Plex Mono',monospace;
+      --sans:'IBM Plex Sans',sans-serif;
+
+      --c-loading:#f59e0b;
+      --c-ready:#22c55e;
+      --c-dropped:#38bdf8;
+      --c-incoming:#a78bfa;
+      --c-dockready:#34d399;
+      --c-departed:#475569;
+      --c-bad:#ef4444;
+
+      --glow-loading:0 0 12px rgba(245,158,11,.35);
+      --glow-ready:0 0 12px rgba(34,197,94,.35);
+      --glow-dropped:0 0 12px rgba(56,189,248,.25);
+      --glow-dockready:0 0 12px rgba(52,211,153,.3);
+
+      --shadow:0 8px 32px rgba(0,0,0,.5);
+      --radius:10px;
     }
-    *{box-sizing:border-box}
-    body{margin:0;background:radial-gradient(1200px 800px at 20% 10%,rgba(99,102,241,.14),transparent 60%),radial-gradient(900px 700px at 90% 30%,rgba(56,189,248,.10),transparent 60%),var(--bg);color:var(--text);font-family:var(--sans);}
-    a{color:#fff;text-decoration:none}
-    .topbar{position:sticky;top:0;z-index:50;background:rgba(11,18,32,.88);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);}
-    .topbar-inner{max-width:1400px;margin:0 auto;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
-    .brand{display:flex;align-items:center;gap:10px;font-weight:900;letter-spacing:.2px;flex-wrap:wrap;}
-    .mono{font-family:var(--mono)}
-    .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--border);border-radius:999px;background:rgba(255,255,255,.03);color:var(--muted);font-size:12px;white-space:nowrap;}
-    .dot{width:8px;height:8px;border-radius:999px;background:#999;}
-    .dot.ok{background:#22c55e;}.dot.bad{background:#ef4444;}.dot.warn{background:#f59e0b;}
-    .actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
-    .actions a,.actions button{border:none;color:#fff;padding:8px 12px;border-radius:10px;font-weight:800;cursor:pointer;font-size:14px;transition:filter .15s ease;}
-    .actions a:hover,.actions button:hover{filter:brightness(1.08);}
-    .btn-refresh{background:#2563eb;}.btn-dispatcher{background:#7c3aed;}.btn-dock{background:#f97316;}
-    .btn-driver{background:#16a34a;}.btn-supervisor{background:#0f766e;}.btn-logout{background:#dc2626;}.btn-audit{background:#0e7490;}
-    .wrap{max-width:1400px;margin:0 auto;padding:14px;display:grid;grid-template-columns:1fr;gap:14px;}
-    .grid-2{display:grid;grid-template-columns:1fr 320px;gap:14px;align-items:start;}
-    @media(max-width:1100px){.grid-2{grid-template-columns:1fr;}}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:visible;}
-    .card h3{margin:0;padding:12px 14px;border-bottom:1px solid var(--border);font-size:14px;letter-spacing:.2px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
-    .card .body{padding:14px;}
-    .muted{color:var(--muted)}.small{font-size:12px}
-    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
-    .row>*{flex:1 1 auto;}.row .tight{flex:0 0 auto;}
-    input,select,textarea{width:100%;padding:10px;border-radius:12px;border:1px solid var(--border);background:#0c132a;color:var(--text);outline:none;font-size:14px;}
-    textarea{min-height:76px;resize:vertical;}
-    label{display:block;font-size:12px;color:var(--muted);margin:10px 0 6px;}
-    button.secondary{background:rgba(255,255,255,.03);border:1px solid var(--border);padding:10px 12px;border-radius:12px;color:#fff;font-weight:900;cursor:pointer;}
-    button.danger{background:rgba(239,68,68,.18);border:1px solid rgba(239,68,68,.35);}
-    .divider{height:1px;background:rgba(120,145,220,.14);margin:12px 0;}
-    .board-table-wrap{width:100%;overflow:hidden;}
-    .brow{display:grid;grid-template-columns:9% 9% 12% 5% 7% 1fr 12% 16%;width:100%;min-width:0;align-items:center;}
-    .brow>*{padding:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-size:12px;}
-    .brow.bhead>*{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;padding-bottom:7px;border-bottom:1px solid rgba(120,145,220,.2);}
-    .brow.bdata{border-bottom:1px solid rgba(120,145,220,.08);min-height:34px;}
-    .brow.bdata:hover{background:rgba(255,255,255,.025);}
-    .brow.bempty>*{padding:12px 6px;color:var(--muted);}
-    .brow .bacts{display:flex;gap:4px;align-items:center;}
-    table{width:100%;border-collapse:collapse;table-layout:auto;}
-    th,td{text-align:left;padding:7px 8px;border-bottom:1px solid rgba(120,145,220,.12);vertical-align:middle;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-    th{background:rgba(12,19,42,.92);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
-    tr:hover td{background:rgba(255,255,255,.02);}
-    .table-wrap-scroll{overflow-x:auto;}.table-wrap-scroll table{min-width:700px;}
-    .mini{font-size:12px;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.03);border:1px solid var(--border);color:var(--muted);display:inline-flex;align-items:center;gap:8px;white-space:nowrap;}
-    .tag{display:inline-flex;align-items:center;padding:3px 7px;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,.03);font-size:11px;white-space:nowrap;gap:5px;}
-    .tag.good{background:var(--good);}.tag.warn{background:var(--warn);}.tag.bad{background:var(--bad);}
-    .tbl-btn{padding:4px 8px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,.04);color:#fff;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;}
-    .tbl-btn:hover{filter:brightness(1.15);}
-    .tbl-btn.danger{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.3);}
-    .tbl-btn.success{background:rgba(34,197,94,.15);border-color:rgba(34,197,94,.3);color:#fff;}
-    .plate-grid{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:8px;}
-    @media(max-width:980px){.plate-grid{grid-template-columns:repeat(7,minmax(0,1fr));}}
-    @media(max-width:680px){.plate-grid{grid-template-columns:repeat(5,minmax(0,1fr));}}
-    @media(max-width:520px){.plate-grid{grid-template-columns:repeat(4,minmax(0,1fr));}}
-    .plate{border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.03);padding:8px;display:flex;flex-direction:column;gap:6px;min-height:72px;}
-    .plate .top{display:flex;justify-content:space-between;align-items:center;gap:8px;}
-    .plate .door{font-weight:900;font-size:12px;}
-    .plate .note{color:var(--muted);font-size:11px;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-    .plate select,.plate input{padding:7px 8px;border-radius:10px;font-size:12px;}
-    .plate .btnRow{display:flex;gap:6px;justify-content:flex-end;}
-    .plate .tinyBtn{padding:7px 9px;border-radius:10px;font-size:12px;background:rgba(255,255,255,.03);border:1px solid var(--border);color:#fff;cursor:pointer;font-weight:800;}
-    .info{background:rgba(56,189,248,.12);padding:10px;border-radius:12px;border:1px solid rgba(120,145,220,.18);}
-    .info .title{font-weight:900;margin-bottom:4px;}
-    .info.warn-info{background:rgba(245,158,11,.10);border-color:rgba(245,158,11,.3);}
-    .checkline{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid rgba(120,145,220,.16);border-radius:12px;background:rgba(255,255,255,.02);}
-    .checkline input[type="checkbox"]{width:18px;height:18px;}
-    .driver-wrap{max-width:520px;margin:0 auto;padding:14px;display:grid;gap:14px;}
-    .driver-header{text-align:center;padding:20px 14px 10px;}
-    .driver-header h1{margin:0 0 6px;font-size:22px;font-weight:900;letter-spacing:.3px;}
-    .driver-header p{margin:0;color:var(--muted);font-size:13px;}
-    .supervisor-wrap{max-width:1400px;margin:0 auto;padding:14px;display:grid;gap:14px;}
+    *{box-sizing:border-box;margin:0;padding:0;}
+    html{scroll-behavior:smooth;}
+    body{
+      background:var(--bg);
+      color:var(--text);
+      font-family:var(--sans);
+      font-size:14px;
+      min-height:100vh;
+    }
+    a{color:inherit;text-decoration:none;}
+
+    /* ── TOPBAR ── */
+    .topbar{
+      position:sticky;top:0;z-index:100;
+      background:rgba(8,13,24,.95);
+      backdrop-filter:blur(16px);
+      border-bottom:1px solid var(--border);
+    }
+    .topbar-inner{
+      max-width:1440px;margin:0 auto;
+      padding:0 16px;
+      height:52px;
+      display:flex;align-items:center;justify-content:space-between;gap:12px;
+    }
+    .brand{
+      display:flex;align-items:center;gap:12px;flex-shrink:0;
+    }
+    .brand-name{
+      font-family:var(--mono);font-weight:700;font-size:15px;letter-spacing:.1em;
+      color:#fff;
+    }
+    .brand-sep{color:var(--muted2);margin:0 2px;}
+    .ws-badge{
+      display:inline-flex;align-items:center;gap:6px;
+      padding:4px 10px;border-radius:999px;
+      border:1px solid var(--border2);
+      background:var(--bg3);
+      font-family:var(--mono);font-size:11px;color:var(--muted);
+    }
+    .ws-dot{width:7px;height:7px;border-radius:50%;background:var(--muted2);transition:background .3s,box-shadow .3s;}
+    .ws-dot.ok{background:var(--c-ready);box-shadow:0 0 6px var(--c-ready);}
+    .ws-dot.bad{background:var(--c-bad);box-shadow:0 0 6px var(--c-bad);}
+    .ws-dot.warn{background:var(--c-loading);box-shadow:0 0 6px var(--c-loading);}
+
+    .nav{display:flex;align-items:center;gap:4px;}
+    .nav-btn{
+      display:inline-flex;align-items:center;gap:6px;
+      padding:6px 12px;border-radius:8px;
+      border:1px solid transparent;
+      font-family:var(--sans);font-size:12px;font-weight:700;
+      cursor:pointer;color:var(--muted);background:transparent;
+      transition:all .15s ease;letter-spacing:.03em;
+      text-transform:uppercase;
+    }
+    .nav-btn:hover{color:var(--text);background:var(--bg3);border-color:var(--border);}
+    .nav-btn.active{color:#fff;background:var(--bg3);border-color:var(--border2);}
+    .nav-btn .nb-dot{width:7px;height:7px;border-radius:50%;}
+    .nb-dispatcher{background:#818cf8;}
+    .nb-dock{background:#fb923c;}
+    .nb-driver{background:#4ade80;}
+    .nb-supervisor{background:#2dd4bf;}
+    .nav-btn.active.role-dispatcher{color:#a5b4fc;border-color:rgba(129,140,248,.4);background:rgba(129,140,248,.08);}
+    .nav-btn.active.role-dock{color:#fdba74;border-color:rgba(251,146,60,.4);background:rgba(251,146,60,.08);}
+    .nav-btn.active.role-driver{color:#86efac;border-color:rgba(74,222,128,.4);background:rgba(74,222,128,.08);}
+    .nav-btn.active.role-supervisor{color:#5eead4;border-color:rgba(45,212,180,.4);background:rgba(45,212,180,.08);}
+    .nav-sep{width:1px;height:20px;background:var(--border);margin:0 4px;}
+    .nav-btn.logout{color:var(--c-bad);border-color:rgba(239,68,68,.2);}
+    .nav-btn.logout:hover{background:rgba(239,68,68,.1);}
+    .nav-btn.audit-btn{color:#38bdf8;border-color:rgba(56,189,248,.2);}
+
+    /* ── LAYOUT ── */
+    .page{max-width:1440px;margin:0 auto;padding:16px;}
+    .grid-main{display:grid;grid-template-columns:1fr 300px;gap:14px;align-items:start;}
+    @media(max-width:1100px){.grid-main{grid-template-columns:1fr;}}
+
+    /* ── CARDS ── */
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      overflow:visible;
+    }
+    .card-head{
+      padding:10px 14px;
+      border-bottom:1px solid var(--border);
+      display:flex;align-items:center;justify-content:space-between;gap:10px;
+    }
+    .card-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
+    .card-body{padding:14px;}
+
+    /* ── PILLS ── */
+    .pill{
+      display:inline-flex;align-items:center;gap:6px;
+      padding:3px 8px;border-radius:999px;
+      font-family:var(--mono);font-size:11px;
+      border:1px solid var(--border2);background:var(--bg3);color:var(--muted);
+      white-space:nowrap;
+    }
+
+    /* ── FORM ELEMENTS ── */
+    input,select,textarea{
+      width:100%;padding:9px 11px;
+      border-radius:8px;border:1px solid var(--border2);
+      background:var(--bg2);color:var(--text);
+      font-family:var(--sans);font-size:13px;outline:none;
+      transition:border-color .15s;
+    }
+    input:focus,select:focus,textarea:focus{border-color:#3b5998;}
+    textarea{min-height:72px;resize:vertical;}
+    label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:10px 0 5px;}
+    .row{display:flex;gap:10px;flex-wrap:wrap;}
+    .row>*{flex:1 1 auto;}.row>.tight{flex:0 0 auto;}
+
+    /* ── BUTTONS ── */
+    .btn{
+      display:inline-flex;align-items:center;justify-content:center;gap:6px;
+      padding:9px 14px;border-radius:8px;border:1px solid var(--border2);
+      background:var(--bg3);color:var(--text);
+      font-family:var(--sans);font-size:13px;font-weight:700;
+      cursor:pointer;transition:all .15s;white-space:nowrap;
+    }
+    .btn:hover{filter:brightness(1.15);}
+    .btn-primary{background:#1d4ed8;border-color:#2563eb;color:#fff;}
+    .btn-danger{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.3);color:#fca5a5;}
+    .btn-success{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.3);color:#86efac;}
+    .btn-sm{padding:4px 9px;font-size:11px;border-radius:6px;}
+    .btn-full{width:100%;padding:12px;}
+
+    /* ── STATUS TAGS ── */
+    .stag{
+      display:inline-flex;align-items:center;gap:5px;
+      padding:3px 8px;border-radius:6px;
+      font-family:var(--mono);font-size:11px;font-weight:700;
+      letter-spacing:.04em;white-space:nowrap;
+    }
+    .stag-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+    .stag.s-loading{background:rgba(245,158,11,.15);color:var(--c-loading);border:1px solid rgba(245,158,11,.3);}
+    .stag.s-loading .stag-dot{background:var(--c-loading);box-shadow:0 0 4px var(--c-loading);}
+    .stag.s-ready{background:rgba(34,197,94,.12);color:var(--c-ready);border:1px solid rgba(34,197,94,.3);}
+    .stag.s-ready .stag-dot{background:var(--c-ready);box-shadow:0 0 4px var(--c-ready);}
+    .stag.s-dockready{background:rgba(52,211,153,.12);color:var(--c-dockready);border:1px solid rgba(52,211,153,.3);}
+    .stag.s-dockready .stag-dot{background:var(--c-dockready);box-shadow:0 0 4px var(--c-dockready);}
+    .stag.s-dropped{background:rgba(56,189,248,.1);color:var(--c-dropped);border:1px solid rgba(56,189,248,.25);}
+    .stag.s-dropped .stag-dot{background:var(--c-dropped);}
+    .stag.s-incoming{background:rgba(167,139,250,.1);color:var(--c-incoming);border:1px solid rgba(167,139,250,.25);}
+    .stag.s-incoming .stag-dot{background:var(--c-incoming);}
+    .stag.s-departed{background:rgba(71,85,105,.15);color:#64748b;border:1px solid rgba(71,85,105,.3);}
+    .stag.s-departed .stag-dot{background:#64748b;}
+    .stag.s-unknown{background:var(--bg3);color:var(--muted);border:1px solid var(--border);}
+    .stag.s-unknown .stag-dot{background:var(--muted2);}
+
+    /* ── TRAILER BOARD ROWS ── */
+    .board-head,.board-row{
+      display:grid;
+      grid-template-columns:90px 80px 110px 55px 75px 1fr 110px 160px;
+      align-items:center;
+      gap:0;
+    }
+    .board-head>span,.board-row>span,.board-row>div{
+      padding:6px 8px;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+      min-width:0;
+    }
+    .board-head>span{
+      font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+      color:var(--muted2);padding-bottom:8px;
+      border-bottom:1px solid var(--border);
+    }
+    .board-row{
+      border-bottom:1px solid rgba(30,45,74,.6);
+      transition:background .15s;
+      cursor:default;
+    }
+    .board-row:last-child{border-bottom:none;}
+    .board-row:hover{background:rgba(255,255,255,.025);}
+
+    /* Row glow by status */
+    .board-row.r-loading{border-left:2px solid var(--c-loading);box-shadow:inset 2px 0 12px rgba(245,158,11,.06);}
+    .board-row.r-ready{border-left:2px solid var(--c-ready);box-shadow:inset 2px 0 12px rgba(34,197,94,.06);}
+    .board-row.r-dockready{border-left:2px solid var(--c-dockready);box-shadow:inset 2px 0 12px rgba(52,211,153,.06);}
+    .board-row.r-dropped{border-left:2px solid var(--c-dropped);box-shadow:inset 2px 0 12px rgba(56,189,248,.04);}
+    .board-row.r-incoming{border-left:2px solid var(--c-incoming);box-shadow:inset 2px 0 12px rgba(167,139,250,.04);}
+    .board-row.r-departed{border-left:2px solid #334155;opacity:.6;}
+
+    /* Flash animation when row updates */
+    @keyframes rowFlash{0%{background:rgba(255,255,255,.12);}100%{background:transparent;}}
+    .board-row.flashing{animation:rowFlash .6s ease-out;}
+
+    .trailer-num{font-family:var(--mono);font-weight:700;font-size:13px;color:#fff;}
+    .door-num{font-family:var(--mono);font-weight:500;font-size:13px;color:#93c5fd;}
+    .time-cell{font-size:11px;color:var(--muted);}
+    .note-cell{font-size:12px;color:var(--muted);}
+    .acts-cell{display:flex;gap:4px;align-items:center;}
+    .board-empty{padding:24px 16px;text-align:center;color:var(--muted);font-size:13px;}
+
+    /* ── FILTER BAR ── */
+    .filter-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;}
+    .filter-bar>div{flex:1 1 110px;}.filter-bar>.tight{flex:0 0 auto;}
+    .divider{height:1px;background:var(--border);margin:12px 0;}
+
+    /* ── SIDE PANEL ── */
+    .panel-info{
+      padding:10px 12px;border-radius:8px;
+      background:rgba(56,189,248,.06);border:1px solid rgba(56,189,248,.15);
+      margin-bottom:12px;
+    }
+    .panel-info .pi-title{font-weight:700;font-size:13px;margin-bottom:3px;}
+    .panel-info .pi-sub{font-size:12px;color:var(--muted);}
+    .panel-info.warn{background:rgba(245,158,11,.06);border-color:rgba(245,158,11,.2);}
+    .panel-info.good{background:rgba(34,197,94,.06);border-color:rgba(34,197,94,.2);}
+
+    /* ── DOCK PLATES ── */
+    .acc-head{
+      width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;
+      padding:10px 14px;background:transparent;border:none;color:var(--text);
+      cursor:pointer;font-family:var(--sans);font-weight:700;font-size:12px;
+      text-transform:uppercase;letter-spacing:.07em;
+      border-bottom:1px solid var(--border);
+    }
+    .acc-head .chev{font-size:14px;opacity:.6;transform:rotate(0);transition:transform .18s;pointer-events:none;}
+    .acc-head[aria-expanded="true"] .chev{transform:rotate(180deg);}
+    .acc-body{overflow:hidden;max-height:0;transition:max-height .25s ease;}
+    .plate-grid{display:grid;grid-template-columns:repeat(9,1fr);gap:6px;}
+    @media(max-width:980px){.plate-grid{grid-template-columns:repeat(7,1fr);}}
+    @media(max-width:640px){.plate-grid{grid-template-columns:repeat(5,1fr);}}
+    .plate{
+      border-radius:8px;border:1px solid var(--border);
+      background:var(--bg2);padding:7px;
+      display:flex;flex-direction:column;gap:5px;min-height:68px;
+    }
+    .plate.p-ok{border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.05);}
+    .plate.p-service{border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.05);}
+    .plate .p-door{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--muted);}
+    .plate .p-note{font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .plate .p-edit-row{display:flex;flex-direction:column;gap:4px;}
+    .plate select,.plate input{padding:5px 7px;font-size:11px;border-radius:6px;}
+    .plate .p-btns{display:flex;gap:4px;justify-content:flex-end;margin-top:auto;}
+    .plate .p-btn{padding:4px 7px;font-size:10px;border-radius:5px;border:1px solid var(--border2);background:var(--bg3);color:var(--muted);cursor:pointer;font-weight:700;}
+    .plate .p-btn:hover{color:#fff;}
+
+    /* ── DRIVER PAGE ── */
+    .driver-page{max-width:480px;margin:0 auto;padding:20px 16px;}
+    .driver-hero{text-align:center;padding:24px 0 20px;}
+    .driver-hero h1{font-size:24px;font-weight:900;letter-spacing:-.02em;margin-bottom:6px;}
+    .driver-hero p{color:var(--muted);font-size:14px;}
+    .success-screen{
+      display:none;
+      flex-direction:column;align-items:center;justify-content:center;
+      padding:32px 20px;text-align:center;gap:12px;
+    }
+    .success-icon{font-size:52px;line-height:1;}
+    .success-title{font-size:20px;font-weight:900;color:var(--c-ready);}
+    .success-detail{font-size:14px;color:var(--muted);}
+    .success-again{margin-top:8px;}
+    .checkline{
+      display:flex;align-items:center;gap:12px;
+      padding:12px;border:1px solid var(--border2);border-radius:8px;
+      background:var(--bg2);cursor:pointer;transition:border-color .15s;
+    }
+    .checkline:has(input:checked){border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.04);}
+    .checkline input[type="checkbox"]{width:20px;height:20px;cursor:pointer;accent-color:var(--c-ready);}
+    .checkline .cl-label{font-weight:700;font-size:14px;}
+    .checkline .cl-sub{font-size:12px;color:var(--muted);}
+
+    /* ── SUPERVISOR PAGE ── */
+    .sup-page{max-width:1440px;margin:0 auto;padding:16px;}
     .sup-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
     @media(max-width:900px){.sup-grid{grid-template-columns:1fr;}}
-    .stat-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px;}
-    .stat{flex:1 1 110px;padding:12px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,.03);display:flex;flex-direction:column;gap:4px;}
-    .stat .val{font-size:22px;font-weight:900;}
-    .stat .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
-    .pin-row{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;padding:12px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.02);margin-bottom:8px;}
+    .stat-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+    .stat{
+      flex:1 1 100px;padding:14px 16px;
+      border-radius:var(--radius);border:1px solid var(--border);background:var(--card);
+      display:flex;flex-direction:column;gap:5px;
+    }
+    .stat .s-val{font-family:var(--mono);font-size:26px;font-weight:700;line-height:1;}
+    .stat .s-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
+    .stat.s-loading-stat .s-val{color:var(--c-loading);}
+    .stat.s-ready-stat .s-val{color:var(--c-ready);}
+    .stat.s-conf-stat .s-val{color:var(--c-dropped);}
+    .pin-row{
+      display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;
+      padding:12px;border:1px solid var(--border);border-radius:8px;
+      background:var(--bg2);margin-bottom:8px;
+    }
     .pin-row label{margin:0 0 4px;}
-    .modal-overlay{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:14px;}
-    .modal-overlay.hidden{display:none;}
-    .modal{background:#0e1830;border:1px solid var(--border);border-radius:16px;padding:18px;max-width:380px;width:100%;box-shadow:var(--shadow);}
-    .modal h4{margin:0 0 8px;font-size:15px;}.modal .sub{color:var(--muted);font-size:13px;margin-bottom:14px;}
-    .modal .btns{display:flex;gap:10px;justify-content:flex-end;margin-top:14px;}
-    .modal .btns button{padding:10px 16px;border-radius:12px;border:1px solid var(--border);font-weight:900;cursor:pointer;font-size:14px;}
-    .modal .btns .cancel{background:rgba(255,255,255,.04);color:#fff;}
-    .modal .btns .confirm{background:rgba(239,68,68,.4);border-color:rgba(239,68,68,.5);color:#fff;}
-    .toast{position:fixed;right:14px;bottom:14px;width:min(420px,calc(100vw - 28px));background:rgba(12,19,42,.92);border:1px solid var(--border);border-radius:14px;padding:12px;box-shadow:var(--shadow);display:none;z-index:200;}
-    .toast strong{display:block;margin-bottom:4px;}
-    @media(max-width:768px){.actions{width:100%;justify-content:center;}.actions a,.actions button{flex:1;text-align:center;}}
-    .accordion-head{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;background:rgba(255,255,255,.03);border:none;border-bottom:1px solid var(--border);color:var(--text);cursor:pointer;font-weight:900;}
-    .accordion-head .left{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
-    .accordion-head .chev{font-size:16px;opacity:.9;transform:rotate(0);transition:transform .18s ease;pointer-events:none;}
-    .accordion-head[aria-expanded="true"] .chev{transform:rotate(180deg);}
-    .accordion-body{overflow:hidden;max-height:0;transition:max-height .22s ease;}
-    .filter-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;}
-    .filter-row>div{flex:1 1 120px;}.filter-row>.tight{flex:0 0 auto;}
+
+    /* ── TABLES ── */
+    .tbl-wrap{overflow-x:auto;}
+    .tbl-wrap table{width:100%;border-collapse:collapse;min-width:600px;}
+    .tbl-wrap th,.tbl-wrap td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .tbl-wrap th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted2);background:var(--bg2);}
+    .tbl-wrap tr:hover td{background:rgba(255,255,255,.02);}
+
+    /* ── MODAL ── */
+    .modal-ov{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:16px;}
+    .modal-ov.hidden{display:none;}
+    .modal{background:#0d1525;border:1px solid var(--border2);border-radius:12px;padding:20px;max-width:360px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,.6);}
+    .modal h4{font-size:15px;font-weight:700;margin-bottom:6px;}
+    .modal .m-sub{font-size:13px;color:var(--muted);margin-bottom:16px;}
+    .modal .m-btns{display:flex;gap:10px;justify-content:flex-end;}
+    .modal .m-btns button{padding:9px 16px;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px;border:1px solid var(--border2);}
+    .modal .m-cancel{background:var(--bg3);color:var(--text);}
+    .modal .m-confirm{background:rgba(239,68,68,.3);border-color:rgba(239,68,68,.4);color:#fca5a5;}
+
+    /* ── TOAST ── */
+    .toast{
+      position:fixed;right:16px;bottom:16px;z-index:300;
+      width:min(380px,calc(100vw - 32px));
+      background:#0d1525;border:1px solid var(--border2);border-radius:10px;
+      padding:12px 14px;box-shadow:0 16px 48px rgba(0,0,0,.5);
+      display:none;
+      animation:toastIn .2s ease-out;
+    }
+    @keyframes toastIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+    .toast strong{display:block;font-size:13px;margin-bottom:3px;}
+    .toast .t-body{font-size:12px;color:var(--muted);}
+
+    /* ── ACTIVITY FEED ── */
+    .feed-item{
+      display:flex;align-items:flex-start;gap:10px;
+      padding:8px 0;border-bottom:1px solid var(--border);
+      font-size:12px;
+    }
+    .feed-item:last-child{border-bottom:none;}
+    .feed-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:3px;}
+    .feed-time{font-family:var(--mono);font-size:10px;color:var(--muted2);white-space:nowrap;}
+    .feed-text{color:var(--muted);flex:1;min-width:0;}
+    .feed-text strong{color:var(--text);}
+
+    /* ── LAST UPDATED ── */
+    .last-updated{font-family:var(--mono);font-size:10px;color:var(--muted2);padding:6px 14px;border-top:1px solid var(--border);}
+
+    @media(max-width:768px){
+      .topbar-inner{height:auto;padding:8px 12px;flex-wrap:wrap;gap:8px;}
+      .nav{flex-wrap:wrap;gap:3px;}
+      .nav-btn{padding:5px 9px;font-size:11px;}
+      .board-head,.board-row{grid-template-columns:80px 70px 100px 50px 65px 1fr 90px 120px;}
+    }
   </style>
 </head>
 <body>
 
-<div class="modal-overlay hidden" id="modalOverlay" role="dialog" aria-modal="true">
+<!-- MODAL -->
+<div class="modal-ov hidden" id="modalOv">
   <div class="modal">
     <h4 id="modalTitle">Confirm</h4>
-    <div class="sub" id="modalBody"></div>
-    <div class="btns">
-      <button class="cancel" id="modalCancel">Cancel</button>
-      <button class="confirm" id="modalConfirm">Confirm</button>
+    <div class="m-sub" id="modalBody"></div>
+    <div class="m-btns">
+      <button class="m-cancel" id="modalCancel">Cancel</button>
+      <button class="m-confirm" id="modalConfirm">Confirm</button>
     </div>
   </div>
 </div>
 
+<!-- TOPBAR -->
 <div class="topbar">
   <div class="topbar-inner">
     <div class="brand">
-      <span class="mono">WESBELL</span>
-      <span class="pill"><span class="dot" id="wsDot"></span><span id="wsText">Connecting…</span></span>
-      <span class="pill">Role: <strong id="roleText">—</strong></span>
-      <span class="pill">v<span id="verText">—</span></span>
+      <span class="brand-name">WESBELL</span>
+      <span class="brand-sep">/</span>
+      <div class="ws-badge"><div class="ws-dot" id="wsDot"></div><span id="wsText">Connecting</span></div>
+      <div class="ws-badge" style="display:none;" id="roleBadge">—</div>
+      <div class="ws-badge" id="verBadge">v<span id="verText">—</span></div>
     </div>
-    <div class="actions">
-      <button id="btnRefresh" class="btn-refresh">Refresh</button>
-      <a href="/" class="btn-dispatcher">Dispatcher</a>
-      <a href="/dock" class="btn-dock">Dock</a>
-      <a href="/driver" class="btn-driver">Driver</a>
-      <a href="/supervisor" class="btn-supervisor">Supervisor</a>
-      <button id="btnAudit" class="btn-audit" style="display:none;">Audit Log</button>
-      <button id="btnLogout" class="btn-logout" style="display:none;">Logout</button>
-    </div>
+    <nav class="nav" id="mainNav">
+      <a href="/" class="nav-btn role-dispatcher" id="navDispatch"><span class="nb-dot nb-dispatcher"></span>Dispatcher</a>
+      <a href="/dock" class="nav-btn role-dock" id="navDock"><span class="nb-dot nb-dock"></span>Dock</a>
+      <a href="/driver" class="nav-btn role-driver" id="navDriver"><span class="nb-dot nb-driver"></span>Driver</a>
+      <a href="/supervisor" class="nav-btn role-supervisor" id="navSupervisor"><span class="nb-dot nb-supervisor"></span>Supervisor</a>
+      <div class="nav-sep"></div>
+      <button class="nav-btn audit-btn" id="btnAudit" style="display:none;">Audit</button>
+      <button class="nav-btn logout" id="btnLogout" style="display:none;">Logout</button>
+    </nav>
   </div>
 </div>
 
-<!-- DRIVER VIEW -->
+<!-- ═══════════════════════════════════════════════
+     DRIVER VIEW
+═══════════════════════════════════════════════ -->
 <div id="driverView" style="display:none;">
-  <div class="driver-header">
-    <h1>Driver Drop</h1>
-    <p>Submit your trailer drop and safety confirmation below.</p>
-  </div>
-  <div class="driver-wrap">
-    <div class="card">
-      <h3><span>🚛 Drop Trailer</span></h3>
-      <div class="body">
-        <label>Trailer #</label>
-        <input id="v_trailer" placeholder="e.g. 5312" autocomplete="off" />
-        <div class="row" style="margin-top:0;">
-          <div><label>Door (18–42)</label><input id="v_door" placeholder="e.g. 21" /></div>
-          <div><label>Drop Type</label>
-            <select id="v_dropType"><option>Empty</option><option>Loaded</option></select>
+  <div class="driver-page">
+    <div class="driver-hero">
+      <h1>Driver Portal</h1>
+      <p>Submit trailer drops and safety confirmations</p>
+    </div>
+
+    <!-- Drop form -->
+    <div class="card" id="dropCard">
+      <div class="card-head">
+        <span class="card-title">🚛 Drop Trailer</span>
+      </div>
+      <div class="card-body">
+        <div id="dropForm">
+          <label>Trailer #</label>
+          <input id="v_trailer" placeholder="e.g. 5312" autocomplete="off" style="font-family:var(--mono);font-size:16px;font-weight:700;" />
+          <div class="row" style="margin-top:0;">
+            <div><label>Door (18–42)</label><input id="v_door" placeholder="21" style="font-family:var(--mono);font-size:16px;" /></div>
+            <div><label>Drop Type</label>
+              <select id="v_dropType" style="font-size:15px;">
+                <option>Empty</option><option>Loaded</option>
+              </select>
+            </div>
           </div>
+          <button class="btn btn-primary btn-full" style="margin-top:16px;font-size:15px;" id="btnDriverDrop">Submit Drop</button>
         </div>
-        <button class="secondary" style="margin-top:14px;width:100%;padding:12px;font-size:15px;" id="btnDriverDrop">Submit Drop</button>
+        <div class="success-screen" id="dropSuccess">
+          <div class="success-icon">✅</div>
+          <div class="success-title">Drop Recorded</div>
+          <div class="success-detail" id="dropSuccessDetail"></div>
+          <button class="btn success-again" id="btnDropAgain">Submit Another Drop</button>
+        </div>
       </div>
     </div>
-    <div class="card">
-      <h3><span>✅ Safety Confirmation</span><span class="mini muted small">Both required</span></h3>
-      <div class="body">
-        <label>Trailer # (optional)</label>
-        <input id="c_trailer" placeholder="Optional but recommended" />
-        <label>Door (optional)</label>
-        <input id="c_door" placeholder="Optional" />
-        <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px;">
-          <div class="checkline">
-            <input id="c_loadSecured" type="checkbox" />
-            <div><div style="font-weight:900;">Load secured</div><div class="muted small">Straps/locks set</div></div>
+
+    <!-- Safety confirmation -->
+    <div class="card" style="margin-top:14px;">
+      <div class="card-head">
+        <span class="card-title">Safety Confirmation</span>
+        <span class="pill">Both required</span>
+      </div>
+      <div class="card-body">
+        <div id="safetyForm">
+          <label>Trailer # (optional)</label>
+          <input id="c_trailer" placeholder="Optional but recommended" />
+          <label>Door (optional)</label>
+          <input id="c_door" placeholder="Optional" />
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px;">
+            <label class="checkline" for="c_loadSecured">
+              <input id="c_loadSecured" type="checkbox" />
+              <div><div class="cl-label">Load secured</div><div class="cl-sub">Straps / locks confirmed set</div></div>
+            </label>
+            <label class="checkline" for="c_dockPlateUp">
+              <input id="c_dockPlateUp" type="checkbox" />
+              <div><div class="cl-label">Dock plate up</div><div class="cl-sub">Plate raised before departing</div></div>
+            </label>
           </div>
-          <div class="checkline">
-            <input id="c_dockPlateUp" type="checkbox" />
-            <div><div style="font-weight:900;">Dock plate up</div><div class="muted small">Plate raised before leaving</div></div>
-          </div>
+          <button class="btn btn-success btn-full" style="margin-top:16px;font-size:15px;" id="btnConfirmSafety">Submit Safety Confirm</button>
         </div>
-        <button class="secondary" style="margin-top:14px;width:100%;padding:12px;font-size:15px;" id="btnConfirmSafety">Submit Safety Confirm</button>
+        <div class="success-screen" id="safetySuccess">
+          <div class="success-icon">🛡️</div>
+          <div class="success-title">Safety Confirmed</div>
+          <div class="success-detail">Confirmation logged successfully.</div>
+          <button class="btn success-again" id="btnSafetyAgain">Submit Another</button>
+        </div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- SUPERVISOR VIEW -->
+<!-- ═══════════════════════════════════════════════
+     SUPERVISOR VIEW
+═══════════════════════════════════════════════ -->
 <div id="supervisorView" style="display:none;">
-  <div class="supervisor-wrap">
-    <div class="stat-bar" id="supStats"></div>
+  <div class="sup-page">
+    <div class="stat-row" id="supStats"></div>
     <div class="sup-grid">
+
+      <!-- Live board read-only -->
       <div class="card" style="grid-column:1/-1;">
-        <h3><span>Live Trailer Board</span><span class="mini" id="supCountsPill">0 trailers</span></h3>
-        <div class="body">
-          <div class="filter-row">
-            <div><label>Search</label><input id="supSearch" placeholder="Trailer / Door / Note"></div>
+        <div class="card-head">
+          <span class="card-title">Live Trailer Board</span>
+          <span class="pill" id="supCountsPill">0 trailers</span>
+        </div>
+        <div class="card-body" style="padding-bottom:0;">
+          <div class="filter-bar">
+            <div><label>Search</label><input id="supSearch" placeholder="Trailer / Door / Note" /></div>
             <div><label>Direction</label>
               <select id="supFilterDir"><option value="">All</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
             </div>
             <div><label>Status</label>
               <select id="supFilterStatus"><option value="">All</option><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select>
             </div>
-            <div class="tight"><label>&nbsp;</label><button id="btnSupClearFilters" class="secondary">Clear</button></div>
+            <div class="tight"><label>&nbsp;</label><button class="btn" id="btnSupClearFilters">Clear</button></div>
           </div>
           <div class="divider"></div>
-          <div class="board-table-wrap">
-            <div class="brow bhead">
-              <span>Trailer</span><span>Dir</span><span>Status</span><span>Door</span><span>Type</span><span>Note</span><span>Updated</span><span>—</span>
-            </div>
-            <div id="supTbody"></div>
+          <div class="board-head" style="padding:0 0 2px;">
+            <span>Trailer</span><span>Dir</span><span>Status</span><span>Door</span><span>Type</span><span>Note</span><span>Updated</span><span></span>
           </div>
         </div>
+        <div id="supTbody"></div>
+        <div class="last-updated" id="supLastUpdated">—</div>
       </div>
+
+      <!-- Activity feed -->
       <div class="card">
-        <h3><span>Safety Confirmations</span><span class="mini" id="supConfCount">0</span></h3>
-        <div class="body">
-          <div class="table-wrap-scroll">
-            <table style="min-width:600px;">
-              <thead><tr><th>Time</th><th>Trailer</th><th>Door</th><th>IP / UA</th></tr></thead>
-              <tbody id="supConfBody"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody>
-            </table>
-          </div>
-        </div>
+        <div class="card-head"><span class="card-title">Recent Activity</span><span class="pill" id="supAuditCount">0</span></div>
+        <div class="card-body" id="supFeed"><div style="color:var(--muted);font-size:13px;">Loading…</div></div>
       </div>
+
+      <!-- Safety confirmations -->
       <div class="card">
-        <h3><span>Audit Log</span><span class="mini" id="supAuditCount">0</span></h3>
-        <div class="body">
-          <div class="table-wrap-scroll">
-            <table style="min-width:700px;">
-              <thead><tr><th style="width:150px;">Time</th><th>Role</th><th>Action</th><th>Entity</th><th>ID</th><th>Details</th></tr></thead>
-              <tbody id="supAuditBody"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody>
-            </table>
+        <div class="card-head"><span class="card-title">Safety Confirmations</span><span class="pill" id="supConfCount">0</span></div>
+        <div class="card-body" style="padding:0;">
+          <div class="tbl-wrap">
+            <table><thead><tr><th>Time</th><th>Trailer</th><th>Door</th><th>IP</th></tr></thead>
+            <tbody id="supConfBody"><tr><td colspan="4" style="color:var(--muted);padding:16px;">Loading…</td></tr></tbody></table>
           </div>
         </div>
       </div>
+
+      <!-- PIN management -->
       <div class="card" style="grid-column:1/-1;">
-        <h3><span>🔑 PIN Management</span><span class="mini muted small">Changes apply immediately</span></h3>
-        <div class="body">
-          <div class="info warn-info" style="margin-bottom:14px;">
-            <div class="title">⚠️ Security Notice</div>
-            <div class="muted small">PINs are hashed server-side. You cannot view existing PINs — only set new ones. All changes are audit-logged.</div>
+        <div class="card-head"><span class="card-title">🔑 PIN Management</span></div>
+        <div class="card-body">
+          <div class="panel-info warn" style="margin-bottom:14px;">
+            <div class="pi-title">Security Notice</div>
+            <div class="pi-sub">PINs are hashed server-side. You cannot view existing PINs — only set new ones. All changes are audit-logged.</div>
           </div>
           <div class="pin-row">
-            <div><label>Dispatcher PIN</label><input type="password" id="pin_dispatcher" placeholder="New PIN (min 4 chars)" autocomplete="new-password" /></div>
-            <div><label>Confirm</label><input type="password" id="pin_dispatcher_confirm" placeholder="Repeat PIN" autocomplete="new-password" /></div>
-            <button class="tbl-btn success" id="btnSetDispatcherPin" style="padding:10px 14px;font-size:12px;">Set</button>
+            <div><label>Dispatcher PIN</label><input type="password" id="pin_dispatcher" placeholder="New PIN (min 4)" autocomplete="new-password"/></div>
+            <div><label>Confirm</label><input type="password" id="pin_dispatcher_confirm" placeholder="Repeat PIN" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetDispatcherPin" style="padding:9px 14px;">Set</button>
           </div>
           <div class="pin-row">
-            <div><label>Dock PIN</label><input type="password" id="pin_dock" placeholder="New PIN (min 4 chars)" autocomplete="new-password" /></div>
-            <div><label>Confirm</label><input type="password" id="pin_dock_confirm" placeholder="Repeat PIN" autocomplete="new-password" /></div>
-            <button class="tbl-btn success" id="btnSetDockPin" style="padding:10px 14px;font-size:12px;">Set</button>
+            <div><label>Dock PIN</label><input type="password" id="pin_dock" placeholder="New PIN (min 4)" autocomplete="new-password"/></div>
+            <div><label>Confirm</label><input type="password" id="pin_dock_confirm" placeholder="Repeat PIN" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetDockPin" style="padding:9px 14px;">Set</button>
           </div>
           <div class="pin-row">
-            <div><label>Supervisor PIN</label><input type="password" id="pin_supervisor" placeholder="New PIN (min 4 chars)" autocomplete="new-password" /></div>
-            <div><label>Confirm</label><input type="password" id="pin_supervisor_confirm" placeholder="Repeat PIN" autocomplete="new-password" /></div>
-            <button class="tbl-btn success" id="btnSetSupervisorPin" style="padding:10px 14px;font-size:12px;">Set</button>
+            <div><label>Supervisor PIN</label><input type="password" id="pin_supervisor" placeholder="New PIN (min 4)" autocomplete="new-password"/></div>
+            <div><label>Confirm</label><input type="password" id="pin_supervisor_confirm" placeholder="Repeat PIN" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetSupervisorPin" style="padding:9px 14px;">Set</button>
           </div>
         </div>
       </div>
+
     </div>
   </div>
 </div>
 
-<!-- DISPATCH / DOCK VIEW -->
+<!-- ═══════════════════════════════════════════════
+     DISPATCH / DOCK VIEW
+═══════════════════════════════════════════════ -->
 <div id="dispatchView" style="display:none;">
-  <div class="wrap">
-    <div class="grid-2">
-      <div class="card">
-        <h3><span>Trailer Board</span><span class="mini" id="countsPill">0 trailers</span></h3>
-        <div class="body">
-          <div class="filter-row">
-            <div><label>Search</label><input id="search" placeholder="Trailer / Door / Note"></div>
-            <div><label>Direction</label>
-              <select id="filterDir"><option value="">All</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
-            </div>
-            <div><label>Status</label>
-              <select id="filterStatus"><option value="">All</option><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select>
-            </div>
-            <div class="tight"><label>&nbsp;</label><button id="btnClearFilters" class="secondary">Clear</button></div>
+  <div class="page">
+    <div class="grid-main">
+
+      <!-- Main board -->
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">Trailer Board</span>
+            <span class="pill" id="countsPill">0 trailers</span>
           </div>
-          <div class="divider"></div>
-          <div class="board-table-wrap">
-            <div class="brow bhead">
+          <div class="card-body" style="padding-bottom:0;">
+            <div class="filter-bar">
+              <div><label>Search</label><input id="search" placeholder="Trailer / Door / Note" /></div>
+              <div><label>Direction</label>
+                <select id="filterDir"><option value="">All</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
+              </div>
+              <div><label>Status</label>
+                <select id="filterStatus"><option value="">All</option><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select>
+              </div>
+              <div class="tight"><label>&nbsp;</label><button class="btn" id="btnClearFilters">Clear</button></div>
+            </div>
+            <div class="divider"></div>
+            <div class="board-head" style="padding:0 0 2px;">
               <span>Trailer</span><span>Dir</span><span>Status</span><span>Door</span><span>Type</span><span>Note</span><span>Updated</span><span id="actionsColHead">Actions</span>
             </div>
-            <div id="tbody"></div>
           </div>
-          <div class="muted small" style="margin-top:8px;">Live via WebSocket · Dispatcher: full control · Dock: Loading / Dock Ready</div>
+          <div id="tbody"></div>
+          <div class="last-updated" id="lastUpdated">—</div>
+        </div>
+
+        <!-- Dock Plates -->
+        <div class="card" id="dockPlatesCard" style="display:none;">
+          <button class="acc-head" id="dockPlatesToggle" aria-expanded="false">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span>Dock Plates (18–42)</span>
+              <span class="pill" id="platesMini">—</span>
+            </div>
+            <span class="chev">▾</span>
+          </button>
+          <div class="acc-body" id="dockPlatesBody">
+            <div style="padding:14px;">
+              <div class="plate-grid" id="platesGrid"></div>
+              <div style="margin-top:8px;font-size:11px;color:var(--muted);">Tap Edit on a door to update status / note.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Audit log (dispatcher) -->
+        <div class="card" id="auditCard" style="display:none;">
+          <div class="card-head"><span class="card-title">Audit Log</span><span class="pill" id="auditCount">0</span></div>
+          <div class="card-body" style="padding:0;">
+            <div class="tbl-wrap">
+              <table style="min-width:800px;">
+                <thead><tr><th>Time</th><th>Role</th><th>Action</th><th>Entity</th><th>ID</th><th>Details</th><th>IP</th></tr></thead>
+                <tbody id="auditBody"><tr><td colspan="7" style="color:var(--muted);padding:16px;">Click Audit to load.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Safety confirmations -->
+        <div class="card">
+          <div class="card-head"><span class="card-title">Safety Confirmations</span><span class="pill" id="confCount">0</span></div>
+          <div class="card-body" style="padding:0;">
+            <div class="tbl-wrap">
+              <table style="min-width:600px;">
+                <thead><tr><th>Time</th><th>Trailer</th><th>Door</th><th>IP / UA</th></tr></thead>
+                <tbody id="confBody"><tr><td colspan="4" style="color:var(--muted);padding:16px;">No confirmations yet.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
+
+      <!-- Side panel -->
       <div class="card">
-        <h3><span id="panelTitle">Controls</span><span class="mini" id="panelSub">—</span></h3>
-        <div class="body" id="panelBody"></div>
+        <div class="card-head"><span class="card-title" id="panelTitle">Controls</span><span class="pill" id="panelSub">—</span></div>
+        <div class="card-body" id="panelBody"></div>
       </div>
-    </div>
 
-    <div class="card" id="dockPlatesCard" style="display:none;">
-      <button class="accordion-head" id="dockPlatesToggle" type="button" aria-expanded="false">
-        <div class="left"><span>Dock Plates (18–42)</span><span class="mini" id="platesMini">—</span></div>
-        <div class="chev">▾</div>
-      </button>
-      <div class="accordion-body" id="dockPlatesBody">
-        <div class="body">
-          <div class="plate-grid" id="platesGrid"></div>
-          <div class="muted small" style="margin-top:8px;">Tap "Edit" on a door to update status/note.</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card" id="auditCard" style="display:none;">
-      <h3><span>Audit Log</span><span class="mini" id="auditCount">0</span></h3>
-      <div class="body">
-        <div class="table-wrap-scroll">
-          <table style="min-width:900px;">
-            <thead><tr><th style="width:190px;">Time</th><th style="width:90px;">Role</th><th style="width:130px;">Action</th><th style="width:80px;">Entity</th><th style="width:100px;">ID</th><th>Details</th><th style="width:130px;">IP</th></tr></thead>
-            <tbody id="auditBody"><tr><td colspan="7" class="muted">Click "Audit Log" to load.</td></tr></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h3><span>Safety Confirmations</span><span class="mini" id="confCount">0</span></h3>
-      <div class="body">
-        <div class="table-wrap-scroll">
-          <table style="min-width:760px;">
-            <thead><tr><th style="width:200px;">Time</th><th style="width:120px;">Trailer</th><th style="width:90px;">Door</th><th>IP / UserAgent</th></tr></thead>
-            <tbody id="confBody"><tr><td colspan="4" class="muted">No confirmations yet.</td></tr></tbody>
-          </table>
-        </div>
-      </div>
     </div>
   </div>
 </div>
 
+<!-- TOAST -->
 <div class="toast" id="toast">
   <strong id="toastTitle">Notification</strong>
-  <div class="muted small" id="toastBody"></div>
+  <div class="t-body" id="toastBody"></div>
 </div>
 
 <script>
 (() => {
   const CSRF = {"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"};
-  let ROLE=null, VERSION="", trailers={}, dockPlates={}, confirmations=[];
+  let ROLE=null, VERSION="", trailers={}, dockPlates={}, confirmations=[], auditRows=[];
   const plateEditOpen={};
   const el = id => document.getElementById(id);
 
@@ -355,205 +674,295 @@
   const isSuper  = () => path().startsWith("/supervisor");
 
   const fmtTime = ms => {
-    if (!ms) return "";
-    try { return new Date(ms).toLocaleString(undefined,{month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"}); }
-    catch { return String(ms); }
+    if(!ms) return "";
+    try{ return new Date(ms).toLocaleString(undefined,{month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"}); }
+    catch{ return String(ms); }
+  };
+
+  const timeAgo = ms => {
+    if(!ms) return "";
+    const s=Math.floor((Date.now()-ms)/1000);
+    if(s<60) return `${s}s ago`;
+    if(s<3600) return `${Math.floor(s/60)}m ago`;
+    if(s<86400) return `${Math.floor(s/3600)}h ago`;
+    return `${Math.floor(s/86400)}d ago`;
   };
 
   const esc = s => String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
 
-  async function apiJson(url, opts) {
-    const res = await fetch(url, opts);
-    if (res.status===401) { location.href="/login?expired=1"; return; }
-    if (!res.ok) { const t=await res.text().catch(()=>""); throw new Error(t||"HTTP "+res.status); }
-    const ct = res.headers.get("content-type")||"";
-    return ct.includes("application/json") ? res.json() : {};
+  async function apiJson(url,opts){
+    const res=await fetch(url,opts);
+    if(res.status===401){location.href="/login?expired=1";return;}
+    if(!res.ok){const t=await res.text().catch(()=>"");throw new Error(t||"HTTP "+res.status);}
+    const ct=res.headers.get("content-type")||"";
+    return ct.includes("application/json")?res.json():{};
   }
 
-  function toast(title, body) {
+  function toast(title,body,type){
     el("toastTitle").textContent=title; el("toastBody").textContent=body||"";
-    el("toast").style.display="block";
-    clearTimeout(toast._t); toast._t=setTimeout(()=>el("toast").style.display="none",4500);
+    const t=el("toast");
+    t.style.borderColor=type==="ok"?"rgba(34,197,94,.4)":type==="warn"?"rgba(245,158,11,.4)":"var(--border2)";
+    t.style.display="block";
+    clearTimeout(toast._t); toast._t=setTimeout(()=>t.style.display="none",4500);
   }
 
   let _mr=null;
-  function showModal(title, body) {
-    return new Promise(resolve => {
-      _mr=resolve;
-      el("modalTitle").textContent=title; el("modalBody").textContent=body;
-      el("modalOverlay").classList.remove("hidden"); el("modalConfirm").focus();
+  function showModal(title,body){
+    return new Promise(r=>{
+      _mr=r; el("modalTitle").textContent=title; el("modalBody").textContent=body;
+      el("modalOv").classList.remove("hidden"); el("modalConfirm").focus();
     });
   }
-  el("modalCancel").addEventListener("click",()=>{ el("modalOverlay").classList.add("hidden"); if(_mr){_mr(false);_mr=null;} });
-  el("modalConfirm").addEventListener("click",()=>{ el("modalOverlay").classList.add("hidden"); if(_mr){_mr(true);_mr=null;} });
-  el("modalOverlay").addEventListener("click",e=>{ if(e.target===el("modalOverlay")){ el("modalOverlay").classList.add("hidden"); if(_mr){_mr(false);_mr=null;} } });
+  el("modalCancel").addEventListener("click",()=>{el("modalOv").classList.add("hidden");if(_mr){_mr(false);_mr=null;}});
+  el("modalConfirm").addEventListener("click",()=>{el("modalOv").classList.add("hidden");if(_mr){_mr(true);_mr=null;}});
+  el("modalOv").addEventListener("click",e=>{if(e.target===el("modalOv")){el("modalOv").classList.add("hidden");if(_mr){_mr(false);_mr=null;}}});
 
-  function setPlatesOpen(open) {
-    const t=el("dockPlatesToggle"), b=el("dockPlatesBody"); if(!t||!b) return;
+  // Accordion
+  function setPlatesOpen(open){
+    const t=el("dockPlatesToggle"),b=el("dockPlatesBody");if(!t||!b)return;
     t.setAttribute("aria-expanded",open?"true":"false");
-    if(!open){ b.style.maxHeight="0px"; try{localStorage.setItem("platesOpen","0");}catch{} return; }
-    requestAnimationFrame(()=>{ const h=(b.firstElementChild||b).scrollHeight; b.style.maxHeight=(h+20)+"px"; });
+    if(!open){b.style.maxHeight="0px";try{localStorage.setItem("platesOpen","0");}catch{}return;}
+    requestAnimationFrame(()=>{const h=(b.firstElementChild||b).scrollHeight;b.style.maxHeight=(h+20)+"px";});
     try{localStorage.setItem("platesOpen","1");}catch{}
   }
 
-  const statusTag = s => {
-    const v=String(s||"");
-    const cls=["Ready","Departed","Dock Ready"].includes(v)?"good":["Incoming","Loading","Dropped"].includes(v)?"warn":"";
-    return `<span class="tag ${cls}">${esc(v||"—")}</span>`;
+  // Status tag
+  const STATUS_MAP={
+    "Loading":     {cls:"s-loading",   label:"Loading"},
+    "Ready":       {cls:"s-ready",     label:"Ready"},
+    "Dock Ready":  {cls:"s-dockready", label:"Dock Ready"},
+    "Dropped":     {cls:"s-dropped",   label:"Dropped"},
+    "Incoming":    {cls:"s-incoming",  label:"Incoming"},
+    "Departed":    {cls:"s-departed",  label:"Departed"},
   };
-  const plateTag = s => {
-    const v=String(s||"Unknown");
-    return `<span class="tag ${v==="OK"?"good":v==="Service"?"bad":""}">${esc(v)}</span>`;
+  const ROW_CLASS_MAP={
+    "Loading":"r-loading","Ready":"r-ready","Dock Ready":"r-dockready",
+    "Dropped":"r-dropped","Incoming":"r-incoming","Departed":"r-departed"
   };
 
-  function renderBoardInto(tbodyEl, countEl, sq, dq, stq, readOnly) {
+  function statusTag(s){
+    const m=STATUS_MAP[s]||{cls:"s-unknown",label:s||"—"};
+    return `<span class="stag ${m.cls}"><span class="stag-dot"></span>${esc(m.label)}</span>`;
+  }
+
+  function plateTag(s){
+    const cls=s==="OK"?"s-ready":s==="Service"?"s-loading":"s-unknown";
+    return `<span class="stag ${cls}"><span class="stag-dot"></span>${esc(s||"Unknown")}</span>`;
+  }
+
+  // Active nav highlight
+  function highlightNav(){
+    const p=path();
+    ["navDispatch","navDock","navDriver","navSupervisor"].forEach(id=>el(id)?.classList.remove("active"));
+    if(p.startsWith("/supervisor")) el("navSupervisor")?.classList.add("active");
+    else if(p.startsWith("/driver"))     el("navDriver")?.classList.add("active");
+    else if(p.startsWith("/dock"))       el("navDock")?.classList.add("active");
+    else if(p==="/"||p.startsWith("/index")) el("navDispatch")?.classList.add("active");
+    // Update role badge
+    const rb=el("roleBadge");
+    if(ROLE){rb.style.display="";rb.textContent=ROLE;}
+  }
+
+  // Board render
+  const prevRowStatuses={};
+  function renderBoardInto(tbodyEl, countEl, sq, dq, stq, readOnly){
     const q=(sq?.value||"").trim().toLowerCase(), df=(dq?.value||"").trim(), sf=(stq?.value||"").trim();
     const rows=Object.entries(trailers).map(([t,r])=>({trailer:t,...r})).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
     const filt=rows.filter(r=>{
-      if(df&&r.direction!==df) return false;
-      if(sf&&r.status!==sf) return false;
-      if(q&&!`${r.trailer} ${r.door||""} ${r.note||""} ${r.direction||""} ${r.status||""} ${r.dropType||""}`.toLowerCase().includes(q)) return false;
+      if(df&&r.direction!==df)return false;
+      if(sf&&r.status!==sf)return false;
+      if(q&&!`${r.trailer} ${r.door||""} ${r.note||""} ${r.direction||""} ${r.status||""} ${r.dropType||""}`.toLowerCase().includes(q))return false;
       return true;
     });
     if(countEl) countEl.textContent=`${filt.length} trailer${filt.length===1?"":"s"}`;
-    if(!filt.length){ tbodyEl.innerHTML=`<div class="brow bempty"><span>No trailers match filters.</span></div>`; return; }
+    if(!filt.length){
+      tbodyEl.innerHTML=`<div class="board-empty">No trailers match your filters.</div>`;
+      return;
+    }
     const canEdit=!readOnly&&ROLE==="dispatcher", canDock=!readOnly&&ROLE==="dock";
     tbodyEl.innerHTML=filt.map(r=>{
-      const door=r.door?`<span class="mono">${esc(r.door)}</span>`:`<span class="muted">—</span>`;
-      const note=r.note?esc(r.note):`<span class="muted">—</span>`;
-      const dtype=r.dropType?esc(r.dropType):`<span class="muted">—</span>`;
-      let acts=`<span class="muted">—</span>`;
-      if(canEdit) acts=`<div class="bacts"><button class="tbl-btn" data-act="edit" data-trailer-id="${esc(r.trailer)}">Edit</button><button class="tbl-btn danger" data-act="delete" data-trailer-id="${esc(r.trailer)}">Del</button></div>`;
-      else if(canDock) acts=`<div class="bacts"><button class="tbl-btn" data-act="dockSet" data-to="Loading" data-trailer-id="${esc(r.trailer)}">Loading</button><button class="tbl-btn" data-act="dockSet" data-to="Dock Ready" data-trailer-id="${esc(r.trailer)}">Ready</button></div>`;
-      return `<div class="brow bdata"><span class="mono" style="font-weight:700;">${esc(r.trailer)}</span><span>${esc(r.direction||"—")}</span><span>${statusTag(r.status)}</span><span>${door}</span><span>${dtype}</span><span title="${esc(r.note||"")}">${note}</span><span class="muted">${esc(fmtTime(r.updatedAt))}</span><span>${acts}</span></div>`;
+      const rowCls=ROW_CLASS_MAP[r.status]||"";
+      const prevStatus=prevRowStatuses[r.trailer];
+      const flash=(prevStatus&&prevStatus!==r.status)?" flashing":"";
+      prevRowStatuses[r.trailer]=r.status;
+      const door=r.door?`<span class="door-num">${esc(r.door)}</span>`:`<span style="color:var(--muted2)">—</span>`;
+      const note=r.note?esc(r.note):`<span style="color:var(--muted2)">—</span>`;
+      const dtype=r.dropType?esc(r.dropType):`<span style="color:var(--muted2)">—</span>`;
+      const ago=r.updatedAt?timeAgo(r.updatedAt):"";
+      let acts=`<span style="color:var(--muted2)">—</span>`;
+      if(canEdit) acts=`<div class="acts-cell"><button class="btn btn-sm" data-act="edit" data-trailer-id="${esc(r.trailer)}">Edit</button><button class="btn btn-sm btn-danger" data-act="delete" data-trailer-id="${esc(r.trailer)}">Del</button></div>`;
+      else if(canDock) acts=`<div class="acts-cell"><button class="btn btn-sm" data-act="dockSet" data-to="Loading" data-trailer-id="${esc(r.trailer)}">Loading</button><button class="btn btn-sm" data-act="dockSet" data-to="Dock Ready" data-trailer-id="${esc(r.trailer)}">Ready</button></div>`;
+      return `<div class="board-row ${rowCls}${flash}">
+        <span class="trailer-num">${esc(r.trailer)}</span>
+        <span style="font-size:12px;color:var(--muted)">${esc(r.direction||"—")}</span>
+        <span>${statusTag(r.status)}</span>
+        <span>${door}</span>
+        <span style="font-size:11px;color:var(--muted)">${dtype}</span>
+        <span class="note-cell" title="${esc(r.note||"")}">${note}</span>
+        <span class="time-cell" title="${esc(fmtTime(r.updatedAt))}">${esc(ago)}</span>
+        <span>${acts}</span>
+      </div>`;
     }).join("");
   }
 
-  function renderBoard()    { renderBoardInto(el("tbody"),el("countsPill"),el("search"),el("filterDir"),el("filterStatus"),false); }
-  function renderSupBoard() { renderBoardInto(el("supTbody"),el("supCountsPill"),el("supSearch"),el("supFilterDir"),el("supFilterStatus"),true); renderSupStats(); }
-
-  function renderSupStats() {
-    const v=Object.values(trailers);
-    el("supStats").innerHTML=[
-      {val:v.length,lbl:"Total"},
-      {val:v.filter(r=>r.status==="Loading").length,lbl:"Loading"},
-      {val:v.filter(r=>["Ready","Dock Ready"].includes(r.status)).length,lbl:"Ready"},
-      {val:v.filter(r=>r.status==="Departed").length,lbl:"Departed"},
-      {val:confirmations.length,lbl:"Safety Confirms"},
-    ].map(s=>`<div class="stat"><div class="val">${s.val}</div><div class="lbl">${s.lbl}</div></div>`).join("");
+  function renderBoard(){
+    renderBoardInto(el("tbody"),el("countsPill"),el("search"),el("filterDir"),el("filterStatus"),false);
+    el("lastUpdated").textContent="Last updated: "+fmtTime(Date.now());
+  }
+  function renderSupBoard(){
+    renderBoardInto(el("supTbody"),el("supCountsPill"),el("supSearch"),el("supFilterDir"),el("supFilterStatus"),true);
+    el("supLastUpdated").textContent="Last updated: "+fmtTime(Date.now());
+    renderSupStats();
   }
 
-  function renderPlates() {
-    if(isDriver()||isSuper()) return;
+  function renderSupStats(){
+    const v=Object.values(trailers);
+    const stats=[
+      {val:v.length,lbl:"Total Trailers",cls:""},
+      {val:v.filter(r=>r.status==="Loading").length,lbl:"Loading",cls:"s-loading-stat"},
+      {val:v.filter(r=>["Ready","Dock Ready"].includes(r.status)).length,lbl:"Ready",cls:"s-ready-stat"},
+      {val:v.filter(r=>r.status==="Departed").length,lbl:"Departed",cls:""},
+      {val:confirmations.length,lbl:"Safety Confirms",cls:"s-conf-stat"},
+    ];
+    el("supStats").innerHTML=stats.map(s=>`<div class="stat ${s.cls}"><div class="s-val">${s.val}</div><div class="s-lbl">${s.lbl}</div></div>`).join("");
+  }
+
+  function renderPlates(){
+    if(isDriver()||isSuper())return;
     const canEdit=ROLE==="dispatcher"||ROLE==="dock";
     const doors=[]; for(let d=18;d<=42;d++) doors.push(String(d));
     const pm=el("platesMini");
-    if(pm){ const v=Object.values(dockPlates||{}); pm.textContent=`${v.filter(p=>p?.status==="OK").length} OK • ${v.filter(p=>p?.status==="Service").length} Service`; }
+    if(pm){ const v=Object.values(dockPlates||{}); pm.textContent=`${v.filter(p=>p?.status==="OK").length} OK · ${v.filter(p=>p?.status==="Service").length} Service`; }
     el("platesGrid").innerHTML=doors.map(door=>{
-      const p=dockPlates[door]||{status:"Unknown",note:"",updatedAt:0};
+      const p=dockPlates[door]||{status:"Unknown",note:""};
       const open=!!plateEditOpen[door]&&canEdit;
-      return `<div class="plate"><div class="top"><div class="door">D <span class="mono">${esc(door)}</span></div>${plateTag(p.status)}</div>
-        <div class="note" title="${esc(p.note||"")}">${p.note?esc(p.note):`<span class="muted">No note</span>`}</div>
-        ${open?`<div class="row" style="gap:6px;"><div><select data-plate-status="${esc(door)}"><option ${p.status==="OK"?"selected":""}>OK</option><option ${p.status==="Service"?"selected":""}>Service</option><option ${p.status==="Unknown"?"selected":""}>Unknown</option></select></div><div><input data-plate-note="${esc(door)}" placeholder="Note" value="${esc(p.note||"")}" /></div></div>`:""}
-        <div class="btnRow">${canEdit?`<button class="tinyBtn" data-plate-toggle="${esc(door)}">${open?"Close":"Edit"}</button>${open?`<button class="tinyBtn" data-plate-save="${esc(door)}">Save</button>`:""}`:""}  </div></div>`;
+      const plateCls=p.status==="OK"?"p-ok":p.status==="Service"?"p-service":"";
+      return `<div class="plate ${plateCls}">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span class="p-door">D${esc(door)}</span>${plateTag(p.status)}
+        </div>
+        <div class="p-note" title="${esc(p.note||"")}">${p.note?esc(p.note):`<span style="color:var(--muted2)">—</span>`}</div>
+        ${open?`<div class="p-edit-row">
+          <select data-plate-status="${esc(door)}">
+            <option ${p.status==="OK"?"selected":""}>OK</option>
+            <option ${p.status==="Service"?"selected":""}>Service</option>
+            <option ${p.status==="Unknown"?"selected":""}>Unknown</option>
+          </select>
+          <input data-plate-note="${esc(door)}" placeholder="Note" value="${esc(p.note||"")}" />
+        </div>`:""}
+        <div class="p-btns">${canEdit?`<button class="p-btn" data-plate-toggle="${esc(door)}">${open?"Close":"Edit"}</button>${open?`<button class="p-btn" data-plate-save="${esc(door)}">Save</button>`:""}`:" "}</div>
+      </div>`;
     }).join("");
     if(el("dockPlatesToggle")?.getAttribute("aria-expanded")==="true") setPlatesOpen(true);
   }
 
-  function renderConf() {
+  function renderConf(){
     el("confCount").textContent=confirmations.length;
-    el("confBody").innerHTML=!confirmations.length?`<tr><td colspan="4" class="muted">No confirmations yet.</td></tr>`:
-      confirmations.map(c=>`<tr><td class="muted small">${esc(fmtTime(c.at))}</td><td class="mono"><strong>${esc(c.trailer||"—")}</strong></td><td class="mono">${esc(c.door||"—")}</td><td class="muted small">${esc(`${c.ip||""} ${c.userAgent||""}`.trim()||"—")}</td></tr>`).join("");
+    el("confBody").innerHTML=!confirmations.length?`<tr><td colspan="4" style="color:var(--muted);padding:16px;">No confirmations yet.</td></tr>`:
+      confirmations.map(c=>`<tr><td class="time-cell">${esc(fmtTime(c.at))}</td><td style="font-family:var(--mono);font-weight:700;">${esc(c.trailer||"—")}</td><td style="font-family:var(--mono);">${esc(c.door||"—")}</td><td style="color:var(--muted);font-size:11px;">${esc(`${c.ip||""} ${c.userAgent||""}`.trim()||"—")}</td></tr>`).join("");
   }
 
-  function renderSupConf() {
-    const sb=el("supConfBody"), sc=el("supConfCount"); if(!sb) return;
+  function renderSupConf(){
+    const sb=el("supConfBody"),sc=el("supConfCount");if(!sb)return;
     sc.textContent=confirmations.length;
-    sb.innerHTML=!confirmations.length?`<tr><td colspan="4" class="muted">No confirmations yet.</td></tr>`:
-      confirmations.map(c=>`<tr><td class="muted small">${esc(fmtTime(c.at))}</td><td class="mono"><strong>${esc(c.trailer||"—")}</strong></td><td class="mono">${esc(c.door||"—")}</td><td class="muted small">${esc(`${c.ip||""} ${c.userAgent||""}`.trim()||"—")}</td></tr>`).join("");
+    sb.innerHTML=!confirmations.length?`<tr><td colspan="4" style="color:var(--muted);padding:16px;">No confirmations yet.</td></tr>`:
+      confirmations.map(c=>`<tr><td class="time-cell">${esc(fmtTime(c.at))}</td><td style="font-family:var(--mono);font-weight:700;">${esc(c.trailer||"—")}</td><td style="font-family:var(--mono);">${esc(c.door||"—")}</td><td style="color:var(--muted);font-size:11px;">${esc((c.ip||"").split(",")[0]||"—")}</td></tr>`).join("");
   }
 
-  async function loadAuditInto(bodyEl, countEl, cols) {
-    try {
-      const rows=await apiJson("/api/audit?limit=200"); if(!rows) return;
-      countEl.textContent=rows.length;
-      if(!rows.length){ bodyEl.innerHTML=`<tr><td colspan="${cols}" class="muted">No audit entries.</td></tr>`; return; }
+  // Activity feed for supervisor
+  function renderFeed(rows){
+    const feed=el("supFeed");if(!feed)return;
+    el("supAuditCount").textContent=rows.length;
+    if(!rows.length){feed.innerHTML=`<div style="color:var(--muted);font-size:13px;">No activity yet.</div>`;return;}
+    const colorMap={trailer_create:"var(--c-ready)",trailer_update:"var(--c-dropped)",trailer_delete:"var(--c-bad)",trailer_status_set:"var(--c-loading)",driver_drop:"var(--c-incoming)",safety_confirmed:"var(--c-dockready)",plate_set:"var(--muted)",pin_changed:"var(--c-loading)",trailer_clear_all:"var(--c-bad)"};
+    feed.innerHTML=rows.slice(0,12).map(r=>{
+      const color=colorMap[r.action]||"var(--muted2)";
+      let txt=`<strong>${esc(r.actorRole||"—")}</strong> ${esc(r.action||"—")}`;
+      if(r.entityId&&r.entityId!=="*") txt+=` on <strong>${esc(r.entityId)}</strong>`;
+      return `<div class="feed-item"><div class="feed-dot" style="background:${color};box-shadow:0 0 4px ${color};"></div><div style="flex:1;min-width:0;"><div class="feed-text">${txt}</div></div><div class="feed-time">${esc(timeAgo(r.at))}</div></div>`;
+    }).join("");
+  }
+
+  async function loadAuditInto(bodyEl, countEl, cols){
+    try{
+      const rows=await apiJson("/api/audit?limit=200");if(!rows)return;
+      if(countEl) countEl.textContent=rows.length;
+      auditRows=rows;
+      if(!rows.length){bodyEl.innerHTML=`<tr><td colspan="${cols}" style="color:var(--muted);padding:16px;">No entries.</td></tr>`;return;}
+      if(cols===6){ renderFeed(rows); return; }
       bodyEl.innerHTML=rows.map(r=>{
-        let d=""; try{d=JSON.stringify(r.details||{});}catch{}
-        if(cols===7) return `<tr><td class="muted small">${esc(fmtTime(r.at))}</td><td>${esc(r.actorRole||"—")}</td><td>${esc(r.action||"—")}</td><td>${esc(r.entityType||"—")}</td><td class="mono">${esc(r.entityId||"—")}</td><td class="muted small" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(d)}">${esc(d)}</td><td class="muted small">${esc(r.ip||"—")}</td></tr>`;
-        return `<tr><td class="muted small">${esc(fmtTime(r.at))}</td><td>${esc(r.actorRole||"—")}</td><td>${esc(r.action||"—")}</td><td>${esc(r.entityType||"—")}</td><td class="mono">${esc(r.entityId||"—")}</td><td class="muted small" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(d)}">${esc(d)}</td></tr>`;
+        let d="";try{d=JSON.stringify(r.details||{});}catch{}
+        return `<tr><td class="time-cell">${esc(fmtTime(r.at))}</td><td>${esc(r.actorRole||"—")}</td><td>${esc(r.action||"—")}</td><td>${esc(r.entityType||"—")}</td><td style="font-family:var(--mono);">${esc(r.entityId||"—")}</td><td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;" title="${esc(d)}">${esc(d)}</td><td style="color:var(--muted);font-size:11px;">${esc(r.ip||"—")}</td></tr>`;
       }).join("");
-    } catch(e){ toast("Audit error",e.message); }
+    }catch(e){toast("Audit error",e.message);}
   }
 
+  // Role panels
   function dispatcherPanelHtml(){ return `
-    <div class="info"><div class="title">Dispatcher Controls</div><div class="muted small">Add/update trailers, delete, or clear all.</div></div>
-    <label>Trailer #</label><input id="d_trailer" placeholder="e.g. 5312" autocomplete="off" />
+    <div class="panel-info"><div class="pi-title">Dispatcher Controls</div><div class="pi-sub">Add, update, or delete trailers.</div></div>
+    <label>Trailer #</label><input id="d_trailer" placeholder="e.g. 5312" autocomplete="off" style="font-family:var(--mono);font-weight:700;" />
     <div class="row"><div><label>Direction</label><select id="d_direction"><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select></div>
     <div><label>Status</label><select id="d_status"><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select></div></div>
-    <div class="row"><div><label>Door (18–42)</label><input id="d_door" placeholder="e.g. 21" /></div>
+    <div class="row"><div><label>Door (18–42)</label><input id="d_door" placeholder="e.g. 21" style="font-family:var(--mono);" /></div>
     <div><label>Drop Type</label><select id="d_dropType"><option value="">—</option><option>Empty</option><option>Loaded</option></select></div></div>
     <label>Note</label><textarea id="d_note" placeholder="Short note"></textarea>
-    <div class="row" style="margin-top:10px;"><button class="secondary" id="btnSaveTrailer">Save Trailer</button></div>
+    <button class="btn btn-primary btn-full" style="margin-top:12px;" id="btnSaveTrailer">Save Trailer</button>
     <div class="divider"></div>
-    <button class="secondary danger" id="btnClearAll">Clear All Trailers</button>
-    <div class="muted small" style="margin-top:8px;">Removes all trailers from the board.</div>`; }
+    <button class="btn btn-danger btn-full" id="btnClearAll">Clear All Trailers</button>
+    <div style="margin-top:8px;font-size:11px;color:var(--muted);">Removes all trailers from the board.</div>`; }
 
   function dockPanelHtml(){ return `
-    <div class="info"><div class="title">Dock Controls</div><div class="muted small">Use table buttons to set Loading / Dock Ready.</div></div>
-    <div class="divider"></div><div class="muted small">Dock Plates below — you can edit plate status and notes.</div>`; }
+    <div class="panel-info"><div class="pi-title">Dock Controls</div><div class="pi-sub">Use table buttons to set Loading or Dock Ready.</div></div>
+    <div class="divider"></div>
+    <div style="font-size:12px;color:var(--muted);">Dock Plates are below — edit plate status and notes.</div>`; }
 
-  function renderRolePanel() {
-    const pt=el("panelTitle"), ps=el("panelSub"), pb=el("panelBody");
+  function renderRolePanel(){
     const dpc=el("dockPlatesCard");
     if(ROLE==="dispatcher"){
-      pt.textContent="Dispatcher"; ps.textContent="Add / Update / Delete";
-      pb.innerHTML=dispatcherPanelHtml();
+      el("panelTitle").textContent="Dispatcher"; el("panelSub").textContent="Add / Update / Delete";
+      el("panelBody").innerHTML=dispatcherPanelHtml();
       el("btnLogout").style.display=""; el("btnAudit").style.display="";
       if(dpc) dpc.style.display=""; renderPlates(); return;
     }
     if(ROLE==="dock"){
-      pt.textContent="Dock Controls"; ps.textContent="Loading / Dock Ready • Plates";
-      pb.innerHTML=dockPanelHtml();
+      el("panelTitle").textContent="Dock Controls"; el("panelSub").textContent="Loading / Dock Ready";
+      el("panelBody").innerHTML=dockPanelHtml();
       el("btnLogout").style.display=""; el("btnAudit").style.display="none";
       if(dpc) dpc.style.display=""; renderPlates(); return;
     }
-    pt.textContent="Not Logged In"; ps.textContent="Go to /login";
-    pb.innerHTML=`<div class="muted small">Open <a href="/login">/login</a> or use <a href="/driver">/driver</a>.</div>`;
+    el("panelTitle").textContent="Not Logged In"; el("panelSub").textContent="/login";
+    el("panelBody").innerHTML=`<div style="color:var(--muted);font-size:13px;">Open <a href="/login" style="color:#93c5fd;">/login</a> to access dispatcher or dock controls.</div>`;
     el("btnLogout").style.display="none"; el("btnAudit").style.display="none";
     if(dpc) dpc.style.display="none";
   }
 
-  // ── Actions ──
-  async function doLogout(){ try{await apiJson("/api/logout",{method:"POST",headers:CSRF});}catch{} location.href="/login"; }
+  // Actions
+  async function doLogout(){try{await apiJson("/api/logout",{method:"POST",headers:CSRF});}catch{}location.href="/login";}
 
   async function dispSave(){
     const trailer=(el("d_trailer")?.value||"").trim();
-    if(!trailer) return toast("Missing trailer","Enter a trailer number.");
+    if(!trailer)return toast("Missing trailer","Enter a trailer number.");
     try{
-      await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({
-        trailer,direction:(el("d_direction")?.value||"").trim(),status:(el("d_status")?.value||"").trim(),
-        door:(el("d_door")?.value||"").trim(),note:(el("d_note")?.value||"").trim(),dropType:(el("d_dropType")?.value||"").trim()
-      })});
-      toast("Saved",`Trailer ${trailer} updated.`);
+      await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,direction:(el("d_direction")?.value||"").trim(),status:(el("d_status")?.value||"").trim(),door:(el("d_door")?.value||"").trim(),note:(el("d_note")?.value||"").trim(),dropType:(el("d_dropType")?.value||"").trim()})});
+      toast("Saved",`Trailer ${trailer} updated.`,"ok");
     }catch(e){toast("Save failed",e.message);}
   }
 
   async function dispDelete(trailer){
-    if(!await showModal("Delete Trailer",`Delete trailer ${trailer}? Cannot be undone.`)) return;
-    try{ await apiJson("/api/delete",{method:"POST",headers:CSRF,body:JSON.stringify({trailer})}); toast("Deleted",`${trailer} removed.`); }
-    catch(e){ toast("Delete failed",e.message); }
+    if(!await showModal("Delete Trailer",`Delete trailer ${trailer}? Cannot be undone.`))return;
+    try{await apiJson("/api/delete",{method:"POST",headers:CSRF,body:JSON.stringify({trailer})});toast("Deleted",`${trailer} removed.`);}
+    catch(e){toast("Delete failed",e.message);}
   }
 
   async function dispClear(){
-    if(!await showModal("Clear All Trailers","Remove ALL trailers? Cannot be undone.")) return;
-    try{ await apiJson("/api/clear",{method:"POST",headers:CSRF}); toast("Cleared","All trailers removed."); }
-    catch(e){ toast("Clear failed",e.message); }
+    if(!await showModal("Clear All Trailers","Remove ALL trailers? Cannot be undone."))return;
+    try{await apiJson("/api/clear",{method:"POST",headers:CSRF});toast("Cleared","All trailers removed.");}
+    catch(e){toast("Clear failed",e.message);}
   }
 
   async function dockSet(trailer,status){
-    try{ await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})}); toast("Updated",`${trailer} → ${status}`); }
-    catch(e){ toast("Update failed",e.message); }
+    try{await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})});toast("Updated",`${trailer} → ${status}`,"ok");}
+    catch(e){toast("Update failed",e.message);}
   }
 
   async function plateSave(door){
@@ -561,152 +970,152 @@
     const note=(document.querySelector(`[data-plate-note="${CSS.escape(door)}"]`)?.value||"").trim();
     try{
       await apiJson("/api/dockplates/set",{method:"POST",headers:CSRF,body:JSON.stringify({door,status,note})});
-      toast("Plate saved",`Door ${door} → ${status}`); plateEditOpen[door]=false; renderPlates();
-    }catch(e){ toast("Plate save failed",e.message); }
+      toast("Plate saved",`Door ${door} → ${status}`,"ok");
+      plateEditOpen[door]=false;renderPlates();
+    }catch(e){toast("Plate save failed",e.message);}
   }
 
   async function driverDrop(){
-    const trailer=(el("v_trailer")?.value||"").trim(), door=(el("v_door")?.value||"").trim(), dropType=(el("v_dropType")?.value||"").trim();
-    if(!trailer) return toast("Missing trailer","Enter trailer number.");
-    if(!door)    return toast("Missing door","Enter door 18–42.");
+    const trailer=(el("v_trailer")?.value||"").trim(),door=(el("v_door")?.value||"").trim(),dropType=(el("v_dropType")?.value||"").trim();
+    if(!trailer)return toast("Missing trailer","Enter trailer number.");
+    if(!door)return toast("Missing door","Enter door 18–42.");
     try{
       await apiJson("/api/driver/drop",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door,dropType})});
-      toast("Drop submitted",`${trailer} at door ${door} (${dropType}).`);
-      el("v_trailer").value=""; el("v_door").value=""; el("v_dropType").value="Empty";
-    }catch(e){ toast("Drop failed",e.message); }
+      // Show success screen
+      el("dropForm").style.display="none";
+      el("dropSuccess").style.display="flex";
+      el("dropSuccessDetail").textContent=`Trailer ${trailer} at door ${door} (${dropType})`;
+    }catch(e){toast("Drop failed",e.message);}
   }
 
   async function confSafety(){
-    if(!el("c_loadSecured")?.checked||!el("c_dockPlateUp")?.checked) return toast("Missing confirmations","Both checkboxes must be checked.");
+    if(!el("c_loadSecured")?.checked||!el("c_dockPlateUp")?.checked)return toast("Missing confirmations","Both checkboxes must be checked.");
     try{
-      await apiJson("/api/confirm-safety",{method:"POST",headers:CSRF,body:JSON.stringify({
-        trailer:(el("c_trailer")?.value||"").trim(),door:(el("c_door")?.value||"").trim(),loadSecured:true,dockPlateUp:true
-      })});
-      toast("Confirmed","Safety confirmation submitted.");
-      el("c_loadSecured").checked=false; el("c_dockPlateUp").checked=false;
-    }catch(e){ toast("Confirm failed",e.message); }
+      await apiJson("/api/confirm-safety",{method:"POST",headers:CSRF,body:JSON.stringify({trailer:(el("c_trailer")?.value||"").trim(),door:(el("c_door")?.value||"").trim(),loadSecured:true,dockPlateUp:true})});
+      el("safetyForm").style.display="none";
+      el("safetySuccess").style.display="flex";
+    }catch(e){toast("Confirm failed",e.message);}
   }
 
-  async function setPin(role, inputId, confirmId){
-    const pin=(el(inputId)?.value||"").trim(), conf=(el(confirmId)?.value||"").trim();
-    if(pin.length<4) return toast("PIN too short","Minimum 4 characters.");
-    if(pin!==conf)   return toast("PINs don't match","Enter matching PINs.");
-    if(!await showModal("Change PIN",`Set new ${role} PIN? Existing sessions for this role must log in again.`)) return;
+  async function setPin(role,inputId,confirmId){
+    const pin=(el(inputId)?.value||"").trim(),conf=(el(confirmId)?.value||"").trim();
+    if(pin.length<4)return toast("PIN too short","Minimum 4 characters.");
+    if(pin!==conf)return toast("PINs don't match","Enter matching PINs.");
+    if(!await showModal("Change PIN",`Set new ${role} PIN? Existing sessions must log in again.`))return;
     try{
       await apiJson("/api/supervisor/set-pin",{method:"POST",headers:CSRF,body:JSON.stringify({role,pin})});
-      toast("PIN updated",`${role} PIN changed.`);
-      el(inputId).value=""; el(confirmId).value="";
-    }catch(e){ toast("PIN change failed",e.message); }
+      toast("PIN updated",`${role} PIN changed.`,"ok");
+      el(inputId).value="";el(confirmId).value="";
+    }catch(e){toast("PIN change failed",e.message);}
   }
 
-  // ── Init ──
+  // Init
   async function loadInitial(){
-    try{ const w=await apiJson("/api/whoami"); ROLE=w?.role; VERSION=w?.version||""; }
-    catch{ ROLE=null; VERSION=""; }
+    try{const w=await apiJson("/api/whoami");ROLE=w?.role;VERSION=w?.version||"";}
+    catch{ROLE=null;VERSION="";}
 
-    el("roleText").textContent = ROLE||(isDriver()?"driver":isSuper()?"supervisor":"none");
-    el("verText").textContent  = VERSION||"—";
+    el("verText").textContent=VERSION||"—";
 
-    // Show the right view
-    const dv=el("driverView"), sv=el("supervisorView"), dsp=el("dispatchView");
-    dv.style.display="none"; sv.style.display="none"; dsp.style.display="none";
+    // Show correct view
+    el("driverView").style.display="none";
+    el("supervisorView").style.display="none";
+    el("dispatchView").style.display="none";
 
     if(isDriver()){
-      dv.style.display="";
-      el("btnLogout").style.display="none"; el("btnAudit").style.display="none";
+      el("driverView").style.display="";
+      el("btnLogout").style.display="none";el("btnAudit").style.display="none";
     } else if(isSuper()||ROLE==="supervisor"){
-      sv.style.display="";
-      el("btnLogout").style.display=""; el("btnAudit").style.display="none";
+      el("supervisorView").style.display="";
+      el("btnLogout").style.display="";el("btnAudit").style.display="none";
     } else {
-      dsp.style.display="";
+      el("dispatchView").style.display="";
     }
 
-    try{ trailers=await apiJson("/api/state"); }catch{ trailers={}; }
+    highlightNav();
+
+    try{trailers=await apiJson("/api/state");}catch{trailers={};}
     if(!isDriver()&&!isSuper()){
-      try{ dockPlates=await apiJson("/api/dockplates"); }catch{ dockPlates={}; }
+      try{dockPlates=await apiJson("/api/dockplates");}catch{dockPlates={};}
     }
 
     if(isDriver()){
-      // nothing extra needed
+      // nothing
     } else if(isSuper()||ROLE==="supervisor"){
-      renderSupBoard(); renderSupConf();
-      loadAuditInto(el("supAuditBody"),el("supAuditCount"),6);
+      renderSupBoard();renderSupConf();
+      loadAuditInto(null,el("supAuditCount"),6).then(()=>{ try{renderFeed(auditRows);}catch{} });
     } else {
-      renderRolePanel(); renderBoard(); renderConf();
-      let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{}
+      renderRolePanel();renderBoard();renderConf();
+      let open=false;try{open=localStorage.getItem("platesOpen")==="1";}catch{}
       setPlatesOpen(open);
     }
   }
 
-  // ── Click handler ──
+  // Click handler
   document.addEventListener("click", async ev => {
     const t=ev.target;
-    if(t?.closest?.("#dockPlatesToggle")){ setPlatesOpen(el("dockPlatesToggle").getAttribute("aria-expanded")!=="true"); return; }
+    if(t?.closest?.("#dockPlatesToggle")){setPlatesOpen(el("dockPlatesToggle").getAttribute("aria-expanded")!=="true");return;}
 
     const id=t?.id;
-    if(id==="btnLogout")              return doLogout();
-    if(id==="btnRefresh")             return loadInitial();
-    if(id==="btnSaveTrailer")         return dispSave();
-    if(id==="btnClearAll")            return dispClear();
-    if(id==="btnDriverDrop")          return driverDrop();
-    if(id==="btnConfirmSafety")       return confSafety();
-    if(id==="btnSetDispatcherPin")    return setPin("dispatcher","pin_dispatcher","pin_dispatcher_confirm");
-    if(id==="btnSetDockPin")          return setPin("dock","pin_dock","pin_dock_confirm");
-    if(id==="btnSetSupervisorPin")    return setPin("supervisor","pin_supervisor","pin_supervisor_confirm");
+    if(id==="btnLogout")           return doLogout();
+    if(id==="btnRefresh")          return loadInitial();
+    if(id==="btnSaveTrailer")      return dispSave();
+    if(id==="btnClearAll")         return dispClear();
+    if(id==="btnDriverDrop")       return driverDrop();
+    if(id==="btnConfirmSafety")    return confSafety();
+    if(id==="btnSetDispatcherPin") return setPin("dispatcher","pin_dispatcher","pin_dispatcher_confirm");
+    if(id==="btnSetDockPin")       return setPin("dock","pin_dock","pin_dock_confirm");
+    if(id==="btnSetSupervisorPin") return setPin("supervisor","pin_supervisor","pin_supervisor_confirm");
+    if(id==="btnDropAgain"){el("dropForm").style.display="";el("dropSuccess").style.display="none";el("v_trailer").value="";el("v_door").value="";el("v_dropType").value="Empty";return;}
+    if(id==="btnSafetyAgain"){el("safetyForm").style.display="";el("safetySuccess").style.display="none";el("c_loadSecured").checked=false;el("c_dockPlateUp").checked=false;el("c_trailer").value="";el("c_door").value="";return;}
 
     if(id==="btnClearFilters"||id==="btnSupClearFilters"){
       ["search","filterDir","filterStatus","supSearch","supFilterDir","supFilterStatus"].forEach(i=>{if(el(i))el(i).value="";});
-      renderBoard(); renderSupBoard(); return;
+      renderBoard();renderSupBoard();return;
     }
     if(id==="btnAudit"){
       const showing=el("auditCard").style.display!=="none";
       el("auditCard").style.display=showing?"none":"";
-      if(!showing) loadAuditInto(el("auditBody"),el("auditCount"),7);
+      if(!showing)loadAuditInto(el("auditBody"),el("auditCount"),7);
       return;
     }
 
     const act=t?.dataset?.act;
-    if(act==="delete"){ const tr=t.dataset.trailerId; if(tr) return dispDelete(tr); }
+    if(act==="delete"){const tr=t.dataset.trailerId;if(tr)return dispDelete(tr);}
     if(act==="edit"){
-      const tr=t.dataset.trailerId, r=trailers[tr]; if(!r) return;
-      el("d_trailer").value=tr; el("d_direction").value=r.direction||"Inbound";
-      el("d_status").value=r.status||"Incoming"; el("d_door").value=r.door||"";
-      el("d_note").value=r.note||""; el("d_dropType").value=r.dropType||"";
-      toast("Loaded",`Editing trailer ${tr}`); return;
+      const tr=t.dataset.trailerId,r=trailers[tr];if(!r)return;
+      el("d_trailer").value=tr;el("d_direction").value=r.direction||"Inbound";
+      el("d_status").value=r.status||"Incoming";el("d_door").value=r.door||"";
+      el("d_note").value=r.note||"";el("d_dropType").value=r.dropType||"";
+      toast("Loaded",`Editing trailer ${tr}`);return;
     }
-    if(act==="dockSet"){ const tr=t.dataset.trailerId, to=t.dataset.to; if(tr&&to) return dockSet(tr,to); }
-
-    const tog=t?.dataset?.plateToggle; if(tog){ plateEditOpen[tog]=!plateEditOpen[tog]; renderPlates(); return; }
-    const psv=t?.dataset?.plateSave;   if(psv) return plateSave(psv);
+    if(act==="dockSet"){const tr=t.dataset.trailerId,to=t.dataset.to;if(tr&&to)return dockSet(tr,to);}
+    const tog=t?.dataset?.plateToggle;if(tog){plateEditOpen[tog]=!plateEditOpen[tog];renderPlates();return;}
+    const psv=t?.dataset?.plateSave;if(psv)return plateSave(psv);
   });
 
-  ["search","filterDir","filterStatus"].forEach(id=>{
-    ["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderBoard));
-  });
-  ["supSearch","supFilterDir","supFilterStatus"].forEach(id=>{
-    ["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderSupBoard));
-  });
+  ["search","filterDir","filterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderBoard)));
+  ["supSearch","supFilterDir","supFilterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderSupBoard)));
 
-  // ── WebSocket ──
+  // WebSocket
   let wsRetry=0;
   function wsStatus(s){
-    el("wsDot").className="dot "+(s==="ok"?"ok":s==="bad"?"bad":"warn");
-    el("wsText").textContent=s==="ok"?"Live":s==="bad"?"Offline":"Connecting…";
+    el("wsDot").className="ws-dot "+(s==="ok"?"ok":s==="bad"?"bad":"warn");
+    el("wsText").textContent=s==="ok"?"Live":s==="bad"?"Offline":"Connecting";
   }
   function connectWs(){
     wsStatus("warn");
     const ws=new WebSocket(`${location.protocol==="https:"?"wss":"ws"}://${location.host}`);
-    ws.onopen=()=>{ wsRetry=0; wsStatus("ok"); };
-    ws.onclose=()=>{ wsStatus("bad"); setTimeout(connectWs,Math.min(8000,500+wsRetry++*650)); };
+    ws.onopen=()=>{wsRetry=0;wsStatus("ok");};
+    ws.onclose=()=>{wsStatus("bad");setTimeout(connectWs,Math.min(8000,500+wsRetry++*650));};
     ws.onmessage=evt=>{
-      let msg; try{msg=JSON.parse(evt.data);}catch{return;}
+      let msg;try{msg=JSON.parse(evt.data);}catch{return;}
       const{type,payload}=msg||{};
-      if(type==="state"){ trailers=payload||{}; renderBoard(); renderSupBoard(); }
-      else if(type==="dockplates"){ dockPlates=payload||{}; if(!isDriver()&&!isSuper()) renderPlates(); }
-      else if(type==="confirmations"){ confirmations=Array.isArray(payload)?payload:[]; renderConf(); renderSupConf(); }
-      else if(type==="version"){ VERSION=payload?.version||VERSION; el("verText").textContent=VERSION||"—"; }
+      if(type==="state"){trailers=payload||{};renderBoard();renderSupBoard();}
+      else if(type==="dockplates"){dockPlates=payload||{};if(!isDriver()&&!isSuper())renderPlates();}
+      else if(type==="confirmations"){confirmations=Array.isArray(payload)?payload:[];renderConf();renderSupConf();}
+      else if(type==="version"){VERSION=payload?.version||VERSION;el("verText").textContent=VERSION||"—";}
       else if(type==="notify"&&payload?.kind==="ready")
-        toast("Trailer Ready",`${payload.trailer} is READY${payload.door?" at door "+payload.door:""}.`);
+        toast("🟢 Trailer Ready",`${payload.trailer} is READY${payload.door?" at door "+payload.door:""}.`,"ok");
     };
   }
 

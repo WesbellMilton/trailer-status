@@ -24,7 +24,6 @@ const APP_VERSION = process.env.APP_VERSION || pkg.version;
 
 const LINK_SIGNING_SECRET = String(process.env.LINK_SIGNING_SECRET || "");
 
-// ── Startup guard: refuse to run in production without a real secret ──────────
 if (!LINK_SIGNING_SECRET || LINK_SIGNING_SECRET === "change_me") {
   if (process.env.NODE_ENV === "production") {
     console.error("FATAL: LINK_SIGNING_SECRET must be set in production. Exiting.");
@@ -37,9 +36,6 @@ if (!LINK_SIGNING_SECRET || LINK_SIGNING_SECRET === "change_me") {
   }
 }
 
-// PINs are stored as HMAC-SHA256 hashes in env vars.
-// Generate with: node -e "const c=require('crypto');console.log(c.createHmac('sha256','YOUR_SECRET').update('YOUR_PIN').digest('hex'))"
-// Fallback: if raw PIN env vars are provided, hash them on startup (dev convenience only).
 function hashPin(pin) {
   return crypto
     .createHmac("sha256", LINK_SIGNING_SECRET || "dev-only-secret")
@@ -47,7 +43,6 @@ function hashPin(pin) {
     .digest("hex");
 }
 
-// Accept either pre-hashed (DISPATCHER_PIN_HASH) or raw (DISPATCHER_PIN) for dev ease.
 const DISPATCHER_PIN_HASH =
   process.env.DISPATCHER_PIN_HASH ||
   (process.env.DISPATCHER_PIN ? hashPin(process.env.DISPATCHER_PIN) : hashPin("1234"));
@@ -68,11 +63,6 @@ function verifyPin(input, storedHash) {
   }
 }
 
-/**
- * SQLite path:
- * - local default: ./data.db
- * - Render persistent disk: set DB_PATH=/var/data/data.db
- */
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data.db");
 
 try {
@@ -84,17 +74,14 @@ try {
 
 const db = new sqlite3.Database(DB_PATH);
 
-// In-memory caches
 let trailers = {};
 let confirmations = [];
 let dockPlates = {};
 
 /* =========================
-   RATE LIMITER (simple in-process)
-   No external deps needed for single-process deployments.
-   Replace with express-rate-limit if you scale out.
+   RATE LIMITER
 ========================= */
-const rateLimitStore = new Map(); // key -> { count, resetAt }
+const rateLimitStore = new Map();
 
 function rateLimit(windowMs, max) {
   return (req, res, next) => {
@@ -116,7 +103,6 @@ function rateLimit(windowMs, max) {
   };
 }
 
-// Clean up stale rate-limit entries every 5 minutes
 setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of rateLimitStore) {
@@ -232,9 +218,6 @@ function requireAnyRole(roles) {
   };
 }
 
-// ── CSRF: all mutating API routes must include this header ───────────────────
-// Browsers block cross-origin custom headers, so this is an effective CSRF guard
-// without requiring token infrastructure.
 function requireCsrf(req, res, next) {
   if (req.headers["x-requested-with"] !== "XMLHttpRequest") {
     return res.status(403).send("CSRF check failed");
@@ -260,29 +243,13 @@ function dbAll(sql, params = []) {
   });
 }
 
-async function auditLog({
-  actorRole,
-  action,
-  entityType,
-  entityId,
-  details,
-  ip,
-  userAgent,
-}) {
+async function auditLog({ actorRole, action, entityType, entityId, details, ip, userAgent }) {
   const at = Date.now();
   await dbRun(
     `INSERT INTO audit_log (at, actorRole, action, entityType, entityId, details, ip, userAgent)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      at,
-      actorRole || "",
-      action || "",
-      entityType || "",
-      entityId || "",
-      JSON.stringify(details || {}),
-      ip || "",
-      userAgent || "",
-    ]
+    [at, actorRole || "", action || "", entityType || "", entityId || "",
+     JSON.stringify(details || {}), ip || "", userAgent || ""]
   );
 }
 
@@ -305,9 +272,7 @@ async function initDb() {
     )
   `);
 
-  await dbRun(
-    `ALTER TABLE trailers ADD COLUMN dropType TEXT NOT NULL DEFAULT ''`
-  ).catch(() => {});
+  await dbRun(`ALTER TABLE trailers ADD COLUMN dropType TEXT NOT NULL DEFAULT ''`).catch(() => {});
 
   await dbRun(`
     CREATE TABLE IF NOT EXISTS confirmations (
@@ -343,7 +308,6 @@ async function initDb() {
     )
   `);
 
-  // Seed plates 18..42
   for (let d = 18; d <= 42; d++) {
     await dbRun(
       `INSERT INTO dock_plates (door, status, note, updatedAt)
@@ -374,27 +338,18 @@ async function reloadCachesFromDb() {
 
   const crows = await dbAll(`
     SELECT at, trailer, door, ip, userAgent
-    FROM confirmations
-    ORDER BY id DESC
-    LIMIT 200
+    FROM confirmations ORDER BY id DESC LIMIT 200
   `);
   confirmations = crows.map((r) => ({
-    at: r.at,
-    trailer: r.trailer || "",
-    door: r.door || "",
-    ip: r.ip || "",
-    userAgent: r.userAgent || "",
+    at: r.at, trailer: r.trailer || "", door: r.door || "",
+    ip: r.ip || "", userAgent: r.userAgent || "",
   }));
 
-  const prows = await dbAll(
-    `SELECT door, status, note, updatedAt FROM dock_plates`
-  );
+  const prows = await dbAll(`SELECT door, status, note, updatedAt FROM dock_plates`);
   dockPlates = {};
   for (const r of prows) {
     dockPlates[String(r.door)] = {
-      status: r.status || "Unknown",
-      note: r.note || "",
-      updatedAt: r.updatedAt || 0,
+      status: r.status || "Unknown", note: r.note || "", updatedAt: r.updatedAt || 0,
     };
   }
 }
@@ -438,10 +393,8 @@ app.get("/login", (req, res) => {
   `);
 });
 
-// Rate limit: 20 attempts per 15-minute window per IP
 app.post("/login", rateLimit(15 * 60 * 1000, 20), (req, res) => {
   const pin = String(req.body?.pin || "").trim();
-
   if (verifyPin(pin, DISPATCHER_PIN_HASH)) {
     setAuthCookie(res, "dispatcher");
     return res.redirect("/");
@@ -450,8 +403,6 @@ app.post("/login", rateLimit(15 * 60 * 1000, 20), (req, res) => {
     setAuthCookie(res, "dock");
     return res.redirect("/dock");
   }
-
-  // Generic message — don't reveal which role failed
   res.status(401).send("Invalid PIN");
 });
 
@@ -465,9 +416,7 @@ app.get("/api/whoami", (req, res) => {
   res.json({ role: role || null, version: APP_VERSION });
 });
 
-app.get("/api/version", (req, res) => {
-  res.json({ version: APP_VERSION });
-});
+app.get("/api/version", (req, res) => res.json({ version: APP_VERSION }));
 
 app.get("/", (req, res) => {
   const role = getRoleFromReq(req);
@@ -481,9 +430,7 @@ app.get("/dock", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
-app.get("/driver", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
-});
+app.get("/driver", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 
 app.get("/health", (req, res) =>
   res.json({ ok: true, db: DB_PATH, version: APP_VERSION })
@@ -492,9 +439,7 @@ app.get("/health", (req, res) =>
 /* =========================
    APIs: STATE
 ========================= */
-app.get("/api/state", (req, res) => {
-  res.json(trailers);
-});
+app.get("/api/state", (req, res) => res.json(trailers));
 
 /* =========================
    APIs: AUDIT LOG (dispatcher only)
@@ -507,18 +452,10 @@ app.get("/api/audit", requireRole("dispatcher"), async (req, res) => {
        FROM audit_log ORDER BY id DESC LIMIT ?`,
       [limit]
     );
-    res.json(
-      rows.map((r) => ({
-        ...r,
-        details: (() => {
-          try {
-            return JSON.parse(r.details);
-          } catch {
-            return {};
-          }
-        })(),
-      }))
-    );
+    res.json(rows.map((r) => ({
+      ...r,
+      details: (() => { try { return JSON.parse(r.details); } catch { return {}; } })(),
+    })));
   } catch (err) {
     console.error("audit error:", err);
     res.status(500).send("Server error");
@@ -528,63 +465,49 @@ app.get("/api/audit", requireRole("dispatcher"), async (req, res) => {
 /* =========================
    APIs: DOCK PLATES
 ========================= */
-app.get("/api/dockplates", (req, res) => {
-  res.json(dockPlates);
+app.get("/api/dockplates", (req, res) => res.json(dockPlates));
+
+app.post("/api/dockplates/set", requireCsrf, requireAnyRole(["dispatcher", "dock"]), async (req, res) => {
+  try {
+    const role = getRoleFromReq(req);
+    const door = normalizeDoor(req.body?.door);
+    const status = cleanStr(req.body?.status, 20);
+    const note = cleanStr(req.body?.note, 120);
+
+    const allowed = ["OK", "Service", "Unknown"];
+    if (!door) return res.status(400).send("Door required");
+    if (!/^\d+$/.test(door)) return res.status(400).send("Invalid door");
+    const doorNum = Number(door);
+    if (doorNum < 18 || doorNum > 42) return res.status(400).send("Door must be 18-42");
+    if (!allowed.includes(status)) return res.status(400).send("Invalid status");
+
+    const updatedAt = Date.now();
+    await dbRun(
+      `INSERT INTO dock_plates (door, status, note, updatedAt)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(door) DO UPDATE SET status=excluded.status, note=excluded.note, updatedAt=excluded.updatedAt`,
+      [door, status, note, updatedAt]
+    );
+
+    dockPlates[door] = { status, note, updatedAt };
+
+    await auditLog({
+      actorRole: role, action: "plate_set", entityType: "dock_plate", entityId: door,
+      details: { status, note }, ip: getIp(req), userAgent: req.headers["user-agent"] || "",
+    });
+
+    broadcast("dockplates", dockPlates);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("dockplates/set error:", err);
+    res.status(500).send("Server error");
+  }
 });
 
-app.post(
-  "/api/dockplates/set",
-  requireCsrf,
-  requireAnyRole(["dispatcher", "dock"]),
-  async (req, res) => {
-    try {
-      const role = getRoleFromReq(req);
-      const door = normalizeDoor(req.body?.door);
-      const status = cleanStr(req.body?.status, 20);
-      const note = cleanStr(req.body?.note, 120);
-
-      const allowed = ["OK", "Service", "Unknown"];
-      if (!door) return res.status(400).send("Door required");
-      if (!/^\d+$/.test(door)) return res.status(400).send("Invalid door");
-      const doorNum = Number(door);
-      if (doorNum < 18 || doorNum > 42)
-        return res.status(400).send("Door must be 18-42");
-      if (!allowed.includes(status))
-        return res.status(400).send("Invalid status");
-
-      const updatedAt = Date.now();
-      await dbRun(
-        `INSERT INTO dock_plates (door, status, note, updatedAt)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT(door) DO UPDATE SET status=excluded.status, note=excluded.note, updatedAt=excluded.updatedAt`,
-        [door, status, note, updatedAt]
-      );
-
-      dockPlates[door] = { status, note, updatedAt };
-
-      await auditLog({
-        actorRole: role,
-        action: "plate_set",
-        entityType: "dock_plate",
-        entityId: door,
-        details: { status, note },
-        ip: getIp(req),
-        userAgent: req.headers["user-agent"] || "",
-      });
-
-      broadcast("dockplates", dockPlates);
-      res.json({ ok: true });
-    } catch (err) {
-      console.error("dockplates/set error:", err);
-      res.status(500).send("Server error");
-    }
-  }
-);
-
 /* =========================
-   APIs: DRIVER DROP (public, rate-limited)
+   APIs: DRIVER DROP
 ========================= */
-const driverDropLimiter = rateLimit(10 * 60 * 1000, 30); // 30 drops per 10 min per IP
+const driverDropLimiter = rateLimit(10 * 60 * 1000, 30);
 
 app.post("/api/driver/drop", requireCsrf, driverDropLimiter, async (req, res) => {
   try {
@@ -597,11 +520,9 @@ app.post("/api/driver/drop", requireCsrf, driverDropLimiter, async (req, res) =>
     if (!/^\d+$/.test(door)) return res.status(400).send("Invalid door");
     const dn = Number(door);
     if (dn < 18 || dn > 42) return res.status(400).send("Door must be 18-42");
-    if (!["Empty", "Loaded"].includes(dropType))
-      return res.status(400).send("Invalid drop type");
+    if (!["Empty", "Loaded"].includes(dropType)) return res.status(400).send("Invalid drop type");
 
     const prev = trailers[trailer] || null;
-
     const updatedAt = Date.now();
     const next = {
       direction: prev?.direction || "Inbound",
@@ -616,25 +537,16 @@ app.post("/api/driver/drop", requireCsrf, driverDropLimiter, async (req, res) =>
       `INSERT INTO trailers (trailer, direction, status, door, note, dropType, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(trailer) DO UPDATE SET
-         direction=excluded.direction,
-         status=excluded.status,
-         door=excluded.door,
-         note=excluded.note,
-         dropType=excluded.dropType,
-         updatedAt=excluded.updatedAt`,
+         direction=excluded.direction, status=excluded.status, door=excluded.door,
+         note=excluded.note, dropType=excluded.dropType, updatedAt=excluded.updatedAt`,
       [trailer, next.direction, next.status, next.door, next.note, next.dropType, updatedAt]
     );
 
     trailers[trailer] = next;
 
     await auditLog({
-      actorRole: "driver",
-      action: "driver_drop",
-      entityType: "trailer",
-      entityId: trailer,
-      details: { door, dropType },
-      ip: getIp(req),
-      userAgent: req.headers["user-agent"] || "",
+      actorRole: "driver", action: "driver_drop", entityType: "trailer", entityId: trailer,
+      details: { door, dropType }, ip: getIp(req), userAgent: req.headers["user-agent"] || "",
     });
 
     broadcast("state", trailers);
@@ -646,7 +558,7 @@ app.post("/api/driver/drop", requireCsrf, driverDropLimiter, async (req, res) =>
 });
 
 /* =========================
-   APIs: CONFIRM SAFETY (driver, rate-limited)
+   APIs: CONFIRM SAFETY
 ========================= */
 const safetyConfirmLimiter = rateLimit(10 * 60 * 1000, 60);
 
@@ -657,9 +569,7 @@ app.post("/api/confirm-safety", requireCsrf, safetyConfirmLimiter, async (req, r
     const loadSecured = !!req.body?.loadSecured;
     const dockPlateUp = !!req.body?.dockPlateUp;
 
-    if (!loadSecured || !dockPlateUp) {
-      return res.status(400).send("Both confirmations required");
-    }
+    if (!loadSecured || !dockPlateUp) return res.status(400).send("Both confirmations required");
 
     const ip = getIp(req);
     const at = Date.now();
@@ -672,26 +582,17 @@ app.post("/api/confirm-safety", requireCsrf, safetyConfirmLimiter, async (req, r
 
     const crows = await dbAll(`
       SELECT at, trailer, door, ip, userAgent
-      FROM confirmations
-      ORDER BY id DESC
-      LIMIT 200
+      FROM confirmations ORDER BY id DESC LIMIT 200
     `);
     confirmations = crows.map((r) => ({
-      at: r.at,
-      trailer: r.trailer || "",
-      door: r.door || "",
-      ip: r.ip || "",
-      userAgent: r.userAgent || "",
+      at: r.at, trailer: r.trailer || "", door: r.door || "",
+      ip: r.ip || "", userAgent: r.userAgent || "",
     }));
 
     await auditLog({
-      actorRole: "driver",
-      action: "safety_confirmed",
-      entityType: "trailer",
-      entityId: trailer || "",
+      actorRole: "driver", action: "safety_confirmed", entityType: "trailer", entityId: trailer || "",
       details: { trailer, door, loadSecured: true, dockPlateUp: true },
-      ip,
-      userAgent,
+      ip, userAgent,
     });
 
     broadcast("confirmations", confirmations);
@@ -714,60 +615,43 @@ app.post("/api/upsert", requireCsrf, async (req, res) => {
     if (!trailer) return res.status(400).send("Trailer required");
 
     const prev = trailers[trailer] || null;
-    if (!prev && role === "dock")
-      return res.status(403).send("Dock cannot add trailers");
+    if (!prev && role === "dock") return res.status(403).send("Dock cannot add trailers");
 
     const allowedDir = ["Inbound", "Outbound", "Cross Dock"];
     const allowedStatus = ["Incoming", "Loading", "Dock Ready", "Ready", "Departed", "Dropped"];
     const allowedDropType = ["", "Empty", "Loaded"];
 
-    // Dock: status only
     if (role === "dock") {
       const status = cleanStr(req.body?.status, 30);
-      if (!["Loading", "Dock Ready"].includes(status)) {
+      if (!["Loading", "Dock Ready"].includes(status))
         return res.status(403).send("Dock can only set Loading or Dock Ready");
-      }
 
       const updatedAt = Date.now();
       const next = {
-        direction: prev.direction,
-        status,
-        door: prev.door,
-        note: prev.note || "",
-        dropType: prev.dropType || "",
-        updatedAt,
+        direction: prev.direction, status, door: prev.door,
+        note: prev.note || "", dropType: prev.dropType || "", updatedAt,
       };
 
       await dbRun(
         `INSERT INTO trailers (trailer, direction, status, door, note, dropType, updatedAt)
          VALUES (?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(trailer) DO UPDATE SET
-           direction=excluded.direction,
-           status=excluded.status,
-           door=excluded.door,
-           note=excluded.note,
-           dropType=excluded.dropType,
-           updatedAt=excluded.updatedAt`,
+           direction=excluded.direction, status=excluded.status, door=excluded.door,
+           note=excluded.note, dropType=excluded.dropType, updatedAt=excluded.updatedAt`,
         [trailer, next.direction, next.status, next.door || "", next.note || "", next.dropType || "", updatedAt]
       );
 
       trailers[trailer] = next;
 
       await auditLog({
-        actorRole: role,
-        action: "trailer_status_set",
-        entityType: "trailer",
-        entityId: trailer,
-        details: { from: prev.status, to: status },
-        ip: getIp(req),
-        userAgent: req.headers["user-agent"] || "",
+        actorRole: role, action: "trailer_status_set", entityType: "trailer", entityId: trailer,
+        details: { from: prev.status, to: status }, ip: getIp(req), userAgent: req.headers["user-agent"] || "",
       });
 
       broadcast("state", trailers);
       return res.json({ ok: true });
     }
 
-    // Dispatcher: full control
     if (role !== "dispatcher") return res.status(403).send("Forbidden");
 
     const direction = cleanStr(req.body?.direction, 30) || prev?.direction || "Inbound";
@@ -776,12 +660,9 @@ app.post("/api/upsert", requireCsrf, async (req, res) => {
     const note = cleanStr(req.body?.note, 160);
     const dropType = cleanStr(req.body?.dropType, 12) || prev?.dropType || "";
 
-    if (!allowedDir.includes(direction))
-      return res.status(400).send("Invalid direction");
-    if (!allowedStatus.includes(status))
-      return res.status(400).send("Invalid status");
-    if (!allowedDropType.includes(dropType))
-      return res.status(400).send("Invalid drop type");
+    if (!allowedDir.includes(direction)) return res.status(400).send("Invalid direction");
+    if (!allowedStatus.includes(status)) return res.status(400).send("Invalid status");
+    if (!allowedDropType.includes(dropType)) return res.status(400).send("Invalid drop type");
 
     if (door) {
       if (!/^\d+$/.test(door)) return res.status(400).send("Invalid door");
@@ -796,30 +677,21 @@ app.post("/api/upsert", requireCsrf, async (req, res) => {
       `INSERT INTO trailers (trailer, direction, status, door, note, dropType, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(trailer) DO UPDATE SET
-         direction=excluded.direction,
-         status=excluded.status,
-         door=excluded.door,
-         note=excluded.note,
-         dropType=excluded.dropType,
-         updatedAt=excluded.updatedAt`,
+         direction=excluded.direction, status=excluded.status, door=excluded.door,
+         note=excluded.note, dropType=excluded.dropType, updatedAt=excluded.updatedAt`,
       [trailer, direction, status, next.door, next.note, next.dropType, updatedAt]
     );
 
     trailers[trailer] = next;
 
     await auditLog({
-      actorRole: role,
-      action: prev ? "trailer_update" : "trailer_create",
-      entityType: "trailer",
-      entityId: trailer,
-      details: { prev, next },
-      ip: getIp(req),
-      userAgent: req.headers["user-agent"] || "",
+      actorRole: role, action: prev ? "trailer_update" : "trailer_create",
+      entityType: "trailer", entityId: trailer,
+      details: { prev, next }, ip: getIp(req), userAgent: req.headers["user-agent"] || "",
     });
 
     broadcast("state", trailers);
 
-    // Broadcast ready notification when status transitions to Ready
     if (prev?.status !== "Ready" && status === "Ready") {
       broadcast("notify", { kind: "ready", trailer, door: next.door || "" });
     }
@@ -840,18 +712,12 @@ app.post("/api/delete", requireCsrf, requireRole("dispatcher"), async (req, res)
     if (!trailer) return res.status(400).send("Trailer required");
 
     const prev = trailers[trailer] || null;
-
     await dbRun(`DELETE FROM trailers WHERE trailer = ?`, [trailer]);
     delete trailers[trailer];
 
     await auditLog({
-      actorRole: "dispatcher",
-      action: "trailer_delete",
-      entityType: "trailer",
-      entityId: trailer,
-      details: { prev },
-      ip: getIp(req),
-      userAgent: req.headers["user-agent"] || "",
+      actorRole: "dispatcher", action: "trailer_delete", entityType: "trailer", entityId: trailer,
+      details: { prev }, ip: getIp(req), userAgent: req.headers["user-agent"] || "",
     });
 
     broadcast("state", trailers);
@@ -868,13 +734,8 @@ app.post("/api/clear", requireCsrf, requireRole("dispatcher"), async (req, res) 
     trailers = {};
 
     await auditLog({
-      actorRole: "dispatcher",
-      action: "trailer_clear_all",
-      entityType: "trailer",
-      entityId: "*",
-      details: {},
-      ip: getIp(req),
-      userAgent: req.headers["user-agent"] || "",
+      actorRole: "dispatcher", action: "trailer_clear_all", entityType: "trailer",
+      entityId: "*", details: {}, ip: getIp(req), userAgent: req.headers["user-agent"] || "",
     });
 
     broadcast("state", trailers);
@@ -903,15 +764,10 @@ const PORT = process.env.PORT || 3000;
 function shutdown(signal) {
   console.log(`\n${signal} received. Shutting down…`);
   try {
-    wss.clients.forEach((c) => {
-      try {
-        c.close();
-      } catch {}
-    });
+    wss.clients.forEach((c) => { try { c.close(); } catch {} });
   } catch {}
 
   server.close(() => {
-    // Checkpoint WAL before closing to ensure all writes are flushed
     db.run("PRAGMA wal_checkpoint(FULL)", () => {
       db.close(() => {
         console.log("Closed HTTP + SQLite. Bye.");

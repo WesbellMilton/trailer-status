@@ -1,3 +1,4 @@
+// server.js
 const express = require("express");
 const http = require("http");
 const path = require("path");
@@ -8,7 +9,7 @@ const crypto = require("crypto");
 
 const app = express();
 
-// ✅ Small improvement: trust proxy (Render / reverse proxies)
+// Trust proxy (Render / reverse proxies)
 app.set("trust proxy", true);
 
 app.use(express.json());
@@ -34,7 +35,7 @@ const LINK_SIGNING_SECRET = String(process.env.LINK_SIGNING_SECRET || "change_me
  */
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data.db");
 
-// ✅ Small improvement: ensure DB folder exists (Render persistent disk)
+// Ensure DB folder exists (important for Render disk paths)
 try {
   const dir = path.dirname(DB_PATH);
   if (dir && dir !== "." && dir !== __dirname) fs.mkdirSync(dir, { recursive: true });
@@ -108,6 +109,7 @@ function clearAuthCookie(res) {
 }
 
 function getRoleFromReq(req) {
+  // driver is public on /driver
   if (String(req.path || "").toLowerCase().startsWith("/driver")) return "driver";
 
   const cookies = parseCookies(req.headers.cookie);
@@ -128,7 +130,7 @@ function getRoleFromReq(req) {
   if (sign(base) !== sig) return null;
 
   const ageMs = Date.now() - Number(ts || 0);
-  if (!Number.isFinite(ageMs) || ageMs > 12 * 60 * 60 * 1000) return null;
+  if (!Number.isFinite(ageMs) || ageMs > 12 * 60 * 60 * 1000) return null; // 12h
 
   return role;
 }
@@ -358,7 +360,6 @@ app.get("/api/version", (req, res) => {
   res.json({ version: APP_VERSION });
 });
 
-// Main pages
 app.get("/", (req, res) => {
   const role = getRoleFromReq(req);
   if (role !== "dispatcher") return res.redirect("/login");
@@ -385,7 +386,7 @@ app.get("/api/state", (req, res) => {
 });
 
 /* =========================
-   APIs: DOCK PLATES (public read)
+   APIs: DOCK PLATES
 ========================= */
 app.get("/api/dockplates", (req, res) => {
   res.json(dockPlates);
@@ -551,6 +552,8 @@ app.post("/api/confirm-safety", async (req, res) => {
 
 /* =========================
    APIs: UPSERT TRAILER
+   - Dispatcher: full add/update
+   - Dock: status only (Loading / Dock Ready)
 ========================= */
 app.post("/api/upsert", async (req, res) => {
   try {
@@ -568,7 +571,6 @@ app.post("/api/upsert", async (req, res) => {
     const allowedDir = ["Inbound", "Outbound", "Cross Dock"];
     const allowedStatus = ["Incoming", "Loading", "Dock Ready", "Ready", "Departed", "Dropped"];
 
-    // Dock can only set status
     if (role === "dock") {
       const status = cleanStr(req.body?.status, 30);
       if (!["Loading", "Dock Ready"].includes(status)) {
@@ -611,10 +613,10 @@ app.post("/api/upsert", async (req, res) => {
       });
 
       broadcast("state", trailers);
-      return res.json({ ok: true });
+      res.json({ ok: true });
+      return;
     }
 
-    // Dispatcher full control
     if (role !== "dispatcher") return res.status(403).send("Forbidden");
 
     const direction = cleanStr(req.body?.direction, 30) || (prev?.direction || "Inbound");
@@ -769,16 +771,13 @@ const PORT = process.env.PORT || 3000;
 
 function shutdown(signal) {
   console.log(`\n${signal} received. Shutting down...`);
-  try {
-    wss.clients.forEach((c) => { try { c.close(); } catch {} });
-  } catch {}
+  try { wss.clients.forEach((c) => { try { c.close(); } catch {} }); } catch {}
   server.close(() => {
     db.close(() => {
       console.log("Closed HTTP + SQLite. Bye.");
       process.exit(0);
     });
   });
-  // safety exit if something hangs
   setTimeout(() => process.exit(1), 4000).unref();
 }
 

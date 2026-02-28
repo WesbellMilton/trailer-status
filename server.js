@@ -1,11 +1,16 @@
 const express = require("express");
 const http = require("http");
 const path = require("path");
+const fs = require("fs");
 const WebSocket = require("ws");
 const sqlite3 = require("sqlite3").verbose();
 const crypto = require("crypto");
 
 const app = express();
+
+// ✅ Small improvement: trust proxy (Render / reverse proxies)
+app.set("trust proxy", true);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(__dirname));
@@ -28,6 +33,15 @@ const LINK_SIGNING_SECRET = String(process.env.LINK_SIGNING_SECRET || "change_me
  * - Render persistent disk: set DB_PATH=/var/data/data.db
  */
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data.db");
+
+// ✅ Small improvement: ensure DB folder exists (Render persistent disk)
+try {
+  const dir = path.dirname(DB_PATH);
+  if (dir && dir !== "." && dir !== __dirname) fs.mkdirSync(dir, { recursive: true });
+} catch (e) {
+  console.error("Failed to ensure DB directory:", e);
+}
+
 const db = new sqlite3.Database(DB_PATH);
 
 // In-memory caches
@@ -94,7 +108,6 @@ function clearAuthCookie(res) {
 }
 
 function getRoleFromReq(req) {
-  // driver view is always public on /driver
   if (String(req.path || "").toLowerCase().startsWith("/driver")) return "driver";
 
   const cookies = parseCookies(req.headers.cookie);
@@ -110,11 +123,12 @@ function getRoleFromReq(req) {
   const sig = parts[2];
 
   if (role !== "dispatcher" && role !== "dock") return null;
+
   const base = `${role}|${ts}`;
   if (sign(base) !== sig) return null;
 
   const ageMs = Date.now() - Number(ts || 0);
-  if (!Number.isFinite(ageMs) || ageMs > 12 * 60 * 60 * 1000) return null; // 12h
+  if (!Number.isFinite(ageMs) || ageMs > 12 * 60 * 60 * 1000) return null;
 
   return role;
 }
@@ -191,7 +205,7 @@ async function initDb() {
   `);
 
   // Safe migration if older DB exists
-  await dbRun(`ALTER TABLE trailers ADD COLUMN dropType TEXT NOT NULL DEFAULT ''`).catch(()=>{});
+  await dbRun(`ALTER TABLE trailers ADD COLUMN dropType TEXT NOT NULL DEFAULT ''`).catch(() => {});
 
   await dbRun(`
     CREATE TABLE IF NOT EXISTS confirmations (
@@ -344,7 +358,7 @@ app.get("/api/version", (req, res) => {
   res.json({ version: APP_VERSION });
 });
 
-// Main pages (all serve index.html)
+// Main pages
 app.get("/", (req, res) => {
   const role = getRoleFromReq(req);
   if (role !== "dispatcher") return res.redirect("/login");
@@ -371,7 +385,7 @@ app.get("/api/state", (req, res) => {
 });
 
 /* =========================
-   APIs: DOCK PLATES
+   APIs: DOCK PLATES (public read)
 ========================= */
 app.get("/api/dockplates", (req, res) => {
   res.json(dockPlates);
@@ -537,8 +551,6 @@ app.post("/api/confirm-safety", async (req, res) => {
 
 /* =========================
    APIs: UPSERT TRAILER
-   - Dispatcher: full add/update
-   - Dock: status only (Loading / Dock Ready)
 ========================= */
 app.post("/api/upsert", async (req, res) => {
   try {
@@ -556,6 +568,7 @@ app.post("/api/upsert", async (req, res) => {
     const allowedDir = ["Inbound", "Outbound", "Cross Dock"];
     const allowedStatus = ["Incoming", "Loading", "Dock Ready", "Ready", "Departed", "Dropped"];
 
+    // Dock can only set status
     if (role === "dock") {
       const status = cleanStr(req.body?.status, 30);
       if (!["Loading", "Dock Ready"].includes(status)) {
@@ -598,10 +611,10 @@ app.post("/api/upsert", async (req, res) => {
       });
 
       broadcast("state", trailers);
-      res.json({ ok: true });
-      return;
+      return res.json({ ok: true });
     }
 
+    // Dispatcher full control
     if (role !== "dispatcher") return res.status(403).send("Forbidden");
 
     const direction = cleanStr(req.body?.direction, 30) || (prev?.direction || "Inbound");
@@ -649,7 +662,6 @@ app.post("/api/upsert", async (req, res) => {
 
     broadcast("state", trailers);
 
-    // ready notification
     if (prev?.status !== "Ready" && status === "Ready") {
       broadcast("notify", { kind: "ready", trailer, door: next.door || "" });
     }
@@ -751,9 +763,27 @@ wss.on("connection", (ws) => {
 });
 
 /* =========================
-   START
+   START + GRACEFUL SHUTDOWN
 ========================= */
 const PORT = process.env.PORT || 3000;
+
+function shutdown(signal) {
+  console.log(`\n${signal} received. Shutting down...`);
+  try {
+    wss.clients.forEach((c) => { try { c.close(); } catch {} });
+  } catch {}
+  server.close(() => {
+    db.close(() => {
+      console.log("Closed HTTP + SQLite. Bye.");
+      process.exit(0);
+    });
+  });
+  // safety exit if something hangs
+  setTimeout(() => process.exit(1), 4000).unref();
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 initDb()
   .then(() => {

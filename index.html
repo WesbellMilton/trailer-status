@@ -8,7 +8,6 @@
     :root{
       --bg:#0b1220;
       --card:rgba(255,255,255,.04);
-      --card2:rgba(255,255,255,.06);
       --border:rgba(120,145,220,.18);
       --muted:#a7b2d3;
       --text:#eaf0ff;
@@ -16,10 +15,8 @@
       --warn:rgba(245,158,11,.22);
       --bad:rgba(239,68,68,.22);
       --btn:rgba(99,102,241,.25);
-      --btn2:rgba(56,189,248,.18);
       --shadow:0 12px 40px rgba(0,0,0,.35);
       --radius:14px;
-      --radius2:12px;
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       --sans: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     }
@@ -52,6 +49,7 @@
       display:flex; align-items:center; gap:10px;
       font-weight:900;
       letter-spacing:.2px;
+      flex-wrap:wrap;
     }
     .pill{
       display:inline-flex; align-items:center; gap:8px;
@@ -63,10 +61,7 @@
       font-size:12px;
       white-space:nowrap;
     }
-    .dot{
-      width:8px; height:8px; border-radius:999px;
-      background:#999;
-    }
+    .dot{ width:8px; height:8px; border-radius:999px; background:#999; }
     .dot.ok{ background:#22c55e;}
     .dot.bad{ background:#ef4444;}
     .dot.warn{ background:#f59e0b;}
@@ -81,18 +76,10 @@
       border-radius:12px;
       padding:10px 12px;
       font-weight:800;
-      box-shadow:none;
     }
-    button.secondary{
-      background:rgba(255,255,255,.03);
-      font-weight:800;
-    }
-    button.ghost{
-      background:transparent;
-    }
-    button:disabled{
-      opacity:.55; cursor:not-allowed;
-    }
+    button.secondary{ background:rgba(255,255,255,.03); }
+    button.ghost{ background:transparent; }
+    button:disabled{ opacity:.55; cursor:not-allowed; }
     .wrap{
       max-width:1200px;
       margin:0 auto;
@@ -127,9 +114,7 @@
       justify-content:space-between;
       gap:10px;
     }
-    .card .body{
-      padding:14px;
-    }
+    .card .body{ padding:14px; }
     .muted{color:var(--muted)}
     .row{
       display:flex;
@@ -203,9 +188,6 @@
     .tag.bad{ background:var(--bad); }
     .mono{ font-family:var(--mono); }
     .small{ font-size:12px; }
-    .split{
-      display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap;
-    }
     .mini{
       font-size:12px;
       padding:6px 10px;
@@ -232,50 +214,64 @@
     }
     .toast strong{ display:block; margin-bottom:4px; }
     .toast .muted{ font-size:12px; }
-    .divider{
-      height:1px; background:rgba(120,145,220,.14); margin:12px 0;
-    }
+    .divider{ height:1px; background:rgba(120,145,220,.14); margin:12px 0; }
+
+    /* ✅ COMPACT Dock Plates Section */
+    #dockPlatesCard h3{ padding:10px 12px; }
+    #dockPlatesCard .body{ padding:10px 12px; }
+    #dockPlatesCard .hint{ margin-top:6px; }
+
     .plate-grid{
-  display:grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap:8px;
-}
-@media (max-width: 980px){
-  .plate-grid{ grid-template-columns: repeat(5, minmax(0, 1fr)); }
-}
-@media (max-width: 680px){
-  .plate-grid{ grid-template-columns: repeat(4, minmax(0, 1fr)); }
-}
-@media (max-width: 520px){
-  .plate-grid{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-   .plate{
-  border:1px solid var(--border);
-  border-radius:12px;
-  background:rgba(255,255,255,.03);
-  padding:8px;
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-  min-height:86px;
-}
-.plate .door{
-  font-weight:900;
-  font-size:13px;
-}
-.plate .note{
-  color:var(--muted);
-  font-size:11px;
-  line-height:1.2;
-  min-height: 20px;
-  word-break:break-word;
-}
-.plate select, .plate input{
-  padding:7px 9px;
-  border-radius:10px;
-  font-size:12px;
-}
+      display:grid;
+      grid-template-columns: repeat(9, minmax(0, 1fr));
+      gap:8px;
     }
+    @media (max-width: 980px){ .plate-grid{ grid-template-columns: repeat(7, minmax(0, 1fr)); } }
+    @media (max-width: 680px){ .plate-grid{ grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+    @media (max-width: 520px){ .plate-grid{ grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+    .plate{
+      border:1px solid var(--border);
+      border-radius:12px;
+      background:rgba(255,255,255,.03);
+      padding:8px;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      min-height:72px;
+    }
+    .plate .top{
+      display:flex; justify-content:space-between; align-items:center; gap:8px;
+    }
+    .plate .door{
+      font-weight:900;
+      font-size:12px;
+    }
+    .plate .note{
+      color:var(--muted);
+      font-size:11px;
+      line-height:1.15;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap; /* ✅ one-line note */
+    }
+    .plate .editRow{
+      display:flex; gap:6px; align-items:center;
+    }
+    .plate select, .plate input{
+      padding:7px 8px;
+      border-radius:10px;
+      font-size:12px;
+    }
+    .plate .btnRow{
+      display:flex; gap:6px; justify-content:flex-end;
+    }
+    .plate .tinyBtn{
+      padding:7px 9px;
+      border-radius:10px;
+      font-size:12px;
+    }
+
     .checkline{
       display:flex; align-items:center; gap:10px;
       padding:10px;
@@ -284,14 +280,11 @@
       background:rgba(255,255,255,.02);
     }
     .checkline input[type="checkbox"]{ width:18px; height:18px; }
-    .right{
-      text-align:right;
-    }
-    .danger{
-      background:rgba(239,68,68,.18);
-    }
+
+    .danger{ background:rgba(239,68,68,.18); }
     .info{
       background:rgba(56,189,248,.12);
+      padding:10px;border-radius:12px;border:1px solid rgba(120,145,220,.18);
     }
   </style>
 </head>
@@ -317,8 +310,8 @@
   <div class="wrap">
     <div class="grid-2">
       <!-- LEFT: Trailer Board -->
-      <div class="card" id="dockPlatesCard">
-  <h3>...
+      <div class="card">
+        <h3>
           <span>Trailer Board</span>
           <span class="mini" id="countsPill">0 trailers</span>
         </h3>
@@ -378,8 +371,8 @@
           </div>
 
           <div class="hint">
-            Live updates are instant via WebSocket. Dispatcher can add/edit/delete/clear. Dock can only set status
-            (Loading / Dock Ready) for existing trailers. Driver can drop + safety confirm.
+            Live updates via WebSocket. Dispatcher can add/edit/delete/clear. Dock can only set status
+            (Loading / Dock Ready). Driver can drop + safety confirm.
           </div>
         </div>
       </div>
@@ -387,21 +380,19 @@
       <!-- RIGHT: Role Panels -->
       <div class="card">
         <h3><span id="panelTitle">Controls</span><span class="mini" id="panelSub">—</span></h3>
-        <div class="body" id="panelBody">
-          <!-- injected -->
-        </div>
+        <div class="body" id="panelBody"></div>
       </div>
     </div>
 
-    <!-- Dock Plates -->
-    <div class="card">
+    <!-- ✅ Dock Plates (will be hidden on driver) -->
+    <div class="card" id="dockPlatesCard">
       <h3>
         <span>Dock Plates (18–42)</span>
-        <span class="mini">Dispatcher + Dock can edit</span>
+        <span class="mini">Dispatcher + Dock only</span>
       </h3>
       <div class="body">
         <div class="plate-grid" id="platesGrid"></div>
-        <div class="hint">Set plate status: <strong>OK</strong> / <strong>Service</strong> / <strong>Unknown</strong>. Notes are short and visible to all roles.</div>
+        <div class="hint">Compact view. Click “Edit” on a door to change status/note.</div>
       </div>
     </div>
 
@@ -472,17 +463,17 @@
 
 <script>
 (() => {
-  // ---------- State ----------
   let ROLE = null; // dispatcher | dock | driver | null
   let VERSION = "";
-  let trailers = {};      // from /api/state or websocket
-  let dockPlates = {};    // from /api/dockplates or websocket
-  let confirmations = []; // from websocket
+  let trailers = {};
+  let dockPlates = {};
+  let confirmations = [];
+  const plateEditOpen = {}; // door -> true/false
 
-  // ---------- Elements ----------
   const el = (id) => document.getElementById(id);
   const tbody = el("tbody");
   const platesGrid = el("platesGrid");
+  const dockPlatesCard = el("dockPlatesCard");
   const confBody = el("confBody");
   const confCount = el("confCount");
   const roleText = el("roleText");
@@ -504,7 +495,10 @@
   const filterStatus = el("filterStatus");
   const btnClearFilters = el("btnClearFilters");
 
-  // ---------- Helpers ----------
+  const pathLower = () => location.pathname.toLowerCase();
+  const isDriverPath = () => pathLower().startsWith("/driver");
+  const isDriverView = () => isDriverPath() || ROLE === "driver";
+
   const fmtTime = (ms) => {
     if (!ms) return "";
     try {
@@ -517,28 +511,9 @@
 
   const escapeHtml = (s) => String(s ?? "")
     .replaceAll("&","&amp;").replaceAll("<","&lt;")
-    .replaceAll(">","&gt;").replaceAll('"',"&quot;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
     .replaceAll("'","&#039;");
-
-  function statusTag(status){
-    const s = String(status || "");
-    const good = ["Ready","Departed","Dock Ready"];
-    const warn = ["Incoming","Loading","Dropped"];
-    let cls = "";
-    if (good.includes(s)) cls = "good";
-    else if (warn.includes(s)) cls = "warn";
-    else cls = "";
-    return `<span class="tag ${cls}">${escapeHtml(s || "—")}</span>`;
-  }
-
-  function plateTag(status){
-    const s = String(status || "Unknown");
-    let cls = "";
-    if (s === "OK") cls = "good";
-    else if (s === "Service") cls = "bad";
-    else cls = "";
-    return `<span class="tag ${cls}">${escapeHtml(s)}</span>`;
-  }
 
   async function apiJson(url, opts){
     const res = await fetch(url, opts);
@@ -558,18 +533,30 @@
     toast._tm = setTimeout(() => { t.style.display = "none"; }, 4500);
   }
 
-  // ---------- Rendering ----------
+  function statusTag(status){
+    const s = String(status || "");
+    const good = ["Ready","Departed","Dock Ready"];
+    const warn = ["Incoming","Loading","Dropped"];
+    let cls = "";
+    if (good.includes(s)) cls = "good";
+    else if (warn.includes(s)) cls = "warn";
+    return `<span class="tag ${cls}">${escapeHtml(s || "—")}</span>`;
+  }
+
+  function plateTag(status){
+    const s = String(status || "Unknown");
+    let cls = "";
+    if (s === "OK") cls = "good";
+    else if (s === "Service") cls = "bad";
+    return `<span class="tag ${cls}">${escapeHtml(s)}</span>`;
+  }
+
   function renderBoard(){
     const q = (search.value || "").trim().toLowerCase();
     const dirF = (filterDir.value || "").trim();
     const stF = (filterStatus.value || "").trim();
 
-    const rows = Object.entries(trailers).map(([trailer, r]) => ({
-      trailer,
-      ...r
-    }));
-
-    // newest first
+    const rows = Object.entries(trailers).map(([trailer, r]) => ({ trailer, ...r }));
     rows.sort((a,b) => (b.updatedAt||0) - (a.updatedAt||0));
 
     const filtered = rows.filter(r => {
@@ -631,36 +618,45 @@
   }
 
   function renderPlates(){
-    // Always show; only allow edits if dispatcher/dock
+    // ✅ HARD STOP: never render/show plates on driver
+    if (isDriverView()) return;
+
     const canEdit = (ROLE === "dispatcher" || ROLE === "dock");
     const doors = [];
     for (let d=18; d<=42; d++) doors.push(String(d));
 
     platesGrid.innerHTML = doors.map(door => {
       const p = dockPlates[door] || { status:"Unknown", note:"", updatedAt:0 };
-      const note = p.note || "";
-      const updated = p.updatedAt ? fmtTime(p.updatedAt) : "";
+      const open = !!plateEditOpen[door] && canEdit;
+
       return `
         <div class="plate">
           <div class="top">
-            <div class="door">Door <span class="mono">${escapeHtml(door)}</span></div>
+            <div class="door">D <span class="mono">${escapeHtml(door)}</span></div>
             ${plateTag(p.status)}
           </div>
-          <div class="note">${note ? escapeHtml(note) : `<span class="muted">No note</span>`}</div>
-          <div class="muted small">${updated ? "Updated: " + escapeHtml(updated) : ""}</div>
-          <div class="row">
-            <div>
-              <select ${canEdit ? "" : "disabled"} data-plate-status="${escapeHtml(door)}">
+
+          <div class="note" title="${escapeHtml(p.note || "")}">
+            ${p.note ? escapeHtml(p.note) : `<span class="muted">No note</span>`}
+          </div>
+
+          ${open ? `
+            <div class="editRow">
+              <select data-plate-status="${escapeHtml(door)}">
                 <option ${p.status==="OK"?"selected":""}>OK</option>
                 <option ${p.status==="Service"?"selected":""}>Service</option>
                 <option ${p.status==="Unknown"?"selected":""}>Unknown</option>
               </select>
+              <input data-plate-note="${escapeHtml(door)}" placeholder="Note" value="${escapeHtml(p.note || "")}" />
             </div>
-            <div>
-              <input ${canEdit ? "" : "disabled"} data-plate-note="${escapeHtml(door)}" placeholder="Note" value="${escapeHtml(note)}" />
-            </div>
+          ` : ``}
+
+          <div class="btnRow">
+            ${canEdit ? `
+              <button class="secondary tinyBtn" data-plate-toggle="${escapeHtml(door)}">${open ? "Close" : "Edit"}</button>
+              ${open ? `<button class="secondary tinyBtn" data-plate-save="${escapeHtml(door)}">Save</button>` : ``}
+            ` : ``}
           </div>
-          <button ${canEdit ? "" : "disabled"} class="secondary" data-plate-save="${escapeHtml(door)}">Save</button>
         </div>
       `;
     }).join("");
@@ -688,54 +684,11 @@
     }).join("");
   }
 
-  function renderRolePanel(){
-    // Panel switches by ROLE and by path
-    const path = location.pathname.toLowerCase();
-
-    if (ROLE === "dispatcher") {
-      panelTitle.textContent = "Dispatcher Controls";
-      panelSub.textContent = "Add / Update trailers • Clear board • Audit";
-      panelBody.innerHTML = dispatcherPanelHtml();
-      auditCard.style.display = "";
-      btnLogout.style.display = "";
-      return;
-    }
-    if (ROLE === "dock") {
-      panelTitle.textContent = "Dock Controls";
-      panelSub.textContent = "Set Loading / Dock Ready • Plates";
-      panelBody.innerHTML = dockPanelHtml();
-      auditCard.style.display = "none";
-      btnLogout.style.display = "";
-      return;
-    }
-    // Driver is public on /driver (no cookie needed)
-    if (path.startsWith("/driver")) {
-      panelTitle.textContent = "Driver View";
-      panelSub.textContent = "Drop trailer • Safety confirm";
-      panelBody.innerHTML = driverPanelHtml();
-      auditCard.style.display = "none";
-      btnLogout.style.display = "none";
-      return;
-    }
-
-    // Not authorized
-    panelTitle.textContent = "Not Logged In";
-    panelSub.textContent = "Go to /login";
-    panelBody.innerHTML = `
-      <div class="hint">
-        You’re not logged in for this page.<br/>
-        <a href="/login">Go to Login</a> • or open <a href="/driver">Driver view</a>.
-      </div>
-    `;
-    auditCard.style.display = "none";
-    btnLogout.style.display = "none";
-  }
-
   function dispatcherPanelHtml(){
     return `
-      <div class="info" style="padding:10px;border-radius:12px;border:1px solid rgba(120,145,220,.18);">
+      <div class="info">
         <div style="font-weight:900;margin-bottom:4px;">Add / Update Trailer</div>
-        <div class="muted small">Tip: Use “Dropped” + door + drop type when a driver drops, or set “Ready” to trigger notification.</div>
+        <div class="muted small">Setting status to <strong>Ready</strong> triggers a notification toast for everyone live.</div>
       </div>
 
       <label>Trailer #</label>
@@ -779,11 +732,10 @@
       </div>
 
       <label>Note</label>
-      <textarea id="d_note" placeholder="Short note (paperwork, product, carrier, etc.)"></textarea>
+      <textarea id="d_note" placeholder="Short note"></textarea>
 
       <div class="row" style="margin-top:10px;">
         <button id="btnSaveTrailer">Save</button>
-        <button class="secondary" id="btnFillFromSelected" disabled>Load Selected</button>
       </div>
 
       <div class="divider"></div>
@@ -791,31 +743,26 @@
       <div class="row">
         <button class="secondary danger" id="btnClearAll">Clear All Trailers</button>
       </div>
-
-      <div class="hint">
-        “Clear All” removes all trailers from the board (dispatcher only).
-      </div>
+      <div class="hint">“Clear All” removes all trailers from the board (dispatcher only).</div>
     `;
   }
 
   function dockPanelHtml(){
     return `
-      <div class="info" style="padding:10px;border-radius:12px;border:1px solid rgba(120,145,220,.18);">
-        <div style="font-weight:900;margin-bottom:4px;">Dock can only update existing trailers</div>
+      <div class="info">
+        <div style="font-weight:900;margin-bottom:4px;">Dock Controls</div>
         <div class="muted small">Use the buttons in the table: <strong>Loading</strong> / <strong>Dock Ready</strong>.</div>
       </div>
       <div class="divider"></div>
-      <div class="hint">
-        You can also update Dock Plates below. Trailer creation/editing is restricted to dispatcher.
-      </div>
+      <div class="hint">Dock Plates are available below (dispatcher/dock only).</div>
     `;
   }
 
   function driverPanelHtml(){
     return `
-      <div class="info" style="padding:10px;border-radius:12px;border:1px solid rgba(120,145,220,.18);">
+      <div class="info">
         <div style="font-weight:900;margin-bottom:4px;">Drop a Trailer</div>
-        <div class="muted small">This sets status to <strong>Dropped</strong> and updates everyone instantly.</div>
+        <div class="muted small">Sets status to <strong>Dropped</strong> and updates everyone instantly.</div>
       </div>
 
       <label>Trailer #</label>
@@ -839,7 +786,7 @@
 
       <div class="divider"></div>
 
-      <div class="info" style="padding:10px;border-radius:12px;border:1px solid rgba(120,145,220,.18);">
+      <div class="info">
         <div style="font-weight:900;margin-bottom:4px;">Safety Confirmation</div>
         <div class="muted small">Both boxes must be checked before submitting.</div>
       </div>
@@ -855,7 +802,7 @@
           <input id="c_loadSecured" type="checkbox" />
           <div>
             <div style="font-weight:900;">Load secured</div>
-            <div class="muted small">Straps/locks set, nothing shifting.</div>
+            <div class="muted small">Straps/locks set.</div>
           </div>
         </div>
         <div style="height:10px;"></div>
@@ -869,44 +816,58 @@
       </div>
 
       <button style="margin-top:10px;" id="btnConfirmSafety">Submit Safety Confirm</button>
-
-      <div class="hint">
-        Safety confirmations are logged with timestamp + IP + user agent.
-      </div>
     `;
   }
 
-  // ---------- Actions ----------
-  let selectedTrailer = null;
-
-  async function loadInitial(){
-    // whoami -> role + version
-    try {
-      const who = await apiJson("/api/whoami");
-      ROLE = who.role;
-      VERSION = who.version || "";
-    } catch (e) {
-      // If whoami fails, still allow driver on /driver
-      ROLE = null;
-      VERSION = "";
+  function renderRolePanel(){
+    if (ROLE === "dispatcher") {
+      panelTitle.textContent = "Dispatcher Controls";
+      panelSub.textContent = "Add / Update trailers • Clear board • Audit";
+      panelBody.innerHTML = dispatcherPanelHtml();
+      auditCard.style.display = "";
+      btnLogout.style.display = "";
+      if (dockPlatesCard) dockPlatesCard.style.display = "";
+      renderPlates();
+      return;
     }
-    roleText.textContent = ROLE || (location.pathname.toLowerCase().startsWith("/driver") ? "driver" : "none");
-    verText.textContent = VERSION || "—";
 
-    // state + plates
-    try { trailers = await apiJson("/api/state"); } catch(e){ trailers = {}; }
-    try { dockPlates = await apiJson("/api/dockplates"); } catch(e){ dockPlates = {}; }
+    if (ROLE === "dock") {
+      panelTitle.textContent = "Dock Controls";
+      panelSub.textContent = "Set Loading / Dock Ready • Plates";
+      panelBody.innerHTML = dockPanelHtml();
+      auditCard.style.display = "none";
+      btnLogout.style.display = "";
+      if (dockPlatesCard) dockPlatesCard.style.display = "";
+      renderPlates();
+      return;
+    }
 
-    renderRolePanel();
-    renderBoard();
-    renderPlates();
-    renderConfirmations();
+    // ✅ driver view: hide dock plates completely
+    if (isDriverPath()) {
+      panelTitle.textContent = "Driver View";
+      panelSub.textContent = "Drop trailer • Safety confirm";
+      panelBody.innerHTML = driverPanelHtml();
+      auditCard.style.display = "none";
+      btnLogout.style.display = "none";
+      if (dockPlatesCard) dockPlatesCard.style.display = "none";
+      return;
+    }
+
+    panelTitle.textContent = "Not Logged In";
+    panelSub.textContent = "Go to /login";
+    panelBody.innerHTML = `
+      <div class="hint">
+        You’re not logged in for this page.<br/>
+        <a href="/login">Go to Login</a> • or open <a href="/driver">Driver view</a>.
+      </div>
+    `;
+    auditCard.style.display = "none";
+    btnLogout.style.display = "none";
+    if (dockPlatesCard) dockPlatesCard.style.display = "none";
   }
 
   async function doLogout(){
-    try {
-      await apiJson("/api/logout", { method:"POST", headers:{ "Content-Type":"application/json" } });
-    } catch {}
+    try { await apiJson("/api/logout", { method:"POST", headers:{ "Content-Type":"application/json" } }); } catch {}
     location.href = "/login";
   }
 
@@ -927,9 +888,6 @@
         body: JSON.stringify({ trailer, direction, status, door, note, dropType })
       });
       toast("Saved", `Trailer ${trailer} updated.`);
-      // Optimistic refresh; websocket will also update
-      trailers = await apiJson("/api/state");
-      renderBoard();
     } catch(e) {
       toast("Save failed", e.message || String(e));
     }
@@ -985,6 +943,8 @@
         body: JSON.stringify({ door, status, note })
       });
       toast("Plate saved", `Door ${door} → ${status}`);
+      plateEditOpen[door] = false; // close after save
+      renderPlates();
     } catch(e){
       toast("Plate save failed", e.message || String(e));
     }
@@ -1059,7 +1019,33 @@
     }
   }
 
-  // ---------- Events ----------
+  async function loadInitial(){
+    // ✅ Hide dock plates immediately on driver path (prevents flash)
+    if (isDriverPath() && dockPlatesCard) dockPlatesCard.style.display = "none";
+
+    try {
+      const who = await apiJson("/api/whoami");
+      ROLE = who.role;
+      VERSION = who.version || "";
+    } catch {
+      ROLE = null;
+      VERSION = "";
+    }
+
+    roleText.textContent = ROLE || (isDriverPath() ? "driver" : "none");
+    verText.textContent = VERSION || "—";
+
+    try { trailers = await apiJson("/api/state"); } catch { trailers = {}; }
+    // only fetch plates if not driver
+    if (!isDriverView()) {
+      try { dockPlates = await apiJson("/api/dockplates"); } catch { dockPlates = {}; }
+    }
+
+    renderRolePanel();
+    renderBoard();
+    renderConfirmations();
+  }
+
   document.addEventListener("click", async (ev) => {
     const t = ev.target;
 
@@ -1082,21 +1068,14 @@
     }
     if (act === "edit") {
       const trailer = t.getAttribute("data-trailer");
-      if (!trailer) return;
       const r = trailers[trailer];
       if (!r) return;
-      selectedTrailer = trailer;
-
       el("d_trailer").value = trailer;
       el("d_direction").value = r.direction || "Inbound";
       el("d_status").value = r.status || "Incoming";
       el("d_door").value = r.door || "";
       el("d_note").value = r.note || "";
       el("d_dropType").value = r.dropType || "";
-
-      const btnLoad = el("btnFillFromSelected");
-      if (btnLoad) btnLoad.disabled = false;
-
       toast("Loaded", `Editing trailer ${trailer}`);
       return;
     }
@@ -1104,6 +1083,13 @@
       const trailer = t.getAttribute("data-trailer");
       const to = t.getAttribute("data-to");
       if (trailer && to) return dockSetStatus(trailer, to);
+    }
+
+    const toggleDoor = t?.getAttribute?.("data-plate-toggle");
+    if (toggleDoor) {
+      plateEditOpen[toggleDoor] = !plateEditOpen[toggleDoor];
+      renderPlates();
+      return;
     }
 
     const plateDoor = t?.getAttribute?.("data-plate-save");
@@ -1116,10 +1102,8 @@
     filterStatus.addEventListener(evtName, renderBoard);
   });
 
-  // ---------- WebSocket ----------
-  let ws = null;
+  // WebSocket
   let wsRetry = 0;
-
   function wsSetStatus(state){
     if (state === "ok"){
       wsDot.className = "dot ok";
@@ -1136,13 +1120,9 @@
   function connectWs(){
     wsSetStatus("warn");
     const proto = location.protocol === "https:" ? "wss" : "ws";
-    ws = new WebSocket(`${proto}://${location.host}`);
+    const ws = new WebSocket(`${proto}://${location.host}`);
 
-    ws.onopen = () => {
-      wsRetry = 0;
-      wsSetStatus("ok");
-    };
-
+    ws.onopen = () => { wsRetry = 0; wsSetStatus("ok"); };
     ws.onclose = () => {
       wsSetStatus("bad");
       const wait = Math.min(8000, 500 + wsRetry * 650);
@@ -1150,20 +1130,18 @@
       setTimeout(connectWs, wait);
     };
 
-    ws.onerror = () => {
-      // let onclose handle retry
-    };
-
     ws.onmessage = (evt) => {
       let msg;
       try { msg = JSON.parse(evt.data); } catch { return; }
       const { type, payload } = msg || {};
+
       if (type === "state") {
         trailers = payload || {};
         renderBoard();
       } else if (type === "dockplates") {
         dockPlates = payload || {};
-        renderPlates();
+        // ✅ don’t render plates on driver
+        if (!isDriverView()) renderPlates();
       } else if (type === "confirmations") {
         confirmations = Array.isArray(payload) ? payload : [];
         renderConfirmations();
@@ -1178,9 +1156,7 @@
     };
   }
 
-  // ---------- Boot ----------
   loadInitial().then(connectWs);
-
 })();
 </script>
 </body>

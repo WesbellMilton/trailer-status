@@ -314,6 +314,47 @@
       .actions a, .actions button{ flex:1; text-align:center; }
       table{ min-width:920px; }
     }
+
+    /* Accordion Dock Plates (slim bar) */
+    .accordion-head{
+      width:100%;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+
+      padding:10px 14px;              /* slim bar */
+      background:rgba(255,255,255,.03);
+      border:none;
+      border-bottom:1px solid var(--border);
+      color:var(--text);
+      cursor:pointer;
+      font-weight:900;
+    }
+
+    .accordion-head .left{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+
+    .accordion-head .chev{
+      font-size:16px;
+      opacity:.9;
+      transform:rotate(0deg);
+      transition:transform .18s ease;
+    }
+
+    .accordion-head[aria-expanded="true"] .chev{
+      transform:rotate(180deg);
+    }
+
+    .accordion-body{
+      overflow:hidden;
+      max-height:0;
+      transition:max-height .22s ease;
+    }
   </style>
 </head>
 <body>
@@ -412,14 +453,21 @@
       </div>
     </div>
 
+    <!-- Dock Plates Accordion (hidden on driver) -->
     <div class="card" id="dockPlatesCard">
-      <h3>
-        <span>Dock Plates (18–42)</span>
-        <span class="mini">Dispatcher + Dock</span>
-      </h3>
-      <div class="body">
-        <div class="plate-grid" id="platesGrid"></div>
-        <div class="muted small" style="margin-top:8px;">Tap “Edit” on a door to update status/note.</div>
+      <button class="accordion-head" id="dockPlatesToggle" type="button" aria-expanded="false">
+        <div class="left">
+          <span>Dock Plates (18–42)</span>
+          <span class="mini" id="platesMini">—</span>
+        </div>
+        <div class="chev" id="dockPlatesChev">▾</div>
+      </button>
+
+      <div class="accordion-body" id="dockPlatesBody">
+        <div class="body">
+          <div class="plate-grid" id="platesGrid"></div>
+          <div class="muted small" style="margin-top:8px;">Tap “Edit” on a door to update status/note.</div>
+        </div>
       </div>
     </div>
 
@@ -484,6 +532,11 @@
   const filterStatus = el("filterStatus");
   const btnClearFilters = el("btnClearFilters");
 
+  // Accordion refs
+  const dockPlatesToggle = el("dockPlatesToggle");
+  const dockPlatesBody = el("dockPlatesBody");
+  const platesMini = el("platesMini");
+
   const pathLower = () => location.pathname.toLowerCase();
   const isDriverPath = () => pathLower().startsWith("/driver");
   const isDriverView = () => isDriverPath() || ROLE === "driver";
@@ -522,6 +575,23 @@
     t.style.display = "block";
     clearTimeout(toast._tm);
     toast._tm = setTimeout(() => { t.style.display = "none"; }, 4500);
+  }
+
+  function setDockPlatesOpen(open) {
+    if (!dockPlatesToggle || !dockPlatesBody) return;
+
+    dockPlatesToggle.setAttribute("aria-expanded", open ? "true" : "false");
+
+    if (!open) {
+      dockPlatesBody.style.maxHeight = "0px";
+      try { localStorage.setItem("platesOpen", "0"); } catch {}
+      return;
+    }
+
+    const inner = dockPlatesBody.firstElementChild; // .body wrapper
+    const h = inner ? inner.scrollHeight : dockPlatesBody.scrollHeight;
+    dockPlatesBody.style.maxHeight = (h + 20) + "px";
+    try { localStorage.setItem("platesOpen", "1"); } catch {}
   }
 
   function statusTag(status){
@@ -611,6 +681,14 @@
     const doors = [];
     for (let d=18; d<=42; d++) doors.push(String(d));
 
+    // mini status/count on the slim bar
+    if (platesMini) {
+      const vals = Object.values(dockPlates || {});
+      const ok = vals.filter(p => p?.status === "OK").length;
+      const svc = vals.filter(p => p?.status === "Service").length;
+      platesMini.textContent = `${ok} OK • ${svc} Service`;
+    }
+
     platesGrid.innerHTML = doors.map(door => {
       const p = dockPlates[door] || { status:"Unknown", note:"", updatedAt:0 };
       const open = !!plateEditOpen[door] && canEdit;
@@ -650,6 +728,11 @@
         </div>
       `;
     }).join("");
+
+    // if open, re-measure height after rendering
+    if (dockPlatesToggle?.getAttribute("aria-expanded") === "true") {
+      setDockPlatesOpen(true);
+    }
   }
 
   function renderConfirmations(){
@@ -976,7 +1059,6 @@
   }
 
   async function loadInitial(){
-    // hide plates immediately on driver to prevent flash
     if (isDriverPath() && dockPlatesCard) dockPlatesCard.style.display = "none";
 
     try {
@@ -995,13 +1077,27 @@
     if (!isDriverView()) {
       try { dockPlates = await apiJson("/api/dockplates"); } catch { dockPlates = {}; }
     }
+
     renderRolePanel();
     renderBoard();
     renderConfirmations();
+
+    // Restore accordion state (default closed)
+    if (!isDriverView()) {
+      let open = false;
+      try { open = localStorage.getItem("platesOpen") === "1"; } catch {}
+      setDockPlatesOpen(open);
+    }
   }
 
   document.addEventListener("click", async (ev) => {
     const t = ev.target;
+
+    if (t?.id === "dockPlatesToggle") {
+      const isOpen = dockPlatesToggle.getAttribute("aria-expanded") === "true";
+      setDockPlatesOpen(!isOpen);
+      return;
+    }
 
     if (t?.id === "btnLogout") return doLogout();
     if (t?.id === "btnRefresh") return loadInitial();

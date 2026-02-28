@@ -19,10 +19,54 @@ const wss = new WebSocket.Server({ server });
 /* =========================
    CONFIG
 ========================= */
-const APP_VERSION = process.env.APP_VERSION || "2.3.0";
-const DISPATCHER_PIN = String(process.env.DISPATCHER_PIN || "1234");
-const DOCK_PIN = String(process.env.DOCK_PIN || "789");
-const LINK_SIGNING_SECRET = String(process.env.LINK_SIGNING_SECRET || "change_me");
+const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8"));
+const APP_VERSION = process.env.APP_VERSION || pkg.version;
+
+const LINK_SIGNING_SECRET = String(process.env.LINK_SIGNING_SECRET || "");
+
+// ── Startup guard: refuse to run in production without a real secret ──────────
+if (!LINK_SIGNING_SECRET || LINK_SIGNING_SECRET === "change_me") {
+  if (process.env.NODE_ENV === "production") {
+    console.error("FATAL: LINK_SIGNING_SECRET must be set in production. Exiting.");
+    process.exit(1);
+  } else {
+    console.warn(
+      "WARNING: LINK_SIGNING_SECRET is unset or default. " +
+      "Set a strong secret before deploying to production."
+    );
+  }
+}
+
+// PINs are stored as HMAC-SHA256 hashes in env vars.
+// Generate with: node -e "const c=require('crypto');console.log(c.createHmac('sha256','YOUR_SECRET').update('YOUR_PIN').digest('hex'))"
+// Fallback: if raw PIN env vars are provided, hash them on startup (dev convenience only).
+function hashPin(pin) {
+  return crypto
+    .createHmac("sha256", LINK_SIGNING_SECRET || "dev-only-secret")
+    .update(String(pin))
+    .digest("hex");
+}
+
+// Accept either pre-hashed (DISPATCHER_PIN_HASH) or raw (DISPATCHER_PIN) for dev ease.
+const DISPATCHER_PIN_HASH =
+  process.env.DISPATCHER_PIN_HASH ||
+  (process.env.DISPATCHER_PIN ? hashPin(process.env.DISPATCHER_PIN) : hashPin("1234"));
+
+const DOCK_PIN_HASH =
+  process.env.DOCK_PIN_HASH ||
+  (process.env.DOCK_PIN ? hashPin(process.env.DOCK_PIN) : hashPin("789"));
+
+function verifyPin(input, storedHash) {
+  const inputHash = hashPin(String(input));
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(inputHash, "hex"),
+      Buffer.from(storedHash, "hex")
+    );
+  } catch {
+    return false;
+  }
+}
 
 /**
  * SQLite path:
@@ -31,7 +75,6 @@ const LINK_SIGNING_SECRET = String(process.env.LINK_SIGNING_SECRET || "change_me
  */
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data.db");
 
-// Ensure DB directory exists if using a mounted disk path
 try {
   const dir = path.dirname(DB_PATH);
   if (dir && dir !== "." && dir !== __dirname) fs.mkdirSync(dir, { recursive: true });
@@ -45,6 +88,41 @@ const db = new sqlite3.Database(DB_PATH);
 let trailers = {};
 let confirmations = [];
 let dockPlates = {};
+
+/* =========================
+   RATE LIMITER (simple in-process)
+   No external deps needed for single-process deployments.
+   Replace with express-rate-limit if you scale out.
+========================= */
+const rateLimitStore = new Map(); // key -> { count, resetAt }
+
+function rateLimit(windowMs, max) {
+  return (req, res, next) => {
+    const key = getIp(req);
+    const now = Date.now();
+    let entry = rateLimitStore.get(key);
+
+    if (!entry || now > entry.resetAt) {
+      entry = { count: 0, resetAt: now + windowMs };
+      rateLimitStore.set(key, entry);
+    }
+
+    entry.count++;
+    if (entry.count > max) {
+      res.setHeader("Retry-After", Math.ceil((entry.resetAt - now) / 1000));
+      return res.status(429).send("Too many requests. Please wait and try again.");
+    }
+    next();
+  };
+}
+
+// Clean up stale rate-limit entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitStore) {
+    if (now > entry.resetAt) rateLimitStore.delete(key);
+  }
+}, 5 * 60 * 1000).unref();
 
 /* =========================
    HELPERS
@@ -71,7 +149,7 @@ function normalizeDoor(v) {
 
 function getIp(req) {
   return (
-    (req.headers["x-forwarded-for"]?.split(",")[0]?.trim()) ||
+    req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
     req.socket.remoteAddress ||
     ""
   );
@@ -89,15 +167,23 @@ function parseCookies(cookieHeader) {
 }
 
 function sign(val) {
-  return crypto.createHmac("sha256", LINK_SIGNING_SECRET).update(val).digest("hex");
+  return crypto
+    .createHmac("sha256", LINK_SIGNING_SECRET || "dev-only-secret")
+    .update(val)
+    .digest("hex");
 }
+
+const IS_PROD = process.env.NODE_ENV === "production";
 
 function setAuthCookie(res, role) {
   const ts = Date.now();
   const base = `${role}|${ts}`;
   const sig = sign(base);
   const value = encodeURIComponent(`${base}|${sig}`);
-  res.setHeader("Set-Cookie", [`auth=${value}; Path=/; HttpOnly; SameSite=Lax`]);
+  const secure = IS_PROD ? "; Secure" : "";
+  res.setHeader("Set-Cookie", [
+    `auth=${value}; Path=/; HttpOnly; SameSite=Lax${secure}`,
+  ]);
 }
 
 function clearAuthCookie(res) {
@@ -146,6 +232,16 @@ function requireAnyRole(roles) {
   };
 }
 
+// ── CSRF: all mutating API routes must include this header ───────────────────
+// Browsers block cross-origin custom headers, so this is an effective CSRF guard
+// without requiring token infrastructure.
+function requireCsrf(req, res, next) {
+  if (req.headers["x-requested-with"] !== "XMLHttpRequest") {
+    return res.status(403).send("CSRF check failed");
+  }
+  next();
+}
+
 function dbRun(sql, params = []) {
   return new Promise((resolve, reject) => {
     db.run(sql, params, function (err) {
@@ -164,7 +260,15 @@ function dbAll(sql, params = []) {
   });
 }
 
-async function auditLog({ actorRole, action, entityType, entityId, details, ip, userAgent }) {
+async function auditLog({
+  actorRole,
+  action,
+  entityType,
+  entityId,
+  details,
+  ip,
+  userAgent,
+}) {
   const at = Date.now();
   await dbRun(
     `INSERT INTO audit_log (at, actorRole, action, entityType, entityId, details, ip, userAgent)
@@ -177,7 +281,7 @@ async function auditLog({ actorRole, action, entityType, entityId, details, ip, 
       entityId || "",
       JSON.stringify(details || {}),
       ip || "",
-      userAgent || ""
+      userAgent || "",
     ]
   );
 }
@@ -201,8 +305,9 @@ async function initDb() {
     )
   `);
 
-  // Safe migration
-  await dbRun(`ALTER TABLE trailers ADD COLUMN dropType TEXT NOT NULL DEFAULT ''`).catch(() => {});
+  await dbRun(
+    `ALTER TABLE trailers ADD COLUMN dropType TEXT NOT NULL DEFAULT ''`
+  ).catch(() => {});
 
   await dbRun(`
     CREATE TABLE IF NOT EXISTS confirmations (
@@ -252,7 +357,9 @@ async function initDb() {
 }
 
 async function reloadCachesFromDb() {
-  const trows = await dbAll(`SELECT trailer, direction, status, door, note, dropType, updatedAt FROM trailers`);
+  const trows = await dbAll(
+    `SELECT trailer, direction, status, door, note, dropType, updatedAt FROM trailers`
+  );
   trailers = {};
   for (const r of trows) {
     trailers[r.trailer] = {
@@ -261,7 +368,7 @@ async function reloadCachesFromDb() {
       door: r.door || "",
       note: r.note || "",
       dropType: r.dropType || "",
-      updatedAt: r.updatedAt || 0
+      updatedAt: r.updatedAt || 0,
     };
   }
 
@@ -271,21 +378,23 @@ async function reloadCachesFromDb() {
     ORDER BY id DESC
     LIMIT 200
   `);
-  confirmations = crows.map(r => ({
+  confirmations = crows.map((r) => ({
     at: r.at,
     trailer: r.trailer || "",
     door: r.door || "",
     ip: r.ip || "",
-    userAgent: r.userAgent || ""
+    userAgent: r.userAgent || "",
   }));
 
-  const prows = await dbAll(`SELECT door, status, note, updatedAt FROM dock_plates`);
+  const prows = await dbAll(
+    `SELECT door, status, note, updatedAt FROM dock_plates`
+  );
   dockPlates = {};
   for (const r of prows) {
     dockPlates[String(r.door)] = {
       status: r.status || "Unknown",
       note: r.note || "",
-      updatedAt: r.updatedAt || 0
+      updatedAt: r.updatedAt || 0,
     };
   }
 }
@@ -294,29 +403,32 @@ async function reloadCachesFromDb() {
    PAGES
 ========================= */
 app.get("/login", (req, res) => {
+  const expired = req.query.expired === "1";
   res.send(`
 <!doctype html>
 <html>
 <head>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Login</title>
+  <title>Login – Wesbell</title>
   <style>
     body{font-family:system-ui;background:#0b1220;color:#eaf0ff;margin:0;display:flex;justify-content:center;align-items:center;height:100vh}
     .card{width:340px;background:rgba(255,255,255,.04);border:1px solid rgba(120,145,220,.18);border-radius:14px;padding:18px}
     h2{margin:0 0 6px 0}
     .sub{color:#a7b2d3;font-size:12px;margin-bottom:12px}
-    input{width:100%;padding:12px;border-radius:12px;border:1px solid rgba(120,145,220,.18);background:#0c132a;color:#fff}
-    button{width:100%;padding:12px;border-radius:12px;border:1px solid rgba(120,145,220,.18);background:rgba(99,102,241,.25);color:#fff;font-weight:900;margin-top:10px;cursor:pointer}
+    input{width:100%;padding:12px;border-radius:12px;border:1px solid rgba(120,145,220,.18);background:#0c132a;color:#fff;box-sizing:border-box;}
+    button{width:100%;padding:12px;border-radius:12px;border:none;background:rgba(99,102,241,.55);color:#fff;font-weight:900;margin-top:10px;cursor:pointer;font-size:15px;}
     .hint{margin-top:10px;font-size:12px;color:#a7b2d3}
     a{color:#b7c5ff}
+    .banner{background:rgba(239,68,68,.18);border:1px solid rgba(239,68,68,.35);border-radius:10px;padding:8px 10px;font-size:13px;margin-bottom:10px;}
   </style>
 </head>
 <body>
   <div class="card">
     <h2>Wesbell Login</h2>
-    <div class="sub">Dispatcher & Dock require PIN. Driver is public.</div>
+    ${expired ? `<div class="banner">Session expired. Please log in again.</div>` : ""}
+    <div class="sub">Dispatcher &amp; Dock require a PIN. Driver is public.</div>
     <form method="POST" action="/login">
-      <input name="pin" placeholder="Enter PIN" autocomplete="off" required />
+      <input name="pin" type="password" placeholder="Enter PIN" autocomplete="current-password" required />
       <button type="submit">Login</button>
     </form>
     <div class="hint">Driver link: <a href="/driver">/driver</a></div>
@@ -326,22 +438,24 @@ app.get("/login", (req, res) => {
   `);
 });
 
-app.post("/login", (req, res) => {
+// Rate limit: 20 attempts per 15-minute window per IP
+app.post("/login", rateLimit(15 * 60 * 1000, 20), (req, res) => {
   const pin = String(req.body?.pin || "").trim();
 
-  if (pin === DISPATCHER_PIN) {
+  if (verifyPin(pin, DISPATCHER_PIN_HASH)) {
     setAuthCookie(res, "dispatcher");
     return res.redirect("/");
   }
-  if (pin === DOCK_PIN) {
+  if (verifyPin(pin, DOCK_PIN_HASH)) {
     setAuthCookie(res, "dock");
     return res.redirect("/dock");
   }
 
+  // Generic message — don't reveal which role failed
   res.status(401).send("Invalid PIN");
 });
 
-app.post("/api/logout", (req, res) => {
+app.post("/api/logout", requireCsrf, (req, res) => {
   clearAuthCookie(res);
   res.json({ ok: true });
 });
@@ -371,7 +485,9 @@ app.get("/driver", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
-app.get("/health", (req, res) => res.json({ ok: true, db: DB_PATH, version: APP_VERSION }));
+app.get("/health", (req, res) =>
+  res.json({ ok: true, db: DB_PATH, version: APP_VERSION })
+);
 
 /* =========================
    APIs: STATE
@@ -381,69 +497,108 @@ app.get("/api/state", (req, res) => {
 });
 
 /* =========================
+   APIs: AUDIT LOG (dispatcher only)
+========================= */
+app.get("/api/audit", requireRole("dispatcher"), async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || "200", 10), 500);
+    const rows = await dbAll(
+      `SELECT id, at, actorRole, action, entityType, entityId, details, ip, userAgent
+       FROM audit_log ORDER BY id DESC LIMIT ?`,
+      [limit]
+    );
+    res.json(
+      rows.map((r) => ({
+        ...r,
+        details: (() => {
+          try {
+            return JSON.parse(r.details);
+          } catch {
+            return {};
+          }
+        })(),
+      }))
+    );
+  } catch (err) {
+    console.error("audit error:", err);
+    res.status(500).send("Server error");
+  }
+});
+
+/* =========================
    APIs: DOCK PLATES
 ========================= */
 app.get("/api/dockplates", (req, res) => {
   res.json(dockPlates);
 });
 
-app.post("/api/dockplates/set", requireAnyRole(["dispatcher", "dock"]), async (req, res) => {
-  try {
-    const role = getRoleFromReq(req);
-    const door = normalizeDoor(req.body?.door);
-    const status = cleanStr(req.body?.status, 20);
-    const note = cleanStr(req.body?.note, 120);
+app.post(
+  "/api/dockplates/set",
+  requireCsrf,
+  requireAnyRole(["dispatcher", "dock"]),
+  async (req, res) => {
+    try {
+      const role = getRoleFromReq(req);
+      const door = normalizeDoor(req.body?.door);
+      const status = cleanStr(req.body?.status, 20);
+      const note = cleanStr(req.body?.note, 120);
 
-    const allowed = ["OK", "Service", "Unknown"];
-    if (!door) return res.status(400).send("Door required");
-    if (!/^\d+$/.test(door)) return res.status(400).send("Invalid door");
-    const doorNum = Number(door);
-    if (doorNum < 18 || doorNum > 42) return res.status(400).send("Door must be 18-42");
-    if (!allowed.includes(status)) return res.status(400).send("Invalid status");
+      const allowed = ["OK", "Service", "Unknown"];
+      if (!door) return res.status(400).send("Door required");
+      if (!/^\d+$/.test(door)) return res.status(400).send("Invalid door");
+      const doorNum = Number(door);
+      if (doorNum < 18 || doorNum > 42)
+        return res.status(400).send("Door must be 18-42");
+      if (!allowed.includes(status))
+        return res.status(400).send("Invalid status");
 
-    const updatedAt = Date.now();
-    await dbRun(
-      `INSERT INTO dock_plates (door, status, note, updatedAt)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(door) DO UPDATE SET status=excluded.status, note=excluded.note, updatedAt=excluded.updatedAt`,
-      [door, status, note, updatedAt]
-    );
+      const updatedAt = Date.now();
+      await dbRun(
+        `INSERT INTO dock_plates (door, status, note, updatedAt)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(door) DO UPDATE SET status=excluded.status, note=excluded.note, updatedAt=excluded.updatedAt`,
+        [door, status, note, updatedAt]
+      );
 
-    dockPlates[door] = { status, note, updatedAt };
+      dockPlates[door] = { status, note, updatedAt };
 
-    await auditLog({
-      actorRole: role,
-      action: "plate_set",
-      entityType: "dock_plate",
-      entityId: door,
-      details: { status, note },
-      ip: getIp(req),
-      userAgent: req.headers["user-agent"] || ""
-    });
+      await auditLog({
+        actorRole: role,
+        action: "plate_set",
+        entityType: "dock_plate",
+        entityId: door,
+        details: { status, note },
+        ip: getIp(req),
+        userAgent: req.headers["user-agent"] || "",
+      });
 
-    broadcast("dockplates", dockPlates);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("dockplates/set error:", err);
-    res.status(500).send("Server error");
+      broadcast("dockplates", dockPlates);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("dockplates/set error:", err);
+      res.status(500).send("Server error");
+    }
   }
-});
+);
 
 /* =========================
-   APIs: DRIVER DROP (public)
+   APIs: DRIVER DROP (public, rate-limited)
 ========================= */
-app.post("/api/driver/drop", async (req, res) => {
+const driverDropLimiter = rateLimit(10 * 60 * 1000, 30); // 30 drops per 10 min per IP
+
+app.post("/api/driver/drop", requireCsrf, driverDropLimiter, async (req, res) => {
   try {
     const trailer = cleanStr(req.body?.trailer, 20);
     const door = normalizeDoor(req.body?.door);
-    const dropType = cleanStr(req.body?.dropType, 12); // Empty | Loaded
+    const dropType = cleanStr(req.body?.dropType, 12);
 
     if (!trailer) return res.status(400).send("Trailer required");
     if (!door) return res.status(400).send("Door required");
     if (!/^\d+$/.test(door)) return res.status(400).send("Invalid door");
     const dn = Number(door);
     if (dn < 18 || dn > 42) return res.status(400).send("Door must be 18-42");
-    if (!["Empty", "Loaded"].includes(dropType)) return res.status(400).send("Invalid drop type");
+    if (!["Empty", "Loaded"].includes(dropType))
+      return res.status(400).send("Invalid drop type");
 
     const prev = trailers[trailer] || null;
 
@@ -454,7 +609,7 @@ app.post("/api/driver/drop", async (req, res) => {
       door,
       note: prev?.note || "",
       dropType,
-      updatedAt
+      updatedAt,
     };
 
     await dbRun(
@@ -479,7 +634,7 @@ app.post("/api/driver/drop", async (req, res) => {
       entityId: trailer,
       details: { door, dropType },
       ip: getIp(req),
-      userAgent: req.headers["user-agent"] || ""
+      userAgent: req.headers["user-agent"] || "",
     });
 
     broadcast("state", trailers);
@@ -491,9 +646,11 @@ app.post("/api/driver/drop", async (req, res) => {
 });
 
 /* =========================
-   APIs: CONFIRM SAFETY (driver)
+   APIs: CONFIRM SAFETY (driver, rate-limited)
 ========================= */
-app.post("/api/confirm-safety", async (req, res) => {
+const safetyConfirmLimiter = rateLimit(10 * 60 * 1000, 60);
+
+app.post("/api/confirm-safety", requireCsrf, safetyConfirmLimiter, async (req, res) => {
   try {
     const trailer = cleanStr(req.body?.trailer, 20);
     const door = normalizeDoor(req.body?.door);
@@ -519,12 +676,12 @@ app.post("/api/confirm-safety", async (req, res) => {
       ORDER BY id DESC
       LIMIT 200
     `);
-    confirmations = crows.map(r => ({
+    confirmations = crows.map((r) => ({
       at: r.at,
       trailer: r.trailer || "",
       door: r.door || "",
       ip: r.ip || "",
-      userAgent: r.userAgent || ""
+      userAgent: r.userAgent || "",
     }));
 
     await auditLog({
@@ -534,7 +691,7 @@ app.post("/api/confirm-safety", async (req, res) => {
       entityId: trailer || "",
       details: { trailer, door, loadSecured: true, dockPlateUp: true },
       ip,
-      userAgent
+      userAgent,
     });
 
     broadcast("confirmations", confirmations);
@@ -548,7 +705,7 @@ app.post("/api/confirm-safety", async (req, res) => {
 /* =========================
    APIs: UPSERT TRAILER
 ========================= */
-app.post("/api/upsert", async (req, res) => {
+app.post("/api/upsert", requireCsrf, async (req, res) => {
   try {
     const role = getRoleFromReq(req);
     if (!role) return res.status(401).send("Unauthorized");
@@ -557,12 +714,12 @@ app.post("/api/upsert", async (req, res) => {
     if (!trailer) return res.status(400).send("Trailer required");
 
     const prev = trailers[trailer] || null;
-    if (!prev) {
-      if (role === "dock") return res.status(403).send("Dock cannot add trailers");
-    }
+    if (!prev && role === "dock")
+      return res.status(403).send("Dock cannot add trailers");
 
     const allowedDir = ["Inbound", "Outbound", "Cross Dock"];
     const allowedStatus = ["Incoming", "Loading", "Dock Ready", "Ready", "Departed", "Dropped"];
+    const allowedDropType = ["", "Empty", "Loaded"];
 
     // Dock: status only
     if (role === "dock") {
@@ -578,7 +735,7 @@ app.post("/api/upsert", async (req, res) => {
         door: prev.door,
         note: prev.note || "",
         dropType: prev.dropType || "",
-        updatedAt
+        updatedAt,
       };
 
       await dbRun(
@@ -603,7 +760,7 @@ app.post("/api/upsert", async (req, res) => {
         entityId: trailer,
         details: { from: prev.status, to: status },
         ip: getIp(req),
-        userAgent: req.headers["user-agent"] || ""
+        userAgent: req.headers["user-agent"] || "",
       });
 
       broadcast("state", trailers);
@@ -613,14 +770,18 @@ app.post("/api/upsert", async (req, res) => {
     // Dispatcher: full control
     if (role !== "dispatcher") return res.status(403).send("Forbidden");
 
-    const direction = cleanStr(req.body?.direction, 30) || (prev?.direction || "Inbound");
-    const status = cleanStr(req.body?.status, 30) || (prev?.status || "Incoming");
+    const direction = cleanStr(req.body?.direction, 30) || prev?.direction || "Inbound";
+    const status = cleanStr(req.body?.status, 30) || prev?.status || "Incoming";
     const door = normalizeDoor(req.body?.door ?? prev?.door ?? "");
     const note = cleanStr(req.body?.note, 160);
-    const dropType = cleanStr(req.body?.dropType, 12) || (prev?.dropType || "");
+    const dropType = cleanStr(req.body?.dropType, 12) || prev?.dropType || "";
 
-    if (!allowedDir.includes(direction)) return res.status(400).send("Invalid direction");
-    if (!allowedStatus.includes(status)) return res.status(400).send("Invalid status");
+    if (!allowedDir.includes(direction))
+      return res.status(400).send("Invalid direction");
+    if (!allowedStatus.includes(status))
+      return res.status(400).send("Invalid status");
+    if (!allowedDropType.includes(dropType))
+      return res.status(400).send("Invalid drop type");
 
     if (door) {
       if (!/^\d+$/.test(door)) return res.status(400).send("Invalid door");
@@ -653,11 +814,12 @@ app.post("/api/upsert", async (req, res) => {
       entityId: trailer,
       details: { prev, next },
       ip: getIp(req),
-      userAgent: req.headers["user-agent"] || ""
+      userAgent: req.headers["user-agent"] || "",
     });
 
     broadcast("state", trailers);
 
+    // Broadcast ready notification when status transitions to Ready
     if (prev?.status !== "Ready" && status === "Ready") {
       broadcast("notify", { kind: "ready", trailer, door: next.door || "" });
     }
@@ -672,7 +834,7 @@ app.post("/api/upsert", async (req, res) => {
 /* =========================
    DELETE / CLEAR (dispatcher only)
 ========================= */
-app.post("/api/delete", requireRole("dispatcher"), async (req, res) => {
+app.post("/api/delete", requireCsrf, requireRole("dispatcher"), async (req, res) => {
   try {
     const trailer = cleanStr(req.body?.trailer, 20);
     if (!trailer) return res.status(400).send("Trailer required");
@@ -689,7 +851,7 @@ app.post("/api/delete", requireRole("dispatcher"), async (req, res) => {
       entityId: trailer,
       details: { prev },
       ip: getIp(req),
-      userAgent: req.headers["user-agent"] || ""
+      userAgent: req.headers["user-agent"] || "",
     });
 
     broadcast("state", trailers);
@@ -700,7 +862,7 @@ app.post("/api/delete", requireRole("dispatcher"), async (req, res) => {
   }
 });
 
-app.post("/api/clear", requireRole("dispatcher"), async (req, res) => {
+app.post("/api/clear", requireCsrf, requireRole("dispatcher"), async (req, res) => {
   try {
     await dbRun(`DELETE FROM trailers`);
     trailers = {};
@@ -712,7 +874,7 @@ app.post("/api/clear", requireRole("dispatcher"), async (req, res) => {
       entityId: "*",
       details: {},
       ip: getIp(req),
-      userAgent: req.headers["user-agent"] || ""
+      userAgent: req.headers["user-agent"] || "",
     });
 
     broadcast("state", trailers);
@@ -739,15 +901,26 @@ wss.on("connection", (ws) => {
 const PORT = process.env.PORT || 3000;
 
 function shutdown(signal) {
-  console.log(`\n${signal} received. Shutting down...`);
-  try { wss.clients.forEach((c) => { try { c.close(); } catch {} }); } catch {}
+  console.log(`\n${signal} received. Shutting down…`);
+  try {
+    wss.clients.forEach((c) => {
+      try {
+        c.close();
+      } catch {}
+    });
+  } catch {}
+
   server.close(() => {
-    db.close(() => {
-      console.log("Closed HTTP + SQLite. Bye.");
-      process.exit(0);
+    // Checkpoint WAL before closing to ensure all writes are flushed
+    db.run("PRAGMA wal_checkpoint(FULL)", () => {
+      db.close(() => {
+        console.log("Closed HTTP + SQLite. Bye.");
+        process.exit(0);
+      });
     });
   });
-  setTimeout(() => process.exit(1), 4000).unref();
+
+  setTimeout(() => process.exit(1), 6000).unref();
 }
 
 process.on("SIGINT", () => shutdown("SIGINT"));
@@ -759,6 +932,7 @@ initDb()
       console.log("Running on port", PORT);
       console.log("SQLite DB:", DB_PATH);
       console.log("Version:", APP_VERSION);
+      console.log("Environment:", process.env.NODE_ENV || "development");
     });
   })
   .catch((err) => {

@@ -8,78 +8,45 @@
 </head>
 <body>
 
-  <!-- TOP BAR -->
   <div class="topbar">
     <div class="topbar-inner">
-
       <div class="brand">
         <span class="mono">WESBELL</span>
-
         <span class="pill">
           <span class="dot" id="wsDot"></span>
           <span id="wsText">Connecting…</span>
         </span>
-
-        <span class="pill">
-          Role: <strong id="roleText">—</strong>
-        </span>
-
-        <span class="pill">
-          v<span id="verText">—</span>
-        </span>
+        <span class="pill">Role: <strong id="roleText">—</strong></span>
+        <span class="pill">v<span id="verText">—</span></span>
       </div>
-
       <div class="actions">
-
-        <button id="btnRefresh" class="btn-refresh">
-          Refresh
-        </button>
-
-        <a href="/" class="btn-dispatcher">
-          Dispatcher
-        </a>
-
-        <a href="/dock" class="btn-dock">
-          Dock
-        </a>
-
-        <a href="/driver" class="btn-driver">
-          Driver
-        </a>
-
-        <button id="btnLogout" class="btn-logout" style="display:none;">
-          Logout
-        </button>
-
+        <button id="btnRefresh" class="secondary">Refresh</button>
+        <button id="btnLogout" class="secondary" style="display:none;">Logout</button>
+        <a class="btn ghost" href="/driver">Driver</a>
+        <a class="btn ghost" href="/">Dispatcher</a>
+        <a class="btn ghost" href="/dock">Dock</a>
       </div>
-
     </div>
   </div>
 
-  <!-- MAIN WRAP -->
   <div class="wrap">
-
     <div class="grid-2">
 
-      <!-- TRAILER BOARD -->
+      <!-- Trailer Board -->
       <div class="card">
         <h3>
           <span>Trailer Board</span>
           <span class="mini" id="countsPill">0 trailers</span>
         </h3>
-
         <div class="body">
-
           <div class="row">
-            <input id="search" placeholder="Search trailer / door / note" />
-
+            <input id="search" placeholder="Search trailer / door / note">
             <select id="filterDir">
               <option value="">All Directions</option>
               <option>Inbound</option>
               <option>Outbound</option>
               <option>Cross Dock</option>
             </select>
-
             <select id="filterStatus">
               <option value="">All Status</option>
               <option>Incoming</option>
@@ -89,10 +56,7 @@
               <option>Ready</option>
               <option>Departed</option>
             </select>
-
-            <button id="btnClearFilters" class="secondary">
-              Clear
-            </button>
+            <button id="btnClearFilters" class="secondary">Clear</button>
           </div>
 
           <div class="divider"></div>
@@ -111,51 +75,39 @@
                   <th id="actionsColHead">Actions</th>
                 </tr>
               </thead>
-
               <tbody id="tbody">
-                <tr>
-                  <td colspan="8">Loading…</td>
-                </tr>
+                <tr><td colspan="8">Loading…</td></tr>
               </tbody>
             </table>
           </div>
-
         </div>
       </div>
 
-      <!-- ROLE PANEL -->
+      <!-- Role Panel -->
       <div class="card">
         <h3>
           <span id="panelTitle">Controls</span>
           <span class="mini" id="panelSub">—</span>
         </h3>
-
-        <div class="body" id="panelBody">
-          <!-- Filled dynamically by app.js -->
-        </div>
+        <div class="body" id="panelBody"></div>
       </div>
 
     </div>
 
-    <!-- DOCK PLATES (Hidden automatically on driver view) -->
+    <!-- Dock Plates -->
     <div class="card" id="dockPlatesCard">
-      <h3>
-        Dock Plates (18–42)
-      </h3>
+      <h3>Dock Plates (18–42)</h3>
       <div class="body">
-        <div class="plate-grid" id="platesGrid">
-          <!-- Filled by app.js -->
-        </div>
+        <div class="plate-grid" id="platesGrid"></div>
       </div>
     </div>
 
-    <!-- SAFETY CONFIRMATIONS -->
+    <!-- Confirmations -->
     <div class="card">
       <h3>
         Safety Confirmations
         <span class="mini" id="confCount">0</span>
       </h3>
-
       <div class="body">
         <div class="table-wrap">
           <table>
@@ -167,11 +119,8 @@
                 <th>IP</th>
               </tr>
             </thead>
-
             <tbody id="confBody">
-              <tr>
-                <td colspan="4">No confirmations yet.</td>
-              </tr>
+              <tr><td colspan="4">No confirmations yet.</td></tr>
             </tbody>
           </table>
         </div>
@@ -180,13 +129,11 @@
 
   </div>
 
-  <!-- TOAST NOTIFICATION -->
   <div class="toast" id="toast">
     <strong id="toastTitle"></strong>
     <div id="toastBody"></div>
   </div>
 
   <script src="/app.js"></script>
-
 </body>
 </html>

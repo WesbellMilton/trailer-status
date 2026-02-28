@@ -1,4 +1,3 @@
-// server.js
 const express = require("express");
 const http = require("http");
 const path = require("path");
@@ -8,8 +7,6 @@ const sqlite3 = require("sqlite3").verbose();
 const crypto = require("crypto");
 
 const app = express();
-
-// Trust proxy (Render / reverse proxies)
 app.set("trust proxy", true);
 
 app.use(express.json());
@@ -23,7 +20,6 @@ const wss = new WebSocket.Server({ server });
    CONFIG
 ========================= */
 const APP_VERSION = process.env.APP_VERSION || "2.3.0";
-
 const DISPATCHER_PIN = String(process.env.DISPATCHER_PIN || "1234");
 const DOCK_PIN = String(process.env.DOCK_PIN || "789");
 const LINK_SIGNING_SECRET = String(process.env.LINK_SIGNING_SECRET || "change_me");
@@ -35,7 +31,7 @@ const LINK_SIGNING_SECRET = String(process.env.LINK_SIGNING_SECRET || "change_me
  */
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data.db");
 
-// Ensure DB folder exists (important for Render disk paths)
+// Ensure DB directory exists if using a mounted disk path
 try {
   const dir = path.dirname(DB_PATH);
   if (dir && dir !== "." && dir !== __dirname) fs.mkdirSync(dir, { recursive: true });
@@ -46,9 +42,9 @@ try {
 const db = new sqlite3.Database(DB_PATH);
 
 // In-memory caches
-let trailers = {};       // { trailer: {direction,status,door,note,dropType,updatedAt} }
-let confirmations = [];  // latest first
-let dockPlates = {};     // { "18": {status:"OK|Service|Unknown", note:"", updatedAt} }
+let trailers = {};
+let confirmations = [];
+let dockPlates = {};
 
 /* =========================
    HELPERS
@@ -109,7 +105,6 @@ function clearAuthCookie(res) {
 }
 
 function getRoleFromReq(req) {
-  // driver is public on /driver
   if (String(req.path || "").toLowerCase().startsWith("/driver")) return "driver";
 
   const cookies = parseCookies(req.headers.cookie);
@@ -130,7 +125,7 @@ function getRoleFromReq(req) {
   if (sign(base) !== sig) return null;
 
   const ageMs = Date.now() - Number(ts || 0);
-  if (!Number.isFinite(ageMs) || ageMs > 12 * 60 * 60 * 1000) return null; // 12h
+  if (!Number.isFinite(ageMs) || ageMs > 12 * 60 * 60 * 1000) return null;
 
   return role;
 }
@@ -206,7 +201,7 @@ async function initDb() {
     )
   `);
 
-  // Safe migration if older DB exists
+  // Safe migration
   await dbRun(`ALTER TABLE trailers ADD COLUMN dropType TEXT NOT NULL DEFAULT ''`).catch(() => {});
 
   await dbRun(`
@@ -243,7 +238,7 @@ async function initDb() {
     )
   `);
 
-  // Seed plates 18..42 if missing
+  // Seed plates 18..42
   for (let d = 18; d <= 42; d++) {
     await dbRun(
       `INSERT INTO dock_plates (door, status, note, updatedAt)
@@ -552,8 +547,6 @@ app.post("/api/confirm-safety", async (req, res) => {
 
 /* =========================
    APIs: UPSERT TRAILER
-   - Dispatcher: full add/update
-   - Dock: status only (Loading / Dock Ready)
 ========================= */
 app.post("/api/upsert", async (req, res) => {
   try {
@@ -571,6 +564,7 @@ app.post("/api/upsert", async (req, res) => {
     const allowedDir = ["Inbound", "Outbound", "Cross Dock"];
     const allowedStatus = ["Incoming", "Loading", "Dock Ready", "Ready", "Departed", "Dropped"];
 
+    // Dock: status only
     if (role === "dock") {
       const status = cleanStr(req.body?.status, 30);
       if (!["Loading", "Dock Ready"].includes(status)) {
@@ -613,10 +607,10 @@ app.post("/api/upsert", async (req, res) => {
       });
 
       broadcast("state", trailers);
-      res.json({ ok: true });
-      return;
+      return res.json({ ok: true });
     }
 
+    // Dispatcher: full control
     if (role !== "dispatcher") return res.status(403).send("Forbidden");
 
     const direction = cleanStr(req.body?.direction, 30) || (prev?.direction || "Inbound");
@@ -725,31 +719,6 @@ app.post("/api/clear", requireRole("dispatcher"), async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error("clear error:", err);
-    res.status(500).send("Server error");
-  }
-});
-
-/* =========================
-   AUDIT LOG (dispatcher only)
-========================= */
-app.get("/api/audit", requireRole("dispatcher"), async (req, res) => {
-  try {
-    const rows = await dbAll(
-      `SELECT at, actorRole, action, entityType, entityId, details
-       FROM audit_log
-       ORDER BY id DESC
-       LIMIT 250`
-    );
-    res.json(rows.map(r => ({
-      at: r.at,
-      actorRole: r.actorRole,
-      action: r.action,
-      entityType: r.entityType,
-      entityId: r.entityId,
-      details: (()=>{ try{return JSON.parse(r.details||"{}")}catch{return {}} })()
-    })));
-  } catch (err) {
-    console.error("audit error:", err);
     res.status(500).send("Server error");
   }
 });

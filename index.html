@@ -4,8 +4,317 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Wesbell Trailer Board</title>
-  <link rel="stylesheet" href="styles.css">
-<script src="app.js"></script>
+  <style>
+    :root{
+      --bg:#0b1220;
+      --card:rgba(255,255,255,.04);
+      --border:rgba(120,145,220,.18);
+      --muted:#a7b2d3;
+      --text:#eaf0ff;
+
+      --good:rgba(34,197,94,.22);
+      --warn:rgba(245,158,11,.22);
+      --bad:rgba(239,68,68,.22);
+
+      --shadow:0 12px 40px rgba(0,0,0,.35);
+      --radius:14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      background:radial-gradient(1200px 800px at 20% 10%, rgba(99,102,241,.14), transparent 60%),
+                 radial-gradient(900px 700px at 90% 30%, rgba(56,189,248,.10), transparent 60%),
+                 var(--bg);
+      color:var(--text);
+      font-family:var(--sans);
+    }
+    a{color:#fff; text-decoration:none}
+
+    .topbar{
+      position:sticky; top:0; z-index:50;
+      background:rgba(11,18,32,.88);
+      backdrop-filter: blur(10px);
+      border-bottom:1px solid var(--border);
+    }
+    .topbar-inner{
+      max-width:1200px;
+      margin:0 auto;
+      padding:10px 14px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      flex-wrap:wrap;
+    }
+    .brand{
+      display:flex; align-items:center; gap:10px;
+      font-weight:900;
+      letter-spacing:.2px;
+      flex-wrap:wrap;
+    }
+    .mono{font-family:var(--mono)}
+    .pill{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:6px 10px;
+      border:1px solid var(--border);
+      border-radius:999px;
+      background:rgba(255,255,255,.03);
+      color:var(--muted);
+      font-size:12px;
+      white-space:nowrap;
+    }
+    .dot{ width:8px; height:8px; border-radius:999px; background:#999; }
+    .dot.ok{ background:#22c55e;}
+    .dot.bad{ background:#ef4444;}
+    .dot.warn{ background:#f59e0b;}
+
+    .actions{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    .actions a, .actions button{
+      border:none;
+      color:#fff;
+      padding:8px 12px;
+      border-radius:10px;
+      font-weight:800;
+      cursor:pointer;
+      font-size:14px;
+      transition:filter .15s ease;
+    }
+    .actions a:hover, .actions button:hover{ filter:brightness(1.08); }
+
+    /* Different colors */
+    .btn-refresh{ background:#2563eb; }
+    .btn-dispatcher{ background:#7c3aed; }
+    .btn-dock{ background:#f97316; }
+    .btn-driver{ background:#16a34a; }
+    .btn-logout{ background:#dc2626; }
+
+    .wrap{
+      max-width:1200px;
+      margin:0 auto;
+      padding:14px;
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:14px;
+    }
+    .grid-2{
+      display:grid;
+      grid-template-columns: 1.15fr .85fr;
+      gap:14px;
+    }
+    @media (max-width: 980px){
+      .grid-2{ grid-template-columns:1fr; }
+    }
+
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+    .card h3{
+      margin:0;
+      padding:12px 14px;
+      border-bottom:1px solid var(--border);
+      font-size:14px;
+      letter-spacing:.2px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .card .body{ padding:14px; }
+    .muted{color:var(--muted)}
+    .small{font-size:12px}
+
+    .row{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .row > *{ flex: 1 1 auto; }
+    .row .tight{ flex:0 0 auto; }
+
+    input, select, textarea{
+      width:100%;
+      padding:10px 10px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:#0c132a;
+      color:var(--text);
+      outline:none;
+      font-size:14px;
+    }
+    textarea{ min-height: 76px; resize: vertical; }
+
+    label{
+      display:block;
+      font-size:12px;
+      color:var(--muted);
+      margin:10px 0 6px;
+    }
+
+    button.secondary{
+      background:rgba(255,255,255,.03);
+      border:1px solid var(--border);
+      padding:10px 12px;
+      border-radius:12px;
+      color:#fff;
+      font-weight:900;
+      cursor:pointer;
+    }
+    button.danger{ background:rgba(239,68,68,.18); border:1px solid rgba(239,68,68,.35); }
+
+    .divider{ height:1px; background:rgba(120,145,220,.14); margin:12px 0; }
+    .table-wrap{ overflow:auto; }
+    table{
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0;
+      min-width:860px;
+    }
+    th, td{
+      text-align:left;
+      padding:10px 10px;
+      border-bottom:1px solid rgba(120,145,220,.12);
+      vertical-align:middle;
+      font-size:13px;
+    }
+    th{
+      position:sticky; top:0;
+      background:rgba(12,19,42,.92);
+      backdrop-filter: blur(10px);
+      z-index:1;
+      font-size:12px;
+      color:var(--muted);
+      text-transform:uppercase;
+      letter-spacing:.08em;
+    }
+    tr:hover td{ background:rgba(255,255,255,.02); }
+
+    .mini{
+      font-size:12px;
+      padding:6px 10px;
+      border-radius:999px;
+      background:rgba(255,255,255,.03);
+      border:1px solid var(--border);
+      color:var(--muted);
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      white-space:nowrap;
+    }
+
+    .tag{
+      display:inline-flex;
+      align-items:center;
+      padding:5px 9px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.03);
+      font-size:12px;
+      white-space:nowrap;
+      gap:6px;
+    }
+    .tag.good{ background:var(--good); }
+    .tag.warn{ background:var(--warn); }
+    .tag.bad{ background:var(--bad); }
+
+    /* Compact Dock Plates */
+    .plate-grid{
+      display:grid;
+      grid-template-columns: repeat(9, minmax(0, 1fr));
+      gap:8px;
+    }
+    @media (max-width: 980px){ .plate-grid{ grid-template-columns: repeat(7, minmax(0, 1fr)); } }
+    @media (max-width: 680px){ .plate-grid{ grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+    @media (max-width: 520px){ .plate-grid{ grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+    .plate{
+      border:1px solid var(--border);
+      border-radius:12px;
+      background:rgba(255,255,255,.03);
+      padding:8px;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      min-height:72px;
+    }
+    .plate .top{
+      display:flex; justify-content:space-between; align-items:center; gap:8px;
+    }
+    .plate .door{ font-weight:900; font-size:12px; }
+    .plate .note{
+      color:var(--muted);
+      font-size:11px;
+      line-height:1.15;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .plate select, .plate input{
+      padding:7px 8px;
+      border-radius:10px;
+      font-size:12px;
+    }
+    .plate .btnRow{ display:flex; gap:6px; justify-content:flex-end; }
+    .plate .tinyBtn{
+      padding:7px 9px;
+      border-radius:10px;
+      font-size:12px;
+      background:rgba(255,255,255,.03);
+      border:1px solid var(--border);
+      color:#fff;
+      cursor:pointer;
+      font-weight:800;
+    }
+
+    .info{
+      background:rgba(56,189,248,.12);
+      padding:10px;border-radius:12px;border:1px solid rgba(120,145,220,.18);
+    }
+    .info .title{font-weight:900;margin-bottom:4px;}
+
+    .checkline{
+      display:flex; align-items:center; gap:10px;
+      padding:10px;
+      border:1px solid rgba(120,145,220,.16);
+      border-radius:12px;
+      background:rgba(255,255,255,.02);
+    }
+    .checkline input[type="checkbox"]{ width:18px; height:18px; }
+
+    .toast{
+      position:fixed;
+      right:14px;
+      bottom:14px;
+      width:min(420px, calc(100vw - 28px));
+      background:rgba(12,19,42,.92);
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:12px 12px;
+      box-shadow:var(--shadow);
+      display:none;
+      z-index:200;
+    }
+    .toast strong{ display:block; margin-bottom:4px; }
+
+    /* Mobile button layout */
+    @media (max-width: 768px){
+      .actions{ width:100%; justify-content:center; }
+      .actions a, .actions button{ flex:1; text-align:center; }
+      table{ min-width:920px; }
+    }
+  </style>
 </head>
 <body>
 
@@ -13,27 +322,23 @@
     <div class="topbar-inner">
       <div class="brand">
         <span class="mono">WESBELL</span>
-        <span class="pill">
-          <span class="dot" id="wsDot"></span>
-          <span id="wsText">Connecting…</span>
-        </span>
+        <span class="pill"><span class="dot" id="wsDot"></span><span id="wsText">Connecting…</span></span>
         <span class="pill">Role: <strong id="roleText">—</strong></span>
         <span class="pill">v<span id="verText">—</span></span>
       </div>
+
       <div class="actions">
-        <button id="btnRefresh" class="secondary">Refresh</button>
-        <button id="btnLogout" class="secondary" style="display:none;">Logout</button>
-        <a class="btn ghost" href="/driver">Driver</a>
-        <a class="btn ghost" href="/">Dispatcher</a>
-        <a class="btn ghost" href="/dock">Dock</a>
+        <button id="btnRefresh" class="btn-refresh">Refresh</button>
+        <a href="/" class="btn-dispatcher">Dispatcher</a>
+        <a href="/dock" class="btn-dock">Dock</a>
+        <a href="/driver" class="btn-driver">Driver</a>
+        <button id="btnLogout" class="btn-logout" style="display:none;">Logout</button>
       </div>
     </div>
   </div>
 
   <div class="wrap">
     <div class="grid-2">
-
-      <!-- Trailer Board -->
       <div class="card">
         <h3>
           <span>Trailer Board</span>
@@ -41,23 +346,35 @@
         </h3>
         <div class="body">
           <div class="row">
-            <input id="search" placeholder="Search trailer / door / note">
-            <select id="filterDir">
-              <option value="">All Directions</option>
-              <option>Inbound</option>
-              <option>Outbound</option>
-              <option>Cross Dock</option>
-            </select>
-            <select id="filterStatus">
-              <option value="">All Status</option>
-              <option>Incoming</option>
-              <option>Dropped</option>
-              <option>Loading</option>
-              <option>Dock Ready</option>
-              <option>Ready</option>
-              <option>Departed</option>
-            </select>
-            <button id="btnClearFilters" class="secondary">Clear</button>
+            <div>
+              <label>Search (Trailer / Door / Note)</label>
+              <input id="search" placeholder="e.g. 5312 or door 21 or 'paperwork'">
+            </div>
+            <div>
+              <label>Direction</label>
+              <select id="filterDir">
+                <option value="">All</option>
+                <option>Inbound</option>
+                <option>Outbound</option>
+                <option>Cross Dock</option>
+              </select>
+            </div>
+            <div>
+              <label>Status</label>
+              <select id="filterStatus">
+                <option value="">All</option>
+                <option>Incoming</option>
+                <option>Dropped</option>
+                <option>Loading</option>
+                <option>Dock Ready</option>
+                <option>Ready</option>
+                <option>Departed</option>
+              </select>
+            </div>
+            <div class="tight">
+              <label>&nbsp;</label>
+              <button id="btnClearFilters" class="secondary">Clear</button>
+            </div>
           </div>
 
           <div class="divider"></div>
@@ -66,75 +383,733 @@
             <table>
               <thead>
                 <tr>
-                  <th>Trailer</th>
-                  <th>Direction</th>
-                  <th>Status</th>
-                  <th>Door</th>
-                  <th>Drop</th>
+                  <th style="width:120px;">Trailer</th>
+                  <th style="width:110px;">Direction</th>
+                  <th style="width:140px;">Status</th>
+                  <th style="width:80px;">Door</th>
+                  <th style="width:110px;">Drop Type</th>
                   <th>Note</th>
-                  <th>Updated</th>
-                  <th id="actionsColHead">Actions</th>
+                  <th style="width:170px;">Updated</th>
+                  <th style="width:240px;" id="actionsColHead">Actions</th>
                 </tr>
               </thead>
               <tbody id="tbody">
-                <tr><td colspan="8">Loading…</td></tr>
+                <tr><td colspan="8" class="muted">Loading…</td></tr>
               </tbody>
             </table>
+          </div>
+
+          <div class="muted small" style="margin-top:10px;">
+            Live updates via WebSocket. Dispatcher full control. Dock can set Loading / Dock Ready.
+            Driver can drop trailer + confirm safety.
           </div>
         </div>
       </div>
 
-      <!-- Role Panel -->
       <div class="card">
-        <h3>
-          <span id="panelTitle">Controls</span>
-          <span class="mini" id="panelSub">—</span>
-        </h3>
+        <h3><span id="panelTitle">Controls</span><span class="mini" id="panelSub">—</span></h3>
         <div class="body" id="panelBody"></div>
       </div>
-
     </div>
 
-    <!-- Dock Plates -->
     <div class="card" id="dockPlatesCard">
-      <h3>Dock Plates (18–42)</h3>
+      <h3>
+        <span>Dock Plates (18–42)</span>
+        <span class="mini">Dispatcher + Dock</span>
+      </h3>
       <div class="body">
         <div class="plate-grid" id="platesGrid"></div>
+        <div class="muted small" style="margin-top:8px;">Tap “Edit” on a door to update status/note.</div>
       </div>
     </div>
 
-    <!-- Confirmations -->
     <div class="card">
       <h3>
-        Safety Confirmations
+        <span>Safety Confirmations</span>
         <span class="mini" id="confCount">0</span>
       </h3>
       <div class="body">
         <div class="table-wrap">
-          <table>
+          <table style="min-width:760px;">
             <thead>
               <tr>
-                <th>Time</th>
-                <th>Trailer</th>
-                <th>Door</th>
-                <th>IP</th>
+                <th style="width:200px;">Time</th>
+                <th style="width:120px;">Trailer</th>
+                <th style="width:90px;">Door</th>
+                <th>IP / UserAgent</th>
               </tr>
             </thead>
             <tbody id="confBody">
-              <tr><td colspan="4">No confirmations yet.</td></tr>
+              <tr><td colspan="4" class="muted">No confirmations yet.</td></tr>
             </tbody>
           </table>
         </div>
       </div>
     </div>
-
   </div>
 
   <div class="toast" id="toast">
-    <strong id="toastTitle"></strong>
-    <div id="toastBody"></div>
+    <strong id="toastTitle">Notification</strong>
+    <div class="muted small" id="toastBody"></div>
   </div>
 
-  <script src="/app.js"></script>
+<script>
+(() => {
+  let ROLE = null; // dispatcher | dock | null (driver is path-based)
+  let VERSION = "";
+  let trailers = {};
+  let dockPlates = {};
+  let confirmations = [];
+  const plateEditOpen = {}; // door -> true/false
+
+  const el = (id) => document.getElementById(id);
+  const tbody = el("tbody");
+  const platesGrid = el("platesGrid");
+  const dockPlatesCard = el("dockPlatesCard");
+  const confBody = el("confBody");
+  const confCount = el("confCount");
+  const roleText = el("roleText");
+  const verText = el("verText");
+  const wsDot = el("wsDot");
+  const wsText = el("wsText");
+  const countsPill = el("countsPill");
+  const panelTitle = el("panelTitle");
+  const panelSub = el("panelSub");
+  const panelBody = el("panelBody");
+  const btnLogout = el("btnLogout");
+  const btnRefresh = el("btnRefresh");
+
+  const search = el("search");
+  const filterDir = el("filterDir");
+  const filterStatus = el("filterStatus");
+  const btnClearFilters = el("btnClearFilters");
+
+  const pathLower = () => location.pathname.toLowerCase();
+  const isDriverPath = () => pathLower().startsWith("/driver");
+  const isDriverView = () => isDriverPath() || ROLE === "driver";
+
+  const fmtTime = (ms) => {
+    if (!ms) return "";
+    try {
+      return new Date(ms).toLocaleString(undefined, {
+        year:"numeric", month:"short", day:"2-digit",
+        hour:"2-digit", minute:"2-digit", second:"2-digit"
+      });
+    } catch { return String(ms); }
+  };
+
+  const escapeHtml = (s) => String(s ?? "")
+    .replaceAll("&","&amp;").replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+
+  async function apiJson(url, opts){
+    const res = await fetch(url, opts);
+    if (!res.ok) {
+      const t = await res.text().catch(()=> "");
+      throw new Error(t || ("HTTP " + res.status));
+    }
+    const ct = res.headers.get("content-type") || "";
+    if (ct.includes("application/json")) return res.json();
+    return {};
+  }
+
+  function toast(title, body){
+    const t = el("toast");
+    el("toastTitle").textContent = title;
+    el("toastBody").textContent = body || "";
+    t.style.display = "block";
+    clearTimeout(toast._tm);
+    toast._tm = setTimeout(() => { t.style.display = "none"; }, 4500);
+  }
+
+  function statusTag(status){
+    const s = String(status || "");
+    const good = ["Ready","Departed","Dock Ready"];
+    const warn = ["Incoming","Loading","Dropped"];
+    let cls = "";
+    if (good.includes(s)) cls = "good";
+    else if (warn.includes(s)) cls = "warn";
+    return `<span class="tag ${cls}">${escapeHtml(s || "—")}</span>`;
+  }
+
+  function plateTag(status){
+    const s = String(status || "Unknown");
+    let cls = "";
+    if (s === "OK") cls = "good";
+    else if (s === "Service") cls = "bad";
+    return `<span class="tag ${cls}">${escapeHtml(s)}</span>`;
+  }
+
+  function renderBoard(){
+    const q = (search.value || "").trim().toLowerCase();
+    const dirF = (filterDir.value || "").trim();
+    const stF = (filterStatus.value || "").trim();
+
+    const rows = Object.entries(trailers).map(([trailer, r]) => ({ trailer, ...r }));
+    rows.sort((a,b) => (b.updatedAt||0) - (a.updatedAt||0));
+
+    const filtered = rows.filter(r => {
+      if (dirF && r.direction !== dirF) return false;
+      if (stF && r.status !== stF) return false;
+      if (q) {
+        const hay = `${r.trailer} ${r.door||""} ${r.note||""} ${r.direction||""} ${r.status||""} ${r.dropType||""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+
+    countsPill.textContent = `${filtered.length} trailer${filtered.length===1?"":"s"}`;
+
+    if (!filtered.length) {
+      tbody.innerHTML = `<tr><td colspan="8" class="muted">No trailers match your filters.</td></tr>`;
+      return;
+    }
+
+    const canEdit = (ROLE === "dispatcher");
+    const canDockSet = (ROLE === "dock");
+
+    tbody.innerHTML = filtered.map(r => {
+      const updated = fmtTime(r.updatedAt);
+      const door = r.door ? `<span class="mono">${escapeHtml(r.door)}</span>` : `<span class="muted">—</span>`;
+      const dropType = r.dropType ? `<span class="tag">${escapeHtml(r.dropType)}</span>` : `<span class="muted">—</span>`;
+      const note = r.note ? escapeHtml(r.note) : `<span class="muted">—</span>`;
+
+      let actions = `<span class="muted">—</span>`;
+      if (canEdit) {
+        actions = `
+          <button class="secondary" data-act="edit" data-trailer="${escapeHtml(r.trailer)}">Edit</button>
+          <button class="secondary danger" data-act="delete" data-trailer="${escapeHtml(r.trailer)}">Delete</button>
+        `;
+      } else if (canDockSet) {
+        actions = `
+          <button class="secondary" data-act="dockSet" data-to="Loading" data-trailer="${escapeHtml(r.trailer)}">Loading</button>
+          <button class="secondary" data-act="dockSet" data-to="Dock Ready" data-trailer="${escapeHtml(r.trailer)}">Dock Ready</button>
+        `;
+      }
+
+      return `
+        <tr>
+          <td class="mono"><strong>${escapeHtml(r.trailer)}</strong></td>
+          <td>${escapeHtml(r.direction || "—")}</td>
+          <td>${statusTag(r.status)}</td>
+          <td>${door}</td>
+          <td>${dropType}</td>
+          <td>${note}</td>
+          <td class="small muted">${escapeHtml(updated)}</td>
+          <td>${actions}</td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  function renderPlates(){
+    if (isDriverView()) return;
+
+    const canEdit = (ROLE === "dispatcher" || ROLE === "dock");
+    const doors = [];
+    for (let d=18; d<=42; d++) doors.push(String(d));
+
+    platesGrid.innerHTML = doors.map(door => {
+      const p = dockPlates[door] || { status:"Unknown", note:"", updatedAt:0 };
+      const open = !!plateEditOpen[door] && canEdit;
+
+      return `
+        <div class="plate">
+          <div class="top">
+            <div class="door">D <span class="mono">${escapeHtml(door)}</span></div>
+            ${plateTag(p.status)}
+          </div>
+
+          <div class="note" title="${escapeHtml(p.note || "")}">
+            ${p.note ? escapeHtml(p.note) : `<span class="muted">No note</span>`}
+          </div>
+
+          ${open ? `
+            <div class="row" style="gap:6px;">
+              <div>
+                <select data-plate-status="${escapeHtml(door)}">
+                  <option ${p.status==="OK"?"selected":""}>OK</option>
+                  <option ${p.status==="Service"?"selected":""}>Service</option>
+                  <option ${p.status==="Unknown"?"selected":""}>Unknown</option>
+                </select>
+              </div>
+              <div>
+                <input data-plate-note="${escapeHtml(door)}" placeholder="Note" value="${escapeHtml(p.note || "")}" />
+              </div>
+            </div>
+          ` : ``}
+
+          <div class="btnRow">
+            ${canEdit ? `
+              <button class="tinyBtn" data-plate-toggle="${escapeHtml(door)}">${open ? "Close" : "Edit"}</button>
+              ${open ? `<button class="tinyBtn" data-plate-save="${escapeHtml(door)}">Save</button>` : ``}
+            ` : ``}
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function renderConfirmations(){
+    confCount.textContent = `${confirmations.length}`;
+    if (!confirmations.length) {
+      confBody.innerHTML = `<tr><td colspan="4" class="muted">No confirmations yet.</td></tr>`;
+      return;
+    }
+    confBody.innerHTML = confirmations.map(c => {
+      const t = fmtTime(c.at);
+      const meta = `${c.ip || ""} ${c.userAgent || ""}`.trim();
+      return `
+        <tr>
+          <td class="muted small">${escapeHtml(t)}</td>
+          <td class="mono"><strong>${escapeHtml(c.trailer || "—")}</strong></td>
+          <td class="mono">${escapeHtml(c.door || "—")}</td>
+          <td class="muted small">${escapeHtml(meta || "—")}</td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  function dispatcherPanelHtml(){
+    return `
+      <div class="info">
+        <div class="title">Dispatcher</div>
+        <div class="muted small">Add/update trailers, delete, or clear all.</div>
+      </div>
+
+      <label>Trailer #</label>
+      <input id="d_trailer" placeholder="e.g. 5312" autocomplete="off" />
+
+      <div class="row">
+        <div>
+          <label>Direction</label>
+          <select id="d_direction">
+            <option>Inbound</option>
+            <option>Outbound</option>
+            <option>Cross Dock</option>
+          </select>
+        </div>
+        <div>
+          <label>Status</label>
+          <select id="d_status">
+            <option>Incoming</option>
+            <option>Dropped</option>
+            <option>Loading</option>
+            <option>Dock Ready</option>
+            <option>Ready</option>
+            <option>Departed</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Door (18–42)</label>
+          <input id="d_door" placeholder="e.g. 21" />
+        </div>
+        <div>
+          <label>Drop Type</label>
+          <select id="d_dropType">
+            <option value="">—</option>
+            <option>Empty</option>
+            <option>Loaded</option>
+          </select>
+        </div>
+      </div>
+
+      <label>Note</label>
+      <textarea id="d_note" placeholder="Short note"></textarea>
+
+      <div class="row" style="margin-top:10px;">
+        <button class="secondary" id="btnSaveTrailer">Save</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row">
+        <button class="secondary danger" id="btnClearAll">Clear All Trailers</button>
+      </div>
+      <div class="muted small" style="margin-top:8px;">Clear removes all trailers from the board.</div>
+    `;
+  }
+
+  function dockPanelHtml(){
+    return `
+      <div class="info">
+        <div class="title">Dock</div>
+        <div class="muted small">Use table buttons to set <b>Loading</b> / <b>Dock Ready</b>.</div>
+      </div>
+      <div class="divider"></div>
+      <div class="muted small">Dock Plates are below (dock can edit).</div>
+    `;
+  }
+
+  function driverPanelHtml(){
+    return `
+      <div class="info">
+        <div class="title">Driver Drop</div>
+        <div class="muted small">Updates board instantly.</div>
+      </div>
+
+      <label>Trailer #</label>
+      <input id="v_trailer" placeholder="e.g. 5312" />
+
+      <div class="row">
+        <div>
+          <label>Door (18–42)</label>
+          <input id="v_door" placeholder="e.g. 21" />
+        </div>
+        <div>
+          <label>Drop Type</label>
+          <select id="v_dropType">
+            <option>Empty</option>
+            <option>Loaded</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="secondary" style="margin-top:10px;" id="btnDriverDrop">Submit Drop</button>
+
+      <div class="divider"></div>
+
+      <div class="info">
+        <div class="title">Safety Confirmation</div>
+        <div class="muted small">Both boxes required.</div>
+      </div>
+
+      <label>Trailer # (optional)</label>
+      <input id="c_trailer" placeholder="Optional but recommended" />
+
+      <label>Door (optional)</label>
+      <input id="c_door" placeholder="Optional" />
+
+      <div style="margin-top:10px;">
+        <div class="checkline">
+          <input id="c_loadSecured" type="checkbox" />
+          <div>
+            <div style="font-weight:900;">Load secured</div>
+            <div class="muted small">Straps/locks set</div>
+          </div>
+        </div>
+        <div style="height:10px;"></div>
+        <div class="checkline">
+          <input id="c_dockPlateUp" type="checkbox" />
+          <div>
+            <div style="font-weight:900;">Dock plate up</div>
+            <div class="muted small">Plate raised before leaving</div>
+          </div>
+        </div>
+      </div>
+
+      <button class="secondary" style="margin-top:10px;" id="btnConfirmSafety">Submit Safety Confirm</button>
+    `;
+  }
+
+  function renderRolePanel(){
+    if (ROLE === "dispatcher") {
+      panelTitle.textContent = "Dispatcher Controls";
+      panelSub.textContent = "Add / Update • Delete • Clear";
+      panelBody.innerHTML = dispatcherPanelHtml();
+      btnLogout.style.display = "";
+      if (dockPlatesCard) dockPlatesCard.style.display = "";
+      renderPlates();
+      return;
+    }
+
+    if (ROLE === "dock") {
+      panelTitle.textContent = "Dock Controls";
+      panelSub.textContent = "Loading / Dock Ready • Plates";
+      panelBody.innerHTML = dockPanelHtml();
+      btnLogout.style.display = "";
+      if (dockPlatesCard) dockPlatesCard.style.display = "";
+      renderPlates();
+      return;
+    }
+
+    if (isDriverPath()) {
+      panelTitle.textContent = "Driver View";
+      panelSub.textContent = "Drop • Safety";
+      panelBody.innerHTML = driverPanelHtml();
+      btnLogout.style.display = "none";
+      if (dockPlatesCard) dockPlatesCard.style.display = "none";
+      return;
+    }
+
+    panelTitle.textContent = "Not Logged In";
+    panelSub.textContent = "Go to /login";
+    panelBody.innerHTML = `<div class="muted small">Open <a href="/login">/login</a> or use <a href="/driver">/driver</a>.</div>`;
+    btnLogout.style.display = "none";
+    if (dockPlatesCard) dockPlatesCard.style.display = "none";
+  }
+
+  async function doLogout(){
+    try { await apiJson("/api/logout", { method:"POST", headers:{ "Content-Type":"application/json" } }); } catch {}
+    location.href = "/login";
+  }
+
+  async function dispatcherSave(){
+    const trailer = (el("d_trailer")?.value || "").trim();
+    const direction = (el("d_direction")?.value || "").trim();
+    const status = (el("d_status")?.value || "").trim();
+    const door = (el("d_door")?.value || "").trim();
+    const note = (el("d_note")?.value || "").trim();
+    const dropType = (el("d_dropType")?.value || "").trim();
+
+    if (!trailer) return toast("Missing trailer", "Enter a trailer number.");
+
+    try {
+      await apiJson("/api/upsert", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ trailer, direction, status, door, note, dropType })
+      });
+      toast("Saved", `Trailer ${trailer} updated.`);
+    } catch(e) {
+      toast("Save failed", e.message || String(e));
+    }
+  }
+
+  async function dispatcherDelete(trailer){
+    if (!confirm(`Delete trailer ${trailer}?`)) return;
+    try {
+      await apiJson("/api/delete", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ trailer })
+      });
+      toast("Deleted", `Trailer ${trailer} removed.`);
+    } catch(e){
+      toast("Delete failed", e.message || String(e));
+    }
+  }
+
+  async function dispatcherClearAll(){
+    if (!confirm("Clear ALL trailers? This cannot be undone.")) return;
+    try {
+      await apiJson("/api/clear", { method:"POST", headers:{ "Content-Type":"application/json" } });
+      toast("Cleared", "All trailers removed.");
+    } catch(e){
+      toast("Clear failed", e.message || String(e));
+    }
+  }
+
+  async function dockSetStatus(trailer, toStatus){
+    try{
+      await apiJson("/api/upsert", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ trailer, status: toStatus })
+      });
+      toast("Updated", `${trailer} → ${toStatus}`);
+    } catch(e){
+      toast("Update failed", e.message || String(e));
+    }
+  }
+
+  async function plateSave(door){
+    const statusSel = document.querySelector(`[data-plate-status="${CSS.escape(door)}"]`);
+    const noteInp = document.querySelector(`[data-plate-note="${CSS.escape(door)}"]`);
+    const status = (statusSel?.value || "").trim();
+    const note = (noteInp?.value || "").trim();
+
+    try{
+      await apiJson("/api/dockplates/set", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ door, status, note })
+      });
+      toast("Plate saved", `Door ${door} → ${status}`);
+      plateEditOpen[door] = false;
+      renderPlates();
+    } catch(e){
+      toast("Plate save failed", e.message || String(e));
+    }
+  }
+
+  async function driverDrop(){
+    const trailer = (el("v_trailer")?.value || "").trim();
+    const door = (el("v_door")?.value || "").trim();
+    const dropType = (el("v_dropType")?.value || "").trim();
+
+    if (!trailer) return toast("Missing trailer", "Enter trailer number.");
+    if (!door) return toast("Missing door", "Enter door 18–42.");
+
+    try{
+      await apiJson("/api/driver/drop", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ trailer, door, dropType })
+      });
+      toast("Drop submitted", `${trailer} dropped at door ${door} (${dropType}).`);
+      el("v_trailer").value = "";
+      el("v_door").value = "";
+      el("v_dropType").value = "Empty";
+    } catch(e){
+      toast("Drop failed", e.message || String(e));
+    }
+  }
+
+  async function confirmSafety(){
+    const trailer = (el("c_trailer")?.value || "").trim();
+    const door = (el("c_door")?.value || "").trim();
+    const loadSecured = !!el("c_loadSecured")?.checked;
+    const dockPlateUp = !!el("c_dockPlateUp")?.checked;
+
+    if (!loadSecured || !dockPlateUp) {
+      return toast("Missing confirmations", "Both checkboxes must be checked.");
+    }
+
+    try{
+      await apiJson("/api/confirm-safety", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ trailer, door, loadSecured, dockPlateUp })
+      });
+      toast("Confirmed", "Safety confirmation submitted.");
+      el("c_loadSecured").checked = false;
+      el("c_dockPlateUp").checked = false;
+    } catch(e){
+      toast("Confirm failed", e.message || String(e));
+    }
+  }
+
+  async function loadInitial(){
+    // hide plates immediately on driver to prevent flash
+    if (isDriverPath() && dockPlatesCard) dockPlatesCard.style.display = "none";
+
+    try {
+      const who = await apiJson("/api/whoami");
+      ROLE = who.role;
+      VERSION = who.version || "";
+    } catch {
+      ROLE = null;
+      VERSION = "";
+    }
+
+    roleText.textContent = ROLE || (isDriverPath() ? "driver" : "none");
+    verText.textContent = VERSION || "—";
+
+    try { trailers = await apiJson("/api/state"); } catch { trailers = {}; }
+    if (!isDriverView()) {
+      try { dockPlates = await apiJson("/api/dockplates"); } catch { dockPlates = {}; }
+    }
+    renderRolePanel();
+    renderBoard();
+    renderConfirmations();
+  }
+
+  document.addEventListener("click", async (ev) => {
+    const t = ev.target;
+
+    if (t?.id === "btnLogout") return doLogout();
+    if (t?.id === "btnRefresh") return loadInitial();
+    if (t?.id === "btnClearFilters") {
+      search.value = ""; filterDir.value = ""; filterStatus.value = "";
+      renderBoard(); return;
+    }
+    if (t?.id === "btnSaveTrailer") return dispatcherSave();
+    if (t?.id === "btnClearAll") return dispatcherClearAll();
+    if (t?.id === "btnDriverDrop") return driverDrop();
+    if (t?.id === "btnConfirmSafety") return confirmSafety();
+
+    const act = t?.getAttribute?.("data-act");
+    if (act === "delete") {
+      const trailer = t.getAttribute("data-trailer");
+      if (trailer) return dispatcherDelete(trailer);
+    }
+    if (act === "edit") {
+      const trailer = t.getAttribute("data-trailer");
+      const r = trailers[trailer];
+      if (!r) return;
+      el("d_trailer").value = trailer;
+      el("d_direction").value = r.direction || "Inbound";
+      el("d_status").value = r.status || "Incoming";
+      el("d_door").value = r.door || "";
+      el("d_note").value = r.note || "";
+      el("d_dropType").value = r.dropType || "";
+      toast("Loaded", `Editing trailer ${trailer}`);
+      return;
+    }
+    if (act === "dockSet") {
+      const trailer = t.getAttribute("data-trailer");
+      const to = t.getAttribute("data-to");
+      if (trailer && to) return dockSetStatus(trailer, to);
+    }
+
+    const toggleDoor = t?.getAttribute?.("data-plate-toggle");
+    if (toggleDoor) {
+      plateEditOpen[toggleDoor] = !plateEditOpen[toggleDoor];
+      renderPlates();
+      return;
+    }
+
+    const plateDoor = t?.getAttribute?.("data-plate-save");
+    if (plateDoor) return plateSave(plateDoor);
+  });
+
+  ["input","change"].forEach(evtName => {
+    search.addEventListener(evtName, renderBoard);
+    filterDir.addEventListener(evtName, renderBoard);
+    filterStatus.addEventListener(evtName, renderBoard);
+  });
+
+  // WebSocket (auto-reconnect)
+  let wsRetry = 0;
+  function wsSetStatus(state){
+    if (state === "ok"){
+      wsDot.className = "dot ok";
+      wsText.textContent = "Live";
+    } else if (state === "bad"){
+      wsDot.className = "dot bad";
+      wsText.textContent = "Offline";
+    } else {
+      wsDot.className = "dot warn";
+      wsText.textContent = "Connecting…";
+    }
+  }
+
+  function connectWs(){
+    wsSetStatus("warn");
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${proto}://${location.host}`);
+
+    ws.onopen = () => { wsRetry = 0; wsSetStatus("ok"); };
+    ws.onclose = () => {
+      wsSetStatus("bad");
+      const wait = Math.min(8000, 500 + wsRetry * 650);
+      wsRetry++;
+      setTimeout(connectWs, wait);
+    };
+
+    ws.onmessage = (evt) => {
+      let msg;
+      try { msg = JSON.parse(evt.data); } catch { return; }
+      const { type, payload } = msg || {};
+
+      if (type === "state") {
+        trailers = payload || {};
+        renderBoard();
+      } else if (type === "dockplates") {
+        dockPlates = payload || {};
+        if (!isDriverView()) renderPlates();
+      } else if (type === "confirmations") {
+        confirmations = Array.isArray(payload) ? payload : [];
+        renderConfirmations();
+      } else if (type === "version") {
+        VERSION = payload?.version || VERSION;
+        verText.textContent = VERSION || "—";
+      } else if (type === "notify") {
+        if (payload?.kind === "ready") {
+          toast("Trailer Ready", `${payload.trailer} is READY${payload.door ? " at door " + payload.door : ""}.`);
+        }
+      }
+    };
+  }
+
+  loadInitial().then(connectWs);
+})();
+</script>
 </body>
 </html>

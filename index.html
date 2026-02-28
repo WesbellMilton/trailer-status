@@ -39,7 +39,7 @@
       border-bottom:1px solid var(--border);
     }
     .topbar-inner{
-      max-width:1200px;
+      max-width:1400px;
       margin:0 auto;
       padding:10px 14px;
       display:flex;
@@ -97,7 +97,7 @@
     .btn-audit{ background:#0e7490; }
 
     .wrap{
-      max-width:1200px;
+      max-width:1400px;
       margin:0 auto;
       padding:14px;
       display:grid;
@@ -106,10 +106,11 @@
     }
     .grid-2{
       display:grid;
-      grid-template-columns: 1.15fr .85fr;
+      grid-template-columns: 1fr 320px;
       gap:14px;
+      align-items:start;
     }
-    @media (max-width: 980px){
+    @media (max-width: 1100px){
       .grid-2{ grid-template-columns:1fr; }
     }
 
@@ -175,31 +176,53 @@
     button.danger{ background:rgba(239,68,68,.18); border:1px solid rgba(239,68,68,.35); }
 
     .divider{ height:1px; background:rgba(120,145,220,.14); margin:12px 0; }
-    .table-wrap{ overflow:auto; }
+
+    /* ── Trailer Board Table — condensed, no-scroll ── */
+    .board-table-wrap{
+      width:100%;
+      overflow:hidden; /* NO scroll */
+    }
     table{
       width:100%;
       border-collapse:separate;
       border-spacing:0;
-      min-width:860px;
+      table-layout:fixed; /* key: fixed layout keeps columns uniform */
     }
     th, td{
       text-align:left;
-      padding:10px 10px;
+      padding:7px 8px;
       border-bottom:1px solid rgba(120,145,220,.12);
       vertical-align:middle;
-      font-size:13px;
+      font-size:12px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
     }
     th{
       position:sticky; top:0;
       background:rgba(12,19,42,.92);
       backdrop-filter: blur(10px);
       z-index:1;
-      font-size:12px;
+      font-size:11px;
       color:var(--muted);
       text-transform:uppercase;
       letter-spacing:.08em;
     }
     tr:hover td{ background:rgba(255,255,255,.02); }
+
+    /* Column widths for trailer board — tuned to fit without scroll */
+    .col-trailer  { width: 9%; }
+    .col-dir      { width: 10%; }
+    .col-status   { width: 11%; }
+    .col-door     { width: 6%; }
+    .col-droptype { width: 9%; }
+    .col-note     { width: auto; } /* takes remaining space */
+    .col-updated  { width: 14%; }
+    .col-actions  { width: 18%; }
+
+    /* Scrollable for audit/safety tables only */
+    .table-wrap-scroll{ overflow-x:auto; }
+    .table-wrap-scroll table{ min-width:760px; table-layout:auto; }
 
     .mini{
       font-size:12px;
@@ -217,17 +240,32 @@
     .tag{
       display:inline-flex;
       align-items:center;
-      padding:5px 9px;
+      padding:3px 7px;
       border-radius:999px;
       border:1px solid var(--border);
       background:rgba(255,255,255,.03);
-      font-size:12px;
+      font-size:11px;
       white-space:nowrap;
-      gap:6px;
+      gap:5px;
     }
     .tag.good{ background:var(--good); }
     .tag.warn{ background:var(--warn); }
     .tag.bad{ background:var(--bad); }
+
+    /* Table action buttons — compact */
+    .tbl-btn{
+      padding:4px 8px;
+      border-radius:8px;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.04);
+      color:#fff;
+      font-size:11px;
+      font-weight:700;
+      cursor:pointer;
+      white-space:nowrap;
+    }
+    .tbl-btn:hover{ filter:brightness(1.15); }
+    .tbl-btn.danger{ background:rgba(239,68,68,.15); border-color:rgba(239,68,68,.3); }
 
     /* Compact Dock Plates */
     .plate-grid{
@@ -293,6 +331,30 @@
     }
     .checkline input[type="checkbox"]{ width:18px; height:18px; }
 
+    /* ── Driver Page Layout ── */
+    .driver-wrap{
+      max-width:520px;
+      margin:0 auto;
+      padding:14px;
+      display:grid;
+      gap:14px;
+    }
+    .driver-header{
+      text-align:center;
+      padding:20px 14px 10px;
+    }
+    .driver-header h1{
+      margin:0 0 6px;
+      font-size:22px;
+      font-weight:900;
+      letter-spacing:.3px;
+    }
+    .driver-header p{
+      margin:0;
+      color:var(--muted);
+      font-size:13px;
+    }
+
     /* Modal */
     .modal-overlay{
       position:fixed; inset:0; z-index:100;
@@ -335,7 +397,6 @@
     @media (max-width: 768px){
       .actions{ width:100%; justify-content:center; }
       .actions a, .actions button{ flex:1; text-align:center; }
-      table{ min-width:920px; }
     }
 
     /* Accordion */
@@ -360,7 +421,7 @@
       font-size:16px; opacity:.9;
       transform:rotate(0deg);
       transition:transform .18s ease;
-      pointer-events:none; /* prevent chev from being event target */
+      pointer-events:none;
     }
     .accordion-head[aria-expanded="true"] .chev{
       transform:rotate(180deg);
@@ -372,12 +433,22 @@
     }
 
     /* Audit log table */
-    #auditCard table{ min-width:900px; }
+    #auditCard .table-wrap-scroll table{ min-width:900px; }
+
+    /* Filter row compact */
+    .filter-row{
+      display:flex;
+      gap:8px;
+      align-items:flex-end;
+      flex-wrap:wrap;
+    }
+    .filter-row > div{ flex:1 1 120px; }
+    .filter-row > .tight{ flex:0 0 auto; }
   </style>
 </head>
 <body>
 
-  <!-- Confirm Modal (replaces browser confirm()) -->
+  <!-- Confirm Modal -->
   <div class="modal-overlay hidden" id="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal">
       <h4 id="modalTitle">Confirm</h4>
@@ -409,147 +480,221 @@
     </div>
   </div>
 
-  <div class="wrap">
-    <div class="grid-2">
+  <!-- ── DRIVER VIEW ── -->
+  <div id="driverView" style="display:none;">
+    <div class="driver-header">
+      <h1>Driver Drop</h1>
+      <p>Submit your trailer drop and safety confirmation below.</p>
+    </div>
+    <div class="driver-wrap">
       <div class="card">
-        <h3>
-          <span>Trailer Board</span>
-          <span class="mini" id="countsPill">0 trailers</span>
-        </h3>
+        <h3><span>🚛 Drop Trailer</span></h3>
         <div class="body">
-          <div class="row">
+          <label>Trailer #</label>
+          <input id="v_trailer" placeholder="e.g. 5312" autocomplete="off" />
+          <div class="row" style="margin-top:0;">
             <div>
-              <label>Search (Trailer / Door / Note)</label>
-              <input id="search" placeholder="e.g. 5312 or door 21 or 'paperwork'">
+              <label>Door (18–42)</label>
+              <input id="v_door" placeholder="e.g. 21" />
             </div>
             <div>
-              <label>Direction</label>
-              <select id="filterDir">
-                <option value="">All</option>
-                <option>Inbound</option>
-                <option>Outbound</option>
-                <option>Cross Dock</option>
+              <label>Drop Type</label>
+              <select id="v_dropType">
+                <option>Empty</option>
+                <option>Loaded</option>
               </select>
             </div>
-            <div>
-              <label>Status</label>
-              <select id="filterStatus">
-                <option value="">All</option>
-                <option>Incoming</option>
-                <option>Dropped</option>
-                <option>Loading</option>
-                <option>Dock Ready</option>
-                <option>Ready</option>
-                <option>Departed</option>
-              </select>
+          </div>
+          <button class="secondary" style="margin-top:14px;width:100%;padding:12px;font-size:15px;" id="btnDriverDrop">Submit Drop</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3><span>✅ Safety Confirmation</span><span class="mini muted small">Both required</span></h3>
+        <div class="body">
+          <label>Trailer # (optional)</label>
+          <input id="c_trailer" placeholder="Optional but recommended" />
+          <label>Door (optional)</label>
+          <input id="c_door" placeholder="Optional" />
+
+          <div style="margin-top:14px; display:flex; flex-direction:column; gap:10px;">
+            <div class="checkline">
+              <input id="c_loadSecured" type="checkbox" />
+              <div>
+                <div style="font-weight:900;">Load secured</div>
+                <div class="muted small">Straps/locks set</div>
+              </div>
             </div>
-            <div class="tight">
-              <label>&nbsp;</label>
-              <button id="btnClearFilters" class="secondary">Clear</button>
+            <div class="checkline">
+              <input id="c_dockPlateUp" type="checkbox" />
+              <div>
+                <div style="font-weight:900;">Dock plate up</div>
+                <div class="muted small">Plate raised before leaving</div>
+              </div>
             </div>
           </div>
 
-          <div class="divider"></div>
+          <button class="secondary" style="margin-top:14px;width:100%;padding:12px;font-size:15px;" id="btnConfirmSafety">Submit Safety Confirm</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-          <div class="table-wrap">
-            <table>
+  <!-- ── DISPATCH / DOCK VIEW ── -->
+  <div id="dispatchView">
+    <div class="wrap">
+      <div class="grid-2">
+        <!-- Trailer Board -->
+        <div class="card">
+          <h3>
+            <span>Trailer Board</span>
+            <span class="mini" id="countsPill">0 trailers</span>
+          </h3>
+          <div class="body">
+            <div class="filter-row">
+              <div>
+                <label>Search</label>
+                <input id="search" placeholder="Trailer / Door / Note">
+              </div>
+              <div>
+                <label>Direction</label>
+                <select id="filterDir">
+                  <option value="">All</option>
+                  <option>Inbound</option>
+                  <option>Outbound</option>
+                  <option>Cross Dock</option>
+                </select>
+              </div>
+              <div>
+                <label>Status</label>
+                <select id="filterStatus">
+                  <option value="">All</option>
+                  <option>Incoming</option>
+                  <option>Dropped</option>
+                  <option>Loading</option>
+                  <option>Dock Ready</option>
+                  <option>Ready</option>
+                  <option>Departed</option>
+                </select>
+              </div>
+              <div class="tight">
+                <label>&nbsp;</label>
+                <button id="btnClearFilters" class="secondary">Clear</button>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="board-table-wrap">
+              <table>
+                <colgroup>
+                  <col class="col-trailer">
+                  <col class="col-dir">
+                  <col class="col-status">
+                  <col class="col-door">
+                  <col class="col-droptype">
+                  <col class="col-note">
+                  <col class="col-updated">
+                  <col class="col-actions" id="actionsCol">
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>Trailer</th>
+                    <th>Dir</th>
+                    <th>Status</th>
+                    <th>Door</th>
+                    <th>Type</th>
+                    <th>Note</th>
+                    <th>Updated</th>
+                    <th id="actionsColHead">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody">
+                  <tr><td colspan="8" class="muted">Loading…</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="muted small" style="margin-top:8px;">
+              Live via WebSocket · Dispatcher: full control · Dock: Loading / Dock Ready
+            </div>
+          </div>
+        </div>
+
+        <!-- Side Panel -->
+        <div class="card">
+          <h3><span id="panelTitle">Controls</span><span class="mini" id="panelSub">—</span></h3>
+          <div class="body" id="panelBody"></div>
+        </div>
+      </div>
+
+      <!-- Dock Plates Accordion -->
+      <div class="card" id="dockPlatesCard">
+        <button class="accordion-head" id="dockPlatesToggle" type="button" aria-expanded="false">
+          <div class="left">
+            <span>Dock Plates (18–42)</span>
+            <span class="mini" id="platesMini">—</span>
+          </div>
+          <div class="chev">▾</div>
+        </button>
+        <div class="accordion-body" id="dockPlatesBody">
+          <div class="body">
+            <div class="plate-grid" id="platesGrid"></div>
+            <div class="muted small" style="margin-top:8px;">Tap "Edit" on a door to update status/note.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Audit Log -->
+      <div class="card" id="auditCard" style="display:none;">
+        <h3>
+          <span>Audit Log</span>
+          <span class="mini" id="auditCount">0</span>
+        </h3>
+        <div class="body">
+          <div class="table-wrap-scroll">
+            <table style="min-width:900px;table-layout:auto;">
               <thead>
                 <tr>
-                  <th style="width:120px;">Trailer</th>
-                  <th style="width:110px;">Direction</th>
-                  <th style="width:140px;">Status</th>
-                  <th style="width:80px;">Door</th>
-                  <th style="width:110px;">Drop Type</th>
-                  <th>Note</th>
-                  <th style="width:170px;">Updated</th>
-                  <th style="width:240px;" id="actionsColHead">Actions</th>
+                  <th style="width:190px;">Time</th>
+                  <th style="width:90px;">Role</th>
+                  <th style="width:130px;">Action</th>
+                  <th style="width:80px;">Entity</th>
+                  <th style="width:100px;">ID</th>
+                  <th>Details</th>
+                  <th style="width:130px;">IP</th>
                 </tr>
               </thead>
-              <tbody id="tbody">
-                <tr><td colspan="8" class="muted">Loading…</td></tr>
+              <tbody id="auditBody">
+                <tr><td colspan="7" class="muted">Click "Audit Log" to load.</td></tr>
               </tbody>
             </table>
           </div>
-
-          <div class="muted small" style="margin-top:10px;">
-            Live updates via WebSocket. Dispatcher full control. Dock can set Loading / Dock Ready.
-            Driver can drop trailer + confirm safety.
-          </div>
         </div>
       </div>
 
+      <!-- Safety Confirmations -->
       <div class="card">
-        <h3><span id="panelTitle">Controls</span><span class="mini" id="panelSub">—</span></h3>
-        <div class="body" id="panelBody"></div>
-      </div>
-    </div>
-
-    <!-- Dock Plates Accordion -->
-    <div class="card" id="dockPlatesCard">
-      <button class="accordion-head" id="dockPlatesToggle" type="button" aria-expanded="false">
-        <div class="left">
-          <span>Dock Plates (18–42)</span>
-          <span class="mini" id="platesMini">—</span>
-        </div>
-        <div class="chev">▾</div>
-      </button>
-
-      <div class="accordion-body" id="dockPlatesBody">
+        <h3>
+          <span>Safety Confirmations</span>
+          <span class="mini" id="confCount">0</span>
+        </h3>
         <div class="body">
-          <div class="plate-grid" id="platesGrid"></div>
-          <div class="muted small" style="margin-top:8px;">Tap "Edit" on a door to update status/note.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Audit Log (dispatcher only, toggle) -->
-    <div class="card" id="auditCard" style="display:none;">
-      <h3>
-        <span>Audit Log</span>
-        <span class="mini" id="auditCount">0</span>
-      </h3>
-      <div class="body">
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th style="width:190px;">Time</th>
-                <th style="width:90px;">Role</th>
-                <th style="width:130px;">Action</th>
-                <th style="width:80px;">Entity</th>
-                <th style="width:100px;">ID</th>
-                <th>Details</th>
-                <th style="width:130px;">IP</th>
-              </tr>
-            </thead>
-            <tbody id="auditBody">
-              <tr><td colspan="7" class="muted">Click "Audit Log" to load.</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h3>
-        <span>Safety Confirmations</span>
-        <span class="mini" id="confCount">0</span>
-      </h3>
-      <div class="body">
-        <div class="table-wrap">
-          <table style="min-width:760px;">
-            <thead>
-              <tr>
-                <th style="width:200px;">Time</th>
-                <th style="width:120px;">Trailer</th>
-                <th style="width:90px;">Door</th>
-                <th>IP / UserAgent</th>
-              </tr>
-            </thead>
-            <tbody id="confBody">
-              <tr><td colspan="4" class="muted">No confirmations yet.</td></tr>
-            </tbody>
-          </table>
+          <div class="table-wrap-scroll">
+            <table style="min-width:760px;table-layout:auto;">
+              <thead>
+                <tr>
+                  <th style="width:200px;">Time</th>
+                  <th style="width:120px;">Trailer</th>
+                  <th style="width:90px;">Door</th>
+                  <th>IP / UserAgent</th>
+                </tr>
+              </thead>
+              <tbody id="confBody">
+                <tr><td colspan="4" class="muted">No confirmations yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -562,7 +707,6 @@
 
 <script>
 (() => {
-  // ── CSRF header added to every mutating fetch ──────────────────────────────
   const CSRF_HEADERS = {
     "Content-Type": "application/json",
     "X-Requested-With": "XMLHttpRequest",
@@ -576,32 +720,34 @@
   const plateEditOpen = {};
 
   const el = (id) => document.getElementById(id);
-  const tbody       = el("tbody");
-  const platesGrid  = el("platesGrid");
-  const dockPlatesCard = el("dockPlatesCard");
-  const confBody    = el("confBody");
-  const confCount   = el("confCount");
-  const roleText    = el("roleText");
-  const verText     = el("verText");
-  const wsDot       = el("wsDot");
-  const wsText      = el("wsText");
-  const countsPill  = el("countsPill");
-  const panelTitle  = el("panelTitle");
-  const panelSub    = el("panelSub");
-  const panelBody   = el("panelBody");
-  const btnLogout   = el("btnLogout");
-  const btnRefresh  = el("btnRefresh");
-  const btnAudit    = el("btnAudit");
-  const auditCard   = el("auditCard");
-  const auditBody   = el("auditBody");
-  const auditCount  = el("auditCount");
-  const search      = el("search");
-  const filterDir   = el("filterDir");
-  const filterStatus = el("filterStatus");
+  const tbody           = el("tbody");
+  const platesGrid      = el("platesGrid");
+  const dockPlatesCard  = el("dockPlatesCard");
+  const confBody        = el("confBody");
+  const confCount       = el("confCount");
+  const roleText        = el("roleText");
+  const verText         = el("verText");
+  const wsDot           = el("wsDot");
+  const wsText          = el("wsText");
+  const countsPill      = el("countsPill");
+  const panelTitle      = el("panelTitle");
+  const panelSub        = el("panelSub");
+  const panelBody       = el("panelBody");
+  const btnLogout       = el("btnLogout");
+  const btnRefresh      = el("btnRefresh");
+  const btnAudit        = el("btnAudit");
+  const auditCard       = el("auditCard");
+  const auditBody       = el("auditBody");
+  const auditCount      = el("auditCount");
+  const search          = el("search");
+  const filterDir       = el("filterDir");
+  const filterStatus    = el("filterStatus");
   const btnClearFilters = el("btnClearFilters");
   const dockPlatesToggle = el("dockPlatesToggle");
   const dockPlatesBody   = el("dockPlatesBody");
   const platesMini       = el("platesMini");
+  const driverView       = el("driverView");
+  const dispatchView     = el("dispatchView");
 
   const pathLower    = () => location.pathname.toLowerCase();
   const isDriverPath = () => pathLower().startsWith("/driver");
@@ -611,8 +757,8 @@
     if (!ms) return "";
     try {
       return new Date(ms).toLocaleString(undefined, {
-        year:"numeric", month:"short", day:"2-digit",
-        hour:"2-digit", minute:"2-digit", second:"2-digit",
+        month:"short", day:"2-digit",
+        hour:"2-digit", minute:"2-digit",
       });
     } catch { return String(ms); }
   };
@@ -625,13 +771,9 @@
       .replaceAll('"',"&quot;")
       .replaceAll("'","&#039;");
 
-  // ── API helper: redirects to /login on 401 ────────────────────────────────
   async function apiJson(url, opts) {
     const res = await fetch(url, opts);
-    if (res.status === 401) {
-      location.href = "/login?expired=1";
-      return;
-    }
+    if (res.status === 401) { location.href = "/login?expired=1"; return; }
     if (!res.ok) {
       const t = await res.text().catch(() => "");
       throw new Error(t || ("HTTP " + res.status));
@@ -650,9 +792,7 @@
     toast._tm = setTimeout(() => { t.style.display = "none"; }, 4500);
   }
 
-  // ── Modal (replaces browser confirm()) ────────────────────────────────────
   let _modalResolve = null;
-
   function showModal(title, body) {
     return new Promise((resolve) => {
       _modalResolve = resolve;
@@ -671,7 +811,6 @@
     el("modalOverlay").classList.add("hidden");
     if (_modalResolve) { _modalResolve(true); _modalResolve = null; }
   });
-  // Close on overlay click
   el("modalOverlay").addEventListener("click", (e) => {
     if (e.target === el("modalOverlay")) {
       el("modalOverlay").classList.add("hidden");
@@ -679,7 +818,6 @@
     }
   });
 
-  // ── Accordion ─────────────────────────────────────────────────────────────
   function setDockPlatesOpen(open) {
     if (!dockPlatesToggle || !dockPlatesBody) return;
     dockPlatesToggle.setAttribute("aria-expanded", open ? "true" : "false");
@@ -688,7 +826,6 @@
       try { localStorage.setItem("platesOpen", "0"); } catch {}
       return;
     }
-    // Defer measurement to after paint to get accurate scrollHeight
     requestAnimationFrame(() => {
       const inner = dockPlatesBody.firstElementChild;
       const h = inner ? inner.scrollHeight : dockPlatesBody.scrollHeight;
@@ -697,7 +834,6 @@
     try { localStorage.setItem("platesOpen", "1"); } catch {}
   }
 
-  // ── Render helpers ────────────────────────────────────────────────────────
   function statusTag(status) {
     const s = String(status || "");
     const good = ["Ready","Departed","Dock Ready"];
@@ -716,7 +852,6 @@
     return `<span class="tag ${cls}">${escapeHtml(s)}</span>`;
   }
 
-  // ── Board ─────────────────────────────────────────────────────────────────
   function renderBoard() {
     const q    = (search.value || "").trim().toLowerCase();
     const dirF = (filterDir.value || "").trim();
@@ -751,43 +886,40 @@
         ? `<span class="mono">${escapeHtml(r.door)}</span>`
         : `<span class="muted">—</span>`;
       const dropType = r.dropType
-        ? `<span class="tag">${escapeHtml(r.dropType)}</span>`
+        ? escapeHtml(r.dropType)
         : `<span class="muted">—</span>`;
       const note = r.note ? escapeHtml(r.note) : `<span class="muted">—</span>`;
 
-      // Use data-trailer-id to avoid double-encoding issues; read back via dataset
       let actions = `<span class="muted">—</span>`;
       if (canEdit) {
         actions = `
-          <button class="secondary" data-act="edit"   data-trailer-id="${escapeHtml(r.trailer)}">Edit</button>
-          <button class="secondary danger" data-act="delete" data-trailer-id="${escapeHtml(r.trailer)}">Delete</button>
+          <button class="tbl-btn" data-act="edit"   data-trailer-id="${escapeHtml(r.trailer)}">Edit</button>
+          <button class="tbl-btn danger" data-act="delete" data-trailer-id="${escapeHtml(r.trailer)}">Del</button>
         `;
       } else if (canDockSet) {
         actions = `
-          <button class="secondary" data-act="dockSet" data-to="Loading"    data-trailer-id="${escapeHtml(r.trailer)}">Loading</button>
-          <button class="secondary" data-act="dockSet" data-to="Dock Ready" data-trailer-id="${escapeHtml(r.trailer)}">Dock Ready</button>
+          <button class="tbl-btn" data-act="dockSet" data-to="Loading"    data-trailer-id="${escapeHtml(r.trailer)}">Loading</button>
+          <button class="tbl-btn" data-act="dockSet" data-to="Dock Ready" data-trailer-id="${escapeHtml(r.trailer)}">Ready</button>
         `;
       }
 
       return `
         <tr>
-          <td class="mono"><strong>${escapeHtml(r.trailer)}</strong></td>
+          <td class="mono" style="font-weight:700;">${escapeHtml(r.trailer)}</td>
           <td>${escapeHtml(r.direction || "—")}</td>
           <td>${statusTag(r.status)}</td>
-          <td>${door}</td>
+          <td class="mono">${door}</td>
           <td>${dropType}</td>
-          <td>${note}</td>
-          <td class="small muted">${escapeHtml(updated)}</td>
+          <td title="${escapeHtml(r.note || "")}">${note}</td>
+          <td class="muted">${escapeHtml(updated)}</td>
           <td>${actions}</td>
         </tr>
       `;
     }).join("");
   }
 
-  // ── Dock Plates ───────────────────────────────────────────────────────────
   function renderPlates() {
     if (isDriverView()) return;
-
     const canEdit = (ROLE === "dispatcher" || ROLE === "dock");
     const doors = [];
     for (let d = 18; d <= 42; d++) doors.push(String(d));
@@ -809,11 +941,9 @@
             <div class="door">D <span class="mono">${escapeHtml(door)}</span></div>
             ${plateTag(p.status)}
           </div>
-
           <div class="note" title="${escapeHtml(p.note || "")}">
             ${p.note ? escapeHtml(p.note) : `<span class="muted">No note</span>`}
           </div>
-
           ${open ? `
             <div class="row" style="gap:6px;">
               <div>
@@ -828,7 +958,6 @@
               </div>
             </div>
           ` : ``}
-
           <div class="btnRow">
             ${canEdit ? `
               <button class="tinyBtn" data-plate-toggle="${escapeHtml(door)}">${open ? "Close" : "Edit"}</button>
@@ -839,13 +968,11 @@
       `;
     }).join("");
 
-    // Re-measure accordion height if open
     if (dockPlatesToggle?.getAttribute("aria-expanded") === "true") {
       setDockPlatesOpen(true);
     }
   }
 
-  // ── Confirmations ─────────────────────────────────────────────────────────
   function renderConfirmations() {
     confCount.textContent = `${confirmations.length}`;
     if (!confirmations.length) {
@@ -866,7 +993,6 @@
     }).join("");
   }
 
-  // ── Audit Log ─────────────────────────────────────────────────────────────
   async function loadAudit() {
     try {
       const rows = await apiJson("/api/audit?limit=200");
@@ -896,11 +1022,10 @@
     }
   }
 
-  // ── Role Panels ───────────────────────────────────────────────────────────
   function dispatcherPanelHtml() {
     return `
       <div class="info">
-        <div class="title">Dispatcher</div>
+        <div class="title">Dispatcher Controls</div>
         <div class="muted small">Add/update trailers, delete, or clear all.</div>
       </div>
 
@@ -948,7 +1073,7 @@
       <textarea id="d_note" placeholder="Short note"></textarea>
 
       <div class="row" style="margin-top:10px;">
-        <button class="secondary" id="btnSaveTrailer">Save</button>
+        <button class="secondary" id="btnSaveTrailer">Save Trailer</button>
       </div>
 
       <div class="divider"></div>
@@ -956,14 +1081,14 @@
       <div class="row">
         <button class="secondary danger" id="btnClearAll">Clear All Trailers</button>
       </div>
-      <div class="muted small" style="margin-top:8px;">Clear removes all trailers from the board.</div>
+      <div class="muted small" style="margin-top:8px;">Removes all trailers from the board.</div>
     `;
   }
 
   function dockPanelHtml() {
     return `
       <div class="info">
-        <div class="title">Dock</div>
+        <div class="title">Dock Controls</div>
         <div class="muted small">Use table buttons to set <b>Loading</b> / <b>Dock Ready</b>.</div>
       </div>
       <div class="divider"></div>
@@ -971,71 +1096,10 @@
     `;
   }
 
-  function driverPanelHtml() {
-    return `
-      <div class="info">
-        <div class="title">Driver Drop</div>
-        <div class="muted small">Updates board instantly.</div>
-      </div>
-
-      <label>Trailer #</label>
-      <input id="v_trailer" placeholder="e.g. 5312" />
-
-      <div class="row">
-        <div>
-          <label>Door (18–42)</label>
-          <input id="v_door" placeholder="e.g. 21" />
-        </div>
-        <div>
-          <label>Drop Type</label>
-          <select id="v_dropType">
-            <option>Empty</option>
-            <option>Loaded</option>
-          </select>
-        </div>
-      </div>
-
-      <button class="secondary" style="margin-top:10px;" id="btnDriverDrop">Submit Drop</button>
-
-      <div class="divider"></div>
-
-      <div class="info">
-        <div class="title">Safety Confirmation</div>
-        <div class="muted small">Both boxes required.</div>
-      </div>
-
-      <label>Trailer # (optional)</label>
-      <input id="c_trailer" placeholder="Optional but recommended" />
-
-      <label>Door (optional)</label>
-      <input id="c_door" placeholder="Optional" />
-
-      <div style="margin-top:10px;">
-        <div class="checkline">
-          <input id="c_loadSecured" type="checkbox" />
-          <div>
-            <div style="font-weight:900;">Load secured</div>
-            <div class="muted small">Straps/locks set</div>
-          </div>
-        </div>
-        <div style="height:10px;"></div>
-        <div class="checkline">
-          <input id="c_dockPlateUp" type="checkbox" />
-          <div>
-            <div style="font-weight:900;">Dock plate up</div>
-            <div class="muted small">Plate raised before leaving</div>
-          </div>
-        </div>
-      </div>
-
-      <button class="secondary" style="margin-top:10px;" id="btnConfirmSafety">Submit Safety Confirm</button>
-    `;
-  }
-
   function renderRolePanel() {
     if (ROLE === "dispatcher") {
-      panelTitle.textContent = "Dispatcher Controls";
-      panelSub.textContent   = "Add / Update • Delete • Clear";
+      panelTitle.textContent = "Dispatcher";
+      panelSub.textContent   = "Add / Update / Delete";
       panelBody.innerHTML    = dispatcherPanelHtml();
       btnLogout.style.display = "";
       btnAudit.style.display  = "";
@@ -1056,12 +1120,7 @@
     }
 
     if (isDriverPath()) {
-      panelTitle.textContent = "Driver View";
-      panelSub.textContent   = "Drop • Safety";
-      panelBody.innerHTML    = driverPanelHtml();
-      btnLogout.style.display = "none";
-      btnAudit.style.display  = "none";
-      if (dockPlatesCard) dockPlatesCard.style.display = "none";
+      // Driver view handled by separate DOM element
       return;
     }
 
@@ -1073,7 +1132,6 @@
     if (dockPlatesCard) dockPlatesCard.style.display = "none";
   }
 
-  // ── Actions ───────────────────────────────────────────────────────────────
   async function doLogout() {
     try {
       await apiJson("/api/logout", { method:"POST", headers: CSRF_HEADERS });
@@ -1082,12 +1140,12 @@
   }
 
   async function dispatcherSave() {
-    const trailer  = (el("d_trailer")?.value  || "").trim();
+    const trailer   = (el("d_trailer")?.value  || "").trim();
     const direction = (el("d_direction")?.value || "").trim();
-    const status   = (el("d_status")?.value   || "").trim();
-    const door     = (el("d_door")?.value     || "").trim();
-    const note     = (el("d_note")?.value     || "").trim();
-    const dropType = (el("d_dropType")?.value || "").trim();
+    const status    = (el("d_status")?.value   || "").trim();
+    const door      = (el("d_door")?.value     || "").trim();
+    const note      = (el("d_note")?.value     || "").trim();
+    const dropType  = (el("d_dropType")?.value || "").trim();
 
     if (!trailer) return toast("Missing trailer", "Enter a trailer number.");
 
@@ -1209,10 +1267,7 @@
     }
   }
 
-  // ── Init ──────────────────────────────────────────────────────────────────
   async function loadInitial() {
-    if (isDriverPath() && dockPlatesCard) dockPlatesCard.style.display = "none";
-
     try {
       const who = await apiJson("/api/whoami");
       ROLE    = who?.role;
@@ -1225,27 +1280,34 @@
     roleText.textContent = ROLE || (isDriverPath() ? "driver" : "none");
     verText.textContent  = VERSION || "—";
 
+    // Show correct view
+    if (isDriverPath()) {
+      driverView.style.display = "";
+      dispatchView.style.display = "none";
+      if (dockPlatesCard) dockPlatesCard.style.display = "none";
+    } else {
+      driverView.style.display = "none";
+      dispatchView.style.display = "";
+    }
+
     try { trailers = await apiJson("/api/state"); } catch { trailers = {}; }
     if (!isDriverView()) {
       try { dockPlates = await apiJson("/api/dockplates"); } catch { dockPlates = {}; }
     }
 
     renderRolePanel();
-    renderBoard();
-    renderConfirmations();
-
     if (!isDriverView()) {
+      renderBoard();
+      renderConfirmations();
       let open = false;
       try { open = localStorage.getItem("platesOpen") === "1"; } catch {}
       setDockPlatesOpen(open);
     }
   }
 
-  // ── Global click handler ──────────────────────────────────────────────────
   document.addEventListener("click", async (ev) => {
     const t = ev.target;
 
-    // Accordion: use .closest() so clicking child elements (chev, mini) still works
     if (t?.closest?.("#dockPlatesToggle")) {
       const isOpen = dockPlatesToggle.getAttribute("aria-expanded") === "true";
       setDockPlatesOpen(!isOpen);
@@ -1272,7 +1334,6 @@
       return;
     }
 
-    // Table row actions — read trailer ID via dataset (handles encoding correctly)
     const act = t?.dataset?.act;
     if (act === "delete") {
       const trailer = t.dataset.trailerId;
@@ -1297,7 +1358,6 @@
       if (trailer && to) return dockSetStatus(trailer, to);
     }
 
-    // Plate toggle / save
     const toggleDoor = t?.dataset?.plateToggle;
     if (toggleDoor) {
       plateEditOpen[toggleDoor] = !plateEditOpen[toggleDoor];
@@ -1308,13 +1368,14 @@
     if (plateDoor) return plateSave(plateDoor);
   });
 
-  ["input","change"].forEach(evtName => {
-    search.addEventListener(evtName, renderBoard);
-    filterDir.addEventListener(evtName, renderBoard);
-    filterStatus.addEventListener(evtName, renderBoard);
-  });
+  if (search) {
+    ["input","change"].forEach(evtName => {
+      search.addEventListener(evtName, renderBoard);
+      filterDir.addEventListener(evtName, renderBoard);
+      filterStatus.addEventListener(evtName, renderBoard);
+    });
+  }
 
-  // ── WebSocket (auto-reconnect) ────────────────────────────────────────────
   let wsRetry = 0;
 
   function wsSetStatus(state) {
@@ -1350,13 +1411,13 @@
 
       if (type === "state") {
         trailers = payload || {};
-        renderBoard();
+        if (!isDriverView()) renderBoard();
       } else if (type === "dockplates") {
         dockPlates = payload || {};
         if (!isDriverView()) renderPlates();
       } else if (type === "confirmations") {
         confirmations = Array.isArray(payload) ? payload : [];
-        renderConfirmations();
+        if (!isDriverView()) renderConfirmations();
       } else if (type === "version") {
         VERSION = payload?.version || VERSION;
         verText.textContent = VERSION || "—";

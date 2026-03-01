@@ -1,393 +1,550 @@
+<!-- index.html -->
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Wesbell Dispatch</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Wesbell Dispatch</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:#0a0d12; --s0:#0e1218; --s1:#121820; --s2:#161d27; --s3:#1b2330;
+      --b0:#1a2232; --b1:#213040; --b2:#2a3d55;
+      --t0:#e2e8f2; --t1:#8a9bb5; --t2:#4a5a72; --t3:#2d3d52;
+      --amber:#f0a030; --amber-bg:rgba(240,160,48,.09); --amber-bd:rgba(240,160,48,.20);
+      --cyan:#20c0d0;  --cyan-bg:rgba(32,192,208,.07); --cyan-bd:rgba(32,192,208,.18);
+      --green:#20d090; --green-bg:rgba(32,208,144,.07); --green-bd:rgba(32,208,144,.20);
+      --red:#e84848;   --red-bg:rgba(232,72,72,.08);   --red-bd:rgba(232,72,72,.20);
+      --violet:#9878f0;--violet-bg:rgba(152,120,240,.08); --violet-bd:rgba(152,120,240,.18);
+      --mono:'DM Mono', monospace; --sans:'DM Sans', system-ui, sans-serif;
+      --r:5px; --r2:9px; --sh:0 2px 16px rgba(0,0,0,.5); --sh-lg:0 12px 48px rgba(0,0,0,.7);
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{font-size:14px;-webkit-font-smoothing:antialiased}
+    body{background:var(--bg);color:var(--t0);font-family:var(--sans);line-height:1.5;min-height:100vh}
+    a{color:var(--cyan);text-decoration:none}
 
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+    /* TOPBAR */
+    .topbar{position:sticky;top:0;z-index:100;background:var(--s0);border-bottom:1px solid var(--b0)}
+    .topbar-inner{max-width:1600px;margin:0 auto;padding:0 20px;height:48px;display:flex;align-items:center}
+    .brand-block{display:flex;align-items:center;gap:10px;padding-right:20px;border-right:1px solid var(--b0);margin-right:16px;flex-shrink:0}
+    .brand-mark{width:26px;height:26px;border-radius:6px;background:linear-gradient(135deg,var(--amber),#d05000);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:500;color:#000;letter-spacing:-.5px}
+    .brand-name{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--t0);letter-spacing:.08em}
+    .brand-sub{font-size:9px;color:var(--t2);letter-spacing:.06em;margin-top:1px}
 
-<style>
-:root{
-  --bg:#0a0d12;
-  --s0:#0e1218;
-  --s1:#121820;
-  --s2:#161d27;
-  --b0:#1a2232;
-  --b1:#213040;
-  --b2:#2a3d55;
-  --t0:#e2e8f2;
-  --t1:#8a9bb5;
-  --t2:#4a5a72;
-  --amber:#f0a030;
-  --green:#20d090;
-  --cyan:#20c0d0;
-  --red:#e84848;
-  --violet:#9878f0;
-  --mono:'DM Mono',monospace;
-  --sans:'DM Sans',system-ui,sans-serif;
-  --r:8px;
-}
+    .nav{display:flex;align-items:center;gap:1px;flex:1}
+    .nav-item{display:flex;align-items:center;gap:6px;padding:0 13px;height:48px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--t2);border-bottom:2px solid transparent;background:transparent;border:none;cursor:pointer;transition:color .15s,border-color .15s,background .15s}
+    .nav-item:hover{color:var(--t1);background:rgba(255,255,255,.025)}
+    .nav-item.active{color:var(--amber);border-bottom-color:var(--amber);background:var(--amber-bg)}
 
-*{box-sizing:border-box;margin:0;padding:0}
-body{
-  background:var(--bg);
-  color:var(--t0);
-  font-family:var(--sans);
-  min-height:100vh;
-  -webkit-font-smoothing:antialiased;
-}
+    .topbar-right{display:flex;align-items:center;gap:6px;padding-left:16px;border-left:1px solid var(--b0);margin-left:auto;flex-shrink:0}
+    .chip{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;border:1px solid var(--b0);background:var(--s1);font-family:var(--mono);font-size:10px;color:var(--t2);white-space:nowrap;letter-spacing:.04em}
+    .live-dot{width:6px;height:6px;border-radius:50%;background:var(--t3);transition:all .3s}
+    .live-dot.ok{background:var(--green);box-shadow:0 0 7px var(--green)}
+    .live-dot.bad{background:var(--red);box-shadow:0 0 7px var(--red)}
+    .live-dot.warn{background:var(--amber);box-shadow:0 0 7px var(--amber)}
+    .tb-btn{display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:var(--r);border:1px solid var(--b1);background:var(--s2);color:var(--t1);font-size:11px;font-weight:600;letter-spacing:.04em;cursor:pointer;transition:all .15s}
+    .tb-btn:hover{color:var(--t0);border-color:var(--b2)}
+    .tb-btn.danger{color:var(--red);border-color:var(--red-bd)}
+    .tb-btn.danger:hover{background:var(--red-bg)}
 
-/* ===== TOPBAR ===== */
-.topbar{
-  position:sticky;
-  top:0;
-  z-index:100;
-  background:var(--s0);
-  border-bottom:1px solid var(--b0);
-}
-.topbar-inner{
-  max-width:1600px;
-  margin:auto;
-  padding:0 20px;
-  height:50px;
-  display:flex;
-  align-items:center;
-}
-.brand{
-  font-family:var(--mono);
-  font-size:13px;
-  letter-spacing:.08em;
-  font-weight:600;
-  color:var(--amber);
-  margin-right:25px;
-}
-.nav{
-  display:flex;
-  gap:18px;
-  font-size:12px;
-  text-transform:uppercase;
-  letter-spacing:.06em;
-}
-.nav a{
-  color:var(--t2);
-  text-decoration:none;
-  padding:4px 0;
-}
-.nav a.active{
-  color:var(--amber);
-  border-bottom:2px solid var(--amber);
-}
-.top-right{
-  margin-left:auto;
-  display:flex;
-  align-items:center;
-  gap:10px;
-}
-.badge{
-  font-family:var(--mono);
-  font-size:10px;
-  padding:3px 8px;
-  border-radius:999px;
-  background:var(--s1);
-  border:1px solid var(--b0);
-  color:var(--t2);
-}
-.live-dot{
-  width:7px;
-  height:7px;
-  border-radius:50%;
-  background:var(--green);
-  box-shadow:0 0 8px var(--green);
-  margin-right:5px;
-}
-.btn{
-  padding:6px 10px;
-  border-radius:6px;
-  border:1px solid var(--b1);
-  background:var(--s2);
-  color:var(--t1);
-  font-size:11px;
-  cursor:pointer;
-}
-.btn:hover{border-color:var(--b2);color:var(--t0)}
-.btn-danger{border-color:rgba(232,72,72,.3);color:var(--red)}
-.btn-danger:hover{background:rgba(232,72,72,.1)}
+    /* LAYOUT */
+    .page{max-width:1600px;margin:0 auto;padding:16px 18px}
+    .grid-main{display:grid;grid-template-columns:1fr 280px;gap:14px;align-items:start}
+    @media(max-width:1100px){.grid-main{grid-template-columns:1fr}}
+    .col-stack{display:flex;flex-direction:column;gap:14px}
 
-/* ===== LAYOUT ===== */
-.page{
-  max-width:1600px;
-  margin:auto;
-  padding:18px;
-}
-.grid{
-  display:grid;
-  grid-template-columns:1fr 320px;
-  gap:18px;
-}
-@media(max-width:1100px){
-  .grid{grid-template-columns:1fr}
-}
+    /* PANELS */
+    .panel{background:var(--s1);border:1px solid var(--b0);border-radius:var(--r2);overflow:hidden}
+    .panel-hd{padding:10px 14px;border-bottom:1px solid var(--b0);display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--s0)}
+    .panel-title{font-family:var(--mono);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);display:flex;align-items:center;gap:7px}
+    .ptdot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+    .panel-body{padding:14px}
+    .panel-body-flush{padding:0}
 
-/* ===== PANELS ===== */
-.panel{
-  background:var(--s1);
-  border:1px solid var(--b0);
-  border-radius:var(--r);
-  overflow:hidden;
-}
-.panel-hd{
-  padding:10px 14px;
-  border-bottom:1px solid var(--b0);
-  font-family:var(--mono);
-  font-size:10px;
-  text-transform:uppercase;
-  letter-spacing:.08em;
-  color:var(--t2);
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-}
-.panel-body{padding:14px}
+    /* BADGES */
+    .badge{display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.04em;white-space:nowrap;border:1px solid var(--b0);background:var(--s2);color:var(--t2)}
+    .badge-num{border-color:var(--b1);background:var(--s3);color:var(--t1)}
 
-/* ===== TABLE ===== */
-.tbl-head,
-.tbl-row{
-  display:grid;
-  grid-template-columns:100px 80px 150px 70px 90px 1fr 100px 200px;
-  align-items:center;
-}
-.tbl-head{
-  background:var(--s0);
-  border-bottom:1px solid var(--b0);
-  font-family:var(--mono);
-  font-size:9px;
-  letter-spacing:.08em;
-  text-transform:uppercase;
-  color:var(--t2);
-}
-.tbl-head span,
-.tbl-row span,
-.tbl-row div{
-  padding:8px 10px;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap;
-}
-.tbl-row{
-  border-bottom:1px solid var(--b0);
-  transition:background .15s;
-}
-.tbl-row:hover{background:rgba(255,255,255,.02)}
+    /* STATUS TAGS */
+    .stag{display:inline-flex;align-items:center;gap:4px;padding:2px 6px;border-radius:3px;font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.04em;white-space:nowrap;border:1px solid}
+    .sp{width:4px;height:4px;border-radius:50%;flex-shrink:0}
+    .stag-loading{background:var(--amber-bg);color:var(--amber);border-color:var(--amber-bd)} .stag-loading .sp{background:var(--amber)}
+    .stag-ready{background:var(--green-bg);color:var(--green);border-color:var(--green-bd)} .stag-ready .sp{background:var(--green)}
+    .stag-dockready{background:var(--cyan-bg);color:var(--cyan);border-color:var(--cyan-bd)} .stag-dockready .sp{background:var(--cyan)}
+    .stag-dropped{background:var(--violet-bg);color:var(--violet);border-color:var(--violet-bd)} .stag-dropped .sp{background:var(--violet)}
+    .stag-incoming{background:var(--s2);color:var(--t1);border-color:var(--b1)} .stag-incoming .sp{background:var(--t2)}
+    .stag-departed{background:var(--s1);color:var(--t2);border-color:var(--b0)} .stag-departed .sp{background:var(--t3)}
+    .stag-unknown{background:var(--s2);color:var(--t2);border-color:var(--b0)}
 
-/* ===== STATUS TAGS ===== */
-.stag{
-  font-family:var(--mono);
-  font-size:10px;
-  padding:2px 7px;
-  border-radius:4px;
-  border:1px solid var(--b0);
-}
-.stag-Incoming{color:#9ca3af}
-.stag-Dropped{color:var(--violet)}
-.stag-Loading{color:var(--amber)}
-.stag-DockReady{color:var(--cyan)}
-.stag-Ready{color:var(--green)}
-.stag-Departed{color:var(--t2)}
+    /* TABLE */
+    .tbl-hd,.tbl-row{display:grid;grid-template-columns:86px 68px 108px 48px 68px 1fr 86px 168px;align-items:center}
+    .tbl-hd>span,.tbl-row>span,.tbl-row>div{padding:7px 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+    .tbl-hd{background:var(--s0);border-bottom:1px solid var(--b0)}
+    .tbl-hd>span{font-family:var(--mono);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t3)}
+    .tbl-row{border-bottom:1px solid var(--b0);border-left:2px solid transparent;transition:background .1s}
+    .tbl-row:last-child{border-bottom:none}
+    .tbl-row:hover{background:rgba(255,255,255,.018)}
+    .tbl-row.r-loading{border-left-color:var(--amber)}
+    .tbl-row.r-ready{border-left-color:var(--green)}
+    .tbl-row.r-dockready{border-left-color:var(--cyan)}
+    .tbl-row.r-dropped{border-left-color:var(--violet)}
+    .tbl-row.r-incoming{border-left-color:var(--b1)}
+    .tbl-row.r-departed{border-left-color:var(--b0);opacity:.45}
 
-/* ===== DROPDOWN ===== */
-.status-select{
-  background:var(--s0);
-  border:1px solid var(--b1);
-  color:var(--t0);
-  padding:5px 7px;
-  font-size:11px;
-  border-radius:6px;
-}
+    @keyframes rowPulse{0%{background:rgba(240,160,48,.10)}100%{background:transparent}}
+    .tbl-row.flashing{animation:rowPulse .9s ease-out}
 
-/* ===== SIDE PANEL ===== */
-.side{
-  position:sticky;
-  top:70px;
-}
-.infobox{
-  background:rgba(240,160,48,.08);
-  border-left:3px solid var(--amber);
-  padding:10px;
-  font-size:12px;
-  margin-bottom:15px;
-  border-radius:6px;
-}
+    /* READY flashing green (dispatcher only) */
+    @keyframes readyGlow{
+      0%   { background: rgba(32,208,144,.10); box-shadow: inset 0 0 0 rgba(0,0,0,0); }
+      50%  { background: rgba(32,208,144,.22); box-shadow: inset 0 0 0 rgba(0,0,0,0); }
+      100% { background: rgba(32,208,144,.10); box-shadow: inset 0 0 0 rgba(0,0,0,0); }
+    }
+    .tbl-row.ready-flash{animation:readyGlow 1.05s ease-in-out infinite}
 
-/* ===== DRIVER PAGE ===== */
-.driver-wrap{
-  max-width:420px;
-  margin:40px auto;
-}
-.driver-card{
-  background:var(--s1);
-  border:1px solid var(--b0);
-  border-radius:var(--r);
-  padding:20px;
-  margin-bottom:18px;
-}
-.driver-card h3{
-  font-size:14px;
-  margin-bottom:12px;
-}
-input,select,textarea{
-  width:100%;
-  background:var(--s0);
-  border:1px solid var(--b1);
-  border-radius:6px;
-  padding:10px;
-  color:var(--t0);
-  margin-bottom:10px;
-}
-button.primary{
-  background:rgba(240,160,48,.1);
-  border:1px solid rgba(240,160,48,.3);
-  color:var(--amber);
-  padding:10px;
-  font-weight:600;
-  cursor:pointer;
-  border-radius:6px;
-  width:100%;
-}
-button.primary:hover{background:rgba(240,160,48,.2)}
-</style>
+    .t-num{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--t0)}
+    .t-dir{font-size:11px;color:var(--t2)}
+    .t-door{font-family:var(--mono);font-size:11px;color:var(--cyan)}
+    .t-note{font-size:11px;color:var(--t1)}
+    .t-time{font-family:var(--mono);font-size:10px;color:var(--t2)}
+    .t-acts{display:flex;gap:4px;align-items:center}
+    .tbl-empty{padding:28px 16px;text-align:center;color:var(--t2);font-size:11px;font-family:var(--mono);letter-spacing:.06em}
+
+    /* FILTER BAR */
+    .filter-bar{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;padding:10px 14px;background:var(--s0);border-bottom:1px solid var(--b0)}
+    .filter-bar .field{flex:1 1 110px;margin:0}
+    .filter-bar .tight{flex:0 0 auto}
+
+    /* FORM */
+    .fl{display:block;font-family:var(--mono);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);margin-bottom:4px}
+    .field{margin-bottom:10px}
+    .field-row{display:flex;gap:8px}
+    .field-row>.field{flex:1}
+    input,select,textarea{width:100%;padding:7px 10px;border-radius:var(--r);border:1px solid var(--b1);background:var(--s0);color:var(--t0);font-family:var(--sans);font-size:13px;outline:none;transition:border-color .15s,box-shadow .15s;-webkit-appearance:none}
+    input:focus,select:focus,textarea:focus{border-color:var(--amber);box-shadow:0 0 0 3px var(--amber-bg)}
+    select option{background:var(--s1)}
+    textarea{min-height:60px;resize:vertical}
+
+    /* BUTTONS */
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:7px 12px;border-radius:var(--r);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap;border:1px solid}
+    .btn-primary{background:var(--amber-bg);border-color:var(--amber-bd);color:var(--amber)}
+    .btn-primary:hover{background:rgba(240,160,48,.16)}
+    .btn-default{background:var(--s2);border-color:var(--b1);color:var(--t1)}
+    .btn-default:hover{border-color:var(--b2);color:var(--t0)}
+    .btn-danger{background:var(--red-bg);border-color:var(--red-bd);color:var(--red)}
+    .btn-danger:hover{background:rgba(232,72,72,.14)}
+    .btn-success{background:var(--green-bg);border-color:var(--green-bd);color:var(--green)}
+    .btn-success:hover{background:rgba(32,208,144,.14)}
+    .btn-cyan{background:var(--cyan-bg);border-color:var(--cyan-bd);color:var(--cyan)}
+    .btn-cyan:hover{background:rgba(32,192,208,.14)}
+    .btn-sm{padding:4px 9px;font-size:11px;border-radius:4px}
+    .btn-full{width:100%}
+
+    /* INFOBOX */
+    .infobox{padding:9px 11px;border-radius:var(--r);border-left:2px solid;margin-bottom:11px;font-size:12px;line-height:1.55;color:var(--t1)}
+    .infobox-amber{background:var(--amber-bg);border-color:var(--amber)}
+    .infobox-cyan{background:var(--cyan-bg);border-color:var(--cyan)}
+    .infobox-green{background:var(--green-bg);border-color:var(--green)}
+    .infobox .ib-title{font-weight:700;color:var(--t0);margin-bottom:3px;font-size:11px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em}
+
+    /* ACCORDION */
+    .acc-head{width:100%;display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--s0);border:none;border-bottom:1px solid var(--b0);font-family:var(--mono);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);cursor:pointer;transition:color .15s,background .15s}
+    .acc-head:hover{color:var(--t1);background:rgba(255,255,255,.02)}
+    .acc-head .chev{font-size:10px;transition:transform .18s;pointer-events:none}
+    .acc-head[aria-expanded="true"] .chev{transform:rotate(180deg)}
+    .acc-body{overflow:hidden;max-height:0;transition:max-height .25s ease}
+
+    /* DOCK PLATES */
+    .plate-grid{display:grid;grid-template-columns:repeat(9,1fr);gap:5px;padding:12px}
+    @media(max-width:980px){.plate-grid{grid-template-columns:repeat(7,1fr)}}
+    @media(max-width:640px){.plate-grid{grid-template-columns:repeat(5,1fr)}}
+    .plate{border-radius:var(--r);border:1px solid var(--b0);background:var(--s0);padding:6px;display:flex;flex-direction:column;gap:3px;min-height:60px}
+    .plate.p-ok{border-color:var(--green-bd);background:var(--green-bg)}
+    .plate.p-service{border-color:var(--red-bd);background:var(--red-bg)}
+    .plate .p-door{font-family:var(--mono);font-size:9px;color:var(--t3);letter-spacing:.04em}
+    .plate .p-note{font-size:10px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .plate .p-btns{display:flex;gap:3px;margin-top:auto}
+    .plate .p-btn{padding:2px 5px;font-size:9px;font-weight:600;border-radius:3px;border:1px solid var(--b1);background:var(--s1);color:var(--t2);font-family:var(--mono);cursor:pointer;letter-spacing:.04em}
+    .plate .p-btn:hover{color:var(--t0);border-color:var(--b2)}
+    .plate select,.plate input{padding:3px 5px;font-size:10px;border-radius:3px}
+
+    /* DATA TABLE */
+    .data-tbl-wrap{overflow-x:auto}
+    .data-tbl-wrap table{width:100%;border-collapse:collapse}
+    .data-tbl-wrap th,.data-tbl-wrap td{padding:7px 12px;text-align:left;border-bottom:1px solid var(--b0);font-size:11px;white-space:nowrap}
+    .data-tbl-wrap th{font-family:var(--mono);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t3);background:var(--s0)}
+    .data-tbl-wrap tr:hover td{background:rgba(255,255,255,.015)}
+    .data-tbl-wrap td.mono{font-family:var(--mono)}
+    .data-tbl-wrap td.muted{color:var(--t2);font-family:var(--mono);font-size:10px}
+
+    /* BOARD FOOTER */
+    .board-footer{padding:5px 14px;border-top:1px solid var(--b0);background:var(--s0);display:flex;align-items:center;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:.04em}
+    .divider{height:1px;background:var(--b0);margin:11px 0}
+
+    /* MODAL */
+    .modal-ov{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:16px}
+    .modal-ov.hidden{display:none}
+    .modal{background:var(--s2);border:1px solid var(--b2);border-radius:var(--r2);padding:22px;max-width:380px;width:100%;box-shadow:var(--sh-lg)}
+    .modal h4{font-size:14px;font-weight:700;margin-bottom:6px;color:var(--t0);font-family:var(--mono);letter-spacing:.04em}
+    .modal .m-sub{font-size:12px;color:var(--t1);margin-bottom:18px;line-height:1.55}
+    .modal .m-btns{display:flex;gap:8px;justify-content:flex-end}
+
+    /* TOAST */
+    .toast{position:fixed;right:16px;bottom:16px;z-index:600;width:min(360px,calc(100vw - 32px));background:var(--s2);border:1px solid var(--b2);border-radius:var(--r2);padding:12px 14px;box-shadow:var(--sh-lg);display:none;animation:toastIn .2s cubic-bezier(.16,1,.3,1)}
+    @keyframes toastIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+    .toast-bar{position:absolute;top:0;left:0;right:0;height:2px;border-radius:var(--r2) var(--r2) 0 0}
+    .toast-bar.ok{background:var(--green)}
+    .toast-bar.warn{background:var(--amber)}
+    .toast-bar.err{background:var(--red)}
+    .toast strong{display:block;font-size:12px;font-weight:700;margin:3px 0 2px;color:var(--t0);font-family:var(--mono)}
+    .toast .t-body{font-size:11px;color:var(--t1)}
+
+    /* DRIVER PAGE */
+    .driver-shell{min-height:calc(100vh - 48px);background:var(--bg);
+      background-image:
+        radial-gradient(ellipse 900px 400px at 50% -40px, rgba(240,160,48,.07) 0%, transparent 70%),
+        radial-gradient(ellipse 500px 300px at 90% 90%, rgba(32,192,208,.04) 0%, transparent 70%);
+      display:flex;align-items:flex-start;justify-content:center;padding:36px 16px}
+    .driver-wrap{width:100%;max-width:400px;display:flex;flex-direction:column;gap:12px}
+    .driver-hdr{text-align:center;margin-bottom:6px}
+    .driver-hdr h1{font-size:20px;font-weight:700;letter-spacing:-.02em;color:var(--t0);margin-bottom:4px}
+    .driver-hdr p{font-size:10px;color:var(--t2);font-family:var(--mono);letter-spacing:.08em}
+    .driver-panel{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r2);overflow:hidden}
+    .driver-phd{padding:10px 14px;border-bottom:1px solid var(--b0);background:var(--s0);display:flex;align-items:center;justify-content:space-between}
+    .driver-phd-title{font-family:var(--mono);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t2)}
+    .driver-pbody{padding:16px}
+    .driver-panel input,.driver-panel select{font-size:14px;padding:10px 11px}
+    .success-panel{display:none;flex-direction:column;align-items:center;padding:28px 20px;text-align:center;gap:9px}
+    .success-ring{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px}
+    .success-ring.green{background:var(--green-bg);border:1px solid var(--green-bd)}
+    .success-ring.cyan{background:var(--cyan-bg);border:1px solid var(--cyan-bd)}
+    .success-title{font-size:15px;font-weight:700;color:var(--t0)}
+    .success-detail{font-size:11px;color:var(--t2);font-family:var(--mono)}
+    .checkline{display:flex;align-items:center;gap:11px;padding:10px 12px;border:1px solid var(--b1);border-radius:var(--r);background:var(--s0);cursor:pointer;transition:border-color .15s,background .15s}
+    .checkline:has(input:checked){border-color:var(--green-bd);background:var(--green-bg)}
+    .checkline input[type="checkbox"]{width:16px;height:16px;accent-color:var(--green);cursor:pointer;flex-shrink:0}
+    .checkline .cl-main{font-weight:600;font-size:13px;color:var(--t0)}
+    .checkline .cl-sub{font-size:11px;color:var(--t2);margin-top:1px}
+
+    /* SUPERVISOR */
+    .sup-shell{max-width:1600px;margin:0 auto;padding:16px 18px}
+    .sup-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    @media(max-width:900px){.sup-grid{grid-template-columns:1fr}}
+    .kpi-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+    .kpi{flex:1 1 110px;padding:14px 16px;border-radius:var(--r2);border:1px solid var(--b0);background:var(--s1);position:relative;overflow:hidden}
+    .kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px}
+    .kpi-total::before{background:var(--amber)}
+    .kpi-loading::before{background:var(--amber)}
+    .kpi-ready::before{background:var(--green)}
+    .kpi-departed::before{background:var(--t3)}
+    .kpi-conf::before{background:var(--cyan)}
+    .kpi .k-val{font-family:var(--mono);font-size:28px;font-weight:500;line-height:1;color:var(--t0);margin-bottom:5px}
+    .kpi .k-lbl{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--t3)}
+    .kpi-loading .k-val{color:var(--amber)}
+    .kpi-ready .k-val{color:var(--green)}
+    .kpi-conf .k-val{color:var(--cyan)}
+
+    .feed-item{display:flex;align-items:flex-start;gap:9px;padding:7px 0;border-bottom:1px solid var(--b0)}
+    .feed-item:last-child{border-bottom:none}
+    .feed-pip{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:5px}
+    .feed-content{flex:1;min-width:0}
+    .feed-action{font-size:11px;color:var(--t1);line-height:1.4}
+    .feed-action strong{color:var(--t0);font-weight:600}
+    .feed-time{font-family:var(--mono);font-size:10px;color:var(--t3);margin-top:1px}
+
+    .pin-row{display:grid;grid-template-columns:1fr 1fr auto;gap:9px;align-items:end;padding:11px;border:1px solid var(--b0);border-radius:var(--r);background:var(--s0);margin-bottom:8px}
+    .side-sticky{position:sticky;top:60px}
+
+    @media(max-width:768px){
+      .topbar-inner{padding:0 12px}
+      .brand-sub{display:none}
+      .nav-item{padding:0 9px;font-size:10px}
+      .tbl-hd,.tbl-row{grid-template-columns:72px 56px 94px 42px 56px 1fr 70px 130px}
+    }
+  </style>
 </head>
 <body>
+
+<!-- MODAL -->
+<div class="modal-ov hidden" id="modalOv">
+  <div class="modal">
+    <h4 id="modalTitle">Confirm</h4>
+    <div class="m-sub" id="modalBody"></div>
+    <div class="m-btns">
+      <button class="btn btn-default" id="modalCancel">Cancel</button>
+      <button class="btn btn-danger"  id="modalConfirm">Confirm</button>
+    </div>
+  </div>
+</div>
 
 <!-- TOPBAR -->
 <div class="topbar">
   <div class="topbar-inner">
-    <div class="brand">WESBELL DISPATCH</div>
-
-    <div class="nav">
-      <a href="/" id="navDispatch">Dispatcher</a>
-      <a href="/dock" id="navDock">Dock</a>
-      <a href="/driver" id="navDriver">Driver</a>
-      <a href="/supervisor" id="navSupervisor">Supervisor</a>
+    <div class="brand-block">
+      <div class="brand-mark">W</div>
+      <div>
+        <div class="brand-name">WESBELL</div>
+        <div class="brand-sub">DISPATCH MGT</div>
+      </div>
     </div>
-
-    <div class="top-right">
-      <div class="badge"><span class="live-dot"></span>Live</div>
-      <div class="badge" id="roleBadge"></div>
-      <div class="badge">v<span id="verText">—</span></div>
-      <button class="btn" id="btnAudit" style="display:none;">Audit</button>
-      <button class="btn btn-danger" id="btnLogout" style="display:none;">Sign Out</button>
+    <nav class="nav">
+      <a href="/" class="nav-item" id="navDispatch">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x=".5" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor"/><rect x="7" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x=".5" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x="7" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".3"/></svg>
+        Dispatcher
+      </a>
+      <a href="/dock" class="nav-item" id="navDock">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 9h10M3 9V6l3-2.5L9 6v3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Dock
+      </a>
+      <a href="/driver" class="nav-item" id="navDriver">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="4" width="8" height="5" rx="1.2" stroke="currentColor" stroke-width="1.2"/><path d="M9 6.5h1.5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H9" stroke="currentColor" stroke-width="1.2"/><circle cx="3" cy="9" r="1" fill="currentColor"/><circle cx="7" cy="9" r="1" fill="currentColor"/><path d="M1 6.5 2.5 4h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        Driver
+      </a>
+      <a href="/supervisor" class="nav-item" id="navSupervisor">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="4" r="2" stroke="currentColor" stroke-width="1.2"/><path d="M1.5 10.5c0-1.8 2-3 4.5-3s4.5 1.2 4.5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        Supervisor
+      </a>
+    </nav>
+    <div class="topbar-right">
+      <div class="chip"><div class="live-dot" id="wsDot"></div><span id="wsText">Connecting</span></div>
+      <div class="chip" id="roleBadge" style="display:none;color:var(--amber);">—</div>
+      <div class="chip">v<span id="verText">—</span></div>
+      <button class="tb-btn" id="btnAudit"  style="display:none;">Audit</button>
+      <button class="tb-btn danger" id="btnLogout" style="display:none;">Sign Out</button>
     </div>
   </div>
 </div>
 
-<!-- ============================= -->
-<!-- DRIVER VIEW -->
-<!-- ============================= -->
+<!-- DRIVER -->
 <div id="driverView" style="display:none;">
-  <div class="driver-wrap">
+  <div class="driver-shell">
+    <div class="driver-wrap">
+      <div class="driver-hdr">
+        <h1>Driver Portal</h1>
+        <p>WESBELL DISPATCH MANAGEMENT</p>
+      </div>
 
-    <div class="driver-card">
-      <h3>Trailer Drop</h3>
-      <input id="v_trailer" placeholder="Trailer number"/>
-      <input id="v_door" placeholder="Door (18–42)"/>
-      <select id="v_dropType">
-        <option>Empty</option>
-        <option>Loaded</option>
-      </select>
-      <button class="primary" id="btnDriverDrop">Submit Drop</button>
+      <div class="driver-panel">
+        <div class="driver-phd">
+          <span class="driver-phd-title">Trailer Drop</span>
+          <span class="badge">All fields required</span>
+        </div>
+        <div class="driver-pbody">
+          <div id="dropForm">
+            <div class="field">
+              <label class="fl">Trailer Number</label>
+              <input id="v_trailer" placeholder="e.g. 5312" autocomplete="off" style="font-family:var(--mono);font-size:16px;font-weight:500;"/>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label class="fl">Door (18–42)</label>
+                <input id="v_door" placeholder="21" style="font-family:var(--mono);font-size:15px;"/>
+              </div>
+              <div class="field">
+                <label class="fl">Drop Type</label>
+                <select id="v_dropType"><option>Empty</option><option>Loaded</option></select>
+              </div>
+            </div>
+            <button class="btn btn-primary btn-full" style="padding:10px;font-size:13px;margin-top:2px;" id="btnDriverDrop">Submit Drop →</button>
+          </div>
+          <div class="success-panel" id="dropSuccess">
+            <div class="success-ring green">✅</div>
+            <div class="success-title">Drop Recorded</div>
+            <div class="success-detail" id="dropSuccessDetail"></div>
+            <button class="btn btn-default" style="margin-top:6px;" id="btnDropAgain">Submit Another</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="driver-panel">
+        <div class="driver-phd">
+          <span class="driver-phd-title">Safety Confirmation</span>
+          <span class="badge">Both required</span>
+        </div>
+        <div class="driver-pbody">
+          <div id="safetyForm">
+            <div class="field-row">
+              <div class="field"><label class="fl">Trailer (optional)</label><input id="c_trailer" placeholder="Optional"/></div>
+              <div class="field"><label class="fl">Door (optional)</label><input id="c_door" placeholder="Optional"/></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;">
+              <label class="checkline" for="c_loadSecured">
+                <input id="c_loadSecured" type="checkbox"/>
+                <div><div class="cl-main">Load secured</div><div class="cl-sub">Straps and locks confirmed</div></div>
+              </label>
+              <label class="checkline" for="c_dockPlateUp">
+                <input id="c_dockPlateUp" type="checkbox"/>
+                <div><div class="cl-main">Dock plate raised</div><div class="cl-sub">Plate up before departing</div></div>
+              </label>
+            </div>
+            <button class="btn btn-success btn-full" style="padding:10px;font-size:13px;" id="btnConfirmSafety">Confirm Safety →</button>
+          </div>
+          <div class="success-panel" id="safetySuccess">
+            <div class="success-ring cyan">🛡️</div>
+            <div class="success-title">Safety Confirmed</div>
+            <div class="success-detail">Confirmation logged.</div>
+            <button class="btn btn-default" style="margin-top:6px;" id="btnSafetyAgain">Submit Another</button>
+          </div>
+        </div>
+      </div>
+
     </div>
-
-    <div class="driver-card">
-      <h3>Safety Confirmation</h3>
-      <input id="c_trailer" placeholder="Trailer (optional)"/>
-      <input id="c_door" placeholder="Door (optional)"/>
-      <label><input type="checkbox" id="c_loadSecured"/> Load secured</label><br/>
-      <label><input type="checkbox" id="c_dockPlateUp"/> Dock plate raised</label>
-      <button class="primary" id="btnConfirmSafety">Confirm Safety</button>
-    </div>
-
   </div>
 </div>
 
-<!-- ============================= -->
-<!-- SUPERVISOR VIEW -->
-<!-- ============================= -->
+<!-- SUPERVISOR -->
 <div id="supervisorView" style="display:none;">
-  <div class="page">
-    <div class="panel">
-      <div class="panel-hd">Supervisor Dashboard</div>
-      <div class="panel-body">
-        <div id="supKpis"></div>
-      </div>
-    </div>
+  <div class="sup-shell">
+    <div class="kpi-row" id="supKpis"></div>
+    <div class="sup-grid">
 
-    <div class="panel" style="margin-top:18px;">
-      <div class="panel-hd">Recent Activity</div>
-      <div class="panel-body" id="supFeed"></div>
-    </div>
-
-    <div class="panel" style="margin-top:18px;">
-      <div class="panel-hd">PIN Management</div>
-      <div class="panel-body">
-        <input type="password" id="pin_dispatcher" placeholder="New Dispatcher PIN"/>
-        <button class="primary" id="btnSetDispatcherPin">Update</button>
-        <br/><br/>
-        <input type="password" id="pin_dock" placeholder="New Dock PIN"/>
-        <button class="primary" id="btnSetDockPin">Update</button>
-        <br/><br/>
-        <input type="password" id="pin_supervisor" placeholder="New Supervisor PIN"/>
-        <button class="primary" id="btnSetSupervisorPin">Update</button>
+      <div class="panel" style="grid-column:1/-1;">
+        <div class="panel-hd">
+          <div class="panel-title"><div class="ptdot" style="background:var(--amber)"></div>Live Trailer Board</div>
+          <span class="badge badge-num" id="supCountsPill">0</span>
+        </div>
+        <div class="filter-bar">
+          <div class="field"><label class="fl">Search</label><input id="supSearch" placeholder="Trailer / door / note…"/></div>
+          <div class="field"><label class="fl">Direction</label>
+            <select id="supFilterDir"><option value="">All Directions</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
+          </div>
+          <div class="field"><label class="fl">Status</label>
+            <select id="supFilterStatus"><option value="">All Statuses</option><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select>
+          </div>
+          <div class="tight"><button class="btn btn-default btn-sm" id="btnSupClearFilters" style="margin-top:14px;">Clear</button></div>
+        </div>
+        <div class="tbl-hd"><span>Trailer</span><span>Dir</span><span>Status</span><span>Door</span><span>Type</span><span>Note</span><span>Updated</span><span></span></div>
+        <div id="supTbody"></div>
+        <div class="board-footer"><span id="supLastUpdated">—</span><span id="supCountStr">—</span></div>
       </div>
+
+      <div class="panel">
+        <div class="panel-hd">
+          <div class="panel-title"><div class="ptdot" style="background:var(--cyan)"></div>Recent Activity</div>
+          <span class="badge badge-num" id="supAuditCount">0</span>
+        </div>
+        <div class="panel-body" id="supFeed"><div style="color:var(--t2);font-size:11px;font-family:var(--mono);">Loading…</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-hd">
+          <div class="panel-title"><div class="ptdot" style="background:var(--green)"></div>Safety Confirmations</div>
+          <span class="badge badge-num" id="supConfCount">0</span>
+        </div>
+        <div class="panel-body-flush">
+          <div class="data-tbl-wrap">
+            <table><thead><tr><th>Time</th><th>Trailer</th><th>Door</th><th>IP</th></tr></thead>
+            <tbody id="supConfBody"><tr><td colspan="4" style="padding:16px;color:var(--t2);">Loading…</td></tr></tbody></table>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" style="grid-column:1/-1;">
+        <div class="panel-hd"><div class="panel-title"><div class="ptdot" style="background:var(--amber)"></div>PIN Management</div></div>
+        <div class="panel-body">
+          <div class="infobox infobox-amber" style="margin-bottom:14px;">
+            <div class="ib-title">Security Notice</div>
+            PINs are hashed server-side — cannot be viewed, only reset. All changes are audit-logged and active sessions are invalidated immediately.
+          </div>
+          <div class="pin-row">
+            <div><label class="fl">Dispatcher PIN</label><input type="password" id="pin_dispatcher" placeholder="New PIN (min 4)" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_dispatcher_confirm" placeholder="Repeat" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetDispatcherPin" style="padding:7px 13px;">Update</button>
+          </div>
+          <div class="pin-row">
+            <div><label class="fl">Dock PIN</label><input type="password" id="pin_dock" placeholder="New PIN (min 4)" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_dock_confirm" placeholder="Repeat" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetDockPin" style="padding:7px 13px;">Update</button>
+          </div>
+          <div class="pin-row">
+            <div><label class="fl">Supervisor PIN</label><input type="password" id="pin_supervisor" placeholder="New PIN (min 4)" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_supervisor_confirm" placeholder="Repeat" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetSupervisorPin" style="padding:7px 13px;">Update</button>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
 
-<!-- ============================= -->
-<!-- DISPATCH / DOCK VIEW -->
-<!-- ============================= -->
+<!-- DISPATCH / DOCK SHELL -->
 <div id="dispatchView" style="display:none;">
   <div class="page">
-    <div class="grid">
-
-      <!-- MAIN BOARD -->
-      <div>
+    <div class="grid-main">
+      <div class="col-stack">
 
         <div class="panel">
           <div class="panel-hd">
-            Trailer Board
-            <span id="countsPill"></span>
+            <div class="panel-title"><div class="ptdot" style="background:var(--amber)"></div>Trailer Board</div>
+            <span class="badge badge-num" id="countsPill">0</span>
           </div>
-
-          <div class="tbl-head">
-            <span>Trailer</span>
-            <span>Dir</span>
-            <span>Status</span>
-            <span>Door</span>
-            <span>Type</span>
-            <span>Note</span>
-            <span>Updated</span>
-            <span>Actions</span>
+          <div class="filter-bar">
+            <div class="field"><label class="fl">Search</label><input id="search" placeholder="Trailer, door, note…"/></div>
+            <div class="field"><label class="fl">Direction</label>
+              <select id="filterDir"><option value="">All Directions</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
+            </div>
+            <div class="field"><label class="fl">Status</label>
+              <select id="filterStatus"><option value="">All Statuses</option><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select>
+            </div>
+            <div class="tight"><button class="btn btn-default btn-sm" id="btnClearFilters" style="margin-top:14px;">Clear</button></div>
           </div>
-
+          <div class="tbl-hd">
+            <span>Trailer</span><span>Dir</span><span>Status</span><span>Door</span>
+            <span>Type</span><span>Note</span><span>Updated</span><span id="actionsColHead">Actions</span>
+          </div>
           <div id="tbody"></div>
-
+          <div class="board-footer"><span id="lastUpdated">—</span><span id="boardCountStr">—</span></div>
         </div>
 
-        <div class="panel" style="margin-top:18px;">
-          <div class="panel-hd">Safety Confirmations</div>
-          <div class="panel-body">
-            <div id="confBody"></div>
+        <div class="panel" id="dockPlatesCard" style="display:none;">
+          <button class="acc-head" id="dockPlatesToggle" aria-expanded="false">
+            <span style="display:flex;align-items:center;gap:9px;">
+              Dock Plates (18–42) <span class="badge" id="platesMini">—</span>
+            </span>
+            <span class="chev">▾</span>
+          </button>
+          <div class="acc-body" id="dockPlatesBody">
+            <div class="plate-grid" id="platesGrid"></div>
+            <div style="padding:0 12px 10px;font-family:var(--mono);font-size:9px;color:var(--t3);letter-spacing:.04em;">Click Edit on any door to update status or note.</div>
+          </div>
+        </div>
+
+        <div class="panel" id="auditCard" style="display:none;">
+          <div class="panel-hd"><div class="panel-title"><div class="ptdot" style="background:var(--t2)"></div>Audit Log</div><span class="badge badge-num" id="auditCount">0</span></div>
+          <div class="panel-body-flush">
+            <div class="data-tbl-wrap">
+              <table style="min-width:740px;">
+                <thead><tr><th>Time</th><th>Role</th><th>Action</th><th>Entity</th><th>ID</th><th>Details</th><th>IP</th></tr></thead>
+                <tbody id="auditBody"><tr><td colspan="7" style="padding:16px;color:var(--t2);">Click Audit to load.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-hd"><div class="panel-title"><div class="ptdot" style="background:var(--green)"></div>Safety Confirmations</div><span class="badge badge-num" id="confCount">0</span></div>
+          <div class="panel-body-flush">
+            <div class="data-tbl-wrap">
+              <table style="min-width:520px;">
+                <thead><tr><th>Time</th><th>Trailer</th><th>Door</th><th>IP</th></tr></thead>
+                <tbody id="confBody"><tr><td colspan="4" style="padding:16px;color:var(--t2);">No confirmations yet.</td></tr></tbody>
+              </table>
+            </div>
           </div>
         </div>
 
       </div>
 
       <!-- SIDE PANEL -->
-      <div class="panel side">
-        <div class="panel-hd" id="panelTitle">Controls</div>
+      <div class="panel side-sticky">
+        <div class="panel-hd">
+          <div class="panel-title" id="panelTitle">Controls</div>
+          <span class="badge" id="panelSub">—</span>
+        </div>
         <div class="panel-body" id="panelBody"></div>
       </div>
 
@@ -395,594 +552,532 @@ button.primary:hover{background:rgba(240,160,48,.2)}
   </div>
 </div>
 
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <div class="toast-bar" id="toastBar"></div>
+  <strong id="toastTitle">Notification</strong>
+  <div class="t-body" id="toastBody"></div>
+</div>
+
 <script>
 (() => {
-  const CSRF = { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" };
+  const CSRF={"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"};
+  let ROLE=null,VERSION="",trailers={},dockPlates={},confirmations=[],auditRows=[];
+  const plateEditOpen={};
+  const el=id=>document.getElementById(id);
+  const path=()=>location.pathname.toLowerCase();
+  const isDriver=()=>path().startsWith("/driver");
+  const isSuper=()=>path().startsWith("/supervisor");
 
-  // state
-  let ROLE = null, VERSION = "";
-  let trailers = {};
-  let dockPlates = {};
-  let confirmations = [];
-  let auditRows = [];
-
-  // dom helpers
-  const el = (id) => document.getElementById(id);
-  const pathName = () => (location.pathname || "/").toLowerCase();
-  const isDriver = () => pathName().startsWith("/driver");
-  const isDockRoute = () => pathName().startsWith("/dock");
-  const isSupervisorRoute = () => pathName().startsWith("/supervisor");
-  const isDispatchRoute = () => !isDriver() && !isDockRoute() && !isSupervisorRoute();
-
-  // utils
-  const esc = (s) => String(s ?? "")
-    .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
-
-  const fmtTime = (ms) => {
-    if (!ms) return "";
-    try {
-      return new Date(ms).toLocaleString(undefined, {
-        month: "short",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch { return String(ms); }
+  const fmtTime=ms=>{
+    if(!ms)return"";
+    try{return new Date(ms).toLocaleString(undefined,{month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"});}
+    catch{return String(ms);}
   };
-
-  const timeAgo = (ms) => {
-    if (!ms) return "";
-    const s = Math.floor((Date.now() - ms) / 1000);
-    if (s < 60) return `${s}s ago`;
-    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-    if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-    return `${Math.floor(s / 86400)}d ago`;
+  const timeAgo=ms=>{
+    if(!ms)return"";
+    const s=Math.floor((Date.now()-ms)/1000);
+    if(s<60)return`${s}s ago`;if(s<3600)return`${Math.floor(s/60)}m ago`;
+    if(s<86400)return`${Math.floor(s/3600)}h ago`;return`${Math.floor(s/86400)}d ago`;
   };
+  const esc=s=>String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
 
-  async function apiJson(url, opts) {
-    const res = await fetch(url, opts);
-    if (res.status === 401) { location.href = "/login?expired=1"; return; }
-    if (!res.ok) {
-      const t = await res.text().catch(() => "");
-      throw new Error(t || ("HTTP " + res.status));
-    }
-    const ct = res.headers.get("content-type") || "";
-    return ct.includes("application/json") ? res.json() : {};
+  async function apiJson(url,opts){
+    const res=await fetch(url,opts);
+    if(res.status===401){location.href="/login?expired=1";return;}
+    if(!res.ok){const t=await res.text().catch(()=>"");throw new Error(t||"HTTP "+res.status);}
+    const ct=res.headers.get("content-type")||"";
+    return ct.includes("application/json")?res.json():{};
   }
 
-  // tiny toast (fallback if your toast exists in your main index)
-  function toast(title, body, type) {
-    // if you have the real toast elements from your full index, use them
-    const T = el("toast"), TT = el("toastTitle"), TB = el("toastBody"), BAR = el("toastBar");
-    if (T && TT && TB && BAR) {
-      TT.textContent = title;
-      TB.textContent = body || "";
-      BAR.className = "toast-bar " + (type === "ok" ? "ok" : type === "warn" ? "warn" : "err");
-      T.style.display = "block";
-      clearTimeout(toast._t);
-      toast._t = setTimeout(() => T.style.display = "none", 4500);
-      return;
-    }
-    // fallback
-    console.log(`[${type || "info"}] ${title}: ${body || ""}`);
+  function toast(title,body,type){
+    el("toastTitle").textContent=title;el("toastBody").textContent=body||"";
+    el("toastBar").className="toast-bar "+(type==="ok"?"ok":type==="warn"?"warn":"err");
+    const t=el("toast");t.style.display="block";
+    clearTimeout(toast._t);toast._t=setTimeout(()=>t.style.display="none",4500);
   }
 
-  // ========= NAV / VIEW SWITCH =========
-  function highlightNav() {
-    const map = [
-      ["navDispatch", isDispatchRoute()],
-      ["navDock", isDockRoute()],
-      ["navDriver", isDriver()],
-      ["navSupervisor", isSupervisorRoute()],
-    ];
-    map.forEach(([id, on]) => {
-      const a = el(id);
-      if (!a) return;
-      a.classList.toggle("active", !!on);
+  let _mr=null;
+  function showModal(title,body){
+    return new Promise(r=>{
+      _mr=r;el("modalTitle").textContent=title;el("modalBody").textContent=body;
+      el("modalOv").classList.remove("hidden");el("modalConfirm").focus();
+    });
+  }
+  el("modalCancel").addEventListener("click",()=>{el("modalOv").classList.add("hidden");if(_mr){_mr(false);_mr=null;}});
+  el("modalConfirm").addEventListener("click",()=>{el("modalOv").classList.add("hidden");if(_mr){_mr(true);_mr=null;}});
+  el("modalOv").addEventListener("click",e=>{if(e.target===el("modalOv")){el("modalOv").classList.add("hidden");if(_mr){_mr(false);_mr=null;}}});
+
+  function setPlatesOpen(open){
+    const t=el("dockPlatesToggle"),b=el("dockPlatesBody");if(!t||!b)return;
+    t.setAttribute("aria-expanded",open?"true":"false");
+    if(!open){b.style.maxHeight="0px";try{localStorage.setItem("platesOpen","0");}catch{}return;}
+    requestAnimationFrame(()=>{b.style.maxHeight=(b.scrollHeight+40)+"px";});
+    try{localStorage.setItem("platesOpen","1");}catch{}
+  }
+
+  const STATUS_ROW={Loading:"r-loading",Ready:"r-ready","Dock Ready":"r-dockready",Dropped:"r-dropped",Incoming:"r-incoming",Departed:"r-departed"};
+  const STATUS_TAG={Loading:"stag-loading",Ready:"stag-ready","Dock Ready":"stag-dockready",Dropped:"stag-dropped",Incoming:"stag-incoming",Departed:"stag-departed"};
+
+  function statusTag(s){
+    const cls=STATUS_TAG[s]||"stag-unknown";
+    return `<span class="stag ${cls}"><span class="sp"></span>${esc(s||"—")}</span>`;
+  }
+  function plateStatusTag(s){
+    const cls=s==="OK"?"stag-ready":s==="Service"?"stag-loading":"stag-unknown";
+    return `<span class="stag ${cls}" style="font-size:9px;padding:1px 5px;"><span class="sp"></span>${esc(s||"Unknown")}</span>`;
+  }
+
+  function highlightNav(){
+    ["navDispatch","navDock","navDriver","navSupervisor"].forEach(id=>el(id)?.classList.remove("active"));
+    const p=path();
+    if(p.startsWith("/supervisor"))el("navSupervisor")?.classList.add("active");
+    else if(p.startsWith("/driver"))el("navDriver")?.classList.add("active");
+    else if(p.startsWith("/dock"))el("navDock")?.classList.add("active");
+    else el("navDispatch")?.classList.add("active");
+    const rb=el("roleBadge");
+    if(ROLE){rb.style.display="";rb.textContent=ROLE.toUpperCase();} else {rb.style.display="none";}
+  }
+
+  const prevStatuses={};
+  function renderBoardInto(tbodyEl,countEl,countStrEl,sq,dq,stq,readOnly){
+    if(!tbodyEl)return;
+    const q=(sq?.value||"").trim().toLowerCase(),df=(dq?.value||"").trim(),sf=(stq?.value||"").trim();
+    const rows=Object.entries(trailers).map(([t,r])=>({trailer:t,...r})).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+    const filt=rows.filter(r=>{
+      if(df&&r.direction!==df)return false;
+      if(sf&&r.status!==sf)return false;
+      if(q&&!`${r.trailer} ${r.door||""} ${r.note||""} ${r.direction||""} ${r.status||""} ${r.dropType||""}`.toLowerCase().includes(q))return false;
+      return true;
     });
 
-    const rb = el("roleBadge");
-    if (rb) {
-      if (ROLE) { rb.style.display = ""; rb.textContent = ROLE.toUpperCase(); }
-      else { rb.style.display = "none"; rb.textContent = ""; }
-    }
-    const vt = el("verText");
-    if (vt) vt.textContent = VERSION || "—";
-  }
+    if(countEl)countEl.textContent=filt.length;
+    if(countStrEl)countStrEl.textContent=`${filt.length} trailer${filt.length===1?"":"s"} shown`;
+    if(!filt.length){tbodyEl.innerHTML=`<div class="tbl-empty">No trailers match filters</div>`;return;}
 
-  // ========= ROLE CONTROL PANEL =========
-  function renderRolePanel() {
-    const panelTitle = el("panelTitle");
-    const panelBody  = el("panelBody");
+    const canEdit=!readOnly && ROLE==="dispatcher";
+    const canDock=!readOnly && ROLE==="dock";
 
-    if (!panelTitle || !panelBody) return;
+    const statusOptions = ["Incoming","Dropped","Loading","Dock Ready","Ready","Departed"];
 
-    // DOCK: remove dispatcher controls completely (your request)
-    if (ROLE === "dock") {
-      panelTitle.textContent = "Dock";
-      panelBody.innerHTML = `
-        <div style="font-size:12px;line-height:1.55;color:#8a9bb5;">
-          <b style="color:#e2e8f2;">Dock Workflow</b><br/>
-          • When trailer arrives: set <b style="color:#20c0d0;">Loading</b><br/>
-          • When done: set <b style="color:#20c0d0;">Dock Ready</b><br/>
-          Dispatcher will handle Ready/Departed and full edits.
-        </div>
-      `;
-      const btnAudit = el("btnAudit");
-      if (btnAudit) btnAudit.style.display = "none";
-      const btnLogout = el("btnLogout");
-      if (btnLogout) btnLogout.style.display = "";
-      return;
-    }
+    tbodyEl.innerHTML=filt.map(r=>{
+      const rowCls=STATUS_ROW[r.status]||"";
+      const flash=(prevStatuses[r.trailer]&&prevStatuses[r.trailer]!==r.status)?" flashing":"";
+      prevStatuses[r.trailer]=r.status;
 
-    // DISPATCHER
-    if (ROLE === "dispatcher") {
-      panelTitle.textContent = "Dispatcher";
-      panelBody.innerHTML = `
-        <div style="font-size:12px;line-height:1.55;color:#8a9bb5;margin-bottom:10px;">
-          <b style="color:#e2e8f2;">Dispatcher Controls</b><br/>
-          Add trailers, edit any trailer, and manage Ready/Departed.
-        </div>
+      // Ready flashing green on DISPATCH page (dispatcher only)
+      const readyFlash = (ROLE==="dispatcher" && !readOnly && r.status==="Ready") ? " ready-flash" : "";
 
-        <label style="display:block;font-size:11px;color:#4a5a72;margin:6px 0 4px;">Trailer Number</label>
-        <input id="d_trailer" placeholder="e.g. 5312" style="width:100%;padding:10px;border-radius:10px;border:1px solid #213040;background:#0e1218;color:#e2e8f2;font-size:14px;font-family:monospace;"/>
+      const door=r.door?`<span class="t-door">${esc(r.door)}</span>`:`<span style="color:var(--t3)">—</span>`;
+      const note=r.note?`<span class="t-note" title="${esc(r.note)}">${esc(r.note)}</span>`:`<span style="color:var(--t3)">—</span>`;
+      const dtype=r.dropType?`<span style="font-size:10px;color:var(--t2);font-family:var(--mono);">${esc(r.dropType)}</span>`:`<span style="color:var(--t3)">—</span>`;
+      const ago=r.updatedAt?timeAgo(r.updatedAt):"";
 
-        <div style="display:flex;gap:8px;margin-top:10px;">
-          <div style="flex:1;">
-            <label style="display:block;font-size:11px;color:#4a5a72;margin:6px 0 4px;">Direction</label>
-            <select id="d_direction" style="width:100%;padding:10px;border-radius:10px;border:1px solid #213040;background:#0e1218;color:#e2e8f2;font-size:14px;">
-              <option>Inbound</option><option>Outbound</option><option>Cross Dock</option>
-            </select>
-          </div>
-          <div style="flex:1;">
-            <label style="display:block;font-size:11px;color:#4a5a72;margin:6px 0 4px;">Drop Type</label>
-            <select id="d_dropType" style="width:100%;padding:10px;border-radius:10px;border:1px solid #213040;background:#0e1218;color:#e2e8f2;font-size:14px;">
-              <option value="">—</option><option>Empty</option><option>Loaded</option>
-            </select>
-          </div>
-        </div>
+      let acts=`<span style="color:var(--t3)">—</span>`;
 
-        <div style="display:flex;gap:8px;margin-top:10px;">
-          <div style="flex:1;">
-            <label style="display:block;font-size:11px;color:#4a5a72;margin:6px 0 4px;">Door (18–42)</label>
-            <input id="d_door" placeholder="21" style="width:100%;padding:10px;border-radius:10px;border:1px solid #213040;background:#0e1218;color:#e2e8f2;font-size:14px;font-family:monospace;"/>
-          </div>
-          <div style="flex:1;">
-            <label style="display:block;font-size:11px;color:#4a5a72;margin:6px 0 4px;">Status</label>
-            <select id="d_status" style="width:100%;padding:10px;border-radius:10px;border:1px solid #213040;background:#0e1218;color:#e2e8f2;font-size:14px;">
-              <option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option>
-            </select>
-          </div>
-        </div>
-
-        <label style="display:block;font-size:11px;color:#4a5a72;margin:10px 0 4px;">Note</label>
-        <textarea id="d_note" placeholder="Optional note…" style="width:100%;min-height:70px;padding:10px;border-radius:10px;border:1px solid #213040;background:#0e1218;color:#e2e8f2;font-size:14px;"></textarea>
-
-        <button class="primary" id="btnSaveTrailer" style="width:100%;margin-top:10px;">Save Trailer</button>
-        <button class="btn btn-danger" id="btnClearAll" style="width:100%;margin-top:10px;">Clear All Trailers</button>
-      `;
-      const btnAudit = el("btnAudit");
-      if (btnAudit) btnAudit.style.display = "";
-      const btnLogout = el("btnLogout");
-      if (btnLogout) btnLogout.style.display = "";
-      return;
-    }
-
-    // SUPERVISOR (no controls here; supervisor page has its own)
-    if (ROLE === "supervisor") {
-      panelTitle.textContent = "Supervisor";
-      panelBody.innerHTML = `<div style="color:#8a9bb5;font-size:12px;line-height:1.55;">Use Supervisor page for KPIs, audit feed, and PIN resets.</div>`;
-      const btnAudit = el("btnAudit");
-      if (btnAudit) btnAudit.style.display = "none";
-      const btnLogout = el("btnLogout");
-      if (btnLogout) btnLogout.style.display = "";
-      return;
-    }
-
-    // Not authenticated
-    panelTitle.textContent = "Not Signed In";
-    panelBody.innerHTML = `<div style="color:#8a9bb5;font-size:12px;line-height:1.55;">Please <a href="/login" style="color:#20c0d0;">sign in</a> to access controls.</div>`;
-    const btnAudit = el("btnAudit");
-    if (btnAudit) btnAudit.style.display = "none";
-    const btnLogout = el("btnLogout");
-    if (btnLogout) btnLogout.style.display = "none";
-  }
-
-  // ========= BOARD RENDER =========
-  const STATUS_ORDER = ["Incoming", "Dropped", "Loading", "Dock Ready", "Ready", "Departed"];
-
-  // your big index has tags/colors; this minimal version just shows plain text.
-  function statusTag(s) {
-    return `<span class="stag">${esc(s || "—")}</span>`;
-  }
-
-  // IMPORTANT CHANGE:
-  // - Dispatcher gets inline STATUS dropdown per row (your request)
-  // - Dock gets ONLY two buttons: Loading, Dock Ready (no dispatch controls)
-  // - Dock route still shows board, but no add/edit panel
-  function renderBoard() {
-    const tb = el("tbody");
-    if (!tb) return;
-
-    const rows = Object.entries(trailers)
-      .map(([trailer, r]) => ({ trailer, ...r }))
-      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-
-    const countsPill = el("countsPill");
-    if (countsPill) countsPill.textContent = rows.length;
-
-    if (!rows.length) {
-      tb.innerHTML = `<div style="padding:18px;color:#4a5a72;">No trailers.</div>`;
-      return;
-    }
-
-    const isDockUser = (ROLE === "dock");
-    const isDispatcher = (ROLE === "dispatcher");
-    const isSupervisor = (ROLE === "supervisor");
-
-    tb.innerHTML = rows.map(r => {
-      const trailer = esc(r.trailer);
-      const dir = esc(r.direction || "—");
-      const door = r.door ? esc(r.door) : "—";
-      const dropType = r.dropType ? esc(r.dropType) : "—";
-      const note = r.note ? esc(r.note) : "—";
-      const updated = r.updatedAt ? esc(timeAgo(r.updatedAt)) : "—";
-
-      // ACTIONS
-      let actionsHtml = `<span style="color:#4a5a72;">—</span>`;
-
-      // Dock controls: ONLY allowed status changes
-      if (isDockUser) {
-        if (r.status === "Dropped" || r.status === "Incoming") {
-          actionsHtml = `<button class="btn" data-act="dockSet" data-to="Loading" data-trailer="${trailer}">Loading</button>`;
-        } else if (r.status === "Loading") {
-          actionsHtml = `<button class="btn" data-act="dockSet" data-to="Dock Ready" data-trailer="${trailer}">Dock Ready</button>`;
+      if(canEdit){
+        // status dropdown + quick actions
+        const sel = `
+          <select data-act="rowStatus" data-trailer-id="${esc(r.trailer)}" style="padding:4px 6px;font-size:11px;border-radius:4px;font-family:var(--mono);">
+            ${statusOptions.map(s=>`<option ${s===r.status?"selected":""}>${esc(s)}</option>`).join("")}
+          </select>`;
+        if(r.status==="Dock Ready"){
+          acts=`<div class="t-acts">
+            ${sel}
+            <button class="btn btn-success btn-sm" data-act="markReady" data-trailer-id="${esc(r.trailer)}" style="font-weight:800;">✓ Mark Ready</button>
+            <button class="btn btn-default btn-sm" data-act="edit" data-trailer-id="${esc(r.trailer)}">Edit</button>
+            <button class="btn btn-danger btn-sm" data-act="delete" data-trailer-id="${esc(r.trailer)}">Del</button>
+          </div>`;
         } else {
-          actionsHtml = `<span style="color:#4a5a72;">${esc(r.status || "—")}</span>`;
+          acts=`<div class="t-acts">
+            ${sel}
+            <button class="btn btn-default btn-sm" data-act="edit" data-trailer-id="${esc(r.trailer)}">Edit</button>
+            <button class="btn btn-danger btn-sm" data-act="delete" data-trailer-id="${esc(r.trailer)}">Del</button>
+          </div>`;
         }
+      } else if(canDock){
+        if(r.status==="Dropped"||r.status==="Incoming")
+          acts=`<div class="t-acts"><button class="btn btn-default btn-sm" data-act="dockSet" data-to="Loading" data-trailer-id="${esc(r.trailer)}">Loading</button></div>`;
+        else if(r.status==="Loading")
+          acts=`<div class="t-acts"><button class="btn btn-cyan btn-sm" data-act="dockSet" data-to="Dock Ready" data-trailer-id="${esc(r.trailer)}">Dock Ready</button></div>`;
+        else
+          acts=`<span style="color:var(--t3);font-size:10px;font-family:var(--mono);">${esc(r.status==="Dock Ready"?"Awaiting dispatch":r.status==="Ready"?"Ready":"—")}</span>`;
       }
 
-      // Dispatcher: inline status dropdown + save + delete
-      if (isDispatcher) {
-        const cur = r.status || "";
-        const opts = STATUS_ORDER.map(s => `<option ${s === cur ? "selected" : ""}>${esc(s)}</option>`).join("");
-        actionsHtml = `
-          <div style="display:flex;gap:6px;align-items:center;">
-            <select data-act="statusSelect" data-trailer="${trailer}" style="padding:6px 8px;border-radius:8px;border:1px solid #213040;background:#0e1218;color:#e2e8f2;">
-              ${opts}
-            </select>
-            <button class="btn" data-act="saveRowStatus" data-trailer="${trailer}">Save</button>
-            <button class="btn btn-danger" data-act="delete" data-trailer="${trailer}">Del</button>
-          </div>
-        `;
-      }
+      return `<div class="tbl-row ${rowCls}${flash}${readyFlash}">
+        <span class="t-num">${esc(r.trailer)}</span>
+        <span class="t-dir">${esc(r.direction||"—")}</span>
+        <span>${statusTag(r.status)}</span>
+        <span>${door}</span>
+        <span>${dtype}</span>
+        <span>${note}</span>
+        <span class="t-time" title="${esc(fmtTime(r.updatedAt))}">${esc(ago)}</span>
+        <span>${acts}</span>
+      </div>`;
+    }).join("");
+  }
 
-      // Supervisor view (read-only)
-      if (isSupervisor && (isSupervisorRoute() || ROLE === "supervisor")) {
-        actionsHtml = `<span style="color:#4a5a72;">view</span>`;
-      }
+  function renderBoard(){
+    renderBoardInto(el("tbody"),el("countsPill"),el("boardCountStr"),el("search"),el("filterDir"),el("filterStatus"),false);
+    el("lastUpdated").textContent="Updated "+fmtTime(Date.now());
+  }
+  function renderSupBoard(){
+    renderBoardInto(el("supTbody"),el("supCountsPill"),el("supCountStr"),el("supSearch"),el("supFilterDir"),el("supFilterStatus"),true);
+    el("supLastUpdated").textContent="Updated "+fmtTime(Date.now());
+    renderKpis();
+  }
+  function renderKpis(){
+    const v=Object.values(trailers);
+    el("supKpis").innerHTML=[
+      {val:v.length,lbl:"Total Trailers",cls:"kpi-total"},
+      {val:v.filter(r=>r.status==="Loading").length,lbl:"Loading",cls:"kpi-loading"},
+      {val:v.filter(r=>["Ready","Dock Ready"].includes(r.status)).length,lbl:"Ready",cls:"kpi-ready"},
+      {val:v.filter(r=>r.status==="Departed").length,lbl:"Departed",cls:"kpi-departed"},
+      {val:confirmations.length,lbl:"Safety Confirms",cls:"kpi-conf"},
+    ].map(k=>`<div class="kpi ${k.cls}"><div class="k-val">${k.val}</div><div class="k-lbl">${k.lbl}</div></div>`).join("");
+  }
 
-      return `
-        <div class="tbl-row">
-          <span class="mono">${trailer}</span>
-          <span>${dir}</span>
-          <span>${statusTag(r.status)}</span>
-          <span class="mono">${door}</span>
-          <span class="mono">${dropType}</span>
-          <span title="${note}">${note}</span>
-          <span class="muted" title="${esc(fmtTime(r.updatedAt))}">${updated}</span>
-          <span>${actionsHtml}</span>
+  function renderPlates(){
+    if(isDriver()||isSuper())return;
+    const canEdit=ROLE==="dispatcher"||ROLE==="dock";
+    const doors=[];for(let d=18;d<=42;d++)doors.push(String(d));
+    const pm=el("platesMini");
+    if(pm){
+      const v=Object.values(dockPlates||{});
+      pm.textContent=`${v.filter(p=>p?.status==="OK").length} OK · ${v.filter(p=>p?.status==="Service").length} Svc`;
+    }
+    el("platesGrid").innerHTML=doors.map(door=>{
+      const p=dockPlates[door]||{status:"Unknown",note:""};
+      const open=!!plateEditOpen[door]&&canEdit;
+      const cls=p.status==="OK"?"p-ok":p.status==="Service"?"p-service":"";
+      return `<div class="plate ${cls}">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:3px;">
+          <span class="p-door">D${esc(door)}</span>${plateStatusTag(p.status)}
         </div>
-      `;
-    }).join("");
-  }
-
-  // ========= CONFIRMATIONS =========
-  function renderConfirmations() {
-    const cb = el("confBody");
-    if (!cb) return;
-    if (!confirmations.length) {
-      cb.innerHTML = `<div style="color:#4a5a72;padding:10px;">No confirmations yet.</div>`;
-      return;
-    }
-    cb.innerHTML = confirmations.slice(0, 25).map(c => {
-      return `<div style="padding:6px 0;border-bottom:1px solid #1a2232;color:#8a9bb5;">
-        <span style="color:#4a5a72;">${esc(fmtTime(c.at))}</span>
-        · <span style="color:#e2e8f2;font-family:monospace;">${esc(c.trailer || "—")}</span>
-        · Door <span style="font-family:monospace;">${esc(c.door || "—")}</span>
+        <div class="p-note">${p.note?esc(p.note):`<span style="color:var(--t3)">—</span>`}</div>
+        ${open?`
+          <select data-plate-status="${esc(door)}" style="margin-top:3px;">
+            <option ${p.status==="OK"?"selected":""}>OK</option>
+            <option ${p.status==="Service"?"selected":""}>Service</option>
+            <option ${p.status==="Unknown"?"selected":""}>Unknown</option>
+          </select>
+          <input data-plate-note="${esc(door)}" placeholder="Note" value="${esc(p.note||"")}" style="margin-top:3px;"/>
+        `:``}
+        <div class="p-btns" style="margin-top:3px;">
+          ${canEdit?`
+            <button class="p-btn" data-plate-toggle="${esc(door)}">${open?"Close":"Edit"}</button>
+            ${open?`<button class="p-btn" data-plate-save="${esc(door)}">Save</button>`:""}
+          `:" "}
+        </div>
       </div>`;
     }).join("");
+    if(el("dockPlatesToggle")?.getAttribute("aria-expanded")==="true")setPlatesOpen(true);
   }
 
-  // ========= SUPERVISOR KPI + FEED =========
-  function renderKpis() {
-    const k = el("supKpis");
-    if (!k) return;
-    const v = Object.values(trailers);
-    const total = v.length;
-    const loading = v.filter(x => x.status === "Loading").length;
-    const ready = v.filter(x => x.status === "Ready" || x.status === "Dock Ready").length;
-    const departed = v.filter(x => x.status === "Departed").length;
-    const conf = confirmations.length;
-
-    k.innerHTML = `
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <div class="kpi"><div class="kpi-val">${total}</div><div class="kpi-lbl">Total</div></div>
-        <div class="kpi"><div class="kpi-val">${loading}</div><div class="kpi-lbl">Loading</div></div>
-        <div class="kpi"><div class="kpi-val">${ready}</div><div class="kpi-lbl">Ready/Dock Ready</div></div>
-        <div class="kpi"><div class="kpi-val">${departed}</div><div class="kpi-lbl">Departed</div></div>
-        <div class="kpi"><div class="kpi-val">${conf}</div><div class="kpi-lbl">Safety Confirms</div></div>
-      </div>
-    `;
+  function renderConf(){
+    el("confCount").textContent=confirmations.length;
+    el("confBody").innerHTML=!confirmations.length?`<tr><td colspan="4" style="padding:16px;color:var(--t2);">No safety confirmations yet.</td></tr>`:
+      confirmations.map(c=>`<tr><td class="muted">${esc(fmtTime(c.at))}</td><td class="mono" style="font-weight:500;color:var(--t0);">${esc(c.trailer||"—")}</td><td class="mono">${esc(c.door||"—")}</td><td class="muted">${esc((c.ip||"—").split(",")[0])}</td></tr>`).join("");
+  }
+  function renderSupConf(){
+    const sb=el("supConfBody"),sc=el("supConfCount");if(!sb)return;
+    sc.textContent=confirmations.length;
+    sb.innerHTML=!confirmations.length?`<tr><td colspan="4" style="padding:16px;color:var(--t2);">No confirmations yet.</td></tr>`:
+      confirmations.map(c=>`<tr><td class="muted">${esc(fmtTime(c.at))}</td><td class="mono" style="font-weight:500;color:var(--t0);">${esc(c.trailer||"—")}</td><td class="mono">${esc(c.door||"—")}</td><td class="muted">${esc((c.ip||"—").split(",")[0])}</td></tr>`).join("");
   }
 
-  function renderSupervisorFeed(rows) {
-    const feed = el("supFeed");
-    if (!feed) return;
-    if (!rows || !rows.length) {
-      feed.innerHTML = `<div style="color:#4a5a72;">No activity.</div>`;
-      return;
-    }
-    feed.innerHTML = rows.slice(0, 20).map(r => {
-      return `<div style="padding:8px 0;border-bottom:1px solid #1a2232;color:#8a9bb5;">
-        <div><b style="color:#e2e8f2;">${esc(r.actorRole || "—")}</b> · ${esc(r.action || "—")} · <span style="font-family:monospace;color:#e2e8f2;">${esc(r.entityId || "—")}</span></div>
-        <div style="color:#4a5a72;font-family:monospace;font-size:11px;">${esc(timeAgo(r.at))}</div>
-      </div>`;
+  const FEED_COLORS={trailer_create:"var(--green)",trailer_update:"var(--cyan)",trailer_delete:"var(--red)",trailer_status_set:"var(--amber)",driver_drop:"var(--violet)",safety_confirmed:"var(--green)",plate_set:"var(--t2)",pin_changed:"var(--amber)",trailer_clear_all:"var(--red)"};
+  function renderFeed(rows){
+    const feed=el("supFeed");if(!feed)return;
+    el("supAuditCount").textContent=rows.length;
+    if(!rows.length){feed.innerHTML=`<div style="color:var(--t2);font-size:11px;font-family:var(--mono);">No activity yet.</div>`;return;}
+    feed.innerHTML=rows.slice(0,15).map(r=>{
+      const color=FEED_COLORS[r.action]||"var(--t2)";
+      let txt=`<strong>${esc(r.actorRole||"—")}</strong> — ${esc(r.action||"—")}`;
+      if(r.entityId&&r.entityId!=="*")txt+=` · <strong>${esc(r.entityId)}</strong>`;
+      return `<div class="feed-item"><div class="feed-pip" style="background:${color};"></div><div class="feed-content"><div class="feed-action">${txt}</div><div class="feed-time">${esc(timeAgo(r.at))}</div></div></div>`;
     }).join("");
   }
 
-  async function loadAuditFeed() {
-    try {
-      const rows = await apiJson("/api/audit?limit=200");
-      auditRows = rows || [];
-      renderSupervisorFeed(auditRows);
-    } catch (e) {
-      toast("Audit error", e.message, "err");
-    }
+  async function loadAuditInto(bodyEl,countEl,cols){
+    try{
+      const rows=await apiJson("/api/audit?limit=200");if(!rows)return;
+      auditRows=rows;
+      if(countEl)countEl.textContent=rows.length;
+      if(cols===0){renderFeed(rows);return;}
+      if(!bodyEl)return;
+      if(!rows.length){bodyEl.innerHTML=`<tr><td colspan="${cols}" style="padding:16px;color:var(--t2);">No entries.</td></tr>`;return;}
+      bodyEl.innerHTML=rows.map(r=>{
+        let d="";try{d=JSON.stringify(r.details||{});}catch{}
+        return `<tr><td class="muted">${esc(fmtTime(r.at))}</td><td style="color:var(--t1);">${esc(r.actorRole||"—")}</td><td style="color:var(--t1);">${esc(r.action||"—")}</td><td class="muted">${esc(r.entityType||"—")}</td><td class="mono">${esc(r.entityId||"—")}</td><td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;color:var(--t2);" title="${esc(d)}">${esc(d)}</td><td class="muted">${esc(r.ip||"—")}</td></tr>`;
+      }).join("");
+    }catch(e){toast("Audit error",e.message,"err");}
   }
 
-  // ========= ACTIONS =========
-  async function doLogout() {
-    try { await apiJson("/api/logout", { method: "POST", headers: CSRF }); } catch {}
-    location.href = "/login";
+  function dispPanelHtml(){return `
+    <div class="infobox infobox-amber">
+      <div class="ib-title">Dispatcher Controls</div>
+      Add and manage trailers. When dock marks <strong>Dock Ready</strong>, hit <strong>✓ Mark Ready</strong> on that row.
+    </div>
+    <div class="field"><label class="fl">Trailer Number</label><input id="d_trailer" placeholder="e.g. 5312" autocomplete="off" style="font-family:var(--mono);font-weight:500;"/></div>
+    <div class="field-row">
+      <div class="field"><label class="fl">Direction</label><select id="d_direction"><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select></div>
+      <div class="field"><label class="fl">Status</label><select id="d_status"><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label class="fl">Door (18–42)</label><input id="d_door" placeholder="21" style="font-family:var(--mono);"/></div>
+      <div class="field"><label class="fl">Drop Type</label><select id="d_dropType"><option value="">—</option><option>Empty</option><option>Loaded</option></select></div>
+    </div>
+    <div class="field"><label class="fl">Note</label><textarea id="d_note" placeholder="Optional note…"></textarea></div>
+    <button class="btn btn-primary btn-full" id="btnSaveTrailer">Save Trailer Record</button>
+    <div class="divider"></div>
+    <button class="btn btn-danger btn-full" id="btnClearAll">Clear All Trailers</button>
+    <div style="margin-top:5px;font-size:10px;color:var(--t3);font-family:var(--mono);">Permanently removes all records.</div>`;}
+
+  function dockPanelHtml(){return `
+    <div class="infobox infobox-cyan">
+      <div class="ib-title">Dock Workflow</div>
+      1. Trailer arrives → tap <strong>Loading</strong><br/>
+      2. Loading done → tap <strong>Dock Ready</strong><br/>
+      3. Dispatcher confirms → driver notified.
+    </div>
+    <div style="font-size:11px;color:var(--t2);">No dispatch controls on Dock role.</div>`;}
+
+  function renderRolePanel(){
+    const dpc=el("dockPlatesCard");
+    if(ROLE==="dispatcher"){
+      el("panelTitle").textContent="Dispatcher";el("panelSub").textContent="Full control";
+      el("panelBody").innerHTML=dispPanelHtml();
+      el("btnLogout").style.display="";el("btnAudit").style.display="";
+      if(dpc)dpc.style.display="";renderPlates();return;
+    }
+    if(ROLE==="dock"){
+      el("panelTitle").textContent="Dock";el("panelSub").textContent="Loading / Dock Ready";
+      el("panelBody").innerHTML=dockPanelHtml();
+      el("btnLogout").style.display="";el("btnAudit").style.display="none";
+      if(dpc)dpc.style.display="";renderPlates();return;
+    }
+    el("panelTitle").textContent="Not Authenticated";el("panelSub").textContent="—";
+    el("panelBody").innerHTML=`<div style="color:var(--t2);font-size:12px;line-height:1.6;">
+      Please <a href="/login">sign in</a> to access controls.
+    </div>`;
+    el("btnLogout").style.display="none";el("btnAudit").style.display="none";
+    if(dpc)dpc.style.display="none";
   }
 
-  async function dispSaveFromPanel() {
-    const trailer = (el("d_trailer")?.value || "").trim();
-    if (!trailer) return toast("Validation", "Trailer number is required.", "err");
-
-    const payload = {
-      trailer,
-      direction: (el("d_direction")?.value || "").trim(),
-      status: (el("d_status")?.value || "").trim(),
-      door: (el("d_door")?.value || "").trim(),
-      dropType: (el("d_dropType")?.value || "").trim(),
-      note: (el("d_note")?.value || "").trim(),
-    };
-
-    try {
-      await apiJson("/api/upsert", { method: "POST", headers: CSRF, body: JSON.stringify(payload) });
-      toast("Saved", `Trailer ${trailer} updated.`, "ok");
-    } catch (e) {
-      toast("Save failed", e.message, "err");
-    }
+  async function doLogout(){try{await apiJson("/api/logout",{method:"POST",headers:CSRF});}catch{}location.href="/login";}
+  async function dispSave(){
+    const trailer=(el("d_trailer")?.value||"").trim();
+    if(!trailer)return toast("Validation error","Trailer number is required.","err");
+    try{
+      await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({
+        trailer,
+        direction:(el("d_direction")?.value||"").trim(),
+        status:(el("d_status")?.value||"").trim(),
+        door:(el("d_door")?.value||"").trim(),
+        note:(el("d_note")?.value||"").trim(),
+        dropType:(el("d_dropType")?.value||"").trim()
+      })});
+      toast("Saved",`Trailer ${trailer} updated.`,"ok");
+    }catch(e){toast("Save failed",e.message,"err");}
+  }
+  async function dispDelete(trailer){
+    if(!await showModal("Delete Trailer",`Permanently delete trailer ${trailer}? Cannot be undone.`))return;
+    try{await apiJson("/api/delete",{method:"POST",headers:CSRF,body:JSON.stringify({trailer})});toast("Deleted",`Trailer ${trailer} removed.`,"warn");}
+    catch(e){toast("Delete failed",e.message,"err");}
+  }
+  async function dispClear(){
+    if(!await showModal("Clear All Records","Permanently remove ALL trailer records? Cannot be undone."))return;
+    try{await apiJson("/api/clear",{method:"POST",headers:CSRF});toast("Board cleared","All records removed.","warn");}
+    catch(e){toast("Clear failed",e.message,"err");}
+  }
+  async function dockSet(trailer,status){
+    try{await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})});toast("Updated",`${trailer} → ${status}`,"ok");}
+    catch(e){toast("Update failed",e.message,"err");}
+  }
+  async function markReady(trailer){
+    try{
+      await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status:"Ready"})});
+      toast("Trailer Ready",`${trailer} marked Ready — driver will be notified.`,"ok");
+    }catch(e){toast("Update failed",e.message,"err");}
+  }
+  async function plateSave(door){
+    const status=(document.querySelector(`[data-plate-status="${CSS.escape(door)}"]`)?.value||"").trim();
+    const note=(document.querySelector(`[data-plate-note="${CSS.escape(door)}"]`)?.value||"").trim();
+    try{
+      await apiJson("/api/dockplates/set",{method:"POST",headers:CSRF,body:JSON.stringify({door,status,note})});
+      toast("Plate updated",`Door ${door} → ${status}`,"ok");
+      plateEditOpen[door]=false;renderPlates();
+    }catch(e){toast("Update failed",e.message,"err");}
+  }
+  async function driverDrop(){
+    const trailer=(el("v_trailer")?.value||"").trim(),door=(el("v_door")?.value||"").trim(),dropType=(el("v_dropType")?.value||"").trim();
+    if(!trailer)return toast("Required","Enter a trailer number.","err");
+    if(!door)return toast("Required","Enter a door number.","err");
+    try{
+      await apiJson("/api/driver/drop",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door,dropType})});
+      el("dropForm").style.display="none";el("dropSuccess").style.display="flex";
+      el("dropSuccessDetail").textContent=`Trailer ${trailer} · Door ${door} · ${dropType}`;
+    }catch(e){toast("Submission failed",e.message,"err");}
+  }
+  async function confSafety(){
+    if(!el("c_loadSecured")?.checked||!el("c_dockPlateUp")?.checked)return toast("Incomplete","Both safety items must be confirmed.","err");
+    try{
+      await apiJson("/api/confirm-safety",{method:"POST",headers:CSRF,body:JSON.stringify({
+        trailer:(el("c_trailer")?.value||"").trim(),
+        door:(el("c_door")?.value||"").trim(),
+        loadSecured:true,dockPlateUp:true
+      })});
+      el("safetyForm").style.display="none";el("safetySuccess").style.display="flex";
+    }catch(e){toast("Submission failed",e.message,"err");}
+  }
+  async function setPin(role,inputId,confirmId){
+    const pin=(el(inputId)?.value||"").trim(),conf=(el(confirmId)?.value||"").trim();
+    if(pin.length<4)return toast("PIN too short","Minimum 4 characters.","err");
+    if(pin!==conf)return toast("PINs do not match","Enter matching PINs.","err");
+    if(!await showModal("Update PIN",`Change the ${role} PIN? Active sessions will be invalidated.`))return;
+    try{
+      await apiJson("/api/supervisor/set-pin",{method:"POST",headers:CSRF,body:JSON.stringify({role,pin})});
+      toast("PIN updated",`${role} PIN changed.`,"ok");
+      el(inputId).value="";el(confirmId).value="";
+    }catch(e){toast("Update failed",e.message,"err");}
   }
 
-  async function dispClearAll() {
-    if (!confirm("Clear ALL trailer records? This cannot be undone.")) return;
-    try {
-      await apiJson("/api/clear", { method: "POST", headers: CSRF });
-      toast("Cleared", "All trailers removed.", "warn");
-    } catch (e) {
-      toast("Clear failed", e.message, "err");
-    }
-  }
+  async function loadInitial(){
+    try{const w=await apiJson("/api/whoami");ROLE=w?.role;VERSION=w?.version||"";}
+    catch{ROLE=null;VERSION="";}
+    el("verText").textContent=VERSION||"—";
 
-  async function deleteTrailer(trailer) {
-    if (!confirm(`Delete trailer ${trailer}?`)) return;
-    try {
-      await apiJson("/api/delete", { method: "POST", headers: CSRF, body: JSON.stringify({ trailer }) });
-      toast("Deleted", `Trailer ${trailer} removed.`, "warn");
-    } catch (e) {
-      toast("Delete failed", e.message, "err");
-    }
-  }
+    // Route-first view switching (prevents dock seeing dispatch controls)
+    el("driverView").style.display="none";
+    el("supervisorView").style.display="none";
+    el("dispatchView").style.display="none";
 
-  async function dockSet(trailer, status) {
-    // server already enforces dock can only set Loading/Dock Ready
-    try {
-      await apiJson("/api/upsert", { method: "POST", headers: CSRF, body: JSON.stringify({ trailer, status }) });
-      toast("Updated", `${trailer} → ${status}`, "ok");
-    } catch (e) {
-      toast("Update failed", e.message, "err");
-    }
-  }
-
-  async function saveRowStatus(trailer) {
-    const sel = document.querySelector(`select[data-act="statusSelect"][data-trailer="${CSS.escape(trailer)}"]`);
-    const status = (sel?.value || "").trim();
-    if (!status) return toast("Validation", "Pick a status.", "err");
-    try {
-      await apiJson("/api/upsert", { method: "POST", headers: CSRF, body: JSON.stringify({ trailer, status }) });
-      toast("Saved", `${trailer} → ${status}`, "ok");
-    } catch (e) {
-      toast("Save failed", e.message, "err");
-    }
-  }
-
-  async function driverDrop() {
-    const trailer = (el("v_trailer")?.value || "").trim();
-    const door = (el("v_door")?.value || "").trim();
-    const dropType = (el("v_dropType")?.value || "Empty").trim();
-    if (!trailer) return toast("Required", "Enter a trailer number.", "err");
-    if (!door) return toast("Required", "Enter a door number.", "err");
-
-    try {
-      await apiJson("/api/driver/drop", { method: "POST", headers: CSRF, body: JSON.stringify({ trailer, door, dropType }) });
-      toast("Submitted", `Drop recorded: ${trailer} @ door ${door}`, "ok");
-      el("v_trailer").value = "";
-      el("v_door").value = "";
-      el("v_dropType").value = "Empty";
-    } catch (e) {
-      toast("Submission failed", e.message, "err");
-    }
-  }
-
-  async function confirmSafety() {
-    const loadSecured = !!el("c_loadSecured")?.checked;
-    const dockPlateUp = !!el("c_dockPlateUp")?.checked;
-    if (!loadSecured || !dockPlateUp) return toast("Incomplete", "Both safety boxes must be checked.", "err");
-
-    const trailer = (el("c_trailer")?.value || "").trim();
-    const door = (el("c_door")?.value || "").trim();
-
-    try {
-      await apiJson("/api/confirm-safety", {
-        method: "POST",
-        headers: CSRF,
-        body: JSON.stringify({ trailer, door, loadSecured: true, dockPlateUp: true })
-      });
-      toast("Confirmed", "Safety confirmation logged.", "ok");
-      el("c_trailer").value = "";
-      el("c_door").value = "";
-      el("c_loadSecured").checked = false;
-      el("c_dockPlateUp").checked = false;
-    } catch (e) {
-      toast("Submission failed", e.message, "err");
-    }
-  }
-
-  // ========= CLICK HANDLER =========
-  document.addEventListener("click", (ev) => {
-    const t = ev.target;
-
-    if (t?.id === "btnLogout") return doLogout();
-    if (t?.id === "btnSaveTrailer") return dispSaveFromPanel();
-    if (t?.id === "btnClearAll") return dispClearAll();
-    if (t?.id === "btnDriverDrop") return driverDrop();
-    if (t?.id === "btnConfirmSafety") return confirmSafety();
-
-    const act = t?.dataset?.act;
-    if (!act) return;
-
-    if (act === "dockSet") {
-      const trailer = t.dataset.trailer;
-      const to = t.dataset.to;
-      if (trailer && to) return dockSet(trailer, to);
-    }
-
-    if (act === "saveRowStatus") {
-      const trailer = t.dataset.trailer;
-      if (trailer) return saveRowStatus(trailer);
-    }
-
-    if (act === "delete") {
-      const trailer = t.dataset.trailer;
-      if (trailer) return deleteTrailer(trailer);
-    }
-  });
-
-  // ========= INIT VIEW =========
-  async function loadInitial() {
-    try {
-      const w = await apiJson("/api/whoami");
-      ROLE = w?.role || null;
-      VERSION = w?.version || "";
-    } catch { ROLE = null; VERSION = ""; }
-
-    // view show/hide
-    const dv = el("dispatchView"), drv = el("driverView"), sv = el("supervisorView");
-    if (dv) dv.style.display = "none";
-    if (drv) drv.style.display = "none";
-    if (sv) sv.style.display = "none";
-
-    if (isDriver()) {
-      if (drv) drv.style.display = "";
-      if (el("btnAudit")) el("btnAudit").style.display = "none";
-      if (el("btnLogout")) el("btnLogout").style.display = "none"; // driver is open
-    } else if (isSupervisorRoute() || ROLE === "supervisor") {
-      if (sv) sv.style.display = "";
-      if (el("btnAudit")) el("btnAudit").style.display = "none";
-      if (el("btnLogout")) el("btnLogout").style.display = "";
+    const p=path();
+    if(p.startsWith("/driver")){
+      el("driverView").style.display="";
+      el("btnLogout").style.display="none";el("btnAudit").style.display="none";
+    } else if(p.startsWith("/supervisor") || ROLE==="supervisor"){
+      el("supervisorView").style.display="";
+      el("btnLogout").style.display="";el("btnAudit").style.display="none";
     } else {
-      if (dv) dv.style.display = "";
-      // Dock route should still show the board, but no dispatcher panel (role panel handles this)
-      if (el("btnLogout")) el("btnLogout").style.display = ROLE ? "" : "none";
-      if (el("btnAudit")) el("btnAudit").style.display = (ROLE === "dispatcher") ? "" : "none";
+      el("dispatchView").style.display="";
+      el("btnLogout").style.display = ROLE ? "" : "none";
+      el("btnAudit").style.display = ROLE==="dispatcher" ? "" : "none";
     }
 
     highlightNav();
 
-    // load initial data
-    try { trailers = await apiJson("/api/state"); } catch { trailers = {}; }
-    try { confirmations = await apiJson("/api/confirmations"); } catch { /* optional endpoint doesn't exist */ }
-    // If server doesn't have /api/confirmations, confirmations will come from WS. Keep empty on load.
-    if (!Array.isArray(confirmations)) confirmations = [];
+    try{trailers=await apiJson("/api/state");}catch{trailers={};}
+    if(!isDriver()&&!isSuper()){try{dockPlates=await apiJson("/api/dockplates");}catch{dockPlates={};}}
 
-    // render
-    if (isSupervisorRoute() || ROLE === "supervisor") {
-      renderKpis();
-      await loadAuditFeed();
-    } else if (!isDriver()) {
+    if(isSuper()||ROLE==="supervisor"){
+      renderSupBoard();renderSupConf();
+      loadAuditInto(null,el("supAuditCount"),0);
+    } else if(isDriver()){
+      // driver UI only
+    } else {
       renderRolePanel();
       renderBoard();
-      renderConfirmations();
+      renderConf();
+      let open=false;try{open=localStorage.getItem("platesOpen")==="1";}catch{}
+      setPlatesOpen(open);
     }
   }
 
-  // ========= WEBSOCKET =========
-  let wsRetry = 0;
+  document.addEventListener("click",async ev=>{
+    const t=ev.target;
+    if(t?.closest?.("#dockPlatesToggle")){setPlatesOpen(el("dockPlatesToggle").getAttribute("aria-expanded")!=="true");return;}
+    const id=t?.id;
+    if(id==="btnLogout")return doLogout();
+    if(id==="btnSaveTrailer")return dispSave();
+    if(id==="btnClearAll")return dispClear();
+    if(id==="btnDriverDrop")return driverDrop();
+    if(id==="btnConfirmSafety")return confSafety();
+    if(id==="btnSetDispatcherPin")return setPin("dispatcher","pin_dispatcher","pin_dispatcher_confirm");
+    if(id==="btnSetDockPin")return setPin("dock","pin_dock","pin_dock_confirm");
+    if(id==="btnSetSupervisorPin")return setPin("supervisor","pin_supervisor","pin_supervisor_confirm");
+    if(id==="btnDropAgain"){el("dropForm").style.display="";el("dropSuccess").style.display="none";el("v_trailer").value="";el("v_door").value="";el("v_dropType").value="Empty";return;}
+    if(id==="btnSafetyAgain"){el("safetyForm").style.display="";el("safetySuccess").style.display="none";el("c_loadSecured").checked=false;el("c_dockPlateUp").checked=false;el("c_trailer").value="";el("c_door").value="";return;}
 
-  function connectWs() {
-    const dot = document.querySelector(".live-dot");
-    const setWs = (ok) => {
-      if (!dot) return;
-      dot.style.background = ok ? "#20d090" : "#e84848";
-      dot.style.boxShadow = ok ? "0 0 8px #20d090" : "0 0 8px #e84848";
+    if(id==="btnClearFilters"||id==="btnSupClearFilters"){
+      ["search","filterDir","filterStatus","supSearch","supFilterDir","supFilterStatus"].forEach(i=>{if(el(i))el(i).value="";});
+      renderBoard();renderSupBoard();return;
+    }
+    if(id==="btnAudit"){
+      const showing=el("auditCard").style.display!=="none";
+      el("auditCard").style.display=showing?"none":"";
+      if(!showing)loadAuditInto(el("auditBody"),el("auditCount"),7);return;
+    }
+
+    const act=t?.dataset?.act;
+    if(act==="delete"){const tr=t.dataset.trailerId;if(tr)return dispDelete(tr);}
+    if(act==="edit"){
+      const tr=t.dataset.trailerId,r=trailers[tr];if(!r)return;
+      el("d_trailer").value=tr;el("d_direction").value=r.direction||"Inbound";
+      el("d_status").value=r.status||"Incoming";el("d_door").value=r.door||"";
+      el("d_note").value=r.note||"";el("d_dropType").value=r.dropType||"";
+      toast("Record loaded",`Editing trailer ${tr}`,"ok");return;
+    }
+    if(act==="dockSet"){const tr=t.dataset.trailerId,to=t.dataset.to;if(tr&&to)return dockSet(tr,to);}
+    if(act==="markReady"){const tr=t.dataset.trailerId;if(tr)return markReady(tr);}
+    const tog=t?.dataset?.plateToggle;if(tog){plateEditOpen[tog]=!plateEditOpen[tog];renderPlates();return;}
+    const psv=t?.dataset?.plateSave;if(psv)return plateSave(psv);
+  });
+
+  // Auto-save dispatcher status dropdown (real-time)
+  document.addEventListener("change",(ev)=>{
+    const t=ev.target;
+    if(t?.dataset?.act==="rowStatus"){
+      const trailer=t.dataset.trailerId;
+      const status=t.value;
+      apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})})
+        .catch(e=>toast("Update failed",e.message,"err"));
+    }
+  });
+
+  ["search","filterDir","filterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderBoard)));
+  ["supSearch","supFilterDir","supFilterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderSupBoard)));
+
+  // WS self-healing
+  let wsRetry=0;
+  function wsStatus(s){
+    el("wsDot").className="live-dot "+(s==="ok"?"ok":s==="bad"?"bad":"warn");
+    el("wsText").textContent=s==="ok"?"Live":s==="bad"?"Offline":"Connecting";
+  }
+
+  function connectWs(){
+    wsStatus("warn");
+    const ws=new WebSocket(`${location.protocol==="https:"?"wss":"ws"}://${location.host}`);
+
+    let lastMsg=Date.now();
+    const watchdog=setInterval(()=>{
+      if(Date.now()-lastMsg>15000){
+        try{ws.close();}catch{}
+      }
+    },5000);
+
+    ws.onopen=()=>{wsRetry=0;wsStatus("ok");};
+    ws.onclose=()=>{
+      clearInterval(watchdog);
+      wsStatus("bad");
+      setTimeout(connectWs,Math.min(8000,500+wsRetry++*650));
     };
-
-    setWs(false);
-    const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`);
-
-    ws.onopen = () => { wsRetry = 0; setWs(true); };
-    ws.onclose = () => {
-      setWs(false);
-      setTimeout(connectWs, Math.min(8000, 500 + wsRetry++ * 650));
-    };
-
-    ws.onmessage = (evt) => {
-      let msg;
-      try { msg = JSON.parse(evt.data); } catch { return; }
-      const { type, payload } = msg || {};
-
-      if (type === "version") {
-        VERSION = payload?.version || VERSION;
-        const vt = el("verText"); if (vt) vt.textContent = VERSION || "—";
-      }
-
-      if (type === "state") {
-        trailers = payload || {};
-        if (!isDriver() && !(isSupervisorRoute() || ROLE === "supervisor")) renderBoard();
-        if (isSupervisorRoute() || ROLE === "supervisor") renderKpis();
-      }
-
-      if (type === "confirmations") {
-        confirmations = Array.isArray(payload) ? payload : [];
-        if (!isDriver() && !(isSupervisorRoute() || ROLE === "supervisor")) renderConfirmations();
-        if (isSupervisorRoute() || ROLE === "supervisor") renderKpis();
-      }
-
-      if (type === "notify" && payload?.kind === "ready") {
-        toast("Trailer Ready", `${payload.trailer} is READY${payload.door ? " at door " + payload.door : ""}.`, "ok");
-      }
-
-      // Optional: supervisor feed can be refreshed periodically from /api/audit
-      // (WS doesn't push audit rows in your server right now)
+    ws.onmessage=evt=>{
+      lastMsg=Date.now();
+      let msg;try{msg=JSON.parse(evt.data);}catch{return;}
+      const{type,payload}=msg||{};
+      if(type==="state"){trailers=payload||{};renderBoard();renderSupBoard();}
+      else if(type==="dockplates"){dockPlates=payload||{};if(!isDriver()&&!isSuper())renderPlates();}
+      else if(type==="confirmations"){confirmations=Array.isArray(payload)?payload:[];renderConf();renderSupConf();}
+      else if(type==="version"){VERSION=payload?.version||VERSION;el("verText").textContent=VERSION||"—";}
+      else if(type==="notify"&&payload?.kind==="ready")
+        toast("Trailer Ready",`${payload.trailer} is READY${payload.door?" at door "+payload.door:""}.`,"ok");
     };
   }
 
-  // ========= BOOT =========
   loadInitial().then(connectWs);
 })();
 </script>
+</body>
+</html>

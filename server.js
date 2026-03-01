@@ -17,7 +17,7 @@ app.use(express.urlencoded({ extended: true }));
 ========================= */
 const PORT = process.env.PORT || 3000;
 const DB_FILE = process.env.DB_FILE || path.join(__dirname, "wesbell.sqlite");
-const APP_VERSION = process.env.APP_VERSION || "3.1.1";
+const APP_VERSION = process.env.APP_VERSION || "3.1.0";
 
 const PIN_MIN_LEN = 4;
 
@@ -184,7 +184,6 @@ async function verifyPin(role, pin) {
   const iter = row.iter || 140000;
   const hash = row.hash;
   const candidate = await pbkdf2Hash(pin, salt, iter);
-  // constant-time compare
   if (candidate.length !== hash.length) return false;
   return crypto.timingSafeEqual(candidate, hash);
 }
@@ -232,7 +231,10 @@ function setSessionCookie(res, sid) {
 }
 
 function clearSessionCookie(res) {
-  res.setHeader("Set-Cookie", `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+  res.setHeader(
+    "Set-Cookie",
+    `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`
+  );
 }
 
 function requireRole(roles) {
@@ -258,11 +260,7 @@ async function audit(req, actorRole, action, entityType, entityId, details) {
   const ip = ipOf(req);
   const ua = req.headers["user-agent"] || "";
   let d = "";
-  try {
-    d = JSON.stringify(details || {});
-  } catch {
-    d = "";
-  }
+  try { d = JSON.stringify(details || {}); } catch { d = ""; }
   await run(
     `INSERT INTO audit(at,actorRole,action,entityType,entityId,details,ip,userAgent)
      VALUES(?,?,?,?,?,?,?,?)`,
@@ -410,8 +408,7 @@ app.post("/api/login", requireXHR, async (req, res) => {
   try {
     const role = String(req.body.role || "").toLowerCase();
     const pin = String(req.body.pin || "");
-    if (!["dispatcher", "dock", "supervisor"].includes(role))
-      return res.status(400).send("Invalid role");
+    if (!["dispatcher", "dock", "supervisor"].includes(role)) return res.status(400).send("Invalid role");
     if (pin.length < PIN_MIN_LEN) return res.status(400).send("PIN too short");
 
     const ok = await verifyPin(role, pin);
@@ -440,57 +437,40 @@ app.get("/api/state", async (req, res) => {
 });
 
 // upsert trailer (dispatcher/dock/supervisor)
-app.post(
-  "/api/upsert",
-  requireXHR,
-  requireRole(["dispatcher", "dock", "supervisor"]),
-  async (req, res) => {
-    const actor = req.user.role;
-    try {
-      const trailer = String(req.body.trailer || "").trim();
-      if (!trailer) return res.status(400).send("Missing trailer");
+app.post("/api/upsert", requireXHR, requireRole(["dispatcher", "dock", "supervisor"]), async (req, res) => {
+  const actor = req.user.role;
+  try {
+    const trailer = String(req.body.trailer || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
 
-      // Load existing for merge + audit
-      const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
-      const now = Date.now();
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    const now = Date.now();
 
-      // Merge fields (only overwrite provided)
-      const direction =
-        req.body.direction !== undefined
-          ? String(req.body.direction || "").trim()
-          : existing?.direction || "";
-      const status =
-        req.body.status !== undefined
-          ? String(req.body.status || "").trim()
-          : existing?.status || "";
-      const door =
-        req.body.door !== undefined
-          ? String(req.body.door || "").trim()
-          : existing?.door || "";
-      const note =
-        req.body.note !== undefined
-          ? String(req.body.note || "").trim()
-          : existing?.note || "";
-      const dropType =
-        req.body.dropType !== undefined
-          ? String(req.body.dropType || "").trim()
-          : existing?.dropType || "";
+    const direction = (req.body.direction !== undefined) ? String(req.body.direction || "").trim() : (existing?.direction || "");
+    const status    = (req.body.status !== undefined)    ? String(req.body.status || "").trim()    : (existing?.status || "");
+    const door      = (req.body.door !== undefined)      ? String(req.body.door || "").trim()      : (existing?.door || "");
+    const note      = (req.body.note !== undefined)      ? String(req.body.note || "").trim()      : (existing?.note || "");
+    const dropType  = (req.body.dropType !== undefined)  ? String(req.body.dropType || "").trim()  : (existing?.dropType || "");
 
-      // Role restrictions:
-      // - dock can only change status to Loading / Dock Ready
-      // - (dock can still create/update trailers via status flow only)
-      if (actor === "dock" && req.body.status !== undefined) {
-        if (!["Loading", "Dock Ready"].includes(status)) {
-          return res.status(403).send("Dock can only set Loading or Dock Ready");
-        }
-      }
+    // Role restrictions:
+    // - dock can ONLY change status to Loading / Dock Ready (no other field writes)
+    if (actor === "dock") {
+      const onlyStatus =
+        req.body.status !== undefined &&
+        req.body.direction === undefined &&
+        req.body.door === undefined &&
+        req.body.note === undefined &&
+        req.body.dropType === undefined;
 
-      // Basic status validation
-      const allowed = ["Incoming", "Dropped", "Loading", "Dock Ready", "Ready", "Departed", ""];
-      if (!allowed.includes(status)) return res.status(400).send("Invalid status");
+      if (!onlyStatus) return res.status(403).send("Dock can only update trailer status");
+      if (!["Loading", "Dock Ready"].includes(status)) return res.status(403).send("Dock can only set Loading or Dock Ready");
+    }
 
-      await run(
-        `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
+    const allowed = ["Incoming", "Dropped", "Loading", "Dock Ready", "Ready", "Departed", ""];
+    if (!allowed.includes(status)) return res.status(400).send("Invalid status");
+
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
        VALUES(?,?,?,?,?,?,?)
        ON CONFLICT(trailer) DO UPDATE SET
         direction=excluded.direction,
@@ -499,33 +479,27 @@ app.post(
         note=excluded.note,
         dropType=excluded.dropType,
         updatedAt=excluded.updatedAt`,
-        [trailer, direction, status, door, note, dropType, now]
-      );
+      [trailer, direction, status, door, note, dropType, now]
+    );
 
-      const action = existing ? "trailer_update" : "trailer_create";
-      await audit(req, actor, action, "trailer", trailer, {
-        direction,
-        status,
-        door,
-        dropType,
-        note,
-      });
+    const action = existing ? "trailer_update" : "trailer_create";
+    await audit(req, actor, action, "trailer", trailer, { direction, status, door, dropType, note });
 
-      // Notify when dispatcher/supervisor sets Ready
-      if (status === "Ready" && (actor === "dispatcher" || actor === "supervisor")) {
-        wsBroadcast("notify", { kind: "ready", trailer, door: door || "" });
-        await audit(req, actor, "trailer_status_set", "trailer", trailer, { status: "Ready" });
-      } else if (req.body.status !== undefined) {
-        await audit(req, actor, "trailer_status_set", "trailer", trailer, { status });
-      }
-
-      await broadcastAll();
-      res.json({ ok: true });
-    } catch (e) {
-      res.status(500).send("Upsert failed");
+    if (req.body.status !== undefined) {
+      await audit(req, actor, "trailer_status_set", "trailer", trailer, { status });
     }
+
+    // Notify when dispatcher/supervisor sets Ready
+    if (status === "Ready" && (actor === "dispatcher" || actor === "supervisor")) {
+      wsBroadcast("notify", { kind: "ready", trailer, door: door || "" });
+    }
+
+    await broadcastAll();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Upsert failed");
   }
-);
+});
 
 // delete trailer (dispatcher/supervisor)
 app.post("/api/delete", requireXHR, requireRole(["dispatcher", "supervisor"]), async (req, res) => {
@@ -561,36 +535,29 @@ app.get("/api/dockplates", async (req, res) => {
 });
 
 // dock plates set (dock/dispatcher/supervisor)
-app.post(
-  "/api/dockplates/set",
-  requireXHR,
-  requireRole(["dock", "dispatcher", "supervisor"]),
-  async (req, res) => {
-    const actor = req.user.role;
-    try {
-      const door = String(req.body.door || "").trim();
-      const status = String(req.body.status || "Unknown").trim();
-      const note = String(req.body.note || "").trim();
+app.post("/api/dockplates/set", requireXHR, requireRole(["dock", "dispatcher", "supervisor"]), async (req, res) => {
+  const actor = req.user.role;
+  try {
+    const door = String(req.body.door || "").trim();
+    const status = String(req.body.status || "Unknown").trim();
+    const note = String(req.body.note || "").trim();
 
-      const dNum = Number(door);
-      if (!Number.isFinite(dNum) || dNum < 18 || dNum > 42)
-        return res.status(400).send("Invalid door");
-      if (!["OK", "Service", "Unknown"].includes(status))
-        return res.status(400).send("Invalid plate status");
+    const dNum = Number(door);
+    if (!Number.isFinite(dNum) || dNum < 18 || dNum > 42) return res.status(400).send("Invalid door");
+    if (!["OK", "Service", "Unknown"].includes(status)) return res.status(400).send("Invalid plate status");
 
-      await run(
-        `INSERT INTO dockplates(door,status,note,updatedAt) VALUES(?,?,?,?)
+    await run(
+      `INSERT INTO dockplates(door,status,note,updatedAt) VALUES(?,?,?,?)
        ON CONFLICT(door) DO UPDATE SET status=excluded.status, note=excluded.note, updatedAt=excluded.updatedAt`,
-        [door, status, note, Date.now()]
-      );
-      await audit(req, actor, "plate_set", "dockplate", door, { status, note });
-      await broadcastAll();
-      res.json({ ok: true });
-    } catch (e) {
-      res.status(500).send("Dock plate set failed");
-    }
+      [door, status, note, Date.now()]
+    );
+    await audit(req, actor, "plate_set", "dockplate", door, { status, note });
+    await broadcastAll();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Dock plate set failed");
   }
-);
+});
 
 // driver drop (no login required)
 app.post("/api/driver/drop", requireXHR, async (req, res) => {
@@ -601,15 +568,11 @@ app.post("/api/driver/drop", requireXHR, async (req, res) => {
 
     if (!trailer) return res.status(400).send("Missing trailer");
     const dNum = Number(door);
-    if (!Number.isFinite(dNum) || dNum < 18 || dNum > 42)
-      return res.status(400).send("Invalid door (18–42)");
-    if (!["Empty", "Loaded"].includes(dropType))
-      return res.status(400).send("Invalid drop type");
+    if (!Number.isFinite(dNum) || dNum < 18 || dNum > 42) return res.status(400).send("Invalid door (18–42)");
+    if (!["Empty", "Loaded"].includes(dropType)) return res.status(400).send("Invalid drop type");
 
     const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
     const now = Date.now();
-
-    // Keep existing direction if present, else default Inbound
     const direction = existing?.direction || "Inbound";
 
     await run(
@@ -625,13 +588,6 @@ app.post("/api/driver/drop", requireXHR, async (req, res) => {
     );
 
     await audit(req, "driver", "driver_drop", "trailer", trailer, { door, dropType });
-    await audit(req, "driver", existing ? "trailer_update" : "trailer_create", "trailer", trailer, {
-      direction,
-      status: "Dropped",
-      door,
-      dropType,
-    });
-
     await broadcastAll();
     res.json({ ok: true });
   } catch (e) {
@@ -653,12 +609,7 @@ app.post("/api/confirm-safety", requireXHR, async (req, res) => {
       `INSERT INTO confirmations(at,trailer,door,ip,userAgent) VALUES(?,?,?,?,?)`,
       [at, trailer || "", door || "", ipOf(req), req.headers["user-agent"] || ""]
     );
-    await audit(req, "driver", "safety_confirmed", "safety", trailer || "-", {
-      trailer,
-      door,
-      loadSecured,
-      dockPlateUp,
-    });
+    await audit(req, "driver", "safety_confirmed", "safety", trailer || "-", { trailer, door, loadSecured, dockPlateUp });
 
     await broadcastAll();
     res.json({ ok: true });
@@ -676,12 +627,9 @@ app.get("/api/audit", requireRole(["dispatcher", "supervisor"]), async (req, res
        FROM audit ORDER BY at DESC LIMIT ?`,
       [limit]
     );
-    // parse details JSON
     const out = rows.map((r) => {
       let details = {};
-      try {
-        details = r.details ? JSON.parse(r.details) : {};
-      } catch {}
+      try { details = r.details ? JSON.parse(r.details) : {}; } catch {}
       return { ...r, details };
     });
     res.json(out);
@@ -691,38 +639,30 @@ app.get("/api/audit", requireRole(["dispatcher", "supervisor"]), async (req, res
 });
 
 // supervisor set-pin
-app.post(
-  "/api/supervisor/set-pin",
-  requireXHR,
-  requireRole(["supervisor"]),
-  async (req, res) => {
-    const actor = req.user.role;
-    try {
-      const role = String(req.body.role || "").toLowerCase();
-      const pin = String(req.body.pin || "");
-      if (!["dispatcher", "dock", "supervisor"].includes(role))
-        return res.status(400).send("Invalid role");
-      if (pin.length < PIN_MIN_LEN) return res.status(400).send("PIN too short");
+app.post("/api/supervisor/set-pin", requireXHR, requireRole(["supervisor"]), async (req, res) => {
+  const actor = req.user.role;
+  try {
+    const role = String(req.body.role || "").toLowerCase();
+    const pin = String(req.body.pin || "");
+    if (!["dispatcher", "dock", "supervisor"].includes(role)) return res.status(400).send("Invalid role");
+    if (pin.length < PIN_MIN_LEN) return res.status(400).send("PIN too short");
 
-      await setPin(role, pin);
+    await setPin(role, pin);
 
-      // Invalidate all sessions (forces re-login everywhere)
-      sessions.clear();
-      await audit(req, actor, "pin_changed", "auth", role, {});
-
-      await broadcastAll();
-      res.json({ ok: true });
-    } catch (e) {
-      res.status(500).send("Set PIN failed");
-    }
+    // Invalidate all sessions (forces re-login everywhere)
+    sessions.clear();
+    await audit(req, actor, "pin_changed", "auth", role, {});
+    await broadcastAll();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Set PIN failed");
   }
-);
+});
 
 /* =========================
    WS CONNECTION
 ========================= */
 wss.on("connection", async (ws) => {
-  // Send initial payloads
   try {
     ws.send(JSON.stringify({ type: "version", payload: { version: APP_VERSION } }));
     ws.send(JSON.stringify({ type: "state", payload: await loadTrailersObject() }));

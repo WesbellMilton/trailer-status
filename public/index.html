@@ -511,7 +511,19 @@
             </div>
           </div>
         </div>
-</div>
+
+        <div class="panel" id="dockPlatesCard">
+          <button class="acc-head" id="dockPlatesToggle" aria-expanded="false">
+            <span style="display:flex;align-items:center;gap:9px;">Dock Plates (28–42) <span class="badge" id="platesMini">—</span></span>
+            <span class="chev">▾</span>
+          </button>
+          <div class="acc-body" id="dockPlatesBody" style="max-height:0px;overflow:hidden;transition:max-height .3s ease;">
+            <div class="plate-grid" id="platesGrid"></div>
+            <div style="padding:0 12px 10px;font-family:var(--mono);font-size:9px;color:var(--t3);letter-spacing:.04em;">Click Edit on any door to update status or note.</div>
+          </div>
+        </div>
+
+      </div>
 
       <!-- Side panel -->
       <div class="panel side-sticky">
@@ -533,10 +545,6 @@
   <div class="t-body" id="toastBody"></div>
 </div>
 
-
-<script src="/app.js"></script>
-</body>
-</html>
 
 <script src="/app.js"></script>
 </body>

@@ -1,6 +1,6 @@
 (() => {
   const CSRF = {"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"};
-  let ROLE = null, VERSION = "", trailers = {}, dockPlates = {}, confirmations = [], auditRows = [];
+  let ROLE = null, VERSION = "", trailers = {}, dockPlates = {}, confirmations = [];
   const plateEditOpen = {};
   const el = id => document.getElementById(id);
   const path = () => location.pathname.toLowerCase();
@@ -137,18 +137,12 @@
     const canEdit=!readOnly&&ROLE==="dispatcher";
     const canDock=!readOnly&&ROLE==="dock";
 
-    // Quick-status buttons for dispatcher — replaces the dropdown
-    const QUICK_STATUSES = ["Incoming","Dropped","Loading","Dock Ready","Ready","Departed"];
-
+    const occupied = getOccupiedDoors();
     tbodyEl.innerHTML=filt.map(r=>{
       const rowCls=STATUS_ROW[r.status]||"";
       const flash=(prevStatuses[r.trailer]&&prevStatuses[r.trailer]!==r.status)?" flashing":"";
       prevStatuses[r.trailer]=r.status;
       const readyFlash=(ROLE==="dispatcher"&&!readOnly&&r.status==="Ready")?" ready-flash":"";
-
-      // Door with occupancy dot
-      const occupied = getOccupiedDoors();
-      const doorOcc = r.door && occupied[r.door];
       const door = r.door
         ? `<span class="t-door">${esc(r.door)}</span>`
         : `<span style="color:var(--t3)">—</span>`;
@@ -201,7 +195,8 @@
     renderDockMap();
     // Update free door count badge
     const occupied = getOccupiedDoors();
-    const freeCount = 25 - Object.keys(occupied).length; // doors 18-42 = 25 doors
+    const occupiedInRange = Object.keys(occupied).filter(d => { const n=parseInt(d); return n>=18&&n<=42; }).length;
+    const freeCount = 25 - occupiedInRange;
     const badge = el("dockMapFreeCount");
     if (badge) badge.textContent = `${freeCount} free`;
   }
@@ -245,7 +240,6 @@
     if(el("dockPlatesToggle2")?.getAttribute("aria-expanded")==="true") setPlatesOpen2(true);
   }
 
-  function renderConf() { /* moved to supervisor only */ }
   function renderSupConf() {
     const sb=el("supConfBody"),sc=el("supConfCount"); if(!sb)return;
     sc.textContent=confirmations.length;
@@ -270,7 +264,6 @@
   async function loadAuditInto(bodyEl,countEl,cols) {
     try {
       const rows=await apiJson("/api/audit?limit=200"); if(!rows)return;
-      auditRows=rows;
       if(countEl) countEl.textContent=rows.length;
       if(cols===0){ renderFeed(rows); return; }
       if(!bodyEl)return;
@@ -584,17 +577,19 @@
   }
   function updateDropSubmitState(){
     const btn=el("btnDriverDrop"); if(!btn)return;
-    btn.disabled=!(driverState.trailer.trim()&&driverState.selectedDoor)||!_wsOnline;
+    // Door is optional — server auto-assigns if none selected
+    btn.disabled=!driverState.trailer.trim()||!_wsOnline;
   }
 
   async function driverDrop(){
     if(!_wsOnline) return toast("Offline","Cannot submit while offline. Please wait for reconnection.","err");
     const {trailer,selectedDoor:door,dropType}=driverState;
     if(!trailer) return toast("Required","Enter your trailer number.","err");
-    if(!door) return toast("Required","Select a door.","err");
     try{
-      await apiJson("/api/driver/drop",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door,dropType})});
-      driverState.sessionDrops.push({trailer,door,dropType,flowType:"drop",at:Date.now(),safetyDone:true});
+      const res=await apiJson("/api/driver/drop",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door,dropType})});
+      const assignedDoor=res?.door||door;
+      driverState.selectedDoor=assignedDoor;
+      driverState.sessionDrops.push({trailer,door:assignedDoor,dropType,flowType:"drop",at:Date.now(),safetyDone:true});
       saveSessionHistory(); renderSessionHistory();
       showDoneScreen("drop");
     }catch(e){ toast("Submission failed",e.message,"err"); }
@@ -836,7 +831,7 @@
     try{ trailers=await apiJson("/api/state"); }catch{ trailers={}; }
     if(!isDriver()&&!isSuper()){ try{ dockPlates=await apiJson("/api/dockplates"); }catch{ dockPlates={}; } }
     if(isSuper()||ROLE==="supervisor"){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0); }
-    else if(isDock()){ renderDockView(); renderPlates(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
+    else if(isDock()){ renderDockView(); renderPlates(); }
     else if(!isDriver()){ renderRolePanel(); renderBoard(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
   }
 

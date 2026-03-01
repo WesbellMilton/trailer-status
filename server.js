@@ -803,9 +803,9 @@ app.post("/api/driver/drop", requireXHR, async (req, res) => {
       [trailer, direction, "Dropped", assignedDoor || door, existing?.note || "", dropType, now]
     );
 
-    await audit(req, "driver", "driver_drop", "trailer", trailer, { door, dropType });
+    await audit(req, "driver", "driver_drop", "trailer", trailer, { door: assignedDoor || door, dropType });
     await broadcastAll();
-    res.json({ ok: true });
+    res.json({ ok: true, door: assignedDoor || door || null });
   } catch (e) {
     res.status(500).send("Drop failed");
   }

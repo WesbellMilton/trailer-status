@@ -102,6 +102,8 @@ async function initDb() {
       userAgent TEXT
     )
   `);
+  // remove dock plates for doors 18-27 (not physical dock plate doors)
+  await run(`DELETE FROM dockplates WHERE CAST(door AS INTEGER) < 28`);
   // migrate existing DB — adds action column if it doesn't exist yet
   try { await run(`ALTER TABLE confirmations ADD COLUMN action TEXT`); } catch (_) {}
 
@@ -129,7 +131,7 @@ async function initDb() {
   `);
 
   // Seed dock doors 18–42 if missing
-  for (let d = 18; d <= 42; d++) {
+  for (let d = 28; d <= 42; d++) {
     const door = String(d);
     const exists = await get(`SELECT door FROM dockplates WHERE door=?`, [door]);
     if (!exists) {

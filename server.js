@@ -638,6 +638,7 @@ app.post("/api/driver/drop", requireXHR, async (req, res) => {
 });
 
 // cross dock pickup (no login required)
+// Status stays as-is here — moved to Departed only after safety is confirmed
 app.post("/api/crossdock/pickup", requireXHR, async (req, res) => {
   try {
     const trailer = String(req.body.trailer || "").trim();
@@ -651,8 +652,8 @@ app.post("/api/crossdock/pickup", requireXHR, async (req, res) => {
       `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
        VALUES(?,?,?,?,?,?,?)
        ON CONFLICT(trailer) DO UPDATE SET
-        door=excluded.door, status=excluded.status, updatedAt=excluded.updatedAt`,
-      [trailer, existing?.direction || "Cross Dock", "Departed", door, existing?.note || "", existing?.dropType || "", now]
+        door=excluded.door, updatedAt=excluded.updatedAt`,
+      [trailer, existing?.direction || "Cross Dock", existing?.status || "Ready", door, existing?.note || "", existing?.dropType || "", now]
     );
     await audit(req, "driver", "crossdock_pickup", "trailer", trailer, { door });
     await broadcastAll();
@@ -696,13 +697,23 @@ app.post("/api/confirm-safety", requireXHR, async (req, res) => {
     const dockPlateUp = !!req.body.dockPlateUp;
     if (!loadSecured || !dockPlateUp) return res.status(400).send("Both confirmations required");
 
-    const at = Date.now();
     const action = String(req.body.action || "safety").trim();
+    const at = Date.now();
+
+    // Cross dock pickup → trailer is leaving, mark Departed
+    // Cross dock offload → trailer is staying, already Dropped, no status change needed
+    if (action === "xdock_pickup" && trailer) {
+      await run(
+        `UPDATE trailers SET status='Departed', updatedAt=? WHERE trailer=?`,
+        [at, trailer]
+      );
+    }
+
     await run(
       `INSERT INTO confirmations(at,trailer,door,action,ip,userAgent) VALUES(?,?,?,?,?,?)`,
       [at, trailer || "", door || "", action, ipOf(req), req.headers["user-agent"] || ""]
     );
-    await audit(req, "driver", "safety_confirmed", "safety", trailer || "-", { trailer, door, loadSecured, dockPlateUp });
+    await audit(req, "driver", "safety_confirmed", "safety", trailer || "-", { trailer, door, action, loadSecured, dockPlateUp });
 
     await broadcastAll();
     res.json({ ok: true });

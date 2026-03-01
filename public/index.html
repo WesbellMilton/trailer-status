@@ -18,7 +18,7 @@
     <div class="m-sub" id="modalBody"></div>
     <div class="m-btns">
       <button class="btn btn-default" id="modalCancel">Cancel</button>
-      <button class="btn btn-danger"  id="modalConfirm">Confirm</button>
+      <button class="btn btn-danger" id="modalConfirm">Confirm</button>
     </div>
   </div>
 </div>
@@ -61,11 +61,14 @@
   </div>
 </div>
 
-<!-- DRIVER VIEW -->
+<!-- ═══════════════════════════════════════════
+     DRIVER VIEW
+═══════════════════════════════════════════ -->
 <div id="driverView" style="display:none;">
   <div class="driver-shell">
     <div class="driver-wrap">
 
+      <!-- Connection bar -->
       <div class="driver-conn-bar">
         <div class="dcb-left">
           <div class="live-dot" id="driverWsDot"></div>
@@ -80,104 +83,226 @@
         <p>WESBELL DISPATCH MANAGEMENT</p>
       </div>
 
-      <div class="step-progress" id="stepProgress">
-        <div class="step-node active" id="stepNode1">
-          <div class="step-circle active" id="stepCircle1">1</div>
-          <span class="step-label">Drop</span>
-        </div>
-        <div class="step-connector" id="stepConn1"></div>
-        <div class="step-node" id="stepNode2">
-          <div class="step-circle" id="stepCircle2">2</div>
-          <span class="step-label">Safety</span>
-        </div>
-        <div class="step-connector" id="stepConn2"></div>
-        <div class="step-node" id="stepNode3">
-          <div class="step-circle" id="stepCircle3">✓</div>
-          <span class="step-label">Done</span>
+      <!-- ── SCREEN: WHO ARE YOU ── -->
+      <div id="who-screen">
+        <div class="driver-panel active-step">
+          <div class="driver-phd">
+            <span class="driver-phd-title">Who are you?</span>
+          </div>
+          <div class="driver-pbody">
+            <div class="who-grid">
+              <button class="who-btn" data-who="driver">
+                <span class="who-icon">🚛</span>
+                <span class="who-label">Driver</span>
+                <span class="who-sub">Drop or cross dock</span>
+              </button>
+              <button class="who-btn" data-who="carrier">
+                <span class="who-icon">🏢</span>
+                <span class="who-label">Carrier</span>
+                <span class="who-sub">Cross dock only</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Step 1: Drop -->
-      <div class="driver-panel active-step" id="driverStep1">
-        <div class="driver-phd">
-          <span class="driver-phd-title"><span style="color:var(--amber);">①</span> Trailer Drop</span>
-          <span class="badge">Step 1 of 2</span>
-        </div>
-        <div class="driver-pbody">
-          <label class="fl" style="margin-bottom:6px;">Your Trailer Number</label>
-          <input id="v_trailer" class="trailer-hero-input" placeholder="e.g. 5312"
-            autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false"/>
-
-          <div class="assignment-card" id="assignmentCard">
-            <div class="ac-icon">🚪</div>
-            <div class="ac-body">
-              <div class="ac-label">Assigned Door</div>
-              <div class="ac-door" id="ac_door">—</div>
-              <div class="ac-meta" id="ac_meta">Assigned by dispatcher</div>
-              <div class="ac-override" id="ac_override">Choose a different door</div>
+      <!-- ── SCREEN: FLOW SELECTION ── -->
+      <div id="flow-screen" style="display:none;">
+        <div class="driver-panel active-step">
+          <div class="driver-phd">
+            <span class="driver-phd-title">What are you here to do?</span>
+            <button class="btn btn-default btn-sm" id="btnBackToWho">← Back</button>
+          </div>
+          <div class="driver-pbody">
+            <p class="flow-sub" id="flowScreenSub">Select an activity:</p>
+            <div class="flow-grid">
+              <button class="flow-btn" id="flowBtnDrop" data-flow="drop">
+                <span class="flow-icon">📦</span>
+                <span class="flow-label">Drop a Trailer</span>
+                <span class="flow-desc">Park a trailer at a door</span>
+              </button>
+              <button class="flow-btn" data-flow="xdock_pickup">
+                <span class="flow-icon">🔄</span>
+                <span class="flow-label">Cross Dock Pickup</span>
+                <span class="flow-desc">Pick up a loaded trailer</span>
+              </button>
+              <button class="flow-btn" data-flow="xdock_offload">
+                <span class="flow-icon">📥</span>
+                <span class="flow-label">Cross Dock Offload</span>
+                <span class="flow-desc">Drop a loaded trailer to unload</span>
+              </button>
             </div>
           </div>
+        </div>
+      </div>
 
-          <div class="door-picker-wrap" id="doorPickerWrap">
-            <div class="door-picker-label">Select Your Door (18–42)</div>
-            <div class="door-picker-grid" id="doorPickerGrid"></div>
+      <!-- ── SCREEN: DRIVER DROP ── -->
+      <div id="drop-screen" style="display:none;">
+        <div class="driver-panel active-step">
+          <div class="driver-phd">
+            <span class="driver-phd-title"><span style="color:var(--amber);">📦</span> Trailer Drop</span>
+            <button class="btn btn-default btn-sm" id="btnBackToFlow">← Back</button>
           </div>
+          <div class="driver-pbody">
+            <label class="fl" style="margin-bottom:6px;">Your Trailer Number</label>
+            <input id="v_trailer" class="trailer-hero-input" placeholder="e.g. 5312"
+              autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false"/>
 
-          <label class="fl" style="margin-top:16px;margin-bottom:6px;">What Are You Dropping?</label>
-          <div class="drop-type-toggle">
-            <button class="drop-type-btn selected" id="dtbEmpty" data-type="Empty">
-              <span class="dtb-icon">📦</span>Empty
+            <!-- Auto-assigned door -->
+            <div class="assignment-card" id="assignmentCard">
+              <div class="ac-icon">🚪</div>
+              <div class="ac-body">
+                <div class="ac-label">Assigned Door</div>
+                <div class="ac-door" id="ac_door">—</div>
+                <div class="ac-meta" id="ac_meta">Assigned by dispatcher</div>
+                <div class="ac-override" id="ac_override">Choose a different door</div>
+              </div>
+            </div>
+
+            <!-- Manual door picker -->
+            <div class="door-picker-wrap" id="doorPickerWrap">
+              <div class="door-picker-label">Select Your Door (18–42)</div>
+              <div class="door-picker-grid" id="doorPickerGrid"></div>
+            </div>
+
+            <label class="fl" style="margin-top:16px;margin-bottom:6px;">What Are You Dropping?</label>
+            <div class="drop-type-toggle">
+              <button class="drop-type-btn selected" id="dtbEmpty" data-type="Empty">
+                <span class="dtb-icon">📦</span>Empty
+              </button>
+              <button class="drop-type-btn" id="dtbLoaded" data-type="Loaded">
+                <span class="dtb-icon">🏋️</span>Loaded
+              </button>
+            </div>
+
+            <button class="driver-submit" id="btnDriverDrop" disabled>
+              <span>Record Drop</span>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
-            <button class="drop-type-btn" id="dtbLoaded" data-type="Loaded">
-              <span class="dtb-icon">🏋️</span>Loaded
+            <div class="no-safety-note">✓ No safety check required for drops</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SCREEN: CROSS DOCK PICKUP ── -->
+      <div id="xdock-pickup-screen" style="display:none;">
+        <div class="driver-panel active-step">
+          <div class="driver-phd">
+            <span class="driver-phd-title"><span style="color:var(--cyan);">🔄</span> Cross Dock Pickup</span>
+            <button class="btn btn-default btn-sm" id="btnBackToFlow">← Back</button>
+          </div>
+          <div class="driver-pbody">
+            <label class="fl" style="margin-bottom:6px;">Trailer Number to Pick Up</label>
+            <input id="xp_trailer" class="trailer-hero-input" placeholder="e.g. 5312"
+              autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false"/>
+
+            <!-- Assignment found -->
+            <div class="assignment-card" id="pickupAssignmentCard" style="border-color:var(--cyan-bd);background:var(--cyan-bg);">
+              <div class="ac-icon">🚪</div>
+              <div class="ac-body">
+                <div class="ac-label" style="color:var(--cyan);">Your Assigned Door</div>
+                <div class="ac-door" id="pac_door">—</div>
+                <div class="ac-meta" id="pac_meta">Assigned by dispatcher</div>
+              </div>
+            </div>
+
+            <!-- No assignment found -->
+            <div class="no-assignment-msg" id="pickupNoAssignment">
+              <span>⚠️</span>
+              <div>
+                <div style="font-weight:600;color:var(--t0);">No assignment found</div>
+                <div style="font-size:11px;color:var(--t1);margin-top:2px;">Contact your dispatcher — this trailer has no door assigned.</div>
+              </div>
+            </div>
+
+            <button class="driver-submit" id="btnXdockPickup" disabled>
+              <span>Confirm Pickup</span>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="safety-required-note">⚠ Safety check required after this step</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SCREEN: CROSS DOCK OFFLOAD ── -->
+      <div id="xdock-offload-screen" style="display:none;">
+        <div class="driver-panel active-step">
+          <div class="driver-phd">
+            <span class="driver-phd-title"><span style="color:var(--amber);">📥</span> Cross Dock Offload</span>
+            <button class="btn btn-default btn-sm" id="btnBackToFlow">← Back</button>
+          </div>
+          <div class="driver-pbody">
+            <label class="fl" style="margin-bottom:6px;">Trailer Number You're Offloading</label>
+            <input id="xo_trailer" class="trailer-hero-input" placeholder="e.g. 5312"
+              autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false"/>
+
+            <!-- Auto-assigned door -->
+            <div class="assignment-card" id="offloadAssignmentCard">
+              <div class="ac-icon">🚪</div>
+              <div class="ac-body">
+                <div class="ac-label">Assigned Door</div>
+                <div class="ac-door" id="oac_door">—</div>
+                <div class="ac-meta" id="oac_meta">Assigned by dispatcher</div>
+                <div class="ac-override" id="oac_override">Choose a different door</div>
+              </div>
+            </div>
+
+            <!-- Manual door picker -->
+            <div class="door-picker-wrap" id="offloadDoorPickerWrap">
+              <div class="door-picker-label">Select Your Door (18–42)</div>
+              <div class="door-picker-grid" id="offloadDoorPickerGrid"></div>
+            </div>
+
+            <button class="driver-submit" id="btnXdockOffload" disabled>
+              <span>Confirm Offload</span>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="safety-required-note">⚠ Safety check required after this step</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SCREEN: SAFETY ── -->
+      <div id="safety-screen" style="display:none;">
+        <div class="driver-panel active-step" style="border-color:rgba(32,208,144,.25);">
+          <div class="driver-phd">
+            <span class="driver-phd-title"><span style="color:var(--green);">🛡</span> Safety Confirmation</span>
+          </div>
+          <div class="driver-pbody">
+            <div id="safetyContext" style="margin-bottom:14px;display:flex;gap:6px;flex-wrap:wrap;"></div>
+            <label class="checkline" for="c_loadSecured">
+              <input id="c_loadSecured" type="checkbox"/>
+              <div>
+                <div class="cl-main">Load secured</div>
+                <div class="cl-sub">Straps, locks, and load bars confirmed</div>
+              </div>
+            </label>
+            <label class="checkline" for="c_dockPlateUp">
+              <input id="c_dockPlateUp" type="checkbox"/>
+              <div>
+                <div class="cl-main">Dock plate raised</div>
+                <div class="cl-sub">Plate fully up before departing dock</div>
+              </div>
+            </label>
+            <button class="driver-submit green" id="btnConfirmSafety" disabled>
+              <span>Confirm &amp; Complete</span>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12 13 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
           </div>
-
-          <button class="driver-submit" id="btnDriverDrop" disabled>
-            <span>Record Drop</span>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
         </div>
       </div>
 
-      <!-- Step 2: Safety -->
-      <div class="driver-panel" id="driverStep2" style="opacity:.5;pointer-events:none;">
-        <div class="driver-phd">
-          <span class="driver-phd-title"><span style="color:var(--green);">②</span> Safety Confirmation</span>
-          <span class="badge">Step 2 of 2</span>
-        </div>
-        <div class="driver-pbody">
-          <div id="safetyContext" style="margin-bottom:14px;display:flex;gap:6px;flex-wrap:wrap;"></div>
-          <label class="checkline" for="c_loadSecured">
-            <input id="c_loadSecured" type="checkbox"/>
-            <div>
-              <div class="cl-main">Load secured</div>
-              <div class="cl-sub">Straps, locks, and load bars confirmed</div>
-            </div>
-          </label>
-          <label class="checkline" for="c_dockPlateUp">
-            <input id="c_dockPlateUp" type="checkbox"/>
-            <div>
-              <div class="cl-main">Dock plate raised</div>
-              <div class="cl-sub">Plate fully up before departing dock</div>
-            </div>
-          </label>
-          <button class="driver-submit green" id="btnConfirmSafety" disabled>
-            <span>Confirm &amp; Complete</span>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12 13 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-        </div>
-      </div>
-
-      <!-- Done -->
-      <div class="driver-panel" id="driverDone" style="display:none;">
-        <div class="driver-done">
-          <div class="done-ring">✅</div>
-          <div class="done-title">All Done!</div>
-          <div class="done-detail" id="driverDoneDetail"></div>
-          <button class="btn btn-default" style="margin-top:12px;padding:10px 22px;" id="btnDriverRestart">
-            Submit Another Drop
-          </button>
+      <!-- ── SCREEN: DONE ── -->
+      <div id="done-screen" style="display:none;">
+        <div class="driver-panel">
+          <div class="driver-done">
+            <div class="done-ring">✅</div>
+            <div class="done-title">All Done!</div>
+            <div class="done-detail" id="driverDoneDetail"></div>
+            <button class="btn btn-default" style="margin-top:12px;padding:10px 22px;" id="btnDriverRestart">
+              Start Over
+            </button>
+          </div>
         </div>
       </div>
 
@@ -185,10 +310,10 @@
       <div class="session-history" id="sessionHistory">
         <div class="sh-hd">
           <span>This Session</span>
-          <span id="shCount" style="color:var(--t3);">0 drops</span>
+          <span id="shCount" style="color:var(--t3);">0 submissions</span>
         </div>
         <div class="sh-body" id="shBody">
-          <div class="sh-empty">No drops submitted yet this session.</div>
+          <div class="sh-empty">No submissions yet this session.</div>
         </div>
       </div>
 
@@ -196,7 +321,9 @@
   </div>
 </div>
 
-<!-- SUPERVISOR VIEW -->
+<!-- ═══════════════════════════════════════════
+     SUPERVISOR VIEW
+═══════════════════════════════════════════ -->
 <div id="supervisorView" style="display:none;">
   <div class="sup-shell">
     <div class="kpi-row" id="supKpis"></div>
@@ -237,8 +364,8 @@
         </div>
         <div class="panel-body-flush">
           <div class="data-tbl-wrap">
-            <table><thead><tr><th>Time</th><th>Trailer</th><th>Door</th><th>IP</th></tr></thead>
-            <tbody id="supConfBody"><tr><td colspan="4" style="padding:16px;color:var(--t2);">Loading…</td></tr></tbody></table>
+            <table><thead><tr><th>Time</th><th>Trailer</th><th>Door</th><th>Type</th><th>IP</th></tr></thead>
+            <tbody id="supConfBody"><tr><td colspan="5" style="padding:16px;color:var(--t2);">Loading…</td></tr></tbody></table>
           </div>
         </div>
       </div>
@@ -272,7 +399,9 @@
   </div>
 </div>
 
-<!-- DISPATCH / DOCK VIEW -->
+<!-- ═══════════════════════════════════════════
+     DISPATCH / DOCK VIEW
+═══════════════════════════════════════════ -->
 <div id="dispatchView" style="display:none;">
   <div class="page">
     <div class="grid-main">
@@ -303,9 +432,7 @@
 
         <div class="panel" id="dockPlatesCard" style="display:none;">
           <button class="acc-head" id="dockPlatesToggle" aria-expanded="false">
-            <span style="display:flex;align-items:center;gap:9px;">
-              Dock Plates (18–42) <span class="badge" id="platesMini">—</span>
-            </span>
+            <span style="display:flex;align-items:center;gap:9px;">Dock Plates (18–42) <span class="badge" id="platesMini">—</span></span>
             <span class="chev">▾</span>
           </button>
           <div class="acc-body" id="dockPlatesBody">
@@ -336,9 +463,9 @@
           </div>
           <div class="panel-body-flush">
             <div class="data-tbl-wrap">
-              <table style="min-width:520px;">
-                <thead><tr><th>Time</th><th>Trailer</th><th>Door</th><th>IP</th></tr></thead>
-                <tbody id="confBody"><tr><td colspan="4" style="padding:16px;color:var(--t2);">No confirmations yet.</td></tr></tbody>
+              <table style="min-width:560px;">
+                <thead><tr><th>Time</th><th>Trailer</th><th>Door</th><th>Type</th><th>IP</th></tr></thead>
+                <tbody id="confBody"><tr><td colspan="5" style="padding:16px;color:var(--t2);">No confirmations yet.</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -346,7 +473,7 @@
 
       </div>
 
-      <!-- Side panel — role-rendered by JS -->
+      <!-- Side panel -->
       <div class="panel side-sticky">
         <div class="panel-hd">
           <div class="panel-title" id="panelTitle">Controls</div>

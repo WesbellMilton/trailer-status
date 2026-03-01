@@ -30,13 +30,13 @@
     return ct.includes("application/json") ? res.json() : {};
   }
 
-  function toast(title, body, type) {
+  function toast(title, body, type, duration) {
     el("toastTitle").textContent = title;
     el("toastBody").textContent = body||"";
     el("toastBar").className = "toast-bar "+(type==="ok"?"ok":type==="warn"?"warn":"err");
     const t=el("toast"); t.style.display="block";
     clearTimeout(toast._t);
-    toast._t = setTimeout(()=>t.style.display="none", 4500);
+    toast._t = setTimeout(()=>t.style.display="none", duration||4500);
   }
 
   let _mr=null;
@@ -83,6 +83,38 @@
     if(ROLE){ rb.style.display=""; rb.textContent=ROLE.toUpperCase(); } else { rb.style.display="none"; }
   }
 
+  /* ═══════════════════════════════════════════
+     DOOR OCCUPANCY HELPERS
+  ═══════════════════════════════════════════ */
+  function getOccupiedDoors() {
+    const map = {}; // door -> {trailer, status}
+    Object.entries(trailers).forEach(([t,r]) => {
+      if (r.door && !["Departed",""].includes(r.status)) {
+        map[r.door] = { trailer: t, status: r.status };
+      }
+    });
+    return map;
+  }
+
+  function renderDockMap() {
+    const mapEl = el("dockMapGrid"); if (!mapEl) return;
+    const occupied = getOccupiedDoors();
+    let html = "";
+    for (let d=18; d<=42; d++) {
+      const ds = String(d);
+      const occ = occupied[ds];
+      const cls = occ ? `dm-occupied dm-${(STATUS_ROW[occ.status]||"r-incoming").replace("r-","")}` : "dm-free";
+      html += `<div class="dm-cell ${cls}" title="${occ?`${esc(occ.trailer)} · ${esc(occ.status)}`:"Free"}">
+        <span class="dm-door">D${ds}</span>
+        ${occ ? `<span class="dm-trailer">${esc(occ.trailer)}</span><span class="dm-status">${esc(occ.status)}</span>` : `<span class="dm-free-label">Free</span>`}
+      </div>`;
+    }
+    mapEl.innerHTML = html;
+  }
+
+  /* ═══════════════════════════════════════════
+     BOARD RENDERING
+  ═══════════════════════════════════════════ */
   const prevStatuses={};
   function renderBoardInto(tbodyEl,countEl,countStrEl,sq,dq,stq,readOnly) {
     if(!tbodyEl)return;
@@ -99,20 +131,49 @@
     if(!filt.length){ tbodyEl.innerHTML=`<div class="tbl-empty">No trailers match filters</div>`; return; }
     const canEdit=!readOnly&&ROLE==="dispatcher";
     const canDock=!readOnly&&ROLE==="dock";
-    const statusOptions=["Incoming","Dropped","Loading","Dock Ready","Ready","Departed"];
+
+    // Quick-status buttons for dispatcher — replaces the dropdown
+    const QUICK_STATUSES = ["Incoming","Dropped","Loading","Dock Ready","Ready","Departed"];
+
     tbodyEl.innerHTML=filt.map(r=>{
       const rowCls=STATUS_ROW[r.status]||"";
       const flash=(prevStatuses[r.trailer]&&prevStatuses[r.trailer]!==r.status)?" flashing":"";
       prevStatuses[r.trailer]=r.status;
       const readyFlash=(ROLE==="dispatcher"&&!readOnly&&r.status==="Ready")?" ready-flash":"";
-      const door=r.door?`<span class="t-door">${esc(r.door)}</span>`:`<span style="color:var(--t3)">—</span>`;
+
+      // Door with occupancy dot
+      const occupied = getOccupiedDoors();
+      const doorOcc = r.door && occupied[r.door];
+      const door = r.door
+        ? `<span class="t-door">${esc(r.door)}</span>`
+        : `<span style="color:var(--t3)">—</span>`;
+
       const note=r.note?`<span class="t-note" title="${esc(r.note)}">${esc(r.note)}</span>`:`<span style="color:var(--t3)">—</span>`;
       const dtype=r.dropType?`<span style="font-size:10px;color:var(--t2);font-family:var(--mono);">${esc(r.dropType)}</span>`:`<span style="color:var(--t3)">—</span>`;
       const ago=r.updatedAt?timeAgo(r.updatedAt):"";
+
       let acts=`<span style="color:var(--t3)">—</span>`;
       if(canEdit){
-        const sel=`<select data-act="rowStatus" data-trailer-id="${esc(r.trailer)}" style="padding:4px 6px;font-size:11px;border-radius:4px;font-family:var(--mono);">${statusOptions.map(s=>`<option ${s===r.status?"selected":""}>${esc(s)}</option>`).join("")}</select>`;
-        acts=`<div class="t-acts">${sel}${r.status==="Dock Ready"?`<button class="btn btn-success btn-sm" data-act="markReady" data-trailer-id="${esc(r.trailer)}" style="font-weight:800;">✓ Ready</button>`:""}<button class="btn btn-default btn-sm" data-act="edit" data-trailer-id="${esc(r.trailer)}">Edit</button><button class="btn btn-danger btn-sm" data-act="delete" data-trailer-id="${esc(r.trailer)}">Del</button></div>`;
+        // Inline quick-status buttons + edit/delete
+        const nextStatuses = {
+          "Incoming":  ["Dropped","Departed"],
+          "Dropped":   ["Loading","Departed"],
+          "Loading":   ["Dock Ready","Departed"],
+          "Dock Ready":["Ready","Departed"],
+          "Ready":     ["Departed"],
+          "Departed":  ["Incoming"],
+        };
+        const nexts = nextStatuses[r.status] || [];
+        const quickBtns = nexts.map(s => {
+          const btnCls = s==="Ready"?"btn-success":s==="Departed"?"btn-default":"btn-default";
+          return `<button class="btn ${btnCls} btn-sm qs-btn" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}">${esc(s)}</button>`;
+        }).join("");
+        acts = `<div class="t-acts">
+          ${quickBtns}
+          ${r.status==="Dock Ready"?`<button class="btn btn-success btn-sm" data-act="markReady" data-trailer-id="${esc(r.trailer)}" style="font-weight:800;">✓ Ready</button>`:""}
+          <button class="btn btn-default btn-sm" data-act="edit" data-trailer-id="${esc(r.trailer)}">Edit</button>
+          <button class="btn btn-danger btn-sm" data-act="delete" data-trailer-id="${esc(r.trailer)}">Del</button>
+        </div>`;
       } else if(canDock){
         if(r.status==="Dropped"||r.status==="Incoming")
           acts=`<div class="t-acts"><button class="btn btn-default btn-sm" data-act="dockSet" data-to="Loading" data-trailer-id="${esc(r.trailer)}">Loading</button></div>`;
@@ -129,8 +190,21 @@
     }).join("");
   }
 
-  function renderBoard()    { renderBoardInto(el("tbody"),el("countsPill"),el("boardCountStr"),el("search"),el("filterDir"),el("filterStatus"),false); el("lastUpdated").textContent="Updated "+fmtTime(Date.now()); }
-  function renderSupBoard() { renderBoardInto(el("supTbody"),el("supCountsPill"),el("supCountStr"),el("supSearch"),el("supFilterDir"),el("supFilterStatus"),true); el("supLastUpdated").textContent="Updated "+fmtTime(Date.now()); renderKpis(); }
+  function renderBoard()    {
+    renderBoardInto(el("tbody"),el("countsPill"),el("boardCountStr"),el("search"),el("filterDir"),el("filterStatus"),false);
+    el("lastUpdated").textContent="Updated "+fmtTime(Date.now());
+    renderDockMap();
+    // Update free door count badge
+    const occupied = getOccupiedDoors();
+    const freeCount = 25 - Object.keys(occupied).length; // doors 18-42 = 25 doors
+    const badge = el("dockMapFreeCount");
+    if (badge) badge.textContent = `${freeCount} free`;
+  }
+  function renderSupBoard() {
+    renderBoardInto(el("supTbody"),el("supCountsPill"),el("supCountStr"),el("supSearch"),el("supFilterDir"),el("supFilterStatus"),true);
+    el("supLastUpdated").textContent="Updated "+fmtTime(Date.now());
+    renderKpis();
+  }
 
   function renderKpis() {
     const v=Object.values(trailers);
@@ -206,7 +280,7 @@
   }
 
   function dispPanelHtml(){ return `
-    <div class="infobox infobox-amber"><div class="ib-title">Dispatcher Controls</div>Add and manage trailers. When dock marks <strong>Dock Ready</strong>, hit <strong>✓ Ready</strong> on that row.</div>
+    <div class="infobox infobox-amber"><div class="ib-title">Dispatcher Controls</div>Add and manage trailers. Use inline buttons on each row for quick status changes.</div>
     <div class="field"><label class="fl">Trailer Number</label><input id="d_trailer" placeholder="e.g. 5312" autocomplete="off" style="font-family:var(--mono);font-weight:500;"/></div>
     <div class="field-row">
       <div class="field"><label class="fl">Direction</label><select id="d_direction"><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select></div>
@@ -252,6 +326,10 @@
     try{ await apiJson("/api/clear",{method:"POST",headers:CSRF}); toast("Board cleared","All records removed.","warn"); }
     catch(e){ toast("Clear failed",e.message,"err"); }
   }
+  async function quickStatus(trailer, status){
+    try{ await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})}); toast("Updated",`${trailer} → ${status}`,"ok"); }
+    catch(e){ toast("Update failed",e.message,"err"); }
+  }
   async function dockSet(trailer,status){ try{ await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})}); toast("Updated",`${trailer} → ${status}`,"ok"); } catch(e){ toast("Update failed",e.message,"err"); } }
   async function markReady(trailer){ try{ await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status:"Ready"})}); toast("Trailer Ready",`${trailer} marked Ready.`,"ok"); } catch(e){ toast("Update failed",e.message,"err"); } }
   async function plateSave(door){
@@ -270,11 +348,44 @@
   }
 
   /* ═══════════════════════════════════════════
+     DRIVER PORTAL — CONNECTION & OFFLINE
+  ═══════════════════════════════════════════ */
+  let _wsOnline = false;
+
+  function setDriverOnline(online) {
+    _wsOnline = online;
+    const banner = el("offlineBanner");
+    if (!banner) return;
+    if (online) {
+      banner.style.display = "none";
+    } else {
+      banner.style.display = "flex";
+    }
+    // Block submit buttons when offline
+    ["btnDriverDrop","btnXdockPickup","btnXdockOffload","btnConfirmSafety"].forEach(id => {
+      const btn = el(id);
+      if (!btn) return;
+      if (!online) {
+        btn.dataset.offlineDisabled = "1";
+        btn.disabled = true;
+      } else {
+        if (btn.dataset.offlineDisabled) {
+          delete btn.dataset.offlineDisabled;
+          // Re-evaluate proper disabled state
+          updateDropSubmitState();
+          updateOffloadSubmitState();
+          updateSafetySubmitState();
+        }
+      }
+    });
+  }
+
+  /* ═══════════════════════════════════════════
      DRIVER PORTAL STATE
   ═══════════════════════════════════════════ */
   const driverState = {
-    whoType: null,       // "driver" | "carrier"
-    flowType: null,      // "drop" | "xdock_pickup" | "xdock_offload"
+    whoType: null,
+    flowType: null,
     trailer: "",
     assignedDoor: "",
     selectedDoor: "",
@@ -298,11 +409,9 @@
       </div>`).join("");
   }
 
-  /* Screen switcher */
   const ALL_SCREENS=["who-screen","flow-screen","drop-screen","xdock-pickup-screen","xdock-offload-screen","safety-screen","done-screen"];
-  function showScreen(id){ ALL_SCREENS.forEach(s=>{ const e=el(s); if(e)e.style.display="none"; }); const t=el(id); if(t)t.style.display=""; }
+  function showScreen(id){ ALL_SCREENS.forEach(s=>{ const e=el(s); if(e)e.style.display="none"; }); const t=el(id); if(t){ t.style.display=""; if(id==="who-screen"||id==="flow-screen") setTimeout(()=>t.querySelector("button")?.focus(),50); } }
 
-  /* Who are you */
   function selectWho(whoType){
     driverState.whoType=whoType;
     const dropBtn=el("flowBtnDrop");
@@ -312,14 +421,13 @@
     showScreen("flow-screen");
   }
 
-  /* Flow selection */
   function selectFlow(flowType){
     driverState.flowType=flowType;
     driverState.trailer=""; driverState.assignedDoor=""; driverState.selectedDoor="";
     driverState.dropType="Empty"; driverState.overrideMode=false;
-    if(flowType==="drop"){ resetDropScreen(); showScreen("drop-screen"); el("v_trailer")?.focus(); }
-    else if(flowType==="xdock_pickup"){ resetPickupScreen(); showScreen("xdock-pickup-screen"); el("xp_trailer")?.focus(); }
-    else if(flowType==="xdock_offload"){ resetOffloadScreen(); showScreen("xdock-offload-screen"); el("xo_trailer")?.focus(); }
+    if(flowType==="drop"){ resetDropScreen(); showScreen("drop-screen"); setTimeout(()=>el("v_trailer")?.focus(),100); }
+    else if(flowType==="xdock_pickup"){ resetPickupScreen(); showScreen("xdock-pickup-screen"); setTimeout(()=>el("xp_trailer")?.focus(),100); }
+    else if(flowType==="xdock_offload"){ resetOffloadScreen(); showScreen("xdock-offload-screen"); setTimeout(()=>el("xo_trailer")?.focus(),100); }
   }
 
   /* ── FLOW 1: DRIVER DROP ── */
@@ -330,9 +438,13 @@
     el("dtbEmpty")?.classList.add("selected"); el("dtbLoaded")?.classList.remove("selected");
     driverState.dropType="Empty"; updateDropSubmitState();
   }
-  function updateDropSubmitState(){ const btn=el("btnDriverDrop"); if(btn) btn.disabled=!(driverState.trailer.trim()&&driverState.selectedDoor); }
+  function updateDropSubmitState(){
+    const btn=el("btnDriverDrop"); if(!btn)return;
+    btn.disabled=!(driverState.trailer.trim()&&driverState.selectedDoor)||!_wsOnline;
+  }
 
   async function driverDrop(){
+    if(!_wsOnline) return toast("Offline","Cannot submit while offline. Please wait for reconnection.","err");
     const {trailer,selectedDoor:door,dropType}=driverState;
     if(!trailer) return toast("Required","Enter your trailer number.","err");
     if(!door) return toast("Required","Select a door.","err");
@@ -363,6 +475,7 @@
     onPickupTrailerInput._t=setTimeout(()=>lookupAssignment(val,"pickup"),500);
   }
   async function xdockPickup(){
+    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
     const{trailer,selectedDoor:door}=driverState;
     if(!trailer) return toast("Required","Enter trailer number.","err");
     if(!door) return toast("No assignment","This trailer has no door assignment. Contact your dispatcher.","warn");
@@ -381,7 +494,10 @@
     hideDoorPicker("offloadDoorPickerWrap");
     driverState.selectedDoor=""; updateOffloadSubmitState();
   }
-  function updateOffloadSubmitState(){ const btn=el("btnXdockOffload"); if(btn) btn.disabled=!(driverState.trailer.trim()&&driverState.selectedDoor); }
+  function updateOffloadSubmitState(){
+    const btn=el("btnXdockOffload"); if(!btn)return;
+    btn.disabled=!(driverState.trailer.trim()&&driverState.selectedDoor)||!_wsOnline;
+  }
   async function onOffloadTrailerInput(){
     const val=(el("xo_trailer")?.value||"").trim();
     driverState.trailer=val;
@@ -395,6 +511,7 @@
     onOffloadTrailerInput._t=setTimeout(()=>lookupAssignment(val,"offload"),500);
   }
   async function xdockOffload(){
+    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
     const{trailer,selectedDoor:door}=driverState;
     if(!trailer) return toast("Required","Enter trailer number.","err");
     if(!door) return toast("Required","Select a door.","err");
@@ -421,7 +538,7 @@
           el("pac_meta").textContent=meta;
           el("pickupAssignmentCard")?.classList.add("visible");
           el("pickupNoAssignment")?.classList.remove("visible");
-          const btn=el("btnXdockPickup"); if(btn)btn.disabled=false;
+          const btn=el("btnXdockPickup"); if(btn)btn.disabled=!_wsOnline;
         } else {
           driverState.selectedDoor="";
           el("pickupNoAssignment")?.classList.add("visible");
@@ -447,7 +564,6 @@
     }
   }
 
-  /* Drop-specific lookup */
   let _lookupTimer=null;
   function onTrailerInput(){
     const val=(el("v_trailer")?.value||"").trim();
@@ -480,13 +596,12 @@
     updateDropSubmitState();
   }
 
-  /* Door picker */
   function buildDoorPicker(gridId){
     const grid=el(gridId||"doorPickerGrid"); if(!grid)return;
-    const occupied=new Set(Object.values(trailers).filter(r=>r.door&&!["Departed",""].includes(r.status)).map(r=>r.door));
+    const occupied=getOccupiedDoors();
     let html="";
     for(let d=18;d<=42;d++){
-      const ds=String(d), occ=occupied.has(ds), sel=driverState.selectedDoor===ds;
+      const ds=String(d), occ=!!occupied[ds], sel=driverState.selectedDoor===ds;
       html+=`<button class="door-btn${occ?" occupied":""}${sel?" selected":""}" data-door="${ds}" data-picker="${gridId||"doorPickerGrid"}">${ds}${occ?`<span class="door-btn-sub">In use</span>`:""}</button>`;
     }
     grid.innerHTML=html;
@@ -494,7 +609,6 @@
   function showDoorPicker(wrapId,gridId){ buildDoorPicker(gridId); el(wrapId||"doorPickerWrap")?.classList.add("visible"); el("assignmentCard")?.classList.remove("visible"); }
   function hideDoorPicker(wrapId){ el(wrapId||"doorPickerWrap")?.classList.remove("visible"); }
 
-  /* Safety screen */
   function showSafetyScreen(){
     const ctx=el("safetyContext");
     if(ctx){
@@ -510,8 +624,9 @@
     updateSafetySubmitState();
     showScreen("safety-screen");
   }
-  function updateSafetySubmitState(){ const btn=el("btnConfirmSafety"); if(btn) btn.disabled=!(el("c_loadSecured")?.checked&&el("c_dockPlateUp")?.checked); }
+  function updateSafetySubmitState(){ const btn=el("btnConfirmSafety"); if(btn) btn.disabled=!(el("c_loadSecured")?.checked&&el("c_dockPlateUp")?.checked)||!_wsOnline; }
   async function confSafety(){
+    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
     if(!el("c_loadSecured")?.checked||!el("c_dockPlateUp")?.checked) return toast("Incomplete","Both safety items must be confirmed.","err");
     try{
       await apiJson("/api/confirm-safety",{method:"POST",headers:CSRF,body:JSON.stringify({trailer:driverState.trailer,door:driverState.selectedDoor,loadSecured:true,dockPlateUp:true,action:driverState.flowType})});
@@ -522,7 +637,6 @@
     }catch(e){ toast("Submission failed",e.message,"err"); }
   }
 
-  /* Done screen */
   function showDoneScreen(flowType){
     const labels={drop:"Drop recorded — no safety check required.",xdock_pickup:"Pickup recorded + safety confirmed.",xdock_offload:"Offload recorded + safety confirmed."};
     const detail=el("driverDoneDetail");
@@ -541,6 +655,7 @@
     const dot=el("driverWsDot"),txt=el("driverWsText"); if(!dot||!txt)return;
     dot.className="live-dot "+state;
     txt.textContent=state==="ok"?"Live":state==="bad"?"Offline":"Connecting…";
+    setDriverOnline(state==="ok");
   }
 
   async function loadInitial(){
@@ -589,7 +704,6 @@
     if(id==="btnSetDispatcherPin") return setPin("dispatcher","pin_dispatcher","pin_dispatcher_confirm");
     if(id==="btnSetDockPin") return setPin("dock","pin_dock","pin_dock_confirm");
     if(id==="btnSetSupervisorPin") return setPin("supervisor","pin_supervisor","pin_supervisor_confirm");
-    // Driver portal
     const whoBtn=direct?.closest?.("[data-who]"); if(whoBtn){ selectWho(whoBtn.dataset.who); return; }
     const flowBtn=direct?.closest?.("[data-flow]"); if(flowBtn){ selectFlow(flowBtn.dataset.flow); return; }
     if(id==="btnBackToWho"){ showScreen("who-screen"); return; }
@@ -609,11 +723,13 @@
     }
     const dtBtn=direct?.closest?.("[data-type]");
     if(dtBtn&&dtBtn.dataset.type){ driverState.dropType=dtBtn.dataset.type; el("dtbEmpty")?.classList.toggle("selected",driverState.dropType==="Empty"); el("dtbLoaded")?.classList.toggle("selected",driverState.dropType==="Loaded"); return; }
-    const act=direct?.dataset?.act;
-    if(act==="delete"){ const tr=direct.dataset.trailerId; if(tr)return dispDelete(tr); }
-    if(act==="edit"){ const tr=direct.dataset.trailerId,r=trailers[tr]; if(!r)return; el("d_trailer").value=tr; el("d_direction").value=r.direction||"Inbound"; el("d_status").value=r.status||"Incoming"; el("d_door").value=r.door||""; el("d_note").value=r.note||""; el("d_dropType").value=r.dropType||""; toast("Record loaded",`Editing trailer ${tr}`,"ok"); return; }
-    if(act==="dockSet"){ const tr=direct.dataset.trailerId,to=direct.dataset.to; if(tr&&to)return dockSet(tr,to); }
-    if(act==="markReady"){ const tr=direct.dataset.trailerId; if(tr)return markReady(tr); }
+    const act=direct?.dataset?.act||direct?.closest?.("[data-act]")?.dataset?.act;
+    const trId=direct?.dataset?.trailerId||direct?.closest?.("[data-trailer-id]")?.dataset?.trailerId;
+    if(act==="delete"&&trId) return dispDelete(trId);
+    if(act==="quickStatus"){ const to=direct?.dataset?.to||direct?.closest?.("[data-to]")?.dataset?.to; if(trId&&to)return quickStatus(trId,to); }
+    if(act==="edit"&&trId){ const r=trailers[trId]; if(!r)return; el("d_trailer").value=trId; el("d_direction").value=r.direction||"Inbound"; el("d_status").value=r.status||"Incoming"; el("d_door").value=r.door||""; el("d_note").value=r.note||""; el("d_dropType").value=r.dropType||""; toast("Record loaded",`Editing trailer ${trId}`,"ok"); return; }
+    if(act==="dockSet"){ const to=direct?.dataset?.to; if(trId&&to)return dockSet(trId,to); }
+    if(act==="markReady"&&trId) return markReady(trId);
     const tog=direct?.dataset?.plateToggle; if(tog){ plateEditOpen[tog]=!plateEditOpen[tog]; renderPlates(); return; }
     const psv=direct?.dataset?.plateSave; if(psv)return plateSave(psv);
   });
@@ -632,8 +748,15 @@
   ["search","filterDir","filterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderBoard)));
   ["supSearch","supFilterDir","supFilterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderSupBoard)));
 
+  /* ═══════════════════════════════════════════
+     WEBSOCKET
+  ═══════════════════════════════════════════ */
   let wsRetry=0;
-  function wsStatus(s){ el("wsDot").className="live-dot "+(s==="ok"?"ok":s==="bad"?"bad":"warn"); el("wsText").textContent=s==="ok"?"Live":s==="bad"?"Offline":"Connecting"; syncDriverWsDot(s); }
+  function wsStatus(s){
+    el("wsDot").className="live-dot "+(s==="ok"?"ok":s==="bad"?"bad":"warn");
+    el("wsText").textContent=s==="ok"?"Live":s==="bad"?"Offline":"Connecting";
+    syncDriverWsDot(s);
+  }
   function connectWs(){
     wsStatus("warn");
     const ws=new WebSocket(`${location.protocol==="https:"?"wss":"ws"}://${location.host}`);
@@ -645,11 +768,26 @@
       lastMsg=Date.now();
       let msg; try{msg=JSON.parse(evt.data);}catch{return;}
       const{type,payload}=msg||{};
-      if(type==="state"){ trailers=payload||{}; renderBoard(); renderSupBoard(); }
+      if(type==="state"){
+        trailers=payload||{};
+        renderBoard(); renderSupBoard();
+      }
       else if(type==="dockplates"){ dockPlates=payload||{}; if(!isDriver()&&!isSuper())renderPlates(); }
       else if(type==="confirmations"){ confirmations=Array.isArray(payload)?payload:[]; renderConf(); renderSupConf(); }
       else if(type==="version"){ VERSION=payload?.version||VERSION; el("verText").textContent=VERSION||"—"; if(el("driverVerText"))el("driverVerText").textContent=VERSION||"—"; }
-      else if(type==="notify"&&payload?.kind==="ready") toast("Trailer Ready",`${payload.trailer} is READY${payload.door?" at door "+payload.door:""}.`,"ok");
+      else if(type==="notify"&&payload?.kind==="ready"){
+        // Prominent ready notification — toast + driver banner
+        toast("🟢 Trailer Ready",`${payload.trailer} is READY${payload.door?" at door "+payload.door:""}.`,"ok", 8000);
+        if(isDriver()){
+          const banner=el("readyNotifBanner");
+          if(banner){
+            el("readyNotifText").textContent=`Trailer ${payload.trailer} is READY${payload.door?" at door "+payload.door:""}`;
+            banner.style.display="flex";
+            clearTimeout(banner._t);
+            banner._t=setTimeout(()=>banner.style.display="none",12000);
+          }
+        }
+      }
     };
   }
   loadInitial().then(connectWs);

@@ -1088,3 +1088,13 @@
   padding: 8px 0 2px;
   letter-spacing: .04em;
 }
+
+
+/* Dock plates inline on /dock view */
+.dock-plates-inline {
+  margin: 0 16px 80px;
+  border-radius: var(--r2);
+  border: 1px solid var(--b1);
+  background: var(--s0);
+  overflow: hidden;
+}

@@ -1,5 +1,5 @@
 // server.js
-// Wesbell Dispatch / Dock / Driver / Supervisor (single index.html, role auth, sqlite storage, WS realtime)
+// Wesbell Dispatch - single-page multi-role board + WS live updates + PIN auth + SQLite persistence
 
 const express = require("express");
 const http = require("http");
@@ -8,70 +8,40 @@ const WebSocket = require("ws");
 const sqlite3 = require("sqlite3").verbose();
 const crypto = require("crypto");
 
-// ---------------- CONFIG ----------------
-const APP_VERSION = process.env.APP_VERSION || "3.0.0";
+const app = express();
+app.use(express.json({ limit: "200kb" }));
+app.use(express.urlencoded({ extended: true }));
+
+/* =========================
+   CONFIG
+========================= */
 const PORT = process.env.PORT || 3000;
-const DB_FILE = process.env.DB_FILE || path.join(__dirname, "wesbell.db");
-const COOKIE_NAME = process.env.COOKIE_NAME || "wb_session";
-const IS_PROD = process.env.NODE_ENV === "production";
+const DB_FILE = process.env.DB_FILE || path.join(__dirname, "wesbell.sqlite");
+const APP_VERSION = process.env.APP_VERSION || "3.0.0";
 
-// ---------------- HELPERS ----------------
-const now = () => Date.now();
-const randHex = (n = 24) => crypto.randomBytes(n).toString("hex");
-const sha256 = (s) => crypto.createHash("sha256").update(String(s)).digest("hex");
+const PIN_MIN_LEN = 4;
 
-function getIP(req) {
-  const xf = req.headers["x-forwarded-for"];
-  const raw = (Array.isArray(xf) ? xf[0] : xf) || req.socket.remoteAddress || "";
-  return String(raw).split(",")[0].trim();
+// Basic session config (in-memory sessions)
+const SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12 hours
+const COOKIE_NAME = "wb_session";
+
+// Optional first-run default PINs (override via env)
+const ENV_PINS = {
+  dispatcher: process.env.DISPATCHER_PIN || "",
+  dock: process.env.DOCK_PIN || "",
+  supervisor: process.env.SUPERVISOR_PIN || "",
+};
+
+// Simple anti-CSRF header check for state-changing requests (your UI sets this)
+function requireXHR(req, res, next) {
+  const h = (req.get("X-Requested-With") || "").toLowerCase();
+  if (h !== "xmlhttprequest") return res.status(400).send("Bad request");
+  next();
 }
 
-function safeStr(v, max = 200) {
-  v = (v ?? "").toString().trim();
-  if (v.length > max) v = v.slice(0, max);
-  return v;
-}
-
-function normalizeDoor(door) {
-  const d = safeStr(door, 8);
-  if (!d) return "";
-  const n = parseInt(d, 10);
-  if (!Number.isFinite(n)) return "";
-  return String(n);
-}
-
-function normalizeTrailer(trailer) {
-  let t = safeStr(trailer, 24).toUpperCase();
-  t = t.replace(/[^A-Z0-9-]/g, "");
-  return t;
-}
-
-function isSameOrigin(req) {
-  const origin = req.headers.origin;
-  if (!origin) return true;
-  const host = req.headers.host;
-  if (!host) return false;
-  try {
-    const o = new URL(origin);
-    return o.host === host;
-  } catch {
-    return false;
-  }
-}
-
-function pbkdf2Hash(pin, saltHex) {
-  const salt = Buffer.from(saltHex, "hex");
-  const out = crypto.pbkdf2Sync(String(pin), salt, 120000, 32, "sha256");
-  return out.toString("hex");
-}
-
-function newPinRecord(pin) {
-  const salt = crypto.randomBytes(16).toString("hex");
-  const hash = pbkdf2Hash(pin, salt);
-  return { salt, hash };
-}
-
-// ---------------- DB ----------------
+/* =========================
+   DB
+========================= */
 const db = new sqlite3.Database(DB_FILE);
 
 function run(sql, params = []) {
@@ -84,18 +54,24 @@ function run(sql, params = []) {
 }
 function get(sql, params = []) {
   return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => (err ? reject(err) : resolve(row)));
+    db.get(sql, params, (err, row) => {
+      if (err) reject(err);
+      else resolve(row);
+    });
   });
 }
 function all(sql, params = []) {
   return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => (err ? reject(err) : resolve(rows)));
+    db.all(sql, params, (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows);
+    });
   });
 }
 
 async function initDb() {
   await run(`
-    CREATE TABLE IF NOT EXISTS trailers(
+    CREATE TABLE IF NOT EXISTS trailers (
       trailer TEXT PRIMARY KEY,
       direction TEXT,
       status TEXT,
@@ -107,7 +83,7 @@ async function initDb() {
   `);
 
   await run(`
-    CREATE TABLE IF NOT EXISTS dockplates(
+    CREATE TABLE IF NOT EXISTS dockplates (
       door TEXT PRIMARY KEY,
       status TEXT,
       note TEXT,
@@ -116,7 +92,7 @@ async function initDb() {
   `);
 
   await run(`
-    CREATE TABLE IF NOT EXISTS confirmations(
+    CREATE TABLE IF NOT EXISTS confirmations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       at INTEGER,
       trailer TEXT,
@@ -127,7 +103,7 @@ async function initDb() {
   `);
 
   await run(`
-    CREATE TABLE IF NOT EXISTS audit(
+    CREATE TABLE IF NOT EXISTS audit (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       at INTEGER,
       actorRole TEXT,
@@ -135,513 +111,580 @@ async function initDb() {
       entityType TEXT,
       entityId TEXT,
       details TEXT,
-      ip TEXT
+      ip TEXT,
+      userAgent TEXT
     )
   `);
 
   await run(`
-    CREATE TABLE IF NOT EXISTS pins(
+    CREATE TABLE IF NOT EXISTS pins (
       role TEXT PRIMARY KEY,
-      salt TEXT,
-      hash TEXT,
-      updatedAt INTEGER
+      salt BLOB,
+      hash BLOB,
+      iter INTEGER
     )
   `);
 
-  await run(`
-    CREATE TABLE IF NOT EXISTS sessions(
-      token TEXT PRIMARY KEY,
-      role TEXT,
-      createdAt INTEGER,
-      lastSeen INTEGER
-    )
-  `);
-
-  // Ensure default plate rows (18–42) exist
+  // Seed dock doors 18–42 if missing
   for (let d = 18; d <= 42; d++) {
     const door = String(d);
-    await run(
-      `INSERT OR IGNORE INTO dockplates(door,status,note,updatedAt) VALUES(?,?,?,?)`,
-      [door, "Unknown", "", now()]
-    );
+    const exists = await get(`SELECT door FROM dockplates WHERE door=?`, [door]);
+    if (!exists) {
+      await run(
+        `INSERT INTO dockplates (door,status,note,updatedAt) VALUES (?,?,?,?)`,
+        [door, "Unknown", "", Date.now()]
+      );
+    }
   }
 
-  // Set default PINs if missing (change via supervisor panel ASAP)
-  const defaults = {
-    dispatcher: process.env.DEFAULT_DISPATCHER_PIN || "1111",
-    dock:       process.env.DEFAULT_DOCK_PIN       || "2222",
-    supervisor: process.env.DEFAULT_SUPERVISOR_PIN || "3333",
-  };
-  for (const role of Object.keys(defaults)) {
-    const exists = await get(`SELECT role FROM pins WHERE role=?`, [role]);
-    if (!exists) {
-      const rec = newPinRecord(defaults[role]);
-      await run(`INSERT INTO pins(role,salt,hash,updatedAt) VALUES(?,?,?,?)`, [
-        role, rec.salt, rec.hash, now(),
-      ]);
-      await auditLog("system", "pin_seeded", "pin", role, { role }, "127.0.0.1");
+  // Seed PINs if none exist
+  for (const role of ["dispatcher", "dock", "supervisor"]) {
+    const row = await get(`SELECT role FROM pins WHERE role=?`, [role]);
+    if (!row) {
+      const pin = ENV_PINS[role] && ENV_PINS[role].length >= PIN_MIN_LEN
+        ? ENV_PINS[role]
+        : genTempPin();
+      await setPin(role, pin);
+      console.log(`[SECURITY] Initial ${role} PIN set to: ${pin}`);
+      console.log(`[SECURITY] Change it in Supervisor → PIN Management ASAP.`);
     }
   }
 }
 
-async function auditLog(actorRole, action, entityType, entityId, detailsObj, ip) {
-  let details = "";
-  try { details = JSON.stringify(detailsObj || {}); } catch { details = "{}"; }
+function genTempPin() {
+  // 6-digit
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function pbkdf2Hash(pin, salt, iter = 140000) {
+  return new Promise((resolve, reject) => {
+    crypto.pbkdf2(pin, salt, iter, 32, "sha256", (err, derived) => {
+      if (err) reject(err);
+      else resolve(derived);
+    });
+  });
+}
+
+async function setPin(role, pin) {
+  const salt = crypto.randomBytes(16);
+  const iter = 140000;
+  const hash = await pbkdf2Hash(pin, salt, iter);
   await run(
-    `INSERT INTO audit(at,actorRole,action,entityType,entityId,details,ip) VALUES(?,?,?,?,?,?,?)`,
-    [now(), actorRole || "—", action || "—", entityType || "—", entityId || "—", details, ip || ""]
+    `INSERT INTO pins(role,salt,hash,iter) VALUES(?,?,?,?)
+     ON CONFLICT(role) DO UPDATE SET salt=excluded.salt, hash=excluded.hash, iter=excluded.iter`,
+    [role, salt, hash, iter]
   );
 }
 
-async function getStateObject() {
-  const rows = await all(`SELECT * FROM trailers ORDER BY updatedAt DESC`);
+async function verifyPin(role, pin) {
+  const row = await get(`SELECT salt, hash, iter FROM pins WHERE role=?`, [role]);
+  if (!row) return false;
+  const salt = row.salt;
+  const iter = row.iter || 140000;
+  const hash = row.hash;
+  const candidate = await pbkdf2Hash(pin, salt, iter);
+  // constant-time compare
+  if (candidate.length !== hash.length) return false;
+  return crypto.timingSafeEqual(candidate, hash);
+}
+
+/* =========================
+   SESSIONS (memory)
+========================= */
+const sessions = new Map(); // sid -> {role, exp}
+
+function newSession(role) {
+  const sid = crypto.randomBytes(24).toString("hex");
+  sessions.set(sid, { role, exp: Date.now() + SESSION_TTL_MS });
+  return sid;
+}
+
+function parseCookies(req) {
+  const h = req.headers.cookie || "";
+  const out = {};
+  h.split(";").forEach((p) => {
+    const i = p.indexOf("=");
+    if (i > -1) out[p.slice(0, i).trim()] = decodeURIComponent(p.slice(i + 1).trim());
+  });
+  return out;
+}
+
+function getSession(req) {
+  const cookies = parseCookies(req);
+  const sid = cookies[COOKIE_NAME];
+  if (!sid) return null;
+  const s = sessions.get(sid);
+  if (!s) return null;
+  if (Date.now() > s.exp) {
+    sessions.delete(sid);
+    return null;
+  }
+  return { sid, ...s };
+}
+
+function setSessionCookie(res, sid) {
+  const secure = process.env.NODE_ENV === "production";
+  res.setHeader(
+    "Set-Cookie",
+    `${COOKIE_NAME}=${encodeURIComponent(sid)}; Path=/; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`
+  );
+}
+
+function clearSessionCookie(res) {
+  res.setHeader(
+    "Set-Cookie",
+    `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`
+  );
+}
+
+function requireRole(roles) {
+  return (req, res, next) => {
+    const s = getSession(req);
+    if (!s || !roles.includes(s.role)) return res.status(401).send("Unauthorized");
+    req.user = { role: s.role };
+    next();
+  };
+}
+
+/* =========================
+   AUDIT / STATE HELPERS
+========================= */
+function ipOf(req) {
+  const xf = req.headers["x-forwarded-for"];
+  if (xf) return String(xf).split(",")[0].trim();
+  return req.socket.remoteAddress || "";
+}
+
+async function audit(req, actorRole, action, entityType, entityId, details) {
+  const at = Date.now();
+  const ip = ipOf(req);
+  const ua = req.headers["user-agent"] || "";
+  let d = "";
+  try { d = JSON.stringify(details || {}); } catch { d = ""; }
+  await run(
+    `INSERT INTO audit(at,actorRole,action,entityType,entityId,details,ip,userAgent)
+     VALUES(?,?,?,?,?,?,?,?)`,
+    [at, actorRole || "unknown", action, entityType, entityId, d, ip, ua]
+  );
+}
+
+async function loadTrailersObject() {
+  const rows = await all(`SELECT * FROM trailers`);
   const obj = {};
   for (const r of rows) {
     obj[r.trailer] = {
       direction: r.direction || "",
-      status:    r.status    || "",
-      door:      r.door      || "",
-      note:      r.note      || "",
-      dropType:  r.dropType  || "",
+      status: r.status || "",
+      door: r.door || "",
+      note: r.note || "",
+      dropType: r.dropType || "",
       updatedAt: r.updatedAt || 0,
     };
   }
   return obj;
 }
 
-async function getDockPlatesObject() {
-  const rows = await all(`SELECT * FROM dockplates ORDER BY CAST(door AS INT) ASC`);
+async function loadDockPlatesObject() {
+  const rows = await all(`SELECT * FROM dockplates ORDER BY CAST(door AS INTEGER) ASC`);
   const obj = {};
   for (const r of rows) {
-    obj[r.door] = { status: r.status || "Unknown", note: r.note || "", updatedAt: r.updatedAt || 0 };
+    obj[r.door] = {
+      status: r.status || "Unknown",
+      note: r.note || "",
+      updatedAt: r.updatedAt || 0,
+    };
   }
   return obj;
 }
 
-async function getConfirmations(limit = 200) {
-  const rows = await all(
+async function loadConfirmations(limit = 250) {
+  return all(
     `SELECT at,trailer,door,ip,userAgent FROM confirmations ORDER BY at DESC LIMIT ?`,
     [limit]
   );
-  return rows.map((r) => ({
-    at:        r.at,
-    trailer:   r.trailer   || "",
-    door:      r.door      || "",
-    ip:        r.ip        || "",
-    userAgent: r.userAgent || "",
-  }));
 }
 
-// ---------------- AUTH ----------------
-async function readSession(req) {
-  const token = req.cookies?.[COOKIE_NAME];
-  if (!token) return null;
-  const row = await get(`SELECT token,role FROM sessions WHERE token=?`, [token]);
-  if (!row) return null;
-  await run(`UPDATE sessions SET lastSeen=? WHERE token=?`, [now(), token]).catch(() => {});
-  return { token: row.token, role: row.role };
-}
-
-function requireRole(...roles) {
-  return async (req, res, next) => {
-    try {
-      if (!isSameOrigin(req)) return res.status(403).send("Bad origin");
-      const sess = await readSession(req);
-      if (!sess || !roles.includes(sess.role)) return res.status(401).send("Unauthorized");
-      req.user = sess;
-      next();
-    } catch (e) {
-      res.status(500).send("Auth error");
-    }
-  };
-}
-
-// ---------------- APP ----------------
-const app = express();
-app.set("trust proxy", 1);
-app.use(express.json({ limit: "200kb" }));
-app.use(express.urlencoded({ extended: true }));
-app.use(require("cookie-parser")());
-
-// Serve the same index.html for all app routes
-const INDEX_FILE = path.join(__dirname, "index.html");
-app.get(["/", "/dock", "/driver", "/supervisor"], (req, res) => res.sendFile(INDEX_FILE));
-
-// Login page
-app.get("/login", (req, res) => {
-  const expired = req.query.expired
-    ? `<div style="margin:10px 0;color:#ef4444;">Session expired. Log in again.</div>`
-    : "";
-  res.type("html").send(`
-<!doctype html><html><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Login</title>
-<style>
-  body{background:#080d18;color:#e8f0ff;font-family:system-ui;margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:16px;}
-  .card{width:420px;max-width:100%;background:#0f1a2e;border:1px solid #263756;border-radius:12px;padding:18px;box-shadow:0 18px 60px rgba(0,0,0,.55);}
-  h1{margin:0 0 8px;font-size:18px;}
-  p{margin:0 0 14px;color:#93a4c7;font-size:13px;}
-  label{display:block;margin:10px 0 6px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#5a7099;}
-  select,input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #263756;background:#0d1525;color:#e8f0ff;font-size:14px;outline:none;}
-  button{margin-top:14px;width:100%;padding:12px;border-radius:10px;border:1px solid #2563eb;background:#1d4ed8;color:#fff;font-weight:900;cursor:pointer;}
-  .hint{margin-top:10px;color:#5a7099;font-size:12px;}
-</style></head><body>
-<div class="card">
-  <h1>Wesbell Dispatch Login</h1>
-  <p>Enter your role PIN to enable editing tools.</p>
-  ${expired}
-  <form method="POST" action="/login">
-    <label>Role</label>
-    <select name="role">
-      <option value="dispatcher">Dispatcher</option>
-      <option value="dock">Dock</option>
-      <option value="supervisor">Supervisor</option>
-    </select>
-    <label>PIN</label>
-    <input name="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="••••" required />
-    <button type="submit">Log In</button>
-  </form>
-  <div class="hint">Tip: Supervisor can change PINs inside /supervisor.</div>
-</div>
-</body></html>`);
-});
-
-app.post("/login", async (req, res) => {
-  try {
-    if (!isSameOrigin(req)) return res.status(403).send("Bad origin");
-    const role = safeStr(req.body.role, 20).toLowerCase();
-    const pin  = safeStr(req.body.pin, 64);
-    if (!["dispatcher", "dock", "supervisor"].includes(role)) return res.status(400).send("Bad role");
-    if (!pin) return res.status(400).send("Missing PIN");
-
-    const row = await get(`SELECT salt,hash FROM pins WHERE role=?`, [role]);
-    if (!row) return res.status(401).send("Unauthorized");
-
-    const calc = pbkdf2Hash(pin, row.salt);
-    if (calc !== row.hash) {
-      await auditLog(role, "login_failed", "session", "*", { role }, getIP(req));
-      return res.status(401).type("html").send(`<p style="font-family:system-ui">Bad PIN. <a href="/login">Try again</a></p>`);
-    }
-
-    const token = randHex(24);
-    await run(`INSERT INTO sessions(token,role,createdAt,lastSeen) VALUES(?,?,?,?)`, [
-      token, role, now(), now(),
-    ]);
-
-    res.cookie(COOKIE_NAME, token, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure:   IS_PROD,
-      maxAge:   1000 * 60 * 60 * 12, // 12h
-      path:     "/",
-    });
-
-    await auditLog(role, "login_ok", "session", "*", { role }, getIP(req));
-
-    if (role === "dock")       return res.redirect("/dock");
-    if (role === "supervisor") return res.redirect("/supervisor");
-    return res.redirect("/");
-  } catch (e) {
-    res.status(500).send("Login error");
-  }
-});
-
-// ---------------- API ----------------
-app.get("/api/whoami", async (req, res) => {
-  try {
-    const sess = await readSession(req);
-    res.json({ role: sess?.role || null, version: APP_VERSION });
-  } catch {
-    res.json({ role: null, version: APP_VERSION });
-  }
-});
-
-app.post("/api/logout", async (req, res) => {
-  try {
-    if (!isSameOrigin(req)) return res.status(403).send("Bad origin");
-    const token = req.cookies?.[COOKIE_NAME];
-    if (token) await run(`DELETE FROM sessions WHERE token=?`, [token]).catch(() => {});
-    res.clearCookie(COOKIE_NAME, { path: "/" });
-    res.json({ ok: true });
-  } catch {
-    res.json({ ok: true });
-  }
-});
-
-app.get("/api/state", async (req, res) => {
-  try {
-    res.json(await getStateObject());
-  } catch (e) {
-    res.status(500).send("DB error");
-  }
-});
-
-app.post("/api/upsert", requireRole("dispatcher", "dock"), async (req, res) => {
-  try {
-    const ip        = getIP(req);
-    const actorRole = req.user.role;
-
-    const trailer = normalizeTrailer(req.body.trailer);
-    if (!trailer) return res.status(400).send("Missing trailer");
-
-    // Fetch existing row for notify logic
-    const prev = await get(`SELECT status,door FROM trailers WHERE trailer=?`, [trailer]);
-
-    let direction = safeStr(req.body.direction, 20);
-    let status    = safeStr(req.body.status, 20);
-    let door      = normalizeDoor(req.body.door);
-    let note      = safeStr(req.body.note, 300);
-    let dropType  = safeStr(req.body.dropType, 20);
-
-    if (actorRole === "dock") {
-      // Dock only sends {trailer, status} — keep all other fields from DB
-      const cur = await get(`SELECT direction,door,note,dropType FROM trailers WHERE trailer=?`, [trailer]);
-      direction = direction || cur?.direction || "";
-      door      = door      || cur?.door      || "";
-      note      = note      || cur?.note      || "";
-      dropType  = dropType  || cur?.dropType  || "";
-    }
-
-    const updatedAt = now();
-
-    await run(
-      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
-       VALUES(?,?,?,?,?,?,?)
-       ON CONFLICT(trailer) DO UPDATE SET
-         direction=COALESCE(excluded.direction, trailers.direction),
-         status=COALESCE(excluded.status, trailers.status),
-         door=COALESCE(excluded.door, trailers.door),
-         note=COALESCE(excluded.note, trailers.note),
-         dropType=COALESCE(excluded.dropType, trailers.dropType),
-         updatedAt=excluded.updatedAt`,
-      [trailer, direction || "", status || "", door || "", note || "", dropType || "", updatedAt]
-    );
-
-    const action = prev ? "trailer_update" : "trailer_create";
-    await auditLog(actorRole, action, "trailer", trailer, { direction, status, door, note, dropType }, ip);
-
-    broadcastAll("state", await getStateObject());
-    broadcastAll("version", { version: APP_VERSION });
-
-    // ── NOTIFY LOGIC ──
-    // Driver notification only fires when a DISPATCHER sets status to Ready
-    // AND the trailer was previously in "Dock Ready" (set by dock worker).
-    // This enforces the two-step approval: Dock Ready → dispatcher confirms → Ready → driver notified.
-    const newStatus = status || prev?.status || "";
-    const becameReady = actorRole === "dispatcher"
-      && prev?.status === "Dock Ready"
-      && newStatus === "Ready";
-
-    if (becameReady) {
-      broadcastAll("notify", { kind: "ready", trailer, door: door || prev?.door || "" });
-    }
-
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).send("Upsert error");
-  }
-});
-
-app.post("/api/delete", requireRole("dispatcher"), async (req, res) => {
-  try {
-    const ip      = getIP(req);
-    const trailer = normalizeTrailer(req.body.trailer);
-    if (!trailer) return res.status(400).send("Missing trailer");
-    await run(`DELETE FROM trailers WHERE trailer=?`, [trailer]);
-    await auditLog("dispatcher", "trailer_delete", "trailer", trailer, {}, ip);
-    broadcastAll("state", await getStateObject());
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).send("Delete error");
-  }
-});
-
-app.post("/api/clear", requireRole("dispatcher"), async (req, res) => {
-  try {
-    const ip = getIP(req);
-    await run(`DELETE FROM trailers`);
-    await auditLog("dispatcher", "trailer_clear_all", "trailer", "*", {}, ip);
-    broadcastAll("state", await getStateObject());
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).send("Clear error");
-  }
-});
-
-app.get("/api/dockplates", async (req, res) => {
-  try {
-    res.json(await getDockPlatesObject());
-  } catch {
-    res.status(500).send("DB error");
-  }
-});
-
-app.post("/api/dockplates/set", requireRole("dispatcher", "dock"), async (req, res) => {
-  try {
-    const ip     = getIP(req);
-    const door   = normalizeDoor(req.body.door);
-    const status = safeStr(req.body.status, 20) || "Unknown";
-    const note   = safeStr(req.body.note, 120);
-    if (!door) return res.status(400).send("Missing door");
-
-    await run(
-      `INSERT INTO dockplates(door,status,note,updatedAt) VALUES(?,?,?,?)
-       ON CONFLICT(door) DO UPDATE SET status=excluded.status, note=excluded.note, updatedAt=excluded.updatedAt`,
-      [door, status, note, now()]
-    );
-    await auditLog(req.user.role, "plate_set", "dockplate", door, { status, note }, ip);
-
-    broadcastAll("dockplates", await getDockPlatesObject());
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).send("Plate set error");
-  }
-});
-
-// Driver drop (public — no login required)
-app.post("/api/driver/drop", async (req, res) => {
-  try {
-    if (!isSameOrigin(req)) return res.status(403).send("Bad origin");
-    const ip = getIP(req);
-
-    const trailer = normalizeTrailer(req.body.trailer);
-    const door    = normalizeDoor(req.body.door);
-    const dropType = safeStr(req.body.dropType, 20);
-
-    if (!trailer) return res.status(400).send("Missing trailer");
-    if (!door)    return res.status(400).send("Missing door");
-
-    // Keep existing direction/note if trailer already exists
-    const cur = await get(`SELECT direction,note FROM trailers WHERE trailer=?`, [trailer]);
-    const direction = cur?.direction || "Inbound";
-
-    await run(
-      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
-       VALUES(?,?,?,?,?,?,?)
-       ON CONFLICT(trailer) DO UPDATE SET
-         direction=excluded.direction,
-         status=excluded.status,
-         door=excluded.door,
-         dropType=excluded.dropType,
-         updatedAt=excluded.updatedAt`,
-      [trailer, direction, "Dropped", door, cur?.note || "", dropType || "", now()]
-    );
-
-    await auditLog("driver", "driver_drop", "trailer", trailer, { door, dropType }, ip);
-
-    broadcastAll("state", await getStateObject());
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).send("Driver drop error");
-  }
-});
-
-// Safety confirmations (public — no login required)
-app.post("/api/confirm-safety", async (req, res) => {
-  try {
-    if (!isSameOrigin(req)) return res.status(403).send("Bad origin");
-    const ip = getIP(req);
-    const ua = safeStr(req.headers["user-agent"], 180);
-
-    const trailer    = normalizeTrailer(req.body.trailer);
-    const door       = normalizeDoor(req.body.door);
-    const loadSecured = !!req.body.loadSecured;
-    const dockPlateUp = !!req.body.dockPlateUp;
-
-    if (!loadSecured || !dockPlateUp) return res.status(400).send("Missing confirmations");
-
-    await run(
-      `INSERT INTO confirmations(at,trailer,door,ip,userAgent) VALUES(?,?,?,?,?)`,
-      [now(), trailer || "", door || "", ip, ua]
-    );
-    await auditLog("driver", "safety_confirmed", "safety", trailer || "*", { trailer, door }, ip);
-
-    broadcastAll("confirmations", await getConfirmations(200));
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).send("Confirm error");
-  }
-});
-
-app.get("/api/audit", requireRole("dispatcher", "supervisor"), async (req, res) => {
-  try {
-    const limit = Math.max(1, Math.min(500, parseInt(req.query.limit || "200", 10) || 200));
-    const rows  = await all(
-      `SELECT at,actorRole,action,entityType,entityId,details,ip FROM audit ORDER BY at DESC LIMIT ?`,
-      [limit]
-    );
-    res.json(rows.map((r) => ({
-      at:         r.at,
-      actorRole:  r.actorRole,
-      action:     r.action,
-      entityType: r.entityType,
-      entityId:   r.entityId,
-      details: (() => { try { return JSON.parse(r.details || "{}"); } catch { return {}; } })(),
-      ip:         r.ip || "",
-    })));
-  } catch (e) {
-    res.status(500).send("Audit error");
-  }
-});
-
-app.post("/api/supervisor/set-pin", requireRole("supervisor"), async (req, res) => {
-  try {
-    const ip   = getIP(req);
-    const role = safeStr(req.body.role, 20).toLowerCase();
-    const pin  = safeStr(req.body.pin, 64);
-
-    if (!["dispatcher", "dock", "supervisor"].includes(role)) return res.status(400).send("Bad role");
-    if (!pin || pin.length < 4) return res.status(400).send("PIN too short");
-
-    const rec = newPinRecord(pin);
-    await run(
-      `INSERT INTO pins(role,salt,hash,updatedAt) VALUES(?,?,?,?)
-       ON CONFLICT(role) DO UPDATE SET salt=excluded.salt, hash=excluded.hash, updatedAt=excluded.updatedAt`,
-      [role, rec.salt, rec.hash, now()]
-    );
-
-    // Force re-login for all sessions of that role
-    await run(`DELETE FROM sessions WHERE role=?`, [role]).catch(() => {});
-
-    await auditLog("supervisor", "pin_changed", "pin", role, { role }, ip);
-    broadcastAll("version", { version: APP_VERSION });
-
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).send("PIN error");
-  }
-});
-
-// ---------------- WEBSOCKET ----------------
+/* =========================
+   WEBSOCKET
+========================= */
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-function wsSend(ws, type, payload) {
-  if (ws.readyState !== WebSocket.OPEN) return;
-  ws.send(JSON.stringify({ type, payload }));
-}
-
-function broadcastAll(type, payload) {
+function wsBroadcast(type, payload) {
   const msg = JSON.stringify({ type, payload });
   for (const client of wss.clients) {
     if (client.readyState === WebSocket.OPEN) client.send(msg);
   }
 }
 
-wss.on("connection", async (ws) => {
+async function broadcastAll() {
+  wsBroadcast("state", await loadTrailersObject());
+  wsBroadcast("dockplates", await loadDockPlatesObject());
+  wsBroadcast("confirmations", await loadConfirmations(250));
+  wsBroadcast("version", { version: APP_VERSION });
+}
+
+/* =========================
+   VIEWS
+========================= */
+const INDEX_FILE = path.join(__dirname, "index.html");
+
+function sendIndex(req, res) {
+  res.sendFile(INDEX_FILE);
+}
+
+// Minimal /login page (PIN entry)
+app.get("/login", (req, res) => {
+  const expired = req.query.expired ? `<div style="margin:10px 0;color:#e84848;">Session expired. Please sign in again.</div>` : "";
+  res.setHeader("content-type", "text/html; charset=utf-8");
+  res.end(`<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Wesbell Login</title>
+<style>
+  body{margin:0;background:#0a0d12;color:#e2e8f2;font-family:system-ui;padding:22px}
+  .card{max-width:380px;margin:40px auto;background:#121820;border:1px solid #1a2232;border-radius:12px;padding:18px}
+  label{display:block;font-size:12px;margin:10px 0 6px;color:#8a9bb5}
+  input,select{width:100%;padding:12px;border-radius:10px;border:1px solid #213040;background:#0e1218;color:#e2e8f2;font-size:16px}
+  button{width:100%;padding:12px;border-radius:10px;border:1px solid rgba(240,160,48,.2);background:rgba(240,160,48,.09);color:#f0a030;font-weight:700;margin-top:14px;cursor:pointer}
+  .muted{color:#4a5a72;font-size:12px;margin-top:10px;line-height:1.5}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h2 style="margin:0 0 8px;font-size:18px;">Wesbell Dispatch</h2>
+    <div class="muted">Sign in with your role PIN to unlock controls.</div>
+    ${expired}
+    <label>Role</label>
+    <select id="role">
+      <option value="dispatcher">Dispatcher</option>
+      <option value="dock">Dock</option>
+      <option value="supervisor">Supervisor</option>
+    </select>
+    <label>PIN</label>
+    <input id="pin" type="password" inputmode="numeric" placeholder="Enter PIN" />
+    <button id="go">Sign In</button>
+    <div class="muted">Tip: Supervisor can reset PINs in Supervisor → PIN Management.</div>
+  </div>
+<script>
+document.getElementById("go").onclick = async () => {
+  const role = document.getElementById("role").value;
+  const pin = document.getElementById("pin").value;
+  const res = await fetch("/api/login", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json","X-Requested-With":"XMLHttpRequest" },
+    body: JSON.stringify({ role, pin })
+  });
+  if(!res.ok){ alert(await res.text()); return; }
+  location.href = role==="supervisor" ? "/supervisor" : "/";
+};
+document.getElementById("pin").addEventListener("keydown", (e)=>{ if(e.key==="Enter") document.getElementById("go").click(); });
+</script>
+</body></html>`);
+});
+
+// Serve the single-page app for these routes
+app.get("/", sendIndex);
+app.get("/dock", sendIndex);
+app.get("/driver", sendIndex);
+app.get("/supervisor", sendIndex);
+
+/* =========================
+   API
+========================= */
+
+// whoami
+app.get("/api/whoami", (req, res) => {
+  const s = getSession(req);
+  res.json({ role: s?.role || null, version: APP_VERSION });
+});
+
+// login
+app.post("/api/login", requireXHR, async (req, res) => {
   try {
-    wsSend(ws, "version",       { version: APP_VERSION });
-    wsSend(ws, "state",         await getStateObject());
-    wsSend(ws, "dockplates",    await getDockPlatesObject());
-    wsSend(ws, "confirmations", await getConfirmations(200));
+    const role = String(req.body.role || "").toLowerCase();
+    const pin = String(req.body.pin || "");
+    if (!["dispatcher", "dock", "supervisor"].includes(role)) return res.status(400).send("Invalid role");
+    if (pin.length < PIN_MIN_LEN) return res.status(400).send("PIN too short");
+
+    const ok = await verifyPin(role, pin);
+    await audit(req, role, ok ? "login_success" : "login_failed", "auth", role, {});
+    if (!ok) return res.status(401).send("Invalid PIN");
+
+    const sid = newSession(role);
+    setSessionCookie(res, sid);
+    res.json({ ok: true, role, version: APP_VERSION });
+  } catch (e) {
+    res.status(500).send("Login error");
+  }
+});
+
+// logout
+app.post("/api/logout", requireXHR, (req, res) => {
+  const s = getSession(req);
+  if (s?.sid) sessions.delete(s.sid);
+  clearSessionCookie(res);
+  res.json({ ok: true });
+});
+
+// get trailers state
+app.get("/api/state", async (req, res) => {
+  res.json(await loadTrailersObject());
+});
+
+// upsert trailer (dispatcher/dock/supervisor)
+app.post("/api/upsert", requireXHR, requireRole(["dispatcher", "dock", "supervisor"]), async (req, res) => {
+  const actor = req.user.role;
+  try {
+    const trailer = String(req.body.trailer || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+
+    // Load existing for merge + audit
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    const now = Date.now();
+
+    // Merge fields (only overwrite provided)
+    const direction = (req.body.direction !== undefined) ? String(req.body.direction || "").trim() : (existing?.direction || "");
+    const status = (req.body.status !== undefined) ? String(req.body.status || "").trim() : (existing?.status || "");
+    const door = (req.body.door !== undefined) ? String(req.body.door || "").trim() : (existing?.door || "");
+    const note = (req.body.note !== undefined) ? String(req.body.note || "").trim() : (existing?.note || "");
+    const dropType = (req.body.dropType !== undefined) ? String(req.body.dropType || "").trim() : (existing?.dropType || "");
+
+    // Role restrictions:
+    // - dock can only change status to Loading / Dock Ready
+    if (actor === "dock" && req.body.status !== undefined) {
+      if (!["Loading", "Dock Ready"].includes(status)) {
+        return res.status(403).send("Dock can only set Loading or Dock Ready");
+      }
+    }
+
+    // Dispatcher can set any status; Supervisor can also set any status.
+    // Basic status validation:
+    const allowed = ["Incoming", "Dropped", "Loading", "Dock Ready", "Ready", "Departed", ""];
+    if (!allowed.includes(status)) return res.status(400).send("Invalid status");
+
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
+       VALUES(?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET
+        direction=excluded.direction,
+        status=excluded.status,
+        door=excluded.door,
+        note=excluded.note,
+        dropType=excluded.dropType,
+        updatedAt=excluded.updatedAt`,
+      [trailer, direction, status, door, note, dropType, now]
+    );
+
+    const action = existing ? "trailer_update" : "trailer_create";
+    await audit(req, actor, action, "trailer", trailer, { direction, status, door, dropType, note });
+
+    // Notify when dispatcher/supervisor sets Ready
+    if (status === "Ready" && (actor === "dispatcher" || actor === "supervisor")) {
+      wsBroadcast("notify", { kind: "ready", trailer, door: door || "" });
+      await audit(req, actor, "trailer_status_set", "trailer", trailer, { status: "Ready" });
+    } else if (req.body.status !== undefined) {
+      await audit(req, actor, "trailer_status_set", "trailer", trailer, { status });
+    }
+
+    await broadcastAll();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Upsert failed");
+  }
+});
+
+// delete trailer (dispatcher/supervisor)
+app.post("/api/delete", requireXHR, requireRole(["dispatcher", "supervisor"]), async (req, res) => {
+  const actor = req.user.role;
+  try {
+    const trailer = String(req.body.trailer || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+    await run(`DELETE FROM trailers WHERE trailer=?`, [trailer]);
+    await audit(req, actor, "trailer_delete", "trailer", trailer, {});
+    await broadcastAll();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Delete failed");
+  }
+});
+
+// clear all (dispatcher/supervisor)
+app.post("/api/clear", requireXHR, requireRole(["dispatcher", "supervisor"]), async (req, res) => {
+  const actor = req.user.role;
+  try {
+    await run(`DELETE FROM trailers`);
+    await audit(req, actor, "trailer_clear_all", "trailer", "*", {});
+    await broadcastAll();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Clear failed");
+  }
+});
+
+// dock plates get
+app.get("/api/dockplates", async (req, res) => {
+  res.json(await loadDockPlatesObject());
+});
+
+// dock plates set (dock/dispatcher/supervisor)
+app.post("/api/dockplates/set", requireXHR, requireRole(["dock", "dispatcher", "supervisor"]), async (req, res) => {
+  const actor = req.user.role;
+  try {
+    const door = String(req.body.door || "").trim();
+    const status = String(req.body.status || "Unknown").trim();
+    const note = String(req.body.note || "").trim();
+
+    const dNum = Number(door);
+    if (!Number.isFinite(dNum) || dNum < 18 || dNum > 42) return res.status(400).send("Invalid door");
+    if (!["OK", "Service", "Unknown"].includes(status)) return res.status(400).send("Invalid plate status");
+
+    await run(
+      `INSERT INTO dockplates(door,status,note,updatedAt) VALUES(?,?,?,?)
+       ON CONFLICT(door) DO UPDATE SET status=excluded.status, note=excluded.note, updatedAt=excluded.updatedAt`,
+      [door, status, note, Date.now()]
+    );
+    await audit(req, actor, "plate_set", "dockplate", door, { status, note });
+    await broadcastAll();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Dock plate set failed");
+  }
+});
+
+// driver drop (no login required)
+app.post("/api/driver/drop", requireXHR, async (req, res) => {
+  try {
+    const trailer = String(req.body.trailer || "").trim();
+    const door = String(req.body.door || "").trim();
+    const dropType = String(req.body.dropType || "Empty").trim();
+
+    if (!trailer) return res.status(400).send("Missing trailer");
+    const dNum = Number(door);
+    if (!Number.isFinite(dNum) || dNum < 18 || dNum > 42) return res.status(400).send("Invalid door (18–42)");
+    if (!["Empty", "Loaded"].includes(dropType)) return res.status(400).send("Invalid drop type");
+
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    const now = Date.now();
+
+    // Keep existing direction if present, else default Inbound
+    const direction = existing?.direction || "Inbound";
+
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
+       VALUES(?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET
+        direction=excluded.direction,
+        status=excluded.status,
+        door=excluded.door,
+        dropType=excluded.dropType,
+        updatedAt=excluded.updatedAt`,
+      [trailer, direction, "Dropped", door, existing?.note || "", dropType, now]
+    );
+
+    await audit(req, "driver", "driver_drop", "trailer", trailer, { door, dropType });
+    await audit(req, "driver", existing ? "trailer_update" : "trailer_create", "trailer", trailer, {
+      direction,
+      status: "Dropped",
+      door,
+      dropType
+    });
+
+    await broadcastAll();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Drop failed");
+  }
+});
+
+// safety confirmation (no login required)
+app.post("/api/confirm-safety", requireXHR, async (req, res) => {
+  try {
+    const trailer = String(req.body.trailer || "").trim();
+    const door = String(req.body.door || "").trim();
+    const loadSecured = !!req.body.loadSecured;
+    const dockPlateUp = !!req.body.dockPlateUp;
+    if (!loadSecured || !dockPlateUp) return res.status(400).send("Both confirmations required");
+
+    const at = Date.now();
+    await run(
+      `INSERT INTO confirmations(at,trailer,door,ip,userAgent) VALUES(?,?,?,?,?)`,
+      [at, trailer || "", door || "", ipOf(req), req.headers["user-agent"] || ""]
+    );
+    await audit(req, "driver", "safety_confirmed", "safety", trailer || "-", { trailer, door, loadSecured, dockPlateUp });
+
+    await broadcastAll();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Confirm failed");
+  }
+});
+
+// audit log (dispatcher/supervisor)
+app.get("/api/audit", requireRole(["dispatcher", "supervisor"]), async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(500, Number(req.query.limit || 200)));
+    const rows = await all(
+      `SELECT at,actorRole,action,entityType,entityId,details,ip,userAgent
+       FROM audit ORDER BY at DESC LIMIT ?`,
+      [limit]
+    );
+    // parse details JSON
+    const out = rows.map(r => {
+      let details = {};
+      try { details = r.details ? JSON.parse(r.details) : {}; } catch {}
+      return { ...r, details };
+    });
+    res.json(out);
+  } catch (e) {
+    res.status(500).send("Audit failed");
+  }
+});
+
+// supervisor set-pin
+app.post("/api/supervisor/set-pin", requireXHR, requireRole(["supervisor"]), async (req, res) => {
+  const actor = req.user.role;
+  try {
+    const role = String(req.body.role || "").toLowerCase();
+    const pin = String(req.body.pin || "");
+    if (!["dispatcher", "dock", "supervisor"].includes(role)) return res.status(400).send("Invalid role");
+    if (pin.length < PIN_MIN_LEN) return res.status(400).send("PIN too short");
+
+    await setPin(role, pin);
+
+    // Invalidate all sessions (forces re-login everywhere)
+    sessions.clear();
+    await audit(req, actor, "pin_changed", "auth", role, {});
+
+    await broadcastAll();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Set PIN failed");
+  }
+});
+
+/* =========================
+   WS CONNECTION
+========================= */
+wss.on("connection", async (ws) => {
+  // Send initial payloads
+  try {
+    ws.send(JSON.stringify({ type: "version", payload: { version: APP_VERSION } }));
+    ws.send(JSON.stringify({ type: "state", payload: await loadTrailersObject() }));
+    ws.send(JSON.stringify({ type: "dockplates", payload: await loadDockPlatesObject() }));
+    ws.send(JSON.stringify({ type: "confirmations", payload: await loadConfirmations(250) }));
   } catch {}
 });
 
-// ---------------- START ----------------
+/* =========================
+   START
+========================= */
 initDb()
   .then(() => {
     server.listen(PORT, () => {
-      console.log(`Wesbell Dispatch running on port ${PORT} (v${APP_VERSION})`);
+      console.log(`Wesbell Dispatch running on http://localhost:${PORT}`);
       console.log(`DB: ${DB_FILE}`);
     });
   })

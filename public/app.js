@@ -225,7 +225,7 @@
   function renderPlates() {
     if(isDriver()||isSuper())return;
     const canEdit=ROLE==="dispatcher"||ROLE==="dock";
-    const doors=[]; for(let d=18;d<=42;d++) doors.push(String(d));
+    const doors=[]; for(let d=28;d<=42;d++) doors.push(String(d));
     const v=Object.values(dockPlates||{});
     const summary=`${v.filter(p=>p?.status==="OK").length} OK · ${v.filter(p=>p?.status==="Service").length} Svc`;
     ["platesMini","platesMini2"].forEach(id=>{ const e=el(id); if(e)e.textContent=summary; });
@@ -245,12 +245,7 @@
     if(el("dockPlatesToggle2")?.getAttribute("aria-expanded")==="true") setPlatesOpen2(true);
   }
 
-  function renderConf() {
-    el("confCount").textContent=confirmations.length;
-    el("confBody").innerHTML=!confirmations.length
-      ?`<tr><td colspan="5" style="padding:16px;color:var(--t2);">No safety confirmations yet.</td></tr>`
-      :confirmations.map(c=>`<tr><td class="muted">${esc(fmtTime(c.at))}</td><td class="mono" style="font-weight:500;color:var(--t0);">${esc(c.trailer||"—")}</td><td class="mono">${esc(c.door||"—")}</td><td style="color:var(--t1);font-size:11px;">${esc(c.action||"—")}</td><td class="muted">${esc((c.ip||"—").split(",")[0])}</td></tr>`).join("");
-  }
+  function renderConf() { /* moved to supervisor only */ }
   function renderSupConf() {
     const sb=el("supConfBody"),sc=el("supConfCount"); if(!sb)return;
     sc.textContent=confirmations.length;
@@ -776,7 +771,7 @@
     if(!isDriver()&&!isSuper()){ try{ dockPlates=await apiJson("/api/dockplates"); }catch{ dockPlates={}; } }
     if(isSuper()||ROLE==="supervisor"){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0); }
     else if(isDock()){ renderDockView(); renderPlates(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
-    else if(!isDriver()){ renderRolePanel(); renderBoard(); renderConf(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
+    else if(!isDriver()){ renderRolePanel(); renderBoard(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
   }
 
   /* ═══════════════════════════════════════════
@@ -875,7 +870,7 @@
         if(isDock()) renderDockView();
       }
       else if(type==="dockplates"){ dockPlates=payload||{}; if(!isDriver()&&!isSuper())renderPlates(); }
-      else if(type==="confirmations"){ confirmations=Array.isArray(payload)?payload:[]; renderConf(); renderSupConf(); }
+      else if(type==="confirmations"){ confirmations=Array.isArray(payload)?payload:[]; renderSupConf(); }
       else if(type==="version"){ VERSION=payload?.version||VERSION; el("verText").textContent=VERSION||"—"; if(el("driverVerText"))el("driverVerText").textContent=VERSION||"—"; }
       else if(type==="notify"&&payload?.kind==="ready"){
         // Prominent ready notification — toast + driver banner

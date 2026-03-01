@@ -1,314 +1,672 @@
+// server.js
+// Wesbell Dispatch / Dock / Driver / Supervisor (single index.html, role auth, sqlite storage, WS realtime)
+
 const express = require("express");
 const http = require("http");
 const path = require("path");
-const fs = require("fs");
 const WebSocket = require("ws");
 const sqlite3 = require("sqlite3").verbose();
 const crypto = require("crypto");
 
-const app = express();
-app.set("trust proxy", true);
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static(__dirname));
+// ---------------- CONFIG ----------------
+const APP_VERSION = process.env.APP_VERSION || "3.0.0";
+const PORT = process.env.PORT || 3000;
+const DB_FILE = process.env.DB_FILE || path.join(__dirname, "wesbell.db");
+const COOKIE_NAME = process.env.COOKIE_NAME || "wb_session";
+const IS_PROD = process.env.NODE_ENV === "production";
 
+// ---------------- HELPERS ----------------
+const now = () => Date.now();
+const randHex = (n = 24) => crypto.randomBytes(n).toString("hex");
+const sha256 = (s) => crypto.createHash("sha256").update(String(s)).digest("hex");
+
+function getIP(req) {
+  const xf = req.headers["x-forwarded-for"];
+  const raw = (Array.isArray(xf) ? xf[0] : xf) || req.socket.remoteAddress || "";
+  return String(raw).split(",")[0].trim();
+}
+
+function safeStr(v, max = 200) {
+  v = (v ?? "").toString().trim();
+  if (v.length > max) v = v.slice(0, max);
+  return v;
+}
+
+function normalizeDoor(door) {
+  const d = safeStr(door, 8);
+  if (!d) return "";
+  // allow numeric doors only
+  const n = parseInt(d, 10);
+  if (!Number.isFinite(n)) return "";
+  return String(n);
+}
+
+function normalizeTrailer(trailer) {
+  // allow alnum and dash (some fleets use letters)
+  let t = safeStr(trailer, 24).toUpperCase();
+  t = t.replace(/[^A-Z0-9-]/g, "");
+  return t;
+}
+
+function isSameOrigin(req) {
+  // Simple CSRF mitigation: for state-changing requests, require same-origin OR no origin (curl/postman).
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  const host = req.headers.host;
+  if (!host) return false;
+  try {
+    const o = new URL(origin);
+    return o.host === host;
+  } catch {
+    return false;
+  }
+}
+
+function pbkdf2Hash(pin, saltHex) {
+  const salt = Buffer.from(saltHex, "hex");
+  const out = crypto.pbkdf2Sync(String(pin), salt, 120000, 32, "sha256");
+  return out.toString("hex");
+}
+
+function newPinRecord(pin) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = pbkdf2Hash(pin, salt);
+  return { salt, hash };
+}
+
+// ---------------- DB ----------------
+const db = new sqlite3.Database(DB_FILE);
+
+function run(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function (err) {
+      if (err) reject(err);
+      else resolve(this);
+    });
+  });
+}
+function get(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => (err ? reject(err) : resolve(row)));
+  });
+}
+function all(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => (err ? reject(err) : resolve(rows)));
+  });
+}
+
+async function initDb() {
+  await run(`
+    CREATE TABLE IF NOT EXISTS trailers(
+      trailer TEXT PRIMARY KEY,
+      direction TEXT,
+      status TEXT,
+      door TEXT,
+      note TEXT,
+      dropType TEXT,
+      updatedAt INTEGER
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS dockplates(
+      door TEXT PRIMARY KEY,
+      status TEXT,
+      note TEXT,
+      updatedAt INTEGER
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS confirmations(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      at INTEGER,
+      trailer TEXT,
+      door TEXT,
+      ip TEXT,
+      userAgent TEXT
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS audit(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      at INTEGER,
+      actorRole TEXT,
+      action TEXT,
+      entityType TEXT,
+      entityId TEXT,
+      details TEXT,
+      ip TEXT
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS pins(
+      role TEXT PRIMARY KEY,
+      salt TEXT,
+      hash TEXT,
+      updatedAt INTEGER
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS sessions(
+      token TEXT PRIMARY KEY,
+      role TEXT,
+      createdAt INTEGER,
+      lastSeen INTEGER
+    )
+  `);
+
+  // Ensure default plate rows (18–42) exist (optional)
+  for (let d = 18; d <= 42; d++) {
+    const door = String(d);
+    await run(
+      `INSERT OR IGNORE INTO dockplates(door,status,note,updatedAt) VALUES(?,?,?,?)`,
+      [door, "Unknown", "", now()]
+    );
+  }
+
+  // Set default PINs if missing (change ASAP)
+  const defaults = {
+    dispatcher: process.env.DEFAULT_DISPATCHER_PIN || "1111",
+    dock: process.env.DEFAULT_DOCK_PIN || "2222",
+    supervisor: process.env.DEFAULT_SUPERVISOR_PIN || "3333",
+  };
+  for (const role of Object.keys(defaults)) {
+    const exists = await get(`SELECT role FROM pins WHERE role=?`, [role]);
+    if (!exists) {
+      const rec = newPinRecord(defaults[role]);
+      await run(`INSERT INTO pins(role,salt,hash,updatedAt) VALUES(?,?,?,?)`, [
+        role,
+        rec.salt,
+        rec.hash,
+        now(),
+      ]);
+      await auditLog("system", "pin_seeded", "pin", role, { role }, "127.0.0.1");
+    }
+  }
+}
+
+async function auditLog(actorRole, action, entityType, entityId, detailsObj, ip) {
+  let details = "";
+  try {
+    details = JSON.stringify(detailsObj || {});
+  } catch {
+    details = "{}";
+  }
+  await run(
+    `INSERT INTO audit(at,actorRole,action,entityType,entityId,details,ip) VALUES(?,?,?,?,?,?,?)`,
+    [now(), actorRole || "—", action || "—", entityType || "—", entityId || "—", details, ip || ""]
+  );
+}
+
+async function getStateObject() {
+  const rows = await all(`SELECT * FROM trailers ORDER BY updatedAt DESC`);
+  const obj = {};
+  for (const r of rows) {
+    obj[r.trailer] = {
+      direction: r.direction || "",
+      status: r.status || "",
+      door: r.door || "",
+      note: r.note || "",
+      dropType: r.dropType || "",
+      updatedAt: r.updatedAt || 0,
+    };
+  }
+  return obj;
+}
+
+async function getDockPlatesObject() {
+  const rows = await all(`SELECT * FROM dockplates ORDER BY CAST(door AS INT) ASC`);
+  const obj = {};
+  for (const r of rows) {
+    obj[r.door] = { status: r.status || "Unknown", note: r.note || "", updatedAt: r.updatedAt || 0 };
+  }
+  return obj;
+}
+
+async function getConfirmations(limit = 200) {
+  const rows = await all(
+    `SELECT at,trailer,door,ip,userAgent FROM confirmations ORDER BY at DESC LIMIT ?`,
+    [limit]
+  );
+  return rows.map((r) => ({
+    at: r.at,
+    trailer: r.trailer || "",
+    door: r.door || "",
+    ip: r.ip || "",
+    userAgent: r.userAgent || "",
+  }));
+}
+
+// ---------------- AUTH ----------------
+async function readSession(req) {
+  const token = req.cookies?.[COOKIE_NAME];
+  if (!token) return null;
+  const row = await get(`SELECT token,role FROM sessions WHERE token=?`, [token]);
+  if (!row) return null;
+  await run(`UPDATE sessions SET lastSeen=? WHERE token=?`, [now(), token]).catch(() => {});
+  return { token: row.token, role: row.role };
+}
+
+function requireRole(...roles) {
+  return async (req, res, next) => {
+    try {
+      if (!isSameOrigin(req)) return res.status(403).send("Bad origin");
+      const sess = await readSession(req);
+      if (!sess || !roles.includes(sess.role)) return res.status(401).send("Unauthorized");
+      req.user = sess;
+      next();
+    } catch (e) {
+      res.status(500).send("Auth error");
+    }
+  };
+}
+
+// ---------------- APP ----------------
+const app = express();
+app.set("trust proxy", 1);
+app.use(express.json({ limit: "200kb" }));
+app.use(express.urlencoded({ extended: true }));
+app.use(require("cookie-parser")());
+
+// ---- Serve the same index.html for all app routes ----
+const INDEX_FILE = path.join(__dirname, "index.html");
+app.get(["/", "/dock", "/driver", "/supervisor"], (req, res) => res.sendFile(INDEX_FILE));
+
+// ---- Simple login page (you can replace with your own login.html later) ----
+app.get("/login", (req, res) => {
+  const expired = req.query.expired ? `<div style="margin:10px 0;color:#ef4444;">Session expired. Log in again.</div>` : "";
+  res.type("html").send(`
+<!doctype html><html><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Login</title>
+<style>
+  body{background:#080d18;color:#e8f0ff;font-family:system-ui;margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:16px;}
+  .card{width:420px;max-width:100%;background:#0f1a2e;border:1px solid #263756;border-radius:12px;padding:18px;box-shadow:0 18px 60px rgba(0,0,0,.55);}
+  h1{margin:0 0 8px;font-size:18px;}
+  p{margin:0 0 14px;color:#93a4c7;font-size:13px;}
+  label{display:block;margin:10px 0 6px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#5a7099;}
+  select,input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #263756;background:#0d1525;color:#e8f0ff;font-size:14px;outline:none;}
+  button{margin-top:14px;width:100%;padding:12px;border-radius:10px;border:1px solid #2563eb;background:#1d4ed8;color:#fff;font-weight:900;cursor:pointer;}
+  .hint{margin-top:10px;color:#5a7099;font-size:12px;}
+</style></head><body>
+<div class="card">
+  <h1>Wesbell Dispatch Login</h1>
+  <p>Enter your role PIN to enable editing tools.</p>
+  ${expired}
+  <form method="POST" action="/login">
+    <label>Role</label>
+    <select name="role">
+      <option value="dispatcher">Dispatcher</option>
+      <option value="dock">Dock</option>
+      <option value="supervisor">Supervisor</option>
+    </select>
+    <label>PIN</label>
+    <input name="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="••••" required />
+    <button type="submit">Log In</button>
+  </form>
+  <div class="hint">Tip: Supervisor can change PINs inside /supervisor.</div>
+</div>
+</body></html>`);
+});
+
+app.post("/login", async (req, res) => {
+  try {
+    if (!isSameOrigin(req)) return res.status(403).send("Bad origin");
+    const role = safeStr(req.body.role, 20).toLowerCase();
+    const pin = safeStr(req.body.pin, 64);
+    if (!["dispatcher", "dock", "supervisor"].includes(role)) return res.status(400).send("Bad role");
+    if (!pin) return res.status(400).send("Missing PIN");
+
+    const row = await get(`SELECT salt,hash FROM pins WHERE role=?`, [role]);
+    if (!row) return res.status(401).send("Unauthorized");
+
+    const calc = pbkdf2Hash(pin, row.salt);
+    if (calc !== row.hash) {
+      await auditLog(role, "login_failed", "session", "*", { role }, getIP(req));
+      return res.status(401).type("html").send(`<p style="font-family:system-ui">Bad PIN. <a href="/login">Try again</a></p>`);
+    }
+
+    const token = randHex(24);
+    await run(`INSERT INTO sessions(token,role,createdAt,lastSeen) VALUES(?,?,?,?)`, [
+      token,
+      role,
+      now(),
+      now(),
+    ]);
+
+    // cookie
+    res.cookie(COOKIE_NAME, token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: IS_PROD, // set true behind https
+      maxAge: 1000 * 60 * 60 * 12, // 12h
+      path: "/",
+    });
+
+    await auditLog(role, "login_ok", "session", "*", { role }, getIP(req));
+
+    // redirect
+    if (role === "dock") return res.redirect("/dock");
+    if (role === "supervisor") return res.redirect("/supervisor");
+    return res.redirect("/");
+  } catch (e) {
+    res.status(500).send("Login error");
+  }
+});
+
+// ---------------- API ----------------
+app.get("/api/whoami", async (req, res) => {
+  try {
+    const sess = await readSession(req);
+    res.json({ role: sess?.role || null, version: APP_VERSION });
+  } catch {
+    res.json({ role: null, version: APP_VERSION });
+  }
+});
+
+app.post("/api/logout", async (req, res) => {
+  try {
+    if (!isSameOrigin(req)) return res.status(403).send("Bad origin");
+    const token = req.cookies?.[COOKIE_NAME];
+    if (token) await run(`DELETE FROM sessions WHERE token=?`, [token]).catch(() => {});
+    res.clearCookie(COOKIE_NAME, { path: "/" });
+    res.json({ ok: true });
+  } catch {
+    res.json({ ok: true });
+  }
+});
+
+app.get("/api/state", async (req, res) => {
+  try {
+    const state = await getStateObject();
+    res.json(state);
+  } catch (e) {
+    res.status(500).send("DB error");
+  }
+});
+
+app.post("/api/upsert", requireRole("dispatcher", "dock"), async (req, res) => {
+  try {
+    const ip = getIP(req);
+    const actorRole = req.user.role;
+
+    const trailer = normalizeTrailer(req.body.trailer);
+    if (!trailer) return res.status(400).send("Missing trailer");
+
+    // fetch existing for notify logic
+    const prev = await get(`SELECT status,door FROM trailers WHERE trailer=?`, [trailer]);
+
+    // dock can only set status shortcuts (but allow dispatcher-style fields too if you want)
+    let direction = safeStr(req.body.direction, 20);
+    let status = safeStr(req.body.status, 20);
+    let door = normalizeDoor(req.body.door);
+    let note = safeStr(req.body.note, 300);
+    let dropType = safeStr(req.body.dropType, 20);
+
+    if (actorRole === "dock") {
+      // in your UI, dock sends only {trailer,status}
+      // so keep existing values if not provided
+      const cur = await get(`SELECT direction,door,note,dropType FROM trailers WHERE trailer=?`, [trailer]);
+      direction = direction || cur?.direction || "";
+      door = door || cur?.door || "";
+      note = note || cur?.note || "";
+      dropType = dropType || cur?.dropType || "";
+    }
+
+    const updatedAt = now();
+
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
+       VALUES(?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET
+         direction=COALESCE(excluded.direction, trailers.direction),
+         status=COALESCE(excluded.status, trailers.status),
+         door=COALESCE(excluded.door, trailers.door),
+         note=COALESCE(excluded.note, trailers.note),
+         dropType=COALESCE(excluded.dropType, trailers.dropType),
+         updatedAt=excluded.updatedAt
+      `,
+      [trailer, direction || "", status || "", door || "", note || "", dropType || "", updatedAt]
+    );
+
+    const action = prev ? "trailer_update" : "trailer_create";
+    await auditLog(actorRole, action, "trailer", trailer, { direction, status, door, note, dropType }, ip);
+
+    // broadcast new state
+    broadcastAll("state", await getStateObject());
+    broadcastAll("version", { version: APP_VERSION });
+
+    // notify if became READY (your UI listens for notify.kind==="ready")
+    const newStatus = status || prev?.status || "";
+    const becameReady = prev?.status !== "Ready" && newStatus === "Ready";
+    if (becameReady) {
+      broadcastAll("notify", { kind: "ready", trailer, door: door || prev?.door || "" });
+    }
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Upsert error");
+  }
+});
+
+app.post("/api/delete", requireRole("dispatcher"), async (req, res) => {
+  try {
+    const ip = getIP(req);
+    const trailer = normalizeTrailer(req.body.trailer);
+    if (!trailer) return res.status(400).send("Missing trailer");
+    await run(`DELETE FROM trailers WHERE trailer=?`, [trailer]);
+    await auditLog("dispatcher", "trailer_delete", "trailer", trailer, {}, ip);
+    broadcastAll("state", await getStateObject());
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Delete error");
+  }
+});
+
+app.post("/api/clear", requireRole("dispatcher"), async (req, res) => {
+  try {
+    const ip = getIP(req);
+    await run(`DELETE FROM trailers`);
+    await auditLog("dispatcher", "trailer_clear_all", "trailer", "*", {}, ip);
+    broadcastAll("state", await getStateObject());
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Clear error");
+  }
+});
+
+app.get("/api/dockplates", async (req, res) => {
+  try {
+    res.json(await getDockPlatesObject());
+  } catch {
+    res.status(500).send("DB error");
+  }
+});
+
+app.post("/api/dockplates/set", requireRole("dispatcher", "dock"), async (req, res) => {
+  try {
+    const ip = getIP(req);
+    const door = normalizeDoor(req.body.door);
+    const status = safeStr(req.body.status, 20) || "Unknown";
+    const note = safeStr(req.body.note, 120);
+    if (!door) return res.status(400).send("Missing door");
+
+    await run(
+      `INSERT INTO dockplates(door,status,note,updatedAt) VALUES(?,?,?,?)
+       ON CONFLICT(door) DO UPDATE SET status=excluded.status, note=excluded.note, updatedAt=excluded.updatedAt`,
+      [door, status, note, now()]
+    );
+    await auditLog(req.user.role, "plate_set", "dockplate", door, { status, note }, ip);
+
+    broadcastAll("dockplates", await getDockPlatesObject());
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Plate set error");
+  }
+});
+
+// Driver drop (public; no login)
+app.post("/api/driver/drop", async (req, res) => {
+  try {
+    if (!isSameOrigin(req)) return res.status(403).send("Bad origin");
+    const ip = getIP(req);
+
+    const trailer = normalizeTrailer(req.body.trailer);
+    const door = normalizeDoor(req.body.door);
+    const dropType = safeStr(req.body.dropType, 20);
+
+    if (!trailer) return res.status(400).send("Missing trailer");
+    if (!door) return res.status(400).send("Missing door");
+
+    // keep existing direction if present
+    const cur = await get(`SELECT direction,note FROM trailers WHERE trailer=?`, [trailer]);
+    const direction = cur?.direction || "Inbound";
+
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
+       VALUES(?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET
+         direction=excluded.direction,
+         status=excluded.status,
+         door=excluded.door,
+         dropType=excluded.dropType,
+         updatedAt=excluded.updatedAt`,
+      [trailer, direction, "Dropped", door, cur?.note || "", dropType || "", now()]
+    );
+
+    await auditLog("driver", "driver_drop", "trailer", trailer, { door, dropType }, ip);
+
+    broadcastAll("state", await getStateObject());
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Driver drop error");
+  }
+});
+
+// Safety confirmations (public; no login)
+app.post("/api/confirm-safety", async (req, res) => {
+  try {
+    if (!isSameOrigin(req)) return res.status(403).send("Bad origin");
+    const ip = getIP(req);
+    const ua = safeStr(req.headers["user-agent"], 180);
+
+    const trailer = normalizeTrailer(req.body.trailer);
+    const door = normalizeDoor(req.body.door);
+
+    const loadSecured = !!req.body.loadSecured;
+    const dockPlateUp = !!req.body.dockPlateUp;
+    if (!loadSecured || !dockPlateUp) return res.status(400).send("Missing confirmations");
+
+    await run(
+      `INSERT INTO confirmations(at,trailer,door,ip,userAgent) VALUES(?,?,?,?,?)`,
+      [now(), trailer || "", door || "", ip, ua]
+    );
+    await auditLog("driver", "safety_confirmed", "safety", trailer || "*", { trailer, door }, ip);
+
+    broadcastAll("confirmations", await getConfirmations(200));
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Confirm error");
+  }
+});
+
+app.get("/api/audit", requireRole("dispatcher", "supervisor"), async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(500, parseInt(req.query.limit || "200", 10) || 200));
+    const rows = await all(
+      `SELECT at,actorRole,action,entityType,entityId,details,ip FROM audit ORDER BY at DESC LIMIT ?`,
+      [limit]
+    );
+    res.json(
+      rows.map((r) => ({
+        at: r.at,
+        actorRole: r.actorRole,
+        action: r.action,
+        entityType: r.entityType,
+        entityId: r.entityId,
+        details: (() => {
+          try {
+            return JSON.parse(r.details || "{}");
+          } catch {
+            return {};
+          }
+        })(),
+        ip: r.ip || "",
+      }))
+    );
+  } catch (e) {
+    res.status(500).send("Audit error");
+  }
+});
+
+app.post("/api/supervisor/set-pin", requireRole("supervisor"), async (req, res) => {
+  try {
+    const ip = getIP(req);
+    const role = safeStr(req.body.role, 20).toLowerCase();
+    const pin = safeStr(req.body.pin, 64);
+
+    if (!["dispatcher", "dock", "supervisor"].includes(role)) return res.status(400).send("Bad role");
+    if (!pin || pin.length < 4) return res.status(400).send("PIN too short");
+
+    const rec = newPinRecord(pin);
+    await run(
+      `INSERT INTO pins(role,salt,hash,updatedAt) VALUES(?,?,?,?)
+       ON CONFLICT(role) DO UPDATE SET salt=excluded.salt, hash=excluded.hash, updatedAt=excluded.updatedAt`,
+      [role, rec.salt, rec.hash, now()]
+    );
+
+    // kill sessions for that role (force re-login)
+    await run(`DELETE FROM sessions WHERE role=?`, [role]).catch(() => {});
+
+    await auditLog("supervisor", "pin_changed", "pin", role, { role }, ip);
+    broadcastAll("version", { version: APP_VERSION });
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("PIN error");
+  }
+});
+
+// ---------------- WEBSOCKET ----------------
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-/* ── CONFIG ── */
-const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8"));
-const APP_VERSION = process.env.APP_VERSION || pkg.version;
-const LINK_SIGNING_SECRET = String(process.env.LINK_SIGNING_SECRET || "");
-
-if (!LINK_SIGNING_SECRET || LINK_SIGNING_SECRET === "change_me") {
-  if (process.env.NODE_ENV === "production") { console.error("FATAL: LINK_SIGNING_SECRET must be set."); process.exit(1); }
-  else console.warn("WARNING: LINK_SIGNING_SECRET unset. Set before production.");
+function wsSend(ws, type, payload) {
+  if (ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ type, payload }));
 }
 
-function hashPin(pin) {
-  return crypto.createHmac("sha256", LINK_SIGNING_SECRET || "dev-only-secret").update(String(pin)).digest("hex");
+function broadcastAll(type, payload) {
+  const msg = JSON.stringify({ type, payload });
+  for (const client of wss.clients) {
+    if (client.readyState === WebSocket.OPEN) client.send(msg);
+  }
 }
 
-// PIN hashes — stored in memory, can be updated at runtime by supervisor
-let PIN_HASHES = {
-  dispatcher: process.env.DISPATCHER_PIN_HASH || (process.env.DISPATCHER_PIN ? hashPin(process.env.DISPATCHER_PIN) : hashPin("1234")),
-  dock:       process.env.DOCK_PIN_HASH       || (process.env.DOCK_PIN       ? hashPin(process.env.DOCK_PIN)       : hashPin("789")),
-  supervisor: process.env.SUPERVISOR_PIN_HASH || (process.env.SUPERVISOR_PIN ? hashPin(process.env.SUPERVISOR_PIN) : hashPin("sup123")),
-};
-
-function verifyPin(input, hash) {
-  const h = hashPin(String(input));
-  try { return crypto.timingSafeEqual(Buffer.from(h,"hex"), Buffer.from(hash,"hex")); } catch { return false; }
-}
-
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data.db");
-try { const d=path.dirname(DB_PATH); if(d&&d!=="."&&d!==__dirname) fs.mkdirSync(d,{recursive:true}); } catch(e) { console.error("DB dir error:",e); }
-
-const db = new sqlite3.Database(DB_PATH);
-let trailers={}, confirmations=[], dockPlates={};
-
-/* ── RATE LIMITER ── */
-const rlStore = new Map();
-function rateLimit(windowMs, max) {
-  return (req, res, next) => {
-    const key=getIp(req), now=Date.now();
-    let e=rlStore.get(key);
-    if(!e||now>e.resetAt){ e={count:0,resetAt:now+windowMs}; rlStore.set(key,e); }
-    if(++e.count>max){ res.setHeader("Retry-After",Math.ceil((e.resetAt-now)/1000)); return res.status(429).send("Too many requests."); }
-    next();
-  };
-}
-setInterval(()=>{ const now=Date.now(); for(const[k,e] of rlStore) if(now>e.resetAt) rlStore.delete(k); },5*60*1000).unref();
-
-/* ── HELPERS ── */
-function broadcast(type,payload){ const m=JSON.stringify({type,payload}); for(const c of wss.clients) if(c.readyState===WebSocket.OPEN) c.send(m); }
-function cleanStr(v,max){ const s=String(v??"").trim(); return s.length>max?s.slice(0,max):s; }
-function normalizeDoor(v){ const r=String(v??"").trim(); if(!r) return ""; const m=r.match(/(\d{1,3})/); return m?m[1]:r; }
-function getIp(req){ return req.headers["x-forwarded-for"]?.split(",")[0]?.trim()||req.socket.remoteAddress||""; }
-function parseCookies(h){ const o={}; String(h||"").split(";").forEach(p=>{ const[k,...r]=p.trim().split("="); if(k) o[k]=decodeURIComponent(r.join("=")||""); }); return o; }
-function sign(v){ return crypto.createHmac("sha256",LINK_SIGNING_SECRET||"dev-only-secret").update(v).digest("hex"); }
-
-const IS_PROD = process.env.NODE_ENV==="production";
-
-function setAuthCookie(res,role){
-  const ts=Date.now(), base=`${role}|${ts}`, sig=sign(base), val=encodeURIComponent(`${base}|${sig}`);
-  res.setHeader("Set-Cookie",[`auth=${val}; Path=/; HttpOnly; SameSite=Lax${IS_PROD?"; Secure":""}`]);
-}
-function clearAuthCookie(res){ res.setHeader("Set-Cookie",["auth=; Path=/; Max-Age=0; SameSite=Lax"]); }
-
-function getRoleFromReq(req){
-  if(String(req.path||"").toLowerCase().startsWith("/driver")) return "driver";
-  const cookies=parseCookies(req.headers.cookie), auth=cookies.auth; if(!auth) return null;
-  const decoded=decodeURIComponent(auth), parts=decoded.split("|"); if(parts.length!==3) return null;
-  const[role,ts,sig]=parts;
-  if(!["dispatcher","dock","supervisor"].includes(role)) return null;
-  if(sign(`${role}|${ts}`)!==sig) return null;
-  const age=Date.now()-Number(ts||0);
-  if(!Number.isFinite(age)||age>12*60*60*1000) return null;
-  return role;
-}
-
-function requireRole(r){ return (req,res,next)=>{ if(getRoleFromReq(req)===r) return next(); res.status(401).send("Unauthorized"); }; }
-function requireAnyRole(roles){ return (req,res,next)=>{ const r=getRoleFromReq(req); if(r&&roles.includes(r)) return next(); res.status(401).send("Unauthorized"); }; }
-function requireCsrf(req,res,next){ if(req.headers["x-requested-with"]!=="XMLHttpRequest") return res.status(403).send("CSRF check failed"); next(); }
-
-function dbRun(sql,p=[]){ return new Promise((res,rej)=>db.run(sql,p,function(e){ if(e)rej(e); else res(this); })); }
-function dbAll(sql,p=[]){ return new Promise((res,rej)=>db.all(sql,p,(e,r)=>{ if(e)rej(e); else res(r); })); }
-
-async function auditLog({actorRole,action,entityType,entityId,details,ip,userAgent}){
-  await dbRun(`INSERT INTO audit_log(at,actorRole,action,entityType,entityId,details,ip,userAgent) VALUES(?,?,?,?,?,?,?,?)`,
-    [Date.now(),actorRole||"",action||"",entityType||"",entityId||"",JSON.stringify(details||{}),ip||"",userAgent||""]);
-}
-
-/* ── DB INIT ── */
-async function initDb(){
-  await dbRun(`PRAGMA journal_mode=WAL;`);
-  await dbRun(`PRAGMA synchronous=NORMAL;`);
-  await dbRun(`CREATE TABLE IF NOT EXISTS trailers(trailer TEXT PRIMARY KEY,direction TEXT NOT NULL,status TEXT NOT NULL,door TEXT NOT NULL DEFAULT '',note TEXT NOT NULL DEFAULT '',dropType TEXT NOT NULL DEFAULT '',updatedAt INTEGER NOT NULL)`);
-  await dbRun(`ALTER TABLE trailers ADD COLUMN dropType TEXT NOT NULL DEFAULT ''`).catch(()=>{});
-  await dbRun(`CREATE TABLE IF NOT EXISTS confirmations(id INTEGER PRIMARY KEY AUTOINCREMENT,at INTEGER NOT NULL,trailer TEXT NOT NULL DEFAULT '',door TEXT NOT NULL DEFAULT '',ip TEXT NOT NULL DEFAULT '',userAgent TEXT NOT NULL DEFAULT '')`);
-  await dbRun(`CREATE TABLE IF NOT EXISTS dock_plates(door TEXT PRIMARY KEY,status TEXT NOT NULL DEFAULT 'Unknown',note TEXT NOT NULL DEFAULT '',updatedAt INTEGER NOT NULL)`);
-  await dbRun(`CREATE TABLE IF NOT EXISTS audit_log(id INTEGER PRIMARY KEY AUTOINCREMENT,at INTEGER NOT NULL,actorRole TEXT NOT NULL,action TEXT NOT NULL,entityType TEXT NOT NULL,entityId TEXT NOT NULL,details TEXT NOT NULL,ip TEXT NOT NULL,userAgent TEXT NOT NULL)`);
-  for(let d=18;d<=42;d++) await dbRun(`INSERT INTO dock_plates(door,status,note,updatedAt) VALUES(?,'Unknown','',?) ON CONFLICT(door) DO NOTHING`,[String(d),Date.now()]);
-  await reloadCaches();
-}
-
-async function reloadCaches(){
-  const tr=await dbAll(`SELECT trailer,direction,status,door,note,dropType,updatedAt FROM trailers`);
-  trailers={}; for(const r of tr) trailers[r.trailer]={direction:r.direction,status:r.status,door:r.door||"",note:r.note||"",dropType:r.dropType||"",updatedAt:r.updatedAt||0};
-  const cr=await dbAll(`SELECT at,trailer,door,ip,userAgent FROM confirmations ORDER BY id DESC LIMIT 200`);
-  confirmations=cr.map(r=>({at:r.at,trailer:r.trailer||"",door:r.door||"",ip:r.ip||"",userAgent:r.userAgent||""}));
-  const pr=await dbAll(`SELECT door,status,note,updatedAt FROM dock_plates`);
-  dockPlates={}; for(const r of pr) dockPlates[String(r.door)]={status:r.status||"Unknown",note:r.note||"",updatedAt:r.updatedAt||0};
-}
-
-/* ── LOGIN PAGE ── */
-app.get("/login",(req,res)=>{
-  const exp=req.query.expired==="1";
-  res.send(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Login – Wesbell</title>
-  <style>body{font-family:system-ui;background:#0b1220;color:#eaf0ff;margin:0;display:flex;justify-content:center;align-items:center;height:100vh}
-  .card{width:340px;background:rgba(255,255,255,.04);border:1px solid rgba(120,145,220,.18);border-radius:14px;padding:18px}
-  h2{margin:0 0 6px}input{width:100%;padding:12px;border-radius:12px;border:1px solid rgba(120,145,220,.18);background:#0c132a;color:#fff;box-sizing:border-box;}
-  button{width:100%;padding:12px;border-radius:12px;border:none;background:rgba(99,102,241,.55);color:#fff;font-weight:900;margin-top:10px;cursor:pointer;font-size:15px;}
-  .sub,.hint{color:#a7b2d3;font-size:12px;margin-bottom:10px}a{color:#b7c5ff}
-  .banner{background:rgba(239,68,68,.18);border:1px solid rgba(239,68,68,.35);border-radius:10px;padding:8px 10px;font-size:13px;margin-bottom:10px;}</style>
-  </head><body><div class="card"><h2>Wesbell Login</h2>
-  ${exp?`<div class="banner">Session expired. Please log in again.</div>`:""}
-  <div class="sub">Dispatcher, Dock &amp; Supervisor require a PIN. Driver is public.</div>
-  <form method="POST" action="/login"><input name="pin" type="password" placeholder="Enter PIN" autocomplete="current-password" required /><button type="submit">Login</button></form>
-  <div class="hint">Driver link: <a href="/driver">/driver</a></div></div></body></html>`);
+wss.on("connection", async (ws) => {
+  // On connect, send full current state
+  try {
+    wsSend(ws, "version", { version: APP_VERSION });
+    wsSend(ws, "state", await getStateObject());
+    wsSend(ws, "dockplates", await getDockPlatesObject());
+    wsSend(ws, "confirmations", await getConfirmations(200));
+  } catch {}
 });
 
-app.post("/login", rateLimit(15*60*1000,20), (req,res)=>{
-  const pin=String(req.body?.pin||"").trim();
-  if(verifyPin(pin,PIN_HASHES.dispatcher)){ setAuthCookie(res,"dispatcher"); return res.redirect("/"); }
-  if(verifyPin(pin,PIN_HASHES.dock)){       setAuthCookie(res,"dock");       return res.redirect("/dock"); }
-  if(verifyPin(pin,PIN_HASHES.supervisor)){ setAuthCookie(res,"supervisor"); return res.redirect("/supervisor"); }
-  res.status(401).send("Invalid PIN");
-});
-
-app.post("/api/logout", requireCsrf, (req,res)=>{ clearAuthCookie(res); res.json({ok:true}); });
-app.get("/api/whoami", (req,res)=>res.json({role:getRoleFromReq(req)||null,version:APP_VERSION}));
-app.get("/api/version", (req,res)=>res.json({version:APP_VERSION}));
-
-app.get("/",(req,res)=>{ if(getRoleFromReq(req)!=="dispatcher") return res.redirect("/login"); res.sendFile(path.join(__dirname,"index.html")); });
-app.get("/dock",(req,res)=>{ if(getRoleFromReq(req)!=="dock") return res.redirect("/login"); res.sendFile(path.join(__dirname,"index.html")); });
-app.get("/driver",(req,res)=>res.sendFile(path.join(__dirname,"index.html")));
-app.get("/supervisor",(req,res)=>{ if(getRoleFromReq(req)!=="supervisor") return res.redirect("/login"); res.sendFile(path.join(__dirname,"index.html")); });
-app.get("/health",(req,res)=>res.json({ok:true,db:DB_PATH,version:APP_VERSION}));
-
-/* ── STATE ── */
-app.get("/api/state",(req,res)=>res.json(trailers));
-
-/* ── AUDIT ── */
-app.get("/api/audit", requireAnyRole(["dispatcher","supervisor"]), async(req,res)=>{
-  try{
-    const limit=Math.min(parseInt(req.query.limit||"200",10),500);
-    const rows=await dbAll(`SELECT id,at,actorRole,action,entityType,entityId,details,ip,userAgent FROM audit_log ORDER BY id DESC LIMIT ?`,[limit]);
-    res.json(rows.map(r=>({...r,details:(()=>{try{return JSON.parse(r.details);}catch{return {};}})()})));
-  }catch(e){console.error("audit:",e);res.status(500).send("Server error");}
-});
-
-/* ── DOCK PLATES ── */
-app.get("/api/dockplates",(req,res)=>res.json(dockPlates));
-
-app.post("/api/dockplates/set", requireCsrf, requireAnyRole(["dispatcher","dock"]), async(req,res)=>{
-  try{
-    const role=getRoleFromReq(req), door=normalizeDoor(req.body?.door), status=cleanStr(req.body?.status,20), note=cleanStr(req.body?.note,120);
-    if(!door) return res.status(400).send("Door required");
-    if(!/^\d+$/.test(door)) return res.status(400).send("Invalid door");
-    const dn=Number(door); if(dn<18||dn>42) return res.status(400).send("Door 18-42");
-    if(!["OK","Service","Unknown"].includes(status)) return res.status(400).send("Invalid status");
-    const updatedAt=Date.now();
-    await dbRun(`INSERT INTO dock_plates(door,status,note,updatedAt) VALUES(?,?,?,?) ON CONFLICT(door) DO UPDATE SET status=excluded.status,note=excluded.note,updatedAt=excluded.updatedAt`,[door,status,note,updatedAt]);
-    dockPlates[door]={status,note,updatedAt};
-    await auditLog({actorRole:role,action:"plate_set",entityType:"dock_plate",entityId:door,details:{status,note},ip:getIp(req),userAgent:req.headers["user-agent"]||""});
-    broadcast("dockplates",dockPlates); res.json({ok:true});
-  }catch(e){console.error("dockplates/set:",e);res.status(500).send("Server error");}
-});
-
-/* ── SUPERVISOR: SET PIN ── */
-app.post("/api/supervisor/set-pin", requireCsrf, requireRole("supervisor"), async(req,res)=>{
-  try{
-    const role=cleanStr(req.body?.role,20), pin=cleanStr(req.body?.pin,100);
-    if(!["dispatcher","dock","supervisor"].includes(role)) return res.status(400).send("Invalid role");
-    if(pin.length<4) return res.status(400).send("PIN too short");
-    PIN_HASHES[role]=hashPin(pin);
-    await auditLog({actorRole:"supervisor",action:"pin_changed",entityType:"auth",entityId:role,details:{},ip:getIp(req),userAgent:req.headers["user-agent"]||""});
-    res.json({ok:true});
-  }catch(e){console.error("set-pin:",e);res.status(500).send("Server error");}
-});
-
-/* ── DRIVER DROP ── */
-app.post("/api/driver/drop", requireCsrf, rateLimit(10*60*1000,30), async(req,res)=>{
-  try{
-    const trailer=cleanStr(req.body?.trailer,20), door=normalizeDoor(req.body?.door), dropType=cleanStr(req.body?.dropType,12);
-    if(!trailer) return res.status(400).send("Trailer required");
-    if(!door)    return res.status(400).send("Door required");
-    if(!/^\d+$/.test(door)) return res.status(400).send("Invalid door");
-    const dn=Number(door); if(dn<18||dn>42) return res.status(400).send("Door 18-42");
-    if(!["Empty","Loaded"].includes(dropType)) return res.status(400).send("Invalid drop type");
-    const prev=trailers[trailer]||null, updatedAt=Date.now();
-    const next={direction:prev?.direction||"Inbound",status:"Dropped",door,note:prev?.note||"",dropType,updatedAt};
-    await dbRun(`INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt) VALUES(?,?,?,?,?,?,?) ON CONFLICT(trailer) DO UPDATE SET direction=excluded.direction,status=excluded.status,door=excluded.door,note=excluded.note,dropType=excluded.dropType,updatedAt=excluded.updatedAt`,
-      [trailer,next.direction,next.status,next.door,next.note,next.dropType,updatedAt]);
-    trailers[trailer]=next;
-    await auditLog({actorRole:"driver",action:"driver_drop",entityType:"trailer",entityId:trailer,details:{door,dropType},ip:getIp(req),userAgent:req.headers["user-agent"]||""});
-    broadcast("state",trailers); res.json({ok:true});
-  }catch(e){console.error("driver/drop:",e);res.status(500).send("Server error");}
-});
-
-/* ── CONFIRM SAFETY ── */
-app.post("/api/confirm-safety", requireCsrf, rateLimit(10*60*1000,60), async(req,res)=>{
-  try{
-    const trailer=cleanStr(req.body?.trailer,20), door=normalizeDoor(req.body?.door);
-    const loadSecured=!!req.body?.loadSecured, dockPlateUp=!!req.body?.dockPlateUp;
-    if(!loadSecured||!dockPlateUp) return res.status(400).send("Both confirmations required");
-    const ip=getIp(req), at=Date.now(), ua=req.headers["user-agent"]||"";
-    await dbRun(`INSERT INTO confirmations(at,trailer,door,ip,userAgent) VALUES(?,?,?,?,?)`,[at,trailer||"",door||"",ip,ua]);
-    const cr=await dbAll(`SELECT at,trailer,door,ip,userAgent FROM confirmations ORDER BY id DESC LIMIT 200`);
-    confirmations=cr.map(r=>({at:r.at,trailer:r.trailer||"",door:r.door||"",ip:r.ip||"",userAgent:r.userAgent||""}));
-    await auditLog({actorRole:"driver",action:"safety_confirmed",entityType:"trailer",entityId:trailer||"",details:{trailer,door,loadSecured:true,dockPlateUp:true},ip,userAgent:ua});
-    broadcast("confirmations",confirmations); res.json({ok:true});
-  }catch(e){console.error("confirm-safety:",e);res.status(500).send("Server error");}
-});
-
-/* ── UPSERT TRAILER ── */
-app.post("/api/upsert", requireCsrf, async(req,res)=>{
-  try{
-    const role=getRoleFromReq(req); if(!role) return res.status(401).send("Unauthorized");
-    const trailer=cleanStr(req.body?.trailer,20); if(!trailer) return res.status(400).send("Trailer required");
-    const prev=trailers[trailer]||null;
-    if(!prev&&role==="dock") return res.status(403).send("Dock cannot add trailers");
-
-    if(role==="dock"){
-      const status=cleanStr(req.body?.status,30);
-      if(!["Loading","Dock Ready"].includes(status)) return res.status(403).send("Dock can only set Loading or Dock Ready");
-      const updatedAt=Date.now(), next={direction:prev.direction,status,door:prev.door,note:prev.note||"",dropType:prev.dropType||"",updatedAt};
-      await dbRun(`INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt) VALUES(?,?,?,?,?,?,?) ON CONFLICT(trailer) DO UPDATE SET direction=excluded.direction,status=excluded.status,door=excluded.door,note=excluded.note,dropType=excluded.dropType,updatedAt=excluded.updatedAt`,
-        [trailer,next.direction,next.status,next.door||"",next.note||"",next.dropType||"",updatedAt]);
-      trailers[trailer]=next;
-      await auditLog({actorRole:role,action:"trailer_status_set",entityType:"trailer",entityId:trailer,details:{from:prev.status,to:status},ip:getIp(req),userAgent:req.headers["user-agent"]||""});
-      broadcast("state",trailers); return res.json({ok:true});
-    }
-
-    if(role!=="dispatcher") return res.status(403).send("Forbidden");
-    const direction=cleanStr(req.body?.direction,30)||prev?.direction||"Inbound";
-    const status=cleanStr(req.body?.status,30)||prev?.status||"Incoming";
-    const door=normalizeDoor(req.body?.door??prev?.door??"");
-    const note=cleanStr(req.body?.note,160), dropType=cleanStr(req.body?.dropType,12)||prev?.dropType||"";
-    if(!["Inbound","Outbound","Cross Dock"].includes(direction)) return res.status(400).send("Invalid direction");
-    if(!["Incoming","Loading","Dock Ready","Ready","Departed","Dropped"].includes(status)) return res.status(400).send("Invalid status");
-    if(!["","Empty","Loaded"].includes(dropType)) return res.status(400).send("Invalid drop type");
-    if(door){ if(!/^\d+$/.test(door)) return res.status(400).send("Invalid door"); const dn=Number(door); if(dn<18||dn>42) return res.status(400).send("Door 18-42"); }
-    const updatedAt=Date.now(), next={direction,status,door:door||"",note:note||"",dropType,updatedAt};
-    await dbRun(`INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt) VALUES(?,?,?,?,?,?,?) ON CONFLICT(trailer) DO UPDATE SET direction=excluded.direction,status=excluded.status,door=excluded.door,note=excluded.note,dropType=excluded.dropType,updatedAt=excluded.updatedAt`,
-      [trailer,direction,status,next.door,next.note,next.dropType,updatedAt]);
-    trailers[trailer]=next;
-    await auditLog({actorRole:role,action:prev?"trailer_update":"trailer_create",entityType:"trailer",entityId:trailer,details:{prev,next},ip:getIp(req),userAgent:req.headers["user-agent"]||""});
-    broadcast("state",trailers);
-    if(prev?.status!=="Ready"&&status==="Ready") broadcast("notify",{kind:"ready",trailer,door:next.door||""});
-    res.json({ok:true});
-  }catch(e){console.error("upsert:",e);res.status(500).send("Server error");}
-});
-
-/* ── DELETE / CLEAR ── */
-app.post("/api/delete", requireCsrf, requireRole("dispatcher"), async(req,res)=>{
-  try{
-    const trailer=cleanStr(req.body?.trailer,20); if(!trailer) return res.status(400).send("Trailer required");
-    const prev=trailers[trailer]||null;
-    await dbRun(`DELETE FROM trailers WHERE trailer=?`,[trailer]); delete trailers[trailer];
-    await auditLog({actorRole:"dispatcher",action:"trailer_delete",entityType:"trailer",entityId:trailer,details:{prev},ip:getIp(req),userAgent:req.headers["user-agent"]||""});
-    broadcast("state",trailers); res.json({ok:true});
-  }catch(e){console.error("delete:",e);res.status(500).send("Server error");}
-});
-
-app.post("/api/clear", requireCsrf, requireRole("dispatcher"), async(req,res)=>{
-  try{
-    await dbRun(`DELETE FROM trailers`); trailers={};
-    await auditLog({actorRole:"dispatcher",action:"trailer_clear_all",entityType:"trailer",entityId:"*",details:{},ip:getIp(req),userAgent:req.headers["user-agent"]||""});
-    broadcast("state",trailers); res.json({ok:true});
-  }catch(e){console.error("clear:",e);res.status(500).send("Server error");}
-});
-
-/* ── WEBSOCKET ── */
-wss.on("connection",ws=>{
-  ws.send(JSON.stringify({type:"state",payload:trailers}));
-  ws.send(JSON.stringify({type:"dockplates",payload:dockPlates}));
-  ws.send(JSON.stringify({type:"confirmations",payload:confirmations}));
-  ws.send(JSON.stringify({type:"version",payload:{version:APP_VERSION}}));
-});
-
-/* ── START ── */
-const PORT = process.env.PORT||3000;
-
-function shutdown(sig){
-  console.log(`\n${sig} received. Shutting down…`);
-  try{ wss.clients.forEach(c=>{ try{c.close();}catch{} }); }catch{}
-  server.close(()=>{ db.run("PRAGMA wal_checkpoint(FULL)",()=>{ db.close(()=>{ console.log("Closed. Bye."); process.exit(0); }); }); });
-  setTimeout(()=>process.exit(1),6000).unref();
-}
-process.on("SIGINT",()=>shutdown("SIGINT"));
-process.on("SIGTERM",()=>shutdown("SIGTERM"));
-
-initDb().then(()=>{ server.listen(PORT,()=>{ console.log("Port:",PORT,"| DB:",DB_PATH,"| v",APP_VERSION); }); }).catch(e=>{ console.error("DB init failed:",e); process.exit(1); });
+// ---------------- START ----------------
+initDb()
+  .then(() => {
+    server.listen(PORT, () => {
+      console.log(`Wesbell Dispatch running on port ${PORT} (v${APP_VERSION})`);
+      console.log(`DB: ${DB_FILE}`);
+    });
+  })
+  .catch((e) => {
+    console.error("DB init failed:", e);
+    process.exit(1);
+  });

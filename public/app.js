@@ -758,6 +758,8 @@
     } else if(p.startsWith("/dock")){
       el("dockView").style.display="";
       el("btnLogout").style.display=ROLE?"":"none"; el("btnAudit").style.display="none";
+      // Show dock plates FAB for dock workers
+      const fab=el("dpFab"); if(fab)fab.style.display="flex";
     } else {
       el("dispatchView").style.display="";
       el("btnLogout").style.display=ROLE?"":"none";
@@ -767,7 +769,7 @@
     try{ trailers=await apiJson("/api/state"); }catch{ trailers={}; }
     if(!isDriver()&&!isSuper()){ try{ dockPlates=await apiJson("/api/dockplates"); }catch{ dockPlates={}; } }
     if(isSuper()||ROLE==="supervisor"){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0); }
-    else if(isDock()){ renderDockView(); }
+    else if(isDock()){ renderDockView(); renderPlates(); }
     else if(!isDriver()){ renderRolePanel(); renderBoard(); renderConf(); }
   }
 

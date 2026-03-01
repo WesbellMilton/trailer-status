@@ -68,6 +68,19 @@
   <div class="driver-shell">
     <div class="driver-wrap">
 
+      <!-- Offline banner -->
+      <div class="offline-banner" id="offlineBanner" style="display:none;">
+        <span>⚠ No connection — submissions blocked until reconnected</span>
+        <div class="offline-dots"><span></span><span></span><span></span></div>
+      </div>
+
+      <!-- Ready notification banner -->
+      <div class="ready-notif-banner" id="readyNotifBanner" style="display:none;">
+        <span class="rnb-icon">🟢</span>
+        <span id="readyNotifText">Trailer ready</span>
+        <button onclick="document.getElementById('readyNotifBanner').style.display='none'" class="rnb-close">✕</button>
+      </div>
+
       <!-- Connection bar -->
       <div class="driver-conn-bar">
         <div class="dcb-left">
@@ -428,6 +441,16 @@
           </div>
           <div id="tbody"></div>
           <div class="board-footer"><span id="lastUpdated">—</span><span id="boardCountStr">—</span></div>
+        </div>
+
+        <div class="panel" id="dockMapCard">
+          <div class="panel-hd">
+            <div class="panel-title"><div class="ptdot" style="background:var(--cyan)"></div>Door Occupancy Map</div>
+            <span class="badge" id="dockMapFreeCount" style="color:var(--green);">—</span>
+          </div>
+          <div class="panel-body" style="padding:10px 12px;">
+            <div class="dock-map-grid" id="dockMapGrid"></div>
+          </div>
         </div>
 
         <div class="panel" id="dockPlatesCard" style="display:none;">

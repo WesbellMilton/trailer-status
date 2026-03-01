@@ -122,6 +122,14 @@ async function initDb() {
   `);
 
   await run(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      endpoint TEXT PRIMARY KEY,
+      subscription TEXT,
+      createdAt INTEGER
+    )
+  `);
+
+  await run(`
     CREATE TABLE IF NOT EXISTS pins (
       role TEXT PRIMARY KEY,
       salt BLOB,
@@ -333,6 +341,12 @@ async function broadcastAll() {
    STATIC FILES + VIEWS
 ========================= */
 app.use(express.static(path.join(__dirname, "public")));
+// Serve service worker from root scope
+app.get("/sw.js", (req, res) => {
+  res.setHeader("Service-Worker-Allowed", "/");
+  res.setHeader("Content-Type", "application/javascript");
+  res.sendFile(path.join(__dirname, "sw.js"));
+});
 const INDEX_FILE = path.join(__dirname, "public", "index.html");
 
 function sendIndex(req, res) {
@@ -502,6 +516,11 @@ app.post("/api/upsert", requireXHR, requireRole(["dispatcher", "dock", "supervis
     // Notify when dispatcher/supervisor sets Ready
     if (status === "Ready" && (actor === "dispatcher" || actor === "supervisor")) {
       wsBroadcast("notify", { kind: "ready", trailer, door: door || "" });
+      broadcastPush(
+        "🟢 Trailer Ready",
+        `Trailer ${trailer} is ready for pickup${door ? " at door " + door : ""}`,
+        { trailer, door }
+      ).catch(() => {});
     }
 
     await broadcastAll();
@@ -619,6 +638,20 @@ app.post("/api/driver/drop", requireXHR, async (req, res) => {
     const now = Date.now();
     const direction = existing?.direction || "Inbound";
 
+    // Auto-assign door if none provided and none pre-assigned
+    let assignedDoor = door;
+    if (!assignedDoor) {
+      // Find lowest free door 28-42
+      const occupied = await all(
+        `SELECT door FROM trailers WHERE door IS NOT NULL AND door != '' AND status NOT IN ('Departed','') AND trailer != ?`,
+        [trailer]
+      );
+      const occupiedSet = new Set(occupied.map(r => String(r.door)));
+      for (let d = 28; d <= 42; d++) {
+        if (!occupiedSet.has(String(d))) { assignedDoor = String(d); break; }
+      }
+    }
+
     await run(
       `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
        VALUES(?,?,?,?,?,?,?)
@@ -628,7 +661,7 @@ app.post("/api/driver/drop", requireXHR, async (req, res) => {
         door=excluded.door,
         dropType=excluded.dropType,
         updatedAt=excluded.updatedAt`,
-      [trailer, direction, "Dropped", door, existing?.note || "", dropType, now]
+      [trailer, direction, "Dropped", assignedDoor || door, existing?.note || "", dropType, now]
     );
 
     await audit(req, "driver", "driver_drop", "trailer", trailer, { door, dropType });
@@ -689,6 +722,62 @@ app.post("/api/crossdock/offload", requireXHR, async (req, res) => {
     res.status(500).send("Cross dock offload failed");
   }
 });
+
+
+// VAPID public key (needed by client to subscribe)
+app.get("/api/push/vapid-public-key", (req, res) => {
+  if (!VAPID_KEYS) return res.status(503).send("VAPID not ready");
+  res.json({ publicKey: VAPID_KEYS.publicKey });
+});
+
+// Subscribe to push notifications (no auth — driver portal)
+app.post("/api/push/subscribe", requireXHR, async (req, res) => {
+  try {
+    const sub = req.body;
+    if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) {
+      return res.status(400).send("Invalid subscription");
+    }
+    pushSubs.set(sub.endpoint, sub);
+    await run(
+      `INSERT INTO push_subscriptions(endpoint, subscription, createdAt) VALUES(?,?,?)
+       ON CONFLICT(endpoint) DO UPDATE SET subscription=excluded.subscription`,
+      [sub.endpoint, JSON.stringify(sub), Date.now()]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Subscribe failed");
+  }
+});
+
+// Unsubscribe
+app.post("/api/push/unsubscribe", requireXHR, async (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    if (endpoint) {
+      pushSubs.delete(endpoint);
+      await run(`DELETE FROM push_subscriptions WHERE endpoint=?`, [endpoint]);
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Unsubscribe failed");
+  }
+});
+
+async function broadcastPush(title, body, data) {
+  if (pushSubs.size === 0) return;
+  const payload = JSON.stringify({ title, body, data: data || {} });
+  const dead = [];
+  for (const [endpoint, sub] of pushSubs) {
+    try {
+      const status = await sendPush(sub, payload);
+      if (status === 410 || status === 404) dead.push(endpoint); // expired
+    } catch {}
+  }
+  for (const ep of dead) {
+    pushSubs.delete(ep);
+    await run(`DELETE FROM push_subscriptions WHERE endpoint=?`, [ep]).catch(() => {});
+  }
+}
 
 // safety confirmation (no login required)
 app.post("/api/confirm-safety", requireXHR, async (req, res) => {
@@ -784,6 +873,15 @@ wss.on("connection", async (ws) => {
    START
 ========================= */
 initDb()
+  .then(async () => {
+    loadOrGenVapid();
+    // Load existing push subscriptions from DB
+    const subs = await all(`SELECT endpoint, subscription FROM push_subscriptions`);
+    for (const s of subs) {
+      try { pushSubs.set(s.endpoint, JSON.parse(s.subscription)); } catch {}
+    }
+    console.log(`[PUSH] Loaded ${pushSubs.size} push subscriptions`);
+  })
   .then(() => {
     server.listen(PORT, () => {
       console.log(`Wesbell Dispatch running on http://localhost:${PORT}`);

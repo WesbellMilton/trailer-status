@@ -6,6 +6,7 @@
   const path = () => location.pathname.toLowerCase();
   const isDriver = () => path().startsWith("/driver");
   const isSuper  = () => path().startsWith("/supervisor");
+  const isDock   = () => path().startsWith("/dock");
 
   const fmtTime = ms => {
     if (!ms) return "";
@@ -297,6 +298,83 @@
   function dockPanelHtml(){ return `
     <div class="infobox infobox-cyan"><div class="ib-title">Dock Workflow</div>1. Trailer arrives → tap <strong>Loading</strong><br/>2. Loading done → tap <strong>Dock Ready</strong><br/>3. Dispatcher confirms → driver notified.</div>
     <div style="font-size:11px;color:var(--t2);">No dispatch controls on Dock role.</div>`; }
+
+  /* ═══════════════════════════════════════════
+     DOCK VIEW
+  ═══════════════════════════════════════════ */
+  let dockFilter = "active"; // "active" | "all"
+
+  const DOCK_STATUS_NEXT = {
+    "Incoming":  { label: "→ Loading",   to: "Loading",   cls: "dc-btn-default" },
+    "Dropped":   { label: "→ Loading",   to: "Loading",   cls: "dc-btn-default" },
+    "Loading":   { label: "→ Dock Ready",to: "Dock Ready",cls: "dc-btn-cyan"    },
+    "Dock Ready":{ label: "Awaiting dispatcher", to: null, cls: "" },
+    "Ready":     { label: "Ready for pickup",    to: null, cls: "" },
+    "Departed":  { label: "Departed",            to: null, cls: "" },
+  };
+
+  const DOCK_STATUS_COLOR = {
+    "Incoming":  "dc-incoming",
+    "Dropped":   "dc-dropped",
+    "Loading":   "dc-loading",
+    "Dock Ready":"dc-dockready",
+    "Ready":     "dc-ready",
+    "Departed":  "dc-departed",
+  };
+
+  function renderDockView() {
+    const cards = el("dockCards");
+    const countEl = el("dockCount");
+    if (!cards) return;
+
+    const q = (el("dockSearch")?.value || "").trim().toLowerCase();
+    const rows = Object.entries(trailers)
+      .map(([t, r]) => ({ trailer: t, ...r }))
+      .filter(r => {
+        if (dockFilter === "active" && ["Departed","Ready"].includes(r.status)) return false;
+        if (q && !`${r.trailer} ${r.door||""}`.toLowerCase().includes(q)) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        // Sort: Loading first, then Dropped/Incoming, then Dock Ready, then rest
+        const order = { "Loading":0, "Dropped":1, "Incoming":2, "Dock Ready":3, "Ready":4, "Departed":5 };
+        return (order[a.status]??9) - (order[b.status]??9) || (b.updatedAt||0) - (a.updatedAt||0);
+      });
+
+    if (countEl) countEl.textContent = rows.length;
+
+    if (!rows.length) {
+      cards.innerHTML = `<div class="dock-empty">${q ? "No trailers match search." : dockFilter==="active" ? "No active trailers." : "No trailers on board."}</div>`;
+      return;
+    }
+
+    cards.innerHTML = rows.map(r => {
+      const colorCls = DOCK_STATUS_COLOR[r.status] || "";
+      const next = DOCK_STATUS_NEXT[r.status];
+      const hasAction = next?.to;
+
+      return `<div class="dock-card ${colorCls}">
+        <div class="dc-top">
+          <div class="dc-trailer">${esc(r.trailer)}</div>
+          <div class="dc-door">${r.door ? `D${esc(r.door)}` : `<span style="color:var(--t3)">No door</span>`}</div>
+        </div>
+        <div class="dc-status-row">
+          <span class="dc-status-badge ${colorCls}">${esc(r.status)}</span>
+          ${r.updatedAt ? `<span class="dc-ago">${esc(timeAgo(r.updatedAt))}</span>` : ""}
+        </div>
+        ${hasAction
+          ? `<button class="dc-action-btn ${next.cls}" data-act="dockSet" data-to="${esc(next.to)}" data-trailer-id="${esc(r.trailer)}">${esc(next.label)}</button>`
+          : `<div class="dc-no-action">${esc(next?.label||"—")}</div>`
+        }
+      </div>`;
+    }).join("");
+  }
+
+  function syncDockWsDot(state) {
+    const dot = el("dockWsDot"), txt = el("dockWsText"); if (!dot||!txt) return;
+    dot.className = "live-dot " + state;
+    txt.textContent = state==="ok" ? "Live" : state==="bad" ? "Offline" : "Connecting…";
+  }
 
   function renderRolePanel() {
     const fab = el("dpFab");
@@ -665,6 +743,7 @@
 
     el("driverView").style.display="none";
     el("supervisorView").style.display="none";
+    el("dockView").style.display="none";
     el("dispatchView").style.display="none";
 
     const p=path();
@@ -676,6 +755,9 @@
     } else if(p.startsWith("/supervisor")||ROLE==="supervisor"){
       el("supervisorView").style.display="";
       el("btnLogout").style.display=""; el("btnAudit").style.display="none";
+    } else if(p.startsWith("/dock")){
+      el("dockView").style.display="";
+      el("btnLogout").style.display=ROLE?"":"none"; el("btnAudit").style.display="none";
     } else {
       el("dispatchView").style.display="";
       el("btnLogout").style.display=ROLE?"":"none";
@@ -685,6 +767,7 @@
     try{ trailers=await apiJson("/api/state"); }catch{ trailers={}; }
     if(!isDriver()&&!isSuper()){ try{ dockPlates=await apiJson("/api/dockplates"); }catch{ dockPlates={}; } }
     if(isSuper()||ROLE==="supervisor"){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0); }
+    else if(isDock()){ renderDockView(); }
     else if(!isDriver()){ renderRolePanel(); renderBoard(); renderConf(); }
   }
 
@@ -708,6 +791,13 @@
     if(id==="btnSetDispatcherPin") return setPin("dispatcher","pin_dispatcher","pin_dispatcher_confirm");
     if(id==="btnSetDockPin") return setPin("dock","pin_dock","pin_dock_confirm");
     if(id==="btnSetSupervisorPin") return setPin("supervisor","pin_supervisor","pin_supervisor_confirm");
+    // Dock filter buttons
+    const dockFilterBtn = direct?.closest?.("[data-dock-filter]");
+    if(dockFilterBtn){ 
+      dockFilter = dockFilterBtn.dataset.dockFilter;
+      document.querySelectorAll(".dock-filter-btn").forEach(b=>b.classList.toggle("active", b.dataset.dockFilter===dockFilter));
+      renderDockView(); return; 
+    }
     const whoBtn=direct?.closest?.("[data-who]"); if(whoBtn){ selectWho(whoBtn.dataset.who); return; }
     const flowBtn=direct?.closest?.("[data-flow]"); if(flowBtn){ selectFlow(flowBtn.dataset.flow); return; }
     if(id==="btnBackToWho"){ showScreen("who-screen"); return; }
@@ -749,6 +839,7 @@
   el("xp_trailer")?.addEventListener("input",onPickupTrailerInput);
   el("xo_trailer")?.addEventListener("input",onOffloadTrailerInput);
   el("xo_trailer")?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!el("btnXdockOffload")?.disabled)xdockOffload(); });
+  el("dockSearch")?.addEventListener("input", renderDockView);
   ["search","filterDir","filterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderBoard)));
   ["supSearch","supFilterDir","supFilterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderSupBoard)));
 
@@ -760,6 +851,7 @@
     el("wsDot").className="live-dot "+(s==="ok"?"ok":s==="bad"?"bad":"warn");
     el("wsText").textContent=s==="ok"?"Live":s==="bad"?"Offline":"Connecting";
     syncDriverWsDot(s);
+    syncDockWsDot(s);
   }
   function connectWs(){
     wsStatus("warn");
@@ -775,6 +867,7 @@
       if(type==="state"){
         trailers=payload||{};
         renderBoard(); renderSupBoard();
+        if(isDock()) renderDockView();
       }
       else if(type==="dockplates"){ dockPlates=payload||{}; if(!isDriver()&&!isSuper())renderPlates(); }
       else if(type==="confirmations"){ confirmations=Array.isArray(payload)?payload:[]; renderConf(); renderSupConf(); }

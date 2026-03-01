@@ -662,3 +662,87 @@
       flex-shrink: 0;
     }
     .lookup-spinner.visible { display: block; }
+
+/* ═══════════════════════════════════════
+   DRIVER PORTAL — WHO / FLOW SCREENS
+═══════════════════════════════════════ */
+
+/* Who are you grid */
+.who-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.who-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 110px;
+  border-radius: var(--r2);
+  border: 1px solid var(--b1);
+  background: var(--s0);
+  color: var(--t1);
+  cursor: pointer;
+  transition: all .15s;
+  padding: 16px;
+}
+.who-btn:hover { border-color: var(--amber-bd); background: var(--amber-bg); color: var(--amber); }
+.who-btn .who-icon { font-size: 28px; }
+.who-btn .who-label { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--t0); }
+.who-btn .who-sub { font-size: 10px; color: var(--t2); }
+
+/* Flow selection grid */
+.flow-sub { font-size: 11px; color: var(--t2); font-family: var(--mono); letter-spacing: .04em; margin-bottom: 12px; }
+.flow-grid { display: flex; flex-direction: column; gap: 10px; }
+.flow-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 64px;
+  border-radius: var(--r);
+  border: 1px solid var(--b1);
+  background: var(--s0);
+  color: var(--t1);
+  cursor: pointer;
+  transition: all .15s;
+  padding: 14px 16px;
+  text-align: left;
+}
+.flow-btn:hover { border-color: var(--amber-bd); background: var(--amber-bg); }
+.flow-btn .flow-icon { font-size: 22px; flex-shrink: 0; }
+.flow-btn .flow-label { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--t0); display: block; }
+.flow-btn .flow-desc { font-size: 11px; color: var(--t2); display: block; margin-top: 2px; }
+
+/* No assignment message */
+.no-assignment-msg {
+  display: none;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--r);
+  border: 1px solid var(--amber-bd);
+  background: var(--amber-bg);
+  margin-top: 12px;
+  font-size: 14px;
+}
+.no-assignment-msg.visible { display: flex; }
+
+/* Notes below submit */
+.no-safety-note {
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--green);
+  margin-top: 8px;
+  letter-spacing: .04em;
+}
+.safety-required-note {
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--amber);
+  margin-top: 8px;
+  letter-spacing: .04em;
+}

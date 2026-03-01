@@ -325,9 +325,10 @@ async function broadcastAll() {
 }
 
 /* =========================
-   VIEWS
+   STATIC FILES + VIEWS
 ========================= */
-const INDEX_FILE = path.join(__dirname, "index.html");
+app.use(express.static(path.join(__dirname, "public")));
+const INDEX_FILE = path.join(__dirname, "public", "index.html");
 
 function sendIndex(req, res) {
   res.sendFile(INDEX_FILE);

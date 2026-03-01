@@ -17,7 +17,7 @@ app.use(express.urlencoded({ extended: true }));
 ========================= */
 const PORT = process.env.PORT || 3000;
 const DB_FILE = process.env.DB_FILE || path.join(__dirname, "wesbell.sqlite");
-const APP_VERSION = process.env.APP_VERSION || "3.1.0";
+const APP_VERSION = process.env.APP_VERSION || "3.2.0";
 
 const PIN_MIN_LEN = 4;
 
@@ -32,7 +32,7 @@ const ENV_PINS = {
   supervisor: process.env.SUPERVISOR_PIN || "",
 };
 
-// Simple anti-CSRF header check for state-changing requests (your UI sets this)
+// Simple anti-CSRF header check for state-changing requests
 function requireXHR(req, res, next) {
   const h = (req.get("X-Requested-With") || "").toLowerCase();
   if (h !== "xmlhttprequest") return res.status(400).send("Bad request");
@@ -153,8 +153,8 @@ async function initDb() {
 }
 
 function genTempPin() {
-  // 6-digit
-  return String(Math.floor(100000 + Math.random() * 900000));
+  // Cryptographically secure 6-digit PIN
+  return String(crypto.randomInt(100000, 1000000));
 }
 
 function pbkdf2Hash(pin, salt, iter = 140000) {
@@ -415,6 +415,10 @@ app.post("/api/login", requireXHR, async (req, res) => {
     await audit(req, role, ok ? "login_success" : "login_failed", "auth", role, {});
     if (!ok) return res.status(401).send("Invalid PIN");
 
+    // Invalidate any existing session for this browser before issuing a new one
+    const existing = getSession(req);
+    if (existing?.sid) sessions.delete(existing.sid);
+
     const sid = newSession(role);
     setSessionCookie(res, sid);
     res.json({ ok: true, role, version: APP_VERSION });
@@ -516,8 +520,8 @@ app.post("/api/delete", requireXHR, requireRole(["dispatcher", "supervisor"]), a
   }
 });
 
-// clear all (dispatcher/supervisor)
-app.post("/api/clear", requireXHR, requireRole(["dispatcher", "supervisor"]), async (req, res) => {
+// clear all (supervisor only — too destructive for dispatcher)
+app.post("/api/clear", requireXHR, requireRole(["supervisor"]), async (req, res) => {
   const actor = req.user.role;
   try {
     await run(`DELETE FROM trailers`);
@@ -556,6 +560,40 @@ app.post("/api/dockplates/set", requireXHR, requireRole(["dock", "dispatcher", "
     res.json({ ok: true });
   } catch (e) {
     res.status(500).send("Dock plate set failed");
+  }
+});
+
+// driver assignment lookup — no auth required
+// Returns the dispatcher-assigned door for a given trailer
+// so the driver portal can auto-populate the door field.
+app.get("/api/driver/assignment", async (req, res) => {
+  try {
+    const trailer = String(req.query.trailer || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+
+    const row = await get(
+      `SELECT door, direction, status, dropType FROM trailers WHERE trailer=?`,
+      [trailer]
+    );
+
+    if (!row) return res.json({ found: false });
+
+    // Only surface an assignment if the trailer is in an active state
+    // where a door has been assigned but not yet departed.
+    const activeStatuses = ["Incoming", "Dropped", "Loading", "Dock Ready", "Ready"];
+    if (!activeStatuses.includes(row.status)) {
+      return res.json({ found: false });
+    }
+
+    res.json({
+      found: true,
+      door: row.door || "",
+      direction: row.direction || "",
+      status: row.status || "",
+      dropType: row.dropType || "",
+    });
+  } catch (e) {
+    res.status(500).send("Lookup failed");
   }
 });
 
@@ -649,8 +687,11 @@ app.post("/api/supervisor/set-pin", requireXHR, requireRole(["supervisor"]), asy
 
     await setPin(role, pin);
 
-    // Invalidate all sessions (forces re-login everywhere)
-    sessions.clear();
+    // Invalidate only sessions for the affected role — not the supervisor's own session
+    for (const [sid, s] of sessions.entries()) {
+      if (s.role === role) sessions.delete(sid);
+    }
+
     await audit(req, actor, "pin_changed", "auth", role, {});
     await broadcastAll();
     res.json({ ok: true });

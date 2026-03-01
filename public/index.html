@@ -441,6 +441,17 @@
       <div class="dock-empty">Loading…</div>
     </div>
 
+    <div class="dock-plates-inline" id="dockPlatesInline">
+      <button class="acc-head" id="dockPlatesToggle2" aria-expanded="false">
+        <span style="display:flex;align-items:center;gap:9px;">Dock Plates (18–42) <span class="badge" id="platesMini2">—</span></span>
+        <span class="chev">▾</span>
+      </button>
+      <div class="acc-body" id="dockPlatesBody2" style="max-height:0px;overflow:hidden;transition:max-height .3s ease;">
+        <div class="plate-grid" id="platesGrid2"></div>
+        <div style="padding:0 12px 10px;font-family:var(--mono);font-size:9px;color:var(--t3);letter-spacing:.04em;">Tap Edit on any door to update status or note.</div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -515,6 +526,18 @@
           </div>
         </div>
 
+
+        <div class="panel" id="dockPlatesCard">
+          <button class="acc-head" id="dockPlatesToggle" aria-expanded="false">
+            <span style="display:flex;align-items:center;gap:9px;">Dock Plates (18–42) <span class="badge" id="platesMini">—</span></span>
+            <span class="chev">▾</span>
+          </button>
+          <div class="acc-body" id="dockPlatesBody" style="max-height:0px;overflow:hidden;transition:max-height .3s ease;">
+            <div class="plate-grid" id="platesGrid"></div>
+            <div style="padding:0 12px 10px;font-family:var(--mono);font-size:9px;color:var(--t3);letter-spacing:.04em;">Click Edit on any door to update status or note.</div>
+          </div>
+        </div>
+
       </div>
 
       <!-- Side panel -->
@@ -537,25 +560,6 @@
   <div class="t-body" id="toastBody"></div>
 </div>
 
-
-<!-- FLOATING DOCK PLATES -->
-<div class="dp-fab" id="dpFab" title="Dock Plates">
-  <span class="dp-fab-icon">🔧</span>
-  <span class="dp-fab-badge" id="dpFabBadge">—</span>
-</div>
-<div class="dp-panel" id="dpPanel">
-  <div class="dp-panel-hd">
-    <span>Dock Plates (18–42)</span>
-    <div style="display:flex;align-items:center;gap:8px;">
-      <span class="badge" id="platesMini">—</span>
-      <button class="dp-close" id="dpClose">✕</button>
-    </div>
-  </div>
-  <div class="dp-panel-body">
-    <div class="plate-grid" id="platesGrid"></div>
-    <div style="padding:4px 0 2px;font-family:var(--mono);font-size:9px;color:var(--t3);letter-spacing:.04em;">Click Edit on any door to update status or note.</div>
-  </div>
-</div>
 
 <script src="/app.js"></script>
 </body>

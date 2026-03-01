@@ -782,12 +782,37 @@
   };
   const esc=s=>String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
 
+  function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
+  // Self-heal: retry fetch on flaky network / transient errors
   async function apiJson(url,opts){
-    const res=await fetch(url,opts);
-    if(res.status===401){location.href="/login?expired=1";return;}
-    if(!res.ok){const t=await res.text().catch(()=>"");throw new Error(t||"HTTP "+res.status);}
-    const ct=res.headers.get("content-type")||"";
-    return ct.includes("application/json")?res.json():{};
+    const max=3;
+    let lastErr=null;
+    for(let i=0;i<=max;i++){
+      try{
+        const res=await fetch(url,opts);
+        if(res.status===401){location.href="/login?expired=1";return;}
+        if(!res.ok){
+          const t=await res.text().catch(()=>"");
+          // retry common transient codes
+          if([502,503,504].includes(res.status) && i<max){
+            await sleep(200*Math.pow(2,i)+Math.floor(Math.random()*50));
+            continue;
+          }
+          throw new Error(t||("HTTP "+res.status));
+        }
+        const ct=res.headers.get("content-type")||"";
+        return ct.includes("application/json")?res.json():{};
+      }catch(e){
+        lastErr=e;
+        // retry on network errors
+        if(i<max){
+          await sleep(200*Math.pow(2,i)+Math.floor(Math.random()*50));
+          continue;
+        }
+      }
+    }
+    throw lastErr||new Error("Request failed");
   }
 
   function toast(title,body,type){
@@ -869,6 +894,7 @@
           acts=`<div class="t-acts"><button class="btn btn-default btn-sm" data-act="edit" data-trailer-id="${esc(r.trailer)}">Edit</button><button class="btn btn-danger btn-sm" data-act="delete" data-trailer-id="${esc(r.trailer)}">Del</button></div>`;
         }
       } else if(canDock){
+        // Dock has ONLY workflow buttons (no edit controls)
         if(r.status==="Dropped"||r.status==="Incoming")
           acts=`<div class="t-acts"><button class="btn btn-default btn-sm" data-act="dockSet" data-to="Loading" data-trailer-id="${esc(r.trailer)}">Loading</button></div>`;
         else if(r.status==="Loading")
@@ -994,9 +1020,10 @@
   function dockPanelHtml(){return `
     <div class="infobox infobox-cyan">
       <div class="ib-title">Dock Workflow</div>
-      1. Trailer arrives → tap <strong>Loading</strong><br/>
-      2. Loading done → tap <strong>Dock Ready</strong><br/>
-      3. Dispatcher confirms → driver is notified.
+      Tap workflow buttons on trailer rows only:<br/>
+      1) Arrives → <strong>Loading</strong><br/>
+      2) Done → <strong>Dock Ready</strong><br/>
+      Dispatcher handles edits + Ready.
     </div>
     <div class="divider"></div>
     <div style="font-size:11px;color:var(--t2);">Use Dock Plates below to manage individual door status and notes.</div>`;}
@@ -1010,7 +1037,7 @@
       if(dpc)dpc.style.display="";renderPlates();return;
     }
     if(ROLE==="dock"){
-      el("panelTitle").textContent="Dock";el("panelSub").textContent="Loading / Dock Ready";
+      el("panelTitle").textContent="Dock";el("panelSub").textContent="Workflow only";
       el("panelBody").innerHTML=dockPanelHtml();
       el("btnLogout").style.display="";el("btnAudit").style.display="none";
       if(dpc)dpc.style.display="";renderPlates();return;
@@ -1022,34 +1049,51 @@
   }
 
   async function doLogout(){try{await apiJson("/api/logout",{method:"POST",headers:CSRF});}catch{}location.href="/login";}
+
   async function dispSave(){
     const trailer=(el("d_trailer")?.value||"").trim();
     if(!trailer)return toast("Validation error","Trailer number is required.","err");
     try{
-      await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,direction:(el("d_direction")?.value||"").trim(),status:(el("d_status")?.value||"").trim(),door:(el("d_door")?.value||"").trim(),note:(el("d_note")?.value||"").trim(),dropType:(el("d_dropType")?.value||"").trim()})});
+      await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({
+        trailer,
+        direction:(el("d_direction")?.value||"").trim(),
+        status:(el("d_status")?.value||"").trim(),
+        door:(el("d_door")?.value||"").trim(),
+        note:(el("d_note")?.value||"").trim(),
+        dropType:(el("d_dropType")?.value||"").trim()
+      })});
       toast("Saved",`Trailer ${trailer} updated.`,"ok");
     }catch(e){toast("Save failed",e.message,"err");}
   }
+
   async function dispDelete(trailer){
     if(!await showModal("Delete Trailer",`Permanently delete trailer ${trailer}? Cannot be undone.`))return;
     try{await apiJson("/api/delete",{method:"POST",headers:CSRF,body:JSON.stringify({trailer})});toast("Deleted",`Trailer ${trailer} removed.`,"warn");}
     catch(e){toast("Delete failed",e.message,"err");}
   }
+
   async function dispClear(){
     if(!await showModal("Clear All Records","Permanently remove ALL trailer records? Cannot be undone."))return;
     try{await apiJson("/api/clear",{method:"POST",headers:CSRF});toast("Board cleared","All records removed.","warn");}
     catch(e){toast("Clear failed",e.message,"err");}
   }
+
   async function dockSet(trailer,status){
-    try{await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})});toast("Updated",`${trailer} → ${status}`,"ok");}
+    try{
+      // Dock ONLY sends status (server enforces)
+      await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})});
+      toast("Updated",`${trailer} → ${status}`,"ok");
+    }
     catch(e){toast("Update failed",e.message,"err");}
   }
+
   async function markReady(trailer){
     try{
       await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status:"Ready"})});
       toast("Trailer Ready",`${trailer} marked Ready — driver will be notified.`,"ok");
     }catch(e){toast("Update failed",e.message,"err");}
   }
+
   async function plateSave(door){
     const status=(document.querySelector(`[data-plate-status="${CSS.escape(door)}"]`)?.value||"").trim();
     const note=(document.querySelector(`[data-plate-note="${CSS.escape(door)}"]`)?.value||"").trim();
@@ -1058,23 +1102,80 @@
       toast("Plate updated",`Door ${door} → ${status}`,"ok");plateEditOpen[door]=false;renderPlates();
     }catch(e){toast("Update failed",e.message,"err");}
   }
+
+  // Offline queue (driver + safety only) — if network flakes, it retries when WS is Live again
+  const QKEY="wb_pending_actions_v1";
+  function loadQ(){try{return JSON.parse(localStorage.getItem(QKEY)||"[]")||[]}catch{return []}}
+  function saveQ(q){try{localStorage.setItem(QKEY,JSON.stringify(q||[]))}catch{}}
+  let pending=loadQ();
+
+  function enqueue(action){
+    pending.push({id:cryptoRand(),at:Date.now(),...action});
+    saveQ(pending);
+  }
+  function cryptoRand(){
+    return Math.random().toString(16).slice(2)+Math.random().toString(16).slice(2);
+  }
+
+  async function flushQueue(){
+    if(!pending.length) return;
+    // try oldest first
+    const copy=[...pending];
+    for(const item of copy){
+      try{
+        if(item.type==="driver_drop"){
+          await apiJson("/api/driver/drop",{method:"POST",headers:CSRF,body:JSON.stringify(item.payload)});
+        } else if(item.type==="confirm_safety"){
+          await apiJson("/api/confirm-safety",{method:"POST",headers:CSRF,body:JSON.stringify(item.payload)});
+        } else {
+          // unknown -> drop
+        }
+        pending = pending.filter(x=>x.id!==item.id);
+        saveQ(pending);
+      }catch{
+        // stop on first failure to avoid spamming
+        break;
+      }
+    }
+    if(!pending.length) toast("Synced","Queued submissions sent.","ok");
+  }
+
   async function driverDrop(){
     const trailer=(el("v_trailer")?.value||"").trim(),door=(el("v_door")?.value||"").trim(),dropType=(el("v_dropType")?.value||"").trim();
     if(!trailer)return toast("Required","Enter a trailer number.","err");
     if(!door)return toast("Required","Enter a door number.","err");
+    const payload={trailer,door,dropType};
     try{
-      await apiJson("/api/driver/drop",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door,dropType})});
+      await apiJson("/api/driver/drop",{method:"POST",headers:CSRF,body:JSON.stringify(payload)});
       el("dropForm").style.display="none";el("dropSuccess").style.display="flex";
       el("dropSuccessDetail").textContent=`Trailer ${trailer} · Door ${door} · ${dropType}`;
-    }catch(e){toast("Submission failed",e.message,"err");}
+    }catch(e){
+      // queue if offline / transient
+      enqueue({type:"driver_drop",payload});
+      toast("Queued","Offline/unstable — drop saved and will retry.","warn");
+      el("dropForm").style.display="none";el("dropSuccess").style.display="flex";
+      el("dropSuccessDetail").textContent=`(Queued) Trailer ${trailer} · Door ${door} · ${dropType}`;
+    }
   }
+
   async function confSafety(){
     if(!el("c_loadSecured")?.checked||!el("c_dockPlateUp")?.checked)return toast("Incomplete","Both safety items must be confirmed.","err");
+    const payload={
+      trailer:(el("c_trailer")?.value||"").trim(),
+      door:(el("c_door")?.value||"").trim(),
+      loadSecured:true,
+      dockPlateUp:true
+    };
     try{
-      await apiJson("/api/confirm-safety",{method:"POST",headers:CSRF,body:JSON.stringify({trailer:(el("c_trailer")?.value||"").trim(),door:(el("c_door")?.value||"").trim(),loadSecured:true,dockPlateUp:true})});
+      await apiJson("/api/confirm-safety",{method:"POST",headers:CSRF,body:JSON.stringify(payload)});
       el("safetyForm").style.display="none";el("safetySuccess").style.display="flex";
-    }catch(e){toast("Submission failed",e.message,"err");}
+    }catch(e){
+      enqueue({type:"confirm_safety",payload});
+      toast("Queued","Offline/unstable — confirmation saved and will retry.","warn");
+      el("safetyForm").style.display="none";el("safetySuccess").style.display="flex";
+    }
   }
+
   async function setPin(role,inputId,confirmId){
     const pin=(el(inputId)?.value||"").trim(),conf=(el(confirmId)?.value||"").trim();
     if(pin.length<4)return toast("PIN too short","Minimum 4 characters.","err");
@@ -1104,11 +1205,10 @@
     highlightNav();
     try{trailers=await apiJson("/api/state");}catch{trailers={};}
     if(!isDriver()&&!isSuper()){try{dockPlates=await apiJson("/api/dockplates");}catch{dockPlates={};}}
-    if(isDriver()){}
-    else if(isSuper()||ROLE==="supervisor"){
+    if(isSuper()||ROLE==="supervisor"){
       renderSupBoard();renderSupConf();
       loadAuditInto(null,el("supAuditCount"),0);
-    }else{
+    }else if(!isDriver()){
       renderRolePanel();renderBoard();renderConf();
       let open=false;try{open=localStorage.getItem("platesOpen")==="1";}catch{}
       setPlatesOpen(open);
@@ -1160,7 +1260,9 @@
   function wsStatus(s){
     el("wsDot").className="live-dot "+(s==="ok"?"ok":s==="bad"?"bad":"warn");
     el("wsText").textContent=s==="ok"?"Live":s==="bad"?"Offline":"Connecting";
+    if(s==="ok") flushQueue(); // self-heal: try queued actions as soon as Live again
   }
+
   function connectWs(){
     wsStatus("warn");
     const ws=new WebSocket(`${location.protocol==="https:"?"wss":"ws"}://${location.host}`);
@@ -1177,6 +1279,10 @@
         toast("Trailer Ready",`${payload.trailer} is READY${payload.door?" at door "+payload.door:""}.`,"ok");
     };
   }
+
+  // flush queue when browser comes back online too
+  window.addEventListener("online", ()=>flushQueue());
+
   loadInitial().then(connectWs);
 })();
 </script>

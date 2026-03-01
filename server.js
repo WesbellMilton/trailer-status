@@ -299,7 +299,7 @@ async function loadDockPlatesObject() {
 
 async function loadConfirmations(limit = 250) {
   return all(
-    `SELECT at,trailer,door,ip,userAgent FROM confirmations ORDER BY at DESC LIMIT ?`,
+    `SELECT at,trailer,door,action,ip,userAgent FROM confirmations ORDER BY at DESC LIMIT ?`,
     [limit]
   );
 }
@@ -634,6 +634,56 @@ app.post("/api/driver/drop", requireXHR, async (req, res) => {
   }
 });
 
+// cross dock pickup (no login required)
+app.post("/api/crossdock/pickup", requireXHR, async (req, res) => {
+  try {
+    const trailer = String(req.body.trailer || "").trim();
+    const door    = String(req.body.door    || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+    const dNum = Number(door);
+    if (!Number.isFinite(dNum) || dNum < 18 || dNum > 42) return res.status(400).send("Invalid door (18–42)");
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    const now = Date.now();
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
+       VALUES(?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET
+        door=excluded.door, status=excluded.status, updatedAt=excluded.updatedAt`,
+      [trailer, existing?.direction || "Cross Dock", "Departed", door, existing?.note || "", existing?.dropType || "", now]
+    );
+    await audit(req, "driver", "crossdock_pickup", "trailer", trailer, { door });
+    await broadcastAll();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Cross dock pickup failed");
+  }
+});
+
+// cross dock offload (no login required)
+app.post("/api/crossdock/offload", requireXHR, async (req, res) => {
+  try {
+    const trailer = String(req.body.trailer || "").trim();
+    const door    = String(req.body.door    || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+    const dNum = Number(door);
+    if (!Number.isFinite(dNum) || dNum < 18 || dNum > 42) return res.status(400).send("Invalid door (18–42)");
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    const now = Date.now();
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
+       VALUES(?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET
+        door=excluded.door, status=excluded.status, dropType=excluded.dropType, updatedAt=excluded.updatedAt`,
+      [trailer, existing?.direction || "Cross Dock", "Dropped", door, existing?.note || "", "Loaded", now]
+    );
+    await audit(req, "driver", "crossdock_offload", "trailer", trailer, { door });
+    await broadcastAll();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Cross dock offload failed");
+  }
+});
+
 // safety confirmation (no login required)
 app.post("/api/confirm-safety", requireXHR, async (req, res) => {
   try {
@@ -644,9 +694,10 @@ app.post("/api/confirm-safety", requireXHR, async (req, res) => {
     if (!loadSecured || !dockPlateUp) return res.status(400).send("Both confirmations required");
 
     const at = Date.now();
+    const action = String(req.body.action || "safety").trim();
     await run(
-      `INSERT INTO confirmations(at,trailer,door,ip,userAgent) VALUES(?,?,?,?,?)`,
-      [at, trailer || "", door || "", ipOf(req), req.headers["user-agent"] || ""]
+      `INSERT INTO confirmations(at,trailer,door,action,ip,userAgent) VALUES(?,?,?,?,?,?)`,
+      [at, trailer || "", door || "", action, ipOf(req), req.headers["user-agent"] || ""]
     );
     await audit(req, "driver", "safety_confirmed", "safety", trailer || "-", { trailer, door, loadSecured, dockPlateUp });
 

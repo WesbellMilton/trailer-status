@@ -97,10 +97,13 @@ async function initDb() {
       at INTEGER,
       trailer TEXT,
       door TEXT,
+      action TEXT,
       ip TEXT,
       userAgent TEXT
     )
   `);
+  // migrate existing DB — adds action column if it doesn't exist yet
+  try { await run(`ALTER TABLE confirmations ADD COLUMN action TEXT`); } catch (_) {}
 
   await run(`
     CREATE TABLE IF NOT EXISTS audit (

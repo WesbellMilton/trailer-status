@@ -459,6 +459,71 @@
     });
   }
 
+
+  /* ═══════════════════════════════════════════
+     WEB PUSH — DRIVER PORTAL
+  ═══════════════════════════════════════════ */
+  let _pushSub = null;
+
+  async function initPush() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    try {
+      const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      await navigator.serviceWorker.ready;
+      // Check existing subscription
+      _pushSub = await reg.pushManager.getSubscription();
+      updatePushBtn();
+    } catch(e) { console.warn("SW registration failed:", e); }
+  }
+
+  async function subscribePush() {
+    if (!("serviceWorker" in navigator)) return toast("Not supported","Push not supported in this browser.","err");
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const { publicKey } = await apiJson("/api/push/vapid-public-key");
+      _pushSub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+      await apiJson("/api/push/subscribe", { method:"POST", headers:CSRF, body:JSON.stringify(_pushSub) });
+      updatePushBtn();
+      toast("Notifications on","You'll be notified when your trailer is ready.","ok");
+    } catch(e) {
+      toast("Notifications blocked","Enable notifications in browser settings.","err");
+    }
+  }
+
+  async function unsubscribePush() {
+    if (!_pushSub) return;
+    try {
+      await apiJson("/api/push/unsubscribe", { method:"POST", headers:CSRF, body:JSON.stringify({ endpoint: _pushSub.endpoint }) });
+      await _pushSub.unsubscribe();
+      _pushSub = null;
+      updatePushBtn();
+      toast("Notifications off","Push notifications disabled.","warn");
+    } catch(e) { toast("Error",e.message,"err"); }
+  }
+
+  function updatePushBtn() {
+    const btn = el("btnPushToggle"); if (!btn) return;
+    if (!("PushManager" in window)) { btn.style.display="none"; return; }
+    btn.style.display = "";
+    if (_pushSub) {
+      btn.textContent = "🔔 Notifications On";
+      btn.classList.add("push-on");
+    } else {
+      btn.textContent = "🔕 Enable Notifications";
+      btn.classList.remove("push-on");
+    }
+  }
+
+  function urlBase64ToUint8Array(base64String) {
+    const padding = "=".repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const raw = atob(base64);
+    return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+  }
+
   /* ═══════════════════════════════════════════
      DRIVER PORTAL STATE
   ═══════════════════════════════════════════ */
@@ -754,6 +819,7 @@
       el("btnLogout").style.display="none"; el("btnAudit").style.display="none";
       showScreen("who-screen");
       renderSessionHistory();
+      initPush();
     } else if(p.startsWith("/supervisor")||ROLE==="supervisor"){
       el("supervisorView").style.display="";
       el("btnLogout").style.display=""; el("btnAudit").style.display="none";
@@ -807,6 +873,7 @@
     if(id==="btnXdockOffload") return xdockOffload();
     if(id==="btnConfirmSafety") return confSafety();
     if(id==="btnDriverRestart") return driverRestart();
+    if(id==="btnPushToggle") return _pushSub ? unsubscribePush() : subscribePush();
     if(id==="ac_override"){ driverState.overrideMode=true; driverState.assignedDoor=""; driverState.selectedDoor=""; showDoorPicker("doorPickerWrap","doorPickerGrid"); updateDropSubmitState(); return; }
     if(id==="oac_override"){ driverState.overrideMode=true; driverState.assignedDoor=""; driverState.selectedDoor=""; showDoorPicker("offloadDoorPickerWrap","offloadDoorPickerGrid"); updateOffloadSubmitState(); return; }
     const doorBtn=direct?.closest?.("[data-door]");

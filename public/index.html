@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Wesbell Dispatch</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/style.css"/>
+</head>
+<body>
+
+<!-- MODAL -->
+<div class="modal-ov hidden" id="modalOv">
+  <div class="modal">
+    <h4 id="modalTitle">Confirm</h4>
+    <div class="m-sub" id="modalBody"></div>
+    <div class="m-btns">
+      <button class="btn btn-default" id="modalCancel">Cancel</button>
+      <button class="btn btn-danger"  id="modalConfirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand-block">
+      <div class="brand-mark">W</div>
+      <div>
+        <div class="brand-name">WESBELL</div>
+        <div class="brand-sub">DISPATCH MGT</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <a href="/" class="nav-item" id="navDispatch">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x=".5" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor"/><rect x="7" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x=".5" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x="7" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".3"/></svg>
+        Dispatcher
+      </a>
+      <a href="/dock" class="nav-item" id="navDock">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 9h10M3 9V6l3-2.5L9 6v3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Dock
+      </a>
+      <a href="/driver" class="nav-item" id="navDriver">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="4" width="8" height="5" rx="1.2" stroke="currentColor" stroke-width="1.2"/><path d="M9 6.5h1.5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H9" stroke="currentColor" stroke-width="1.2"/><circle cx="3" cy="9" r="1" fill="currentColor"/><circle cx="7" cy="9" r="1" fill="currentColor"/><path d="M1 6.5 2.5 4h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        Driver
+      </a>
+      <a href="/supervisor" class="nav-item" id="navSupervisor">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="4" r="2" stroke="currentColor" stroke-width="1.2"/><path d="M1.5 10.5c0-1.8 2-3 4.5-3s4.5 1.2 4.5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        Supervisor
+      </a>
+    </nav>
+    <div class="topbar-right">
+      <div class="chip"><div class="live-dot" id="wsDot"></div><span id="wsText">Connecting</span></div>
+      <div class="chip" id="roleBadge" style="display:none;color:var(--amber);">—</div>
+      <div class="chip">v<span id="verText">—</span></div>
+      <button class="tb-btn" id="btnAudit" style="display:none;">Audit</button>
+      <button class="tb-btn danger" id="btnLogout" style="display:none;">Sign Out</button>
+    </div>
+  </div>
+</div>
+
+<!-- DRIVER VIEW -->
+<div id="driverView" style="display:none;">
+  <div class="driver-shell">
+    <div class="driver-wrap">
+
+      <div class="driver-conn-bar">
+        <div class="dcb-left">
+          <div class="live-dot" id="driverWsDot"></div>
+          <span id="driverWsText">Connecting…</span>
+          <div class="lookup-spinner" id="lookupSpinner"></div>
+        </div>
+        <span class="dcb-right">v<span id="driverVerText">—</span></span>
+      </div>
+
+      <div class="driver-hdr">
+        <h1>Driver Portal</h1>
+        <p>WESBELL DISPATCH MANAGEMENT</p>
+      </div>
+
+      <div class="step-progress" id="stepProgress">
+        <div class="step-node active" id="stepNode1">
+          <div class="step-circle active" id="stepCircle1">1</div>
+          <span class="step-label">Drop</span>
+        </div>
+        <div class="step-connector" id="stepConn1"></div>
+        <div class="step-node" id="stepNode2">
+          <div class="step-circle" id="stepCircle2">2</div>
+          <span class="step-label">Safety</span>
+        </div>
+        <div class="step-connector" id="stepConn2"></div>
+        <div class="step-node" id="stepNode3">
+          <div class="step-circle" id="stepCircle3">✓</div>
+          <span class="step-label">Done</span>
+        </div>
+      </div>
+
+      <!-- Step 1: Drop -->
+      <div class="driver-panel active-step" id="driverStep1">
+        <div class="driver-phd">
+          <span class="driver-phd-title"><span style="color:var(--amber);">①</span> Trailer Drop</span>
+          <span class="badge">Step 1 of 2</span>
+        </div>
+        <div class="driver-pbody">
+          <label class="fl" style="margin-bottom:6px;">Your Trailer Number</label>
+          <input id="v_trailer" class="trailer-hero-input" placeholder="e.g. 5312"
+            autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false"/>
+
+          <div class="assignment-card" id="assignmentCard">
+            <div class="ac-icon">🚪</div>
+            <div class="ac-body">
+              <div class="ac-label">Assigned Door</div>
+              <div class="ac-door" id="ac_door">—</div>
+              <div class="ac-meta" id="ac_meta">Assigned by dispatcher</div>
+              <div class="ac-override" id="ac_override">Choose a different door</div>
+            </div>
+          </div>
+
+          <div class="door-picker-wrap" id="doorPickerWrap">
+            <div class="door-picker-label">Select Your Door (18–42)</div>
+            <div class="door-picker-grid" id="doorPickerGrid"></div>
+          </div>
+
+          <label class="fl" style="margin-top:16px;margin-bottom:6px;">What Are You Dropping?</label>
+          <div class="drop-type-toggle">
+            <button class="drop-type-btn selected" id="dtbEmpty" data-type="Empty">
+              <span class="dtb-icon">📦</span>Empty
+            </button>
+            <button class="drop-type-btn" id="dtbLoaded" data-type="Loaded">
+              <span class="dtb-icon">🏋️</span>Loaded
+            </button>
+          </div>
+
+          <button class="driver-submit" id="btnDriverDrop" disabled>
+            <span>Record Drop</span>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 2: Safety -->
+      <div class="driver-panel" id="driverStep2" style="opacity:.5;pointer-events:none;">
+        <div class="driver-phd">
+          <span class="driver-phd-title"><span style="color:var(--green);">②</span> Safety Confirmation</span>
+          <span class="badge">Step 2 of 2</span>
+        </div>
+        <div class="driver-pbody">
+          <div id="safetyContext" style="margin-bottom:14px;display:flex;gap:6px;flex-wrap:wrap;"></div>
+          <label class="checkline" for="c_loadSecured">
+            <input id="c_loadSecured" type="checkbox"/>
+            <div>
+              <div class="cl-main">Load secured</div>
+              <div class="cl-sub">Straps, locks, and load bars confirmed</div>
+            </div>
+          </label>
+          <label class="checkline" for="c_dockPlateUp">
+            <input id="c_dockPlateUp" type="checkbox"/>
+            <div>
+              <div class="cl-main">Dock plate raised</div>
+              <div class="cl-sub">Plate fully up before departing dock</div>
+            </div>
+          </label>
+          <button class="driver-submit green" id="btnConfirmSafety" disabled>
+            <span>Confirm &amp; Complete</span>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12 13 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Done -->
+      <div class="driver-panel" id="driverDone" style="display:none;">
+        <div class="driver-done">
+          <div class="done-ring">✅</div>
+          <div class="done-title">All Done!</div>
+          <div class="done-detail" id="driverDoneDetail"></div>
+          <button class="btn btn-default" style="margin-top:12px;padding:10px 22px;" id="btnDriverRestart">
+            Submit Another Drop
+          </button>
+        </div>
+      </div>
+
+      <!-- Session history -->
+      <div class="session-history" id="sessionHistory">
+        <div class="sh-hd">
+          <span>This Session</span>
+          <span id="shCount" style="color:var(--t3);">0 drops</span>
+        </div>
+        <div class="sh-body" id="shBody">
+          <div class="sh-empty">No drops submitted yet this session.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- SUPERVISOR VIEW -->
+<div id="supervisorView" style="display:none;">
+  <div class="sup-shell">
+    <div class="kpi-row" id="supKpis"></div>
+    <div class="sup-grid">
+
+      <div class="panel" style="grid-column:1/-1;">
+        <div class="panel-hd">
+          <div class="panel-title"><div class="ptdot" style="background:var(--amber)"></div>Live Trailer Board</div>
+          <span class="badge badge-num" id="supCountsPill">0</span>
+        </div>
+        <div class="filter-bar">
+          <div class="field"><label class="fl">Search</label><input id="supSearch" placeholder="Trailer / door / note…"/></div>
+          <div class="field"><label class="fl">Direction</label>
+            <select id="supFilterDir"><option value="">All Directions</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
+          </div>
+          <div class="field"><label class="fl">Status</label>
+            <select id="supFilterStatus"><option value="">All Statuses</option><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select>
+          </div>
+          <div class="tight"><button class="btn btn-default btn-sm" id="btnSupClearFilters" style="margin-top:14px;">Clear</button></div>
+        </div>
+        <div class="tbl-hd"><span>Trailer</span><span>Dir</span><span>Status</span><span>Door</span><span>Type</span><span>Note</span><span>Updated</span><span></span></div>
+        <div id="supTbody"></div>
+        <div class="board-footer"><span id="supLastUpdated">—</span><span id="supCountStr">—</span></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-hd">
+          <div class="panel-title"><div class="ptdot" style="background:var(--cyan)"></div>Recent Activity</div>
+          <span class="badge badge-num" id="supAuditCount">0</span>
+        </div>
+        <div class="panel-body" id="supFeed"><div style="color:var(--t2);font-size:11px;font-family:var(--mono);">Loading…</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-hd">
+          <div class="panel-title"><div class="ptdot" style="background:var(--green)"></div>Safety Confirmations</div>
+          <span class="badge badge-num" id="supConfCount">0</span>
+        </div>
+        <div class="panel-body-flush">
+          <div class="data-tbl-wrap">
+            <table><thead><tr><th>Time</th><th>Trailer</th><th>Door</th><th>IP</th></tr></thead>
+            <tbody id="supConfBody"><tr><td colspan="4" style="padding:16px;color:var(--t2);">Loading…</td></tr></tbody></table>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" style="grid-column:1/-1;">
+        <div class="panel-hd"><div class="panel-title"><div class="ptdot" style="background:var(--amber)"></div>PIN Management</div></div>
+        <div class="panel-body">
+          <div class="infobox infobox-amber" style="margin-bottom:14px;">
+            <div class="ib-title">Security Notice</div>
+            PINs are hashed server-side — cannot be viewed, only reset. All changes are audit-logged and active sessions are invalidated immediately.
+          </div>
+          <div class="pin-row">
+            <div><label class="fl">Dispatcher PIN</label><input type="password" id="pin_dispatcher" placeholder="New PIN (min 4)" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_dispatcher_confirm" placeholder="Repeat" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetDispatcherPin" style="padding:7px 13px;">Update</button>
+          </div>
+          <div class="pin-row">
+            <div><label class="fl">Dock PIN</label><input type="password" id="pin_dock" placeholder="New PIN (min 4)" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_dock_confirm" placeholder="Repeat" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetDockPin" style="padding:7px 13px;">Update</button>
+          </div>
+          <div class="pin-row">
+            <div><label class="fl">Supervisor PIN</label><input type="password" id="pin_supervisor" placeholder="New PIN (min 4)" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_supervisor_confirm" placeholder="Repeat" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetSupervisorPin" style="padding:7px 13px;">Update</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- DISPATCH / DOCK VIEW -->
+<div id="dispatchView" style="display:none;">
+  <div class="page">
+    <div class="grid-main">
+      <div class="col-stack">
+
+        <div class="panel">
+          <div class="panel-hd">
+            <div class="panel-title"><div class="ptdot" style="background:var(--amber)"></div>Trailer Board</div>
+            <span class="badge badge-num" id="countsPill">0</span>
+          </div>
+          <div class="filter-bar">
+            <div class="field"><label class="fl">Search</label><input id="search" placeholder="Trailer, door, note…"/></div>
+            <div class="field"><label class="fl">Direction</label>
+              <select id="filterDir"><option value="">All Directions</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
+            </div>
+            <div class="field"><label class="fl">Status</label>
+              <select id="filterStatus"><option value="">All Statuses</option><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select>
+            </div>
+            <div class="tight"><button class="btn btn-default btn-sm" id="btnClearFilters" style="margin-top:14px;">Clear</button></div>
+          </div>
+          <div class="tbl-hd">
+            <span>Trailer</span><span>Dir</span><span>Status</span><span>Door</span>
+            <span>Type</span><span>Note</span><span>Updated</span><span id="actionsColHead">Actions</span>
+          </div>
+          <div id="tbody"></div>
+          <div class="board-footer"><span id="lastUpdated">—</span><span id="boardCountStr">—</span></div>
+        </div>
+
+        <div class="panel" id="dockPlatesCard" style="display:none;">
+          <button class="acc-head" id="dockPlatesToggle" aria-expanded="false">
+            <span style="display:flex;align-items:center;gap:9px;">
+              Dock Plates (18–42) <span class="badge" id="platesMini">—</span>
+            </span>
+            <span class="chev">▾</span>
+          </button>
+          <div class="acc-body" id="dockPlatesBody">
+            <div class="plate-grid" id="platesGrid"></div>
+            <div style="padding:0 12px 10px;font-family:var(--mono);font-size:9px;color:var(--t3);letter-spacing:.04em;">Click Edit on any door to update status or note.</div>
+          </div>
+        </div>
+
+        <div class="panel" id="auditCard" style="display:none;">
+          <div class="panel-hd">
+            <div class="panel-title"><div class="ptdot" style="background:var(--t2)"></div>Audit Log</div>
+            <span class="badge badge-num" id="auditCount">0</span>
+          </div>
+          <div class="panel-body-flush">
+            <div class="data-tbl-wrap">
+              <table style="min-width:740px;">
+                <thead><tr><th>Time</th><th>Role</th><th>Action</th><th>Entity</th><th>ID</th><th>Details</th><th>IP</th></tr></thead>
+                <tbody id="auditBody"><tr><td colspan="7" style="padding:16px;color:var(--t2);">Click Audit to load.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-hd">
+            <div class="panel-title"><div class="ptdot" style="background:var(--green)"></div>Safety Confirmations</div>
+            <span class="badge badge-num" id="confCount">0</span>
+          </div>
+          <div class="panel-body-flush">
+            <div class="data-tbl-wrap">
+              <table style="min-width:520px;">
+                <thead><tr><th>Time</th><th>Trailer</th><th>Door</th><th>IP</th></tr></thead>
+                <tbody id="confBody"><tr><td colspan="4" style="padding:16px;color:var(--t2);">No confirmations yet.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Side panel — role-rendered by JS -->
+      <div class="panel side-sticky">
+        <div class="panel-hd">
+          <div class="panel-title" id="panelTitle">Controls</div>
+          <span class="badge" id="panelSub">—</span>
+        </div>
+        <div class="panel-body" id="panelBody"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <div class="toast-bar" id="toastBar"></div>
+  <strong id="toastTitle">Notification</strong>
+  <div class="t-body" id="toastBody"></div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

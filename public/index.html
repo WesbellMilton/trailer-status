@@ -452,50 +452,6 @@
             <div class="dock-map-grid" id="dockMapGrid"></div>
           </div>
         </div>
-
-        <div class="panel" id="dockPlatesCard" style="display:none;">
-          <button class="acc-head" id="dockPlatesToggle" aria-expanded="false">
-            <span style="display:flex;align-items:center;gap:9px;">Dock Plates (18–42) <span class="badge" id="platesMini">—</span></span>
-            <span class="chev">▾</span>
-          </button>
-          <div class="acc-body" id="dockPlatesBody">
-            <div class="plate-grid" id="platesGrid"></div>
-            <div style="padding:0 12px 10px;font-family:var(--mono);font-size:9px;color:var(--t3);letter-spacing:.04em;">Click Edit on any door to update status or note.</div>
-          </div>
-        </div>
-
-        <div class="panel" id="auditCard" style="display:none;">
-          <div class="panel-hd">
-            <div class="panel-title"><div class="ptdot" style="background:var(--t2)"></div>Audit Log</div>
-            <span class="badge badge-num" id="auditCount">0</span>
-          </div>
-          <div class="panel-body-flush">
-            <div class="data-tbl-wrap">
-              <table style="min-width:740px;">
-                <thead><tr><th>Time</th><th>Role</th><th>Action</th><th>Entity</th><th>ID</th><th>Details</th><th>IP</th></tr></thead>
-                <tbody id="auditBody"><tr><td colspan="7" style="padding:16px;color:var(--t2);">Click Audit to load.</td></tr></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-hd">
-            <div class="panel-title"><div class="ptdot" style="background:var(--green)"></div>Safety Confirmations</div>
-            <span class="badge badge-num" id="confCount">0</span>
-          </div>
-          <div class="panel-body-flush">
-            <div class="data-tbl-wrap">
-              <table style="min-width:560px;">
-                <thead><tr><th>Time</th><th>Trailer</th><th>Door</th><th>Type</th><th>IP</th></tr></thead>
-                <tbody id="confBody"><tr><td colspan="5" style="padding:16px;color:var(--t2);">No confirmations yet.</td></tr></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
       <!-- Side panel -->
       <div class="panel side-sticky">
         <div class="panel-hd">
@@ -514,6 +470,26 @@
   <div class="toast-bar" id="toastBar"></div>
   <strong id="toastTitle">Notification</strong>
   <div class="t-body" id="toastBody"></div>
+</div>
+
+
+<!-- FLOATING DOCK PLATES -->
+<div class="dp-fab" id="dpFab" title="Dock Plates">
+  <span class="dp-fab-icon">🔧</span>
+  <span class="dp-fab-badge" id="dpFabBadge">—</span>
+</div>
+<div class="dp-panel" id="dpPanel">
+  <div class="dp-panel-hd">
+    <span>Dock Plates (18–42)</span>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span class="badge" id="platesMini">—</span>
+      <button class="dp-close" id="dpClose">✕</button>
+    </div>
+  </div>
+  <div class="dp-panel-body">
+    <div class="plate-grid" id="platesGrid"></div>
+    <div style="padding:4px 0 2px;font-family:var(--mono);font-size:9px;color:var(--t3);letter-spacing:.04em;">Click Edit on any door to update status or note.</div>
+  </div>
 </div>
 
 <script src="/app.js"></script>

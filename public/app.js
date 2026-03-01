@@ -55,8 +55,15 @@
   el("modalOv").addEventListener("click", e=>{ if(e.target===el("modalOv")){ el("modalOv").classList.add("hidden"); if(_mr){_mr(false);_mr=null;} } });
 
   function setPlatesOpen(open) {
-    el("dpPanel")?.classList.toggle("open", open);
+    const t=el("dockPlatesToggle"), b=el("dockPlatesBody"); if(!t||!b) return;
+    t.setAttribute("aria-expanded", open?"true":"false");
+    b.style.maxHeight = open ? (b.scrollHeight+40)+"px" : "0px";
     try{localStorage.setItem("platesOpen",open?"1":"0");}catch{}
+  }
+  function setPlatesOpen2(open) {
+    const t=el("dockPlatesToggle2"), b=el("dockPlatesBody2"); if(!t||!b) return;
+    t.setAttribute("aria-expanded", open?"true":"false");
+    b.style.maxHeight = open ? (b.scrollHeight+40)+"px" : "0px";
   }
 
   const STATUS_ROW = {Loading:"r-loading",Ready:"r-ready","Dock Ready":"r-dockready",Dropped:"r-dropped",Incoming:"r-incoming",Departed:"r-departed"};
@@ -219,9 +226,10 @@
     if(isDriver()||isSuper())return;
     const canEdit=ROLE==="dispatcher"||ROLE==="dock";
     const doors=[]; for(let d=18;d<=42;d++) doors.push(String(d));
-    const pm=el("platesMini");
-    if(pm){ const v=Object.values(dockPlates||{}); pm.textContent=`${v.filter(p=>p?.status==="OK").length} OK · ${v.filter(p=>p?.status==="Service").length} Svc`; }
-    el("platesGrid").innerHTML=doors.map(door=>{
+    const v=Object.values(dockPlates||{});
+    const summary=`${v.filter(p=>p?.status==="OK").length} OK · ${v.filter(p=>p?.status==="Service").length} Svc`;
+    ["platesMini","platesMini2"].forEach(id=>{ const e=el(id); if(e)e.textContent=summary; });
+    const plateHtml=doors.map(door=>{
       const p=dockPlates[door]||{status:"Unknown",note:""};
       const open=!!plateEditOpen[door]&&canEdit;
       const cls=p.status==="OK"?"p-ok":p.status==="Service"?"p-service":"";
@@ -232,8 +240,9 @@
         <div class="p-btns" style="margin-top:3px;">${canEdit?`<button class="p-btn" data-plate-toggle="${esc(door)}">${open?"Close":"Edit"}</button>${open?`<button class="p-btn" data-plate-save="${esc(door)}">Save</button>`:""}`:" "}</div>
       </div>`;
     }).join("");
-    // update fab badge
-    const v2=Object.values(dockPlates||{}); const okC=v2.filter(p=>p?.status==="OK").length; const svcC=v2.filter(p=>p?.status==="Service").length; const fab=el("dpFabBadge"); if(fab) fab.textContent=svcC>0?`${svcC} svc`:`${okC} ok`;
+    ["platesGrid","platesGrid2"].forEach(id=>{ const e=el(id); if(e)e.innerHTML=plateHtml; });
+    if(el("dockPlatesToggle")?.getAttribute("aria-expanded")==="true") setPlatesOpen(true);
+    if(el("dockPlatesToggle2")?.getAttribute("aria-expanded")==="true") setPlatesOpen2(true);
   }
 
   function renderConf() {
@@ -377,13 +386,11 @@
   }
 
   function renderRolePanel() {
-    const fab = el("dpFab");
-    if(ROLE==="dispatcher"){ el("panelTitle").textContent="Dispatcher"; el("panelSub").textContent="Full control"; el("panelBody").innerHTML=dispPanelHtml(); el("btnLogout").style.display=""; el("btnAudit").style.display=""; if(fab)fab.style.display="flex"; renderPlates(); return; }
-    if(ROLE==="dock"){ el("panelTitle").textContent="Dock"; el("panelSub").textContent="Loading / Dock Ready"; el("panelBody").innerHTML=dockPanelHtml(); el("btnLogout").style.display=""; el("btnAudit").style.display="none"; if(fab)fab.style.display="flex"; renderPlates(); return; }
+    if(ROLE==="dispatcher"){ el("panelTitle").textContent="Dispatcher"; el("panelSub").textContent="Full control"; el("panelBody").innerHTML=dispPanelHtml(); el("btnLogout").style.display=""; el("btnAudit").style.display=""; renderPlates(); return; }
+    if(ROLE==="dock"){ el("panelTitle").textContent="Dock"; el("panelSub").textContent="Loading / Dock Ready"; el("panelBody").innerHTML=dockPanelHtml(); el("btnLogout").style.display=""; el("btnAudit").style.display="none"; renderPlates(); return; }
     el("panelTitle").textContent="Not Authenticated"; el("panelSub").textContent="—";
     el("panelBody").innerHTML=`<div style="color:var(--t2);font-size:12px;line-height:1.6;">Please <a href="/login">sign in</a> to access controls.</div>`;
     el("btnLogout").style.display="none"; el("btnAudit").style.display="none";
-    if(fab)fab.style.display="none";
   }
 
   async function doLogout(){ try{ await apiJson("/api/logout",{method:"POST",headers:CSRF}); }catch{} location.href="/login"; }
@@ -758,8 +765,7 @@
     } else if(p.startsWith("/dock")){
       el("dockView").style.display="";
       el("btnLogout").style.display=ROLE?"":"none"; el("btnAudit").style.display="none";
-      // Show dock plates FAB for dock workers
-      const fab=el("dpFab"); if(fab)fab.style.display="flex";
+
     } else {
       el("dispatchView").style.display="";
       el("btnLogout").style.display=ROLE?"":"none";
@@ -769,8 +775,8 @@
     try{ trailers=await apiJson("/api/state"); }catch{ trailers={}; }
     if(!isDriver()&&!isSuper()){ try{ dockPlates=await apiJson("/api/dockplates"); }catch{ dockPlates={}; } }
     if(isSuper()||ROLE==="supervisor"){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0); }
-    else if(isDock()){ renderDockView(); renderPlates(); }
-    else if(!isDriver()){ renderRolePanel(); renderBoard(); renderConf(); }
+    else if(isDock()){ renderDockView(); renderPlates(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
+    else if(!isDriver()){ renderRolePanel(); renderBoard(); renderConf(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
   }
 
   /* ═══════════════════════════════════════════
@@ -779,12 +785,9 @@
   document.addEventListener("click", async ev=>{
     const direct=ev.target;
     const id=direct?.id;
-    // Close dp-panel if clicking outside it and the FAB
-    if(el("dpPanel")?.classList.contains("open") && !direct.closest("#dpPanel") && !direct.closest("#dpFab")){
-      setPlatesOpen(false);
-    }
-    if(id==="dpFab"||direct?.closest?.("#dpFab")){ setPlatesOpen(!el("dpPanel")?.classList.contains("open")); return; }
-    if(id==="dpClose"||direct?.closest?.("#dpClose")){ setPlatesOpen(false); return; }
+
+    if(direct?.closest?.("#dockPlatesToggle")){ setPlatesOpen(el("dockPlatesToggle").getAttribute("aria-expanded")!=="true"); return; }
+    if(direct?.closest?.("#dockPlatesToggle2")){ setPlatesOpen2(el("dockPlatesToggle2").getAttribute("aria-expanded")!=="true"); return; }
     if(id==="btnLogout") return doLogout();
     if(id==="btnAudit"){ const s=el("auditCard").style.display!=="none"; el("auditCard").style.display=s?"none":""; if(!s)loadAuditInto(el("auditBody"),el("auditCount"),7); return; }
     if(id==="btnClearFilters"||id==="btnSupClearFilters"){ ["search","filterDir","filterStatus","supSearch","supFilterDir","supFilterStatus"].forEach(i=>{if(el(i))el(i).value="";}); renderBoard(); renderSupBoard(); return; }

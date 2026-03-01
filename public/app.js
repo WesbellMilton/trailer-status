@@ -778,13 +778,13 @@
   ═══════════════════════════════════════════ */
   document.addEventListener("click", async ev=>{
     const direct=ev.target;
+    const id=direct?.id;
     // Close dp-panel if clicking outside it and the FAB
     if(el("dpPanel")?.classList.contains("open") && !direct.closest("#dpPanel") && !direct.closest("#dpFab")){
       setPlatesOpen(false);
     }
     if(id==="dpFab"||direct?.closest?.("#dpFab")){ setPlatesOpen(!el("dpPanel")?.classList.contains("open")); return; }
     if(id==="dpClose"||direct?.closest?.("#dpClose")){ setPlatesOpen(false); return; }
-    const id=direct?.id;
     if(id==="btnLogout") return doLogout();
     if(id==="btnAudit"){ const s=el("auditCard").style.display!=="none"; el("auditCard").style.display=s?"none":""; if(!s)loadAuditInto(el("auditBody"),el("auditCount"),7); return; }
     if(id==="btnClearFilters"||id==="btnSupClearFilters"){ ["search","filterDir","filterStatus","supSearch","supFilterDir","supFilterStatus"].forEach(i=>{if(el(i))el(i).value="";}); renderBoard(); renderSupBoard(); return; }

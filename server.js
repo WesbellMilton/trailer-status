@@ -409,6 +409,7 @@ button{width:100%;padding:12px;border-radius:10px;border:1px solid rgba(240,160,
     <option value="dispatcher">Dispatcher</option>
     <option value="dock">Dock</option>
     <option value="supervisor">Supervisor</option>
+    <option value="admin">⚡ Admin</option>
   </select>
   <label>PIN</label>
   <input id="pin" type="password" inputmode="numeric" placeholder="Enter PIN"/>

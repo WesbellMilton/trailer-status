@@ -945,6 +945,32 @@ async function broadcastPush(title, body, data) {
   }
 }
 
+
+// ── SHUNT: move trailer to new door, reset to Dropped ──
+app.post("/api/shunt", requireXHR, requireRole(["dispatcher", "dock", "driver"]), async (req, res) => {
+  try {
+    const actor = req.user?.role || "driver";
+    const trailer = String(req.body.trailer || "").trim();
+    const door    = String(req.body.door    || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+    if (!door)    return res.status(400).send("Missing door");
+
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    if (!existing) return res.status(404).send("Trailer not found");
+
+    const now = Date.now();
+    await run(
+      `UPDATE trailers SET door=?, status='Dropped', updatedAt=? WHERE trailer=?`,
+      [door, now, trailer]
+    );
+    await audit(req, actor, "trailer_shunt", "trailer", trailer, { fromDoor: existing.door || "—", toDoor: door });
+    await broadcastTrailers();
+    res.json({ ok: true, door });
+  } catch (e) {
+    res.status(500).send("Shunt failed");
+  }
+});
+
 // safety confirmation (no login required)
 app.post("/api/confirm-safety", requireXHR, async (req, res) => {
   try {

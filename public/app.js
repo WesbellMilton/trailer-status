@@ -111,18 +111,25 @@
   }
 
   function renderDockMap() {
-    const mapEl = el("dockMapGrid"); if (!mapEl) return;
-    const occupied = getOccupiedDoors();
-    let html = "";
-    for (let d=28; d<=42; d++) {
-      const ds = String(d);
-      const occ = occupied[ds];
-      const cls = occ ? `dm-occupied dm-${(STATUS_ROW[occ.status]||"r-incoming").replace("r-","")}` : "dm-free";
-      html += `<div class="dm-cell ${cls}" title="${occ?`${esc(occ.trailer)} · ${esc(occ.status)}`:"Free"}">
-        <span class="dm-door">D${ds}</span>
-        ${occ ? `<span class="dm-trailer">${esc(occ.trailer)}</span><span class="dm-status">${esc(occ.status)}</span>` : `<span class="dm-free-label">Free</span>`}
-      </div>`;
-    }
+  const mapEl = el("dockMapGrid"); if (!mapEl) return;
+  const occupied = getOccupiedDoors();
+  const canEdit = ROLE==="dispatcher"||ROLE==="admin";
+  let html = "";
+  for (let d=28; d<=42; d++) {
+    const ds = String(d);
+    const occ = occupied[ds];
+    const cls = occ ? `dm-occupied dm-${(STATUS_ROW[occ.status]||"r-incoming").replace("r-","")}` : "dm-free";
+    const clickable = occ && canEdit ? ` dm-clickable" tabindex="0" role="button" aria-label="Change status of trailer ${occ.trailer} at door ${ds}` : "";
+    html += `<div class="dm-cell ${cls}${clickable}" data-dm-door="${ds}">
+      <span class="dm-door">D${ds}</span>
+      ${occ
+        ? `<span class="dm-trailer">${esc(occ.trailer)}</span><span class="dm-status">${esc(occ.status)}</span>`
+        : `<span class="dm-free-label">Free</span>`
+      }
+    </div>`;
+  }
+  mapEl.innerHTML = html;
+}
     mapEl.innerHTML = html;
   }
 

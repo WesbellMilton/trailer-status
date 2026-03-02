@@ -125,7 +125,7 @@ html += `<div class="dm-cell ${cls}${clickable}" data-dm-door="${ds}" ${occ && c
       <span class="dm-door">D${ds}</span>
       ${occ
         ? `<span class="dm-trailer">${esc(occ.trailer)}</span><span class="dm-status">${esc(occ.status)}</span>`
-        : `<span class="dm-free-label">Free</span>`
+        : `<span class="dm-free-label" data-dm-door="${ds}">Free</span>`
       }
     </div>`;
   }

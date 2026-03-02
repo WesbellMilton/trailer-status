@@ -105,7 +105,7 @@
     const mapEl = el("dockMapGrid"); if (!mapEl) return;
     const occupied = getOccupiedDoors();
     let html = "";
-    for (let d=18; d<=42; d++) {
+    for (let d=28; d<=42; d++) {
       const ds = String(d);
       const occ = occupied[ds];
       const cls = occ ? `dm-occupied dm-${(STATUS_ROW[occ.status]||"r-incoming").replace("r-","")}` : "dm-free";
@@ -195,8 +195,8 @@
     renderDockMap();
     // Update free door count badge
     const occupied = getOccupiedDoors();
-    const occupiedInRange = Object.keys(occupied).filter(d => { const n=parseInt(d); return n>=18&&n<=42; }).length;
-    const freeCount = 25 - occupiedInRange;
+    const occupiedInRange = Object.keys(occupied).filter(d => { const n=parseInt(d); return n>=28&&n<=42; }).length;
+    const freeCount = 15 - occupiedInRange;
     const badge = el("dockMapFreeCount");
     if (badge) badge.textContent = `${freeCount} free`;
   }
@@ -739,7 +739,7 @@
     const grid=el(gridId||"doorPickerGrid"); if(!grid)return;
     const occupied=getOccupiedDoors();
     let html="";
-    for(let d=18;d<=42;d++){
+    for(let d=28;d<=42;d++){
       const ds=String(d), occ=!!occupied[ds], sel=driverState.selectedDoor===ds;
       html+=`<button class="door-btn${occ?" occupied":""}${sel?" selected":""}" data-door="${ds}" data-picker="${gridId||"doorPickerGrid"}">${ds}${occ?`<span class="door-btn-sub">In use</span>`:""}</button>`;
     }

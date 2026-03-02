@@ -314,10 +314,7 @@
     </div>
     <div class="field"><label class="fl" for="d_carrierType">Carrier</label><select id="d_carrierType"><option value="">—</option><option>Wesbell</option><option>Outside</option></select></div>
     <div class="field"><label class="fl" for="d_note">Note</label><textarea id="d_note" placeholder="Optional note…"></textarea></div>
-    <button class="btn btn-primary btn-full" id="btnSaveTrailer">Save Trailer Record</button>
-    <div class="divider"></div>
-    <button class="btn btn-danger btn-full" id="btnClearAll">Clear All Trailers</button>
-    <div style="margin-top:5px;font-size:10px;color:var(--t3);font-family:var(--mono);">Permanently removes all records.</div>`; }
+    <button class="btn btn-primary btn-full" id="btnSaveTrailer">Save Trailer Record</button>`; }
 
   function dockPanelHtml(){ return `
     <div class="infobox infobox-cyan"><div class="ib-title">Dock Workflow</div>1. Trailer arrives → tap <strong>Loading</strong><br/>2. Loading done → tap <strong>Dock Ready</strong><br/>3. Dispatcher confirms → driver notified.</div>

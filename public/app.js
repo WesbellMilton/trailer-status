@@ -1005,12 +1005,10 @@ if(id==="btnSetAdminPinSup")   return setPin("admin","pin_admin_sup","pin_admin_
         "Ready":      ["Departed"],
         "Departed":   ["Incoming","Dropped"],
       };
-      const options = nextStatuses[occ.status] || [];
-
-      el("dmModalTitle").textContent = `Trailer ${occ.trailer} — D${door}`;
-      el("dmModalSub").textContent = `Current status: ${occ.status}`;
-      el("dmStatusBtns").innerHTML = options.map(s => {
-        const btns = el("dmStatusBtns");
+   const options = nextStatuses[occ.status] || [];
+el("dmModalTitle").textContent = `Trailer ${occ.trailer} — D${door}`;
+el("dmModalSub").textContent = `Current status: ${occ.status}`;
+const btns = el("dmStatusBtns");
 btns.innerHTML = "";
 options.forEach(s => {
   const cls = s==="Ready"?"btn-success":s==="Departed"?"btn-default":s==="Loading"?"btn-primary":"btn-cyan";
@@ -1022,8 +1020,7 @@ options.forEach(s => {
   btns.appendChild(b);
 });
 el("dmModalOv").classList.remove("hidden");
-      el("dmModalOv").classList.remove("hidden");
-      return;
+return;
     }
 
     const dmStatusBtn = direct?.closest?.("[data-dm-status]");

@@ -1010,9 +1010,18 @@ if(id==="btnSetAdminPinSup")   return setPin("admin","pin_admin_sup","pin_admin_
       el("dmModalTitle").textContent = `Trailer ${occ.trailer} — D${door}`;
       el("dmModalSub").textContent = `Current status: ${occ.status}`;
       el("dmStatusBtns").innerHTML = options.map(s => {
-        const cls = s==="Ready"?"btn-success":s==="Departed"?"btn-default":s==="Loading"?"btn-primary":"btn-cyan";
-        return `<button class="btn ${cls} btn-full" data-dm-status="${esc(s)}" data-dm-trailer="${esc(occ.trailer)}">${esc(s)}</button>`;
-      }).join("");
+        const btns = el("dmStatusBtns");
+btns.innerHTML = "";
+options.forEach(s => {
+  const cls = s==="Ready"?"btn-success":s==="Departed"?"btn-default":s==="Loading"?"btn-primary":"btn-cyan";
+  const b = document.createElement("button");
+  b.className = `btn ${cls} btn-full`;
+  b.dataset.dmStatus = s;
+  b.dataset.dmTrailer = occ.trailer;
+  b.textContent = s;
+  btns.appendChild(b);
+});
+el("dmModalOv").classList.remove("hidden");
       el("dmModalOv").classList.remove("hidden");
       return;
     }

@@ -644,9 +644,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
     .side-sticky{position:sticky;top:60px}
 
     @media(max-width:768px){
-      .topbar-inner{padding:0 12px}
+      .topbar-inner{padding:0 10px}
       .brand-sub{display:none}
-      .nav-item{padding:0 9px;font-size:10px}
+      .nav-item{padding:0 8px;font-size:10px}
+      .topbar-right .chip:not(:first-child){display:none}
       .tbl-hd,.tbl-row{grid-template-columns:72px 56px 94px 42px 56px 1fr 70px 130px}
     }
 
@@ -1168,4 +1169,132 @@ button:focus-visible {
 .trailer-hero-input:focus-visible {
   outline: 3px solid var(--amber);
   outline-offset: 1px;
+}
+
+/* ═══════════════════════════════════════════
+   MOBILE — 480px and below
+═══════════════════════════════════════════ */
+@media(max-width:480px){
+
+  /* Topbar — compact, hide version chip */
+  .topbar-inner{ padding:0 10px; height:44px; }
+  .brand-name{ font-size:13px; }
+  .brand-mark{ width:22px; height:22px; font-size:11px; }
+  .brand-block{ gap:7px; }
+  .topbar-right .chip{ display:none; }
+  .topbar-right{ gap:4px; padding-left:8px; }
+  .tb-btn{ padding:4px 8px; font-size:10px; }
+  .nav-item{ padding:0 7px; font-size:9px; gap:3px; }
+  .nav-item svg{ display:none; }
+
+  /* Page padding */
+  .page{ padding:10px; gap:10px; }
+
+  /* Trailer board — card layout on mobile instead of table */
+  .tbl-hd{ display:none !important; }
+  .tbl-row{
+    display:flex !important;
+    flex-direction:column;
+    gap:4px;
+    padding:10px 12px !important;
+    border-left-width:3px;
+    position:relative;
+  }
+  .tbl-row > span,
+  .tbl-row > div{ padding:0 !important; white-space:normal !important; overflow:visible !important; }
+
+  /* Trailer number — big and prominent */
+  .t-num{ font-size:18px !important; font-weight:700; font-family:var(--mono); color:var(--t0); }
+
+  /* Status tag on its own line */
+  .tbl-row .stag{ font-size:11px !important; padding:3px 8px !important; }
+
+  /* Door — inline with direction */
+  .t-dir{ font-size:11px; color:var(--t2); }
+  .t-door{ font-size:13px; font-family:var(--mono); font-weight:600; }
+  .t-time{ font-size:10px; color:var(--t3); }
+  .t-note{ font-size:11px; color:var(--t2); white-space:normal !important; }
+
+  /* Actions row — wrap buttons */
+  .t-acts{ display:flex; flex-wrap:wrap; gap:5px; margin-top:4px; }
+  .t-acts .btn{ padding:7px 12px; font-size:11px; }
+  .qs-btn{ flex:1; min-width:80px; text-align:center; }
+
+  /* Filter bar — stack vertically */
+  .filter-bar{ flex-direction:column !important; gap:8px; }
+  .filter-bar .field{ min-width:0 !important; }
+  .filter-bar .tight{ margin-top:0 !important; }
+
+  /* Board footer */
+  .board-footer{ flex-direction:column; gap:2px; font-size:10px; padding:8px 12px; }
+
+  /* Dock map — 4 columns on mobile */
+  .dock-map-grid{ grid-template-columns:repeat(4,1fr) !important; gap:4px; }
+  .dm-cell{ padding:5px 3px; }
+  .dm-door{ font-size:8px; }
+  .dm-trailer{ font-size:8px; }
+  .dm-status{ display:none; }
+
+  /* Side panel — full width, no sticky */
+  .side-sticky{ position:static !important; }
+
+  /* Dispatcher panel form */
+  .field-row{ flex-direction:column !important; gap:8px; }
+
+  /* Dock plates — 3 columns */
+  .plate-grid{ grid-template-columns:repeat(3,1fr) !important; }
+
+  /* Supervisor grid */
+  .sup-grid{ grid-template-columns:1fr !important; }
+  .kpi-row{ gap:6px; }
+  .kpi{ flex:1 1 80px; padding:10px 12px; }
+  .k-val{ font-size:22px !important; }
+
+  /* Data tables — scroll horizontally */
+  .data-tbl-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+
+  /* Dock view toolbar */
+  .dock-toolbar{ padding:8px 12px; gap:8px; flex-wrap:wrap; }
+  .dock-filter-wrap{ gap:4px; }
+  .dock-filter-btn{ padding:5px 10px; font-size:11px; }
+  .dock-search-bar{ padding:6px 12px; }
+  .dock-search-bar input{ font-size:14px; }
+  .dock-cards{ grid-template-columns:1fr !important; padding:10px 12px; gap:8px; }
+  .dock-card{ padding:14px; }
+  .dc-trailer{ font-size:22px !important; }
+  .dc-action-btn{ padding:12px !important; font-size:13px !important; }
+
+  /* Driver portal */
+  .driver-shell{ padding:10px; }
+  .driver-wrap{ max-width:100%; }
+  .driver-hdr h1{ font-size:22px; }
+  .driver-panel{ border-radius:var(--r2); }
+  .trailer-hero-input{ font-size:26px !important; padding:14px 16px !important; }
+  .who-grid{ grid-template-columns:1fr 1fr; gap:8px; }
+  .who-btn{ padding:16px 10px; }
+  .who-icon{ font-size:24px; }
+  .flow-grid{ grid-template-columns:1fr; gap:8px; }
+  .door-picker-grid{ grid-template-columns:repeat(4,1fr) !important; gap:5px; }
+  .door-btn{ padding:12px 6px; font-size:13px; }
+  .btn-full{ padding:14px !important; font-size:14px !important; }
+
+  /* Dock plates inline on dock view */
+  .dock-plates-inline{ margin:0 10px 60px; }
+
+  /* Panel body padding */
+  .panel-body{ padding:10px !important; }
+  .panel-hd{ padding:8px 12px; }
+}
+
+/* ═══════════════════════════════════════════
+   MOBILE — 360px and below (small Androids)
+═══════════════════════════════════════════ */
+@media(max-width:360px){
+  .nav-item span{ display:none; }
+  .nav-item svg{ display:block !important; width:16px; height:16px; }
+  .nav-item{ padding:0 8px; }
+  .dock-map-grid{ grid-template-columns:repeat(3,1fr) !important; }
+  .plate-grid{ grid-template-columns:repeat(2,1fr) !important; }
+  .who-grid{ grid-template-columns:1fr; }
+  .door-picker-grid{ grid-template-columns:repeat(3,1fr) !important; }
 }

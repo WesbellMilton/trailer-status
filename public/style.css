@@ -112,6 +112,7 @@
     .field-row{display:flex;gap:8px}
     .field-row>.field{flex:1}
     input,select,textarea{width:100%;padding:7px 10px;border-radius:var(--r);border:1px solid var(--b1);background:var(--s0);color:var(--t0);font-family:var(--sans);font-size:13px;outline:none;transition:border-color .15s,box-shadow .15s;-webkit-appearance:none}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--amber);outline-offset:1px;}
     input:focus,select:focus,textarea:focus{border-color:var(--amber);box-shadow:0 0 0 3px var(--amber-bg)}
     select option{background:var(--s1)}
     textarea{min-height:60px;resize:vertical}
@@ -341,7 +342,7 @@
       font-size: 24px;
       font-weight: 500;
       letter-spacing: .06em;
-      outline: none;
+      outline: none; /* compensated by focus-visible below */
       transition: border-color .2s, box-shadow .2s;
       text-align: center;
     }
@@ -1115,3 +1116,56 @@
 }
 .push-toggle-btn:hover { border-color: var(--amber-bd); color: var(--amber); }
 .push-toggle-btn.push-on { border-color: rgba(32,208,144,.3); background: rgba(32,208,144,.08); color: var(--green); }
+
+/* ═══════════════════════════════════════════
+   ACCESSIBILITY — FOCUS VISIBLE
+═══════════════════════════════════════════ */
+/* Skip link */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 16px;
+  z-index: 9999;
+  background: var(--amber);
+  color: var(--bg);
+  padding: 8px 16px;
+  border-radius: var(--r);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: top .15s;
+}
+.skip-link:focus { top: 16px; }
+
+/* Button focus */
+button:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+/* Nav item focus */
+.nav-item:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+  border-radius: var(--r);
+}
+/* Plate edit buttons */
+.p-btn:focus-visible,
+.acc-head:focus-visible,
+.dock-filter-btn:focus-visible,
+.who-btn:focus-visible,
+.flow-btn:focus-visible,
+.door-btn:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+/* Dock action buttons */
+.dc-action-btn:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 3px;
+}
+/* Trailer hero input focus-visible override */
+.trailer-hero-input:focus-visible {
+  outline: 3px solid var(--amber);
+  outline-offset: 1px;
+}

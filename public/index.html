@@ -8,6 +8,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="/style.css"/>
+  <meta name="theme-color" content="#0a0a0c"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 </head>
 <body>
 <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -351,7 +354,7 @@
           <span class="badge badge-num" id="supCountsPill">0</span>
         </div>
         <div class="filter-bar">
-          <div class="field"><label class="fl">Search</label><input id="supSearch" aria-label="Search trailers" placeholder="Trailer / door / note…"/></div>
+          <div class="field"><label class="fl">Search</label><input id="supSearch" inputmode="search" autocomplete="off" aria-label="Search trailers" placeholder="Trailer / door / note…"/></div>
           <div class="field"><label class="fl">Direction</label>
             <select id="supFilterDir" aria-label="Filter by direction"><option value="">All Directions</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
           </div>
@@ -472,7 +475,7 @@
             <span class="badge badge-num" id="countsPill">0</span>
           </div>
           <div class="filter-bar">
-            <div class="field"><label class="fl">Search</label><input id="search" placeholder="Trailer, door, note…" aria-label="Search trailers"/></div>
+            <div class="field"><label class="fl">Search</label><input id="search" placeholder="Trailer, door, note…" aria-label="Search trailers" inputmode="search" autocomplete="off"/></div>
             <div class="field"><label class="fl">Direction</label>
               <select id="filterDir" aria-label="Filter by direction"><option value="">All Directions</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
             </div>

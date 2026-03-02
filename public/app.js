@@ -111,7 +111,6 @@ el("dmModalOv").addEventListener("click", e => { if(e.target===el("dmModalOv")) 
     });
     return map;
   }
-
   function renderDockMap() {
   const mapEl = el("dockMapGrid"); if (!mapEl) return;
   const occupied = getOccupiedDoors();

@@ -76,6 +76,21 @@ const VAPID_FILE = process.env.VAPID_FILE || path.join(__dirname, "vapid.json");
 let VAPID_KEYS = null;
 const pushSubs = new Map();
 
+// In-memory caches — avoids DB read on every broadcast
+let _trailersCache = null;
+let _platesCache = null;
+
+async function getTrailersCache() {
+  if (!_trailersCache) _trailersCache = await loadTrailersObject();
+  return _trailersCache;
+}
+async function getPlatesCache() {
+  if (!_platesCache) _platesCache = await loadDockPlatesObject();
+  return _platesCache;
+}
+function invalidateTrailers() { _trailersCache = null; }
+function invalidatePlates() { _platesCache = null; }
+
 function loadOrGenVapid() {
   const fs = require("fs");
   try {
@@ -202,9 +217,10 @@ async function broadcastPush(title, body, data) {
       if (status === 410 || status === 404) dead.push(endpoint);
     } catch {}
   }
-  for (const ep of dead) {
-    pushSubs.delete(ep);
-    await run(`DELETE FROM push_subscriptions WHERE endpoint=?`, [ep]).catch(() => {});
+  if (dead.length) {
+    dead.forEach(ep => pushSubs.delete(ep));
+    const placeholders = dead.map(() => "?").join(",");
+    await run(`DELETE FROM push_subscriptions WHERE endpoint IN (${placeholders})`, dead).catch(() => {});
   }
 }
 
@@ -278,14 +294,12 @@ async function initDb() {
   `);
 
   // Seed dock doors 18–42 if missing
+  // Batch seed missing dock plate doors 28-42
+  const existingPlates = new Set((await all(`SELECT door FROM dockplates`)).map(r => r.door));
   for (let d = 28; d <= 42; d++) {
     const door = String(d);
-    const exists = await get(`SELECT door FROM dockplates WHERE door=?`, [door]);
-    if (!exists) {
-      await run(
-        `INSERT INTO dockplates (door,status,note,updatedAt) VALUES (?,?,?,?)`,
-        [door, "Unknown", "", Date.now()]
-      );
+    if (!existingPlates.has(door)) {
+      await run(`INSERT INTO dockplates (door,status,note,updatedAt) VALUES (?,?,?,?)`, [door, "Unknown", "", Date.now()]);
     }
   }
 
@@ -470,10 +484,22 @@ function wsBroadcast(type, payload) {
 }
 
 async function broadcastAll() {
-  wsBroadcast("state", await loadTrailersObject());
-  wsBroadcast("dockplates", await loadDockPlatesObject());
+  invalidateTrailers(); invalidatePlates();
+  wsBroadcast("state", await getTrailersCache());
+  wsBroadcast("dockplates", await getPlatesCache());
   wsBroadcast("confirmations", await loadConfirmations(250));
   wsBroadcast("version", { version: APP_VERSION });
+}
+async function broadcastTrailers() {
+  invalidateTrailers();
+  wsBroadcast("state", await getTrailersCache());
+}
+async function broadcastPlates() {
+  invalidatePlates();
+  wsBroadcast("dockplates", await getPlatesCache());
+}
+async function broadcastConfirmations() {
+  wsBroadcast("confirmations", await loadConfirmations(250));
 }
 
 /* =========================
@@ -677,7 +703,7 @@ app.post("/api/delete", requireXHR, requireRole(["dispatcher", "supervisor"]), a
     if (!trailer) return res.status(400).send("Missing trailer");
     await run(`DELETE FROM trailers WHERE trailer=?`, [trailer]);
     await audit(req, actor, "trailer_delete", "trailer", trailer, {});
-    await broadcastAll();
+    await broadcastTrailers();
     res.json({ ok: true });
   } catch (e) {
     res.status(500).send("Delete failed");
@@ -690,7 +716,7 @@ app.post("/api/clear", requireXHR, requireRole(["supervisor"]), async (req, res)
   try {
     await run(`DELETE FROM trailers`);
     await audit(req, actor, "trailer_clear_all", "trailer", "*", {});
-    await broadcastAll();
+    await broadcastTrailers();
     res.json({ ok: true });
   } catch (e) {
     res.status(500).send("Clear failed");
@@ -720,7 +746,7 @@ app.post("/api/dockplates/set", requireXHR, requireRole(["dock", "dispatcher", "
       [door, status, note, Date.now()]
     );
     await audit(req, actor, "plate_set", "dockplate", door, { status, note });
-    await broadcastAll();
+    await broadcastPlates();
     res.json({ ok: true });
   } catch (e) {
     res.status(500).send("Dock plate set failed");
@@ -804,7 +830,7 @@ app.post("/api/driver/drop", requireXHR, async (req, res) => {
     );
 
     await audit(req, "driver", "driver_drop", "trailer", trailer, { door: assignedDoor || door, dropType });
-    await broadcastAll();
+    await broadcastTrailers();
     res.json({ ok: true, door: assignedDoor || door || null });
   } catch (e) {
     res.status(500).send("Drop failed");
@@ -830,7 +856,7 @@ app.post("/api/crossdock/pickup", requireXHR, async (req, res) => {
       [trailer, existing?.direction || "Cross Dock", existing?.status || "Ready", door, existing?.note || "", existing?.dropType || "", now]
     );
     await audit(req, "driver", "crossdock_pickup", "trailer", trailer, { door });
-    await broadcastAll();
+    await broadcastTrailers();
     res.json({ ok: true });
   } catch (e) {
     res.status(500).send("Cross dock pickup failed");
@@ -855,7 +881,7 @@ app.post("/api/crossdock/offload", requireXHR, async (req, res) => {
       [trailer, existing?.direction || "Cross Dock", "Dropped", door, existing?.note || "", "Loaded", now]
     );
     await audit(req, "driver", "crossdock_offload", "trailer", trailer, { door });
-    await broadcastAll();
+    await broadcastTrailers();
     res.json({ ok: true });
   } catch (e) {
     res.status(500).send("Cross dock offload failed");
@@ -912,9 +938,10 @@ async function broadcastPush(title, body, data) {
       if (status === 410 || status === 404) dead.push(endpoint); // expired
     } catch {}
   }
-  for (const ep of dead) {
-    pushSubs.delete(ep);
-    await run(`DELETE FROM push_subscriptions WHERE endpoint=?`, [ep]).catch(() => {});
+  if (dead.length) {
+    dead.forEach(ep => pushSubs.delete(ep));
+    const placeholders = dead.map(() => "?").join(",");
+    await run(`DELETE FROM push_subscriptions WHERE endpoint IN (${placeholders})`, dead).catch(() => {});
   }
 }
 
@@ -989,7 +1016,6 @@ app.post("/api/supervisor/set-pin", requireXHR, requireRole(["supervisor"]), asy
     }
 
     await audit(req, actor, "pin_changed", "auth", role, {});
-    await broadcastAll();
     res.json({ ok: true });
   } catch (e) {
     res.status(500).send("Set PIN failed");

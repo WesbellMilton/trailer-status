@@ -132,8 +132,6 @@ el("dmModalOv").addEventListener("click", e => { if(e.target===el("dmModalOv")) 
   }
   mapEl.innerHTML = html;
 }
-    mapEl.innerHTML = html;
-  }
 
   /* ── BOARD ── */
   const prevStatuses={};

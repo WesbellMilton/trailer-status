@@ -261,6 +261,7 @@ async function initDb() {
   await run(`DELETE FROM dockplates WHERE CAST(door AS INTEGER) < 28`);
   // migrate existing DB — adds action column if it doesn't exist yet
   try { await run(`ALTER TABLE confirmations ADD COLUMN action TEXT`); } catch (_) {}
+  try { await run(`ALTER TABLE trailers ADD COLUMN carrierType TEXT DEFAULT ''`); } catch (_) {}
 
   await run(`
     CREATE TABLE IF NOT EXISTS audit (
@@ -818,15 +819,16 @@ app.post("/api/driver/drop", requireXHR, async (req, res) => {
     }
 
     await run(
-      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
-       VALUES(?,?,?,?,?,?,?)
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt)
+       VALUES(?,?,?,?,?,?,?,?)
        ON CONFLICT(trailer) DO UPDATE SET
         direction=excluded.direction,
         status=excluded.status,
         door=excluded.door,
         dropType=excluded.dropType,
+        carrierType=excluded.carrierType,
         updatedAt=excluded.updatedAt`,
-      [trailer, direction, "Dropped", assignedDoor || door, existing?.note || "", dropType, now]
+      [trailer, direction, "Dropped", assignedDoor || door, existing?.note || "", dropType, carrierType, now]
     );
 
     await audit(req, "driver", "driver_drop", "trailer", trailer, { door: assignedDoor || door, dropType });

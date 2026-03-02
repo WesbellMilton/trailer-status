@@ -1298,3 +1298,11 @@ button:focus-visible {
   .who-grid{ grid-template-columns:1fr; }
   .door-picker-grid{ grid-template-columns:repeat(3,1fr) !important; }
 }
+
+/* Secondary quick-status buttons — less prominent */
+.qs-secondary {
+  opacity: 0.55;
+  font-size: 10px !important;
+  padding: 3px 7px !important;
+}
+.qs-secondary:hover { opacity: 1; }

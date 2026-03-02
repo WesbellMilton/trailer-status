@@ -1014,7 +1014,7 @@ options.forEach(s => {
   const b = document.createElement("button");
   b.className = `btn ${cls} btn-full`;
   b.dataset.dmStatus = s;
-  b.dataset.dmTrailer = occ.trailer;
+  b.dataset.dmTrailer = occ ? occ.trailer : "";
   b.textContent = s;
   btns.appendChild(b);
 });

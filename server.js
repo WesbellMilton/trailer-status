@@ -1,593 +1,1074 @@
-<!doctype html>
-<html lang="en">
+// server.js
+// Wesbell Dispatch - single-page multi-role board + WS live updates + PIN auth + SQLite persistence
+
+const express = require("express");
+const http = require("http");
+const path = require("path");
+const WebSocket = require("ws");
+const sqlite3 = require("sqlite3").verbose();
+const crypto = require("crypto");
+
+const app = express();
+app.use(express.json({ limit: "200kb" }));
+app.use(express.urlencoded({ extended: true }));
+
+/* =========================
+   CONFIG
+========================= */
+const PORT = process.env.PORT || 3000;
+const DB_FILE = process.env.DB_FILE || path.join(__dirname, "wesbell.sqlite");
+const APP_VERSION = process.env.APP_VERSION || "3.2.0";
+
+const PIN_MIN_LEN = 4;
+
+// Basic session config (in-memory sessions)
+const SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12 hours
+const COOKIE_NAME = "wb_session";
+
+// Optional first-run default PINs (override via env)
+const ENV_PINS = {
+  dispatcher: process.env.DISPATCHER_PIN || "",
+  dock: process.env.DOCK_PIN || "",
+  supervisor: process.env.SUPERVISOR_PIN || "",
+  admin: process.env.ADMIN_PIN || "",
+};
+
+// Simple anti-CSRF header check for state-changing requests
+function requireXHR(req, res, next) {
+  const h = (req.get("X-Requested-With") || "").toLowerCase();
+  if (h !== "xmlhttprequest") return res.status(400).send("Bad request");
+  next();
+}
+
+/* =========================
+   DB
+========================= */
+const db = new sqlite3.Database(DB_FILE);
+
+function run(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function (err) {
+      if (err) reject(err);
+      else resolve(this);
+    });
+  });
+}
+function get(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => {
+      if (err) reject(err);
+      else resolve(row);
+    });
+  });
+}
+function all(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows);
+    });
+  });
+}
+
+/* =========================
+   VAPID / WEB PUSH
+========================= */
+const VAPID_FILE = process.env.VAPID_FILE || path.join(__dirname, "vapid.json");
+let VAPID_KEYS = null;
+const pushSubs = new Map();
+
+// In-memory caches — avoids DB read on every broadcast
+let _trailersCache = null;
+let _platesCache = null;
+
+async function getTrailersCache() {
+  if (!_trailersCache) _trailersCache = await loadTrailersObject();
+  return _trailersCache;
+}
+async function getPlatesCache() {
+  if (!_platesCache) _platesCache = await loadDockPlatesObject();
+  return _platesCache;
+}
+function invalidateTrailers() { _trailersCache = null; }
+function invalidatePlates() { _platesCache = null; }
+
+function loadOrGenVapid() {
+  const fs = require("fs");
+  try {
+    if (fs.existsSync(VAPID_FILE)) {
+      VAPID_KEYS = JSON.parse(fs.readFileSync(VAPID_FILE, "utf8"));
+      console.log("[VAPID] Loaded existing keys");
+      return;
+    }
+  } catch {}
+  try {
+    const { publicKey, privateKey } = crypto.generateKeyPairSync("ec", {
+      namedCurve: "P-256",
+      publicKeyEncoding: { type: "spki", format: "der" },
+      privateKeyEncoding: { type: "pkcs8", format: "der" },
+    });
+    const pubRaw = publicKey.slice(26);
+    let privRaw;
+    for (let i = 0; i < privateKey.length - 34; i++) {
+      if (privateKey[i] === 0x04 && privateKey[i + 1] === 0x20) {
+        privRaw = privateKey.slice(i + 2, i + 34);
+        break;
+      }
+    }
+    if (!privRaw) throw new Error("Could not extract private key bytes");
+    VAPID_KEYS = {
+      publicKey: pubRaw.toString("base64url"),
+      privateKey: privRaw.toString("base64url"),
+    };
+    fs.writeFileSync(VAPID_FILE, JSON.stringify(VAPID_KEYS));
+    console.log("[VAPID] Generated new key pair");
+  } catch (e) {
+    console.error("[VAPID] Key generation failed:", e.message);
+  }
+}
+
+const b64url = buf => Buffer.isBuffer(buf) ? buf.toString("base64url") : Buffer.from(buf).toString("base64url");
+const fromb64url = s => Buffer.from(s, "base64url");
+
+async function hkdf(salt, ikm, info, len) {
+  const prk = crypto.createHmac("sha256", salt).update(ikm).digest();
+  const t = crypto.createHmac("sha256", prk).update(Buffer.concat([info, Buffer.alloc(1, 1)])).digest();
+  return t.slice(0, len);
+}
+
+async function buildVapidJWT(audience) {
+  const header = b64url(JSON.stringify({ typ: "JWT", alg: "ES256" }));
+  const now = Math.floor(Date.now() / 1000);
+  const payload = b64url(JSON.stringify({ aud: audience, exp: now + 12 * 3600, sub: "mailto:dispatch@wesbell.com" }));
+  const sigInput = `${header}.${payload}`;
+  const privBytes = fromb64url(VAPID_KEYS.privateKey);
+  const privKey = crypto.createPrivateKey({
+    key: Buffer.concat([
+      Buffer.from("308187020100301306072a8648ce3d020106082a8648ce3d030107046d306b0201010420", "hex"),
+      privBytes,
+      Buffer.from("a144034200", "hex"),
+      fromb64url(VAPID_KEYS.publicKey),
+    ]),
+    format: "der",
+    type: "pkcs8",
+  });
+  const sig = crypto.sign(null, Buffer.from(sigInput), { key: privKey, dsaEncoding: "ieee-p1363" });
+  return `${sigInput}.${b64url(sig)}`;
+}
+
+async function encryptPushPayload(plaintext, keys) {
+  const serverKeys = crypto.generateKeyPairSync("ec", { namedCurve: "P-256" });
+  const serverPubRaw = serverKeys.publicKey.export({ type: "spki", format: "der" }).slice(26);
+  const clientPubRaw = fromb64url(keys.p256dh);
+  const authSecret = fromb64url(keys.auth);
+  const clientPub = crypto.createPublicKey({
+    key: Buffer.concat([
+      Buffer.from("3059301306072a8648ce3d020106082a8648ce3d030107034200", "hex"),
+      clientPubRaw,
+    ]),
+    format: "der", type: "spki",
+  });
+  const sharedSecret = crypto.diffieHellman({ privateKey: serverKeys.privateKey, publicKey: clientPub });
+  const prk = await hkdf(authSecret, sharedSecret,
+    Buffer.concat([Buffer.from("WebPush: info\x00"), clientPubRaw, serverPubRaw]), 32);
+  const salt = crypto.randomBytes(16);
+  const cek = await hkdf(salt, prk,
+    Buffer.concat([Buffer.from("Content-Encoding: aes128gcm\x00"), Buffer.alloc(1, 1)]), 16);
+  const nonce = await hkdf(salt, prk,
+    Buffer.concat([Buffer.from("Content-Encoding: nonce\x00"), Buffer.alloc(1, 1)]), 12);
+  const cipher = crypto.createCipheriv("aes-128-gcm", cek, nonce);
+  const msg = Buffer.concat([Buffer.from(plaintext), Buffer.alloc(1, 2)]);
+  const encrypted = Buffer.concat([cipher.update(msg), cipher.final(), cipher.getAuthTag()]);
+  const rs = Buffer.alloc(4); rs.writeUInt32BE(4096);
+  return Buffer.concat([salt, rs, Buffer.alloc(1, serverPubRaw.length), serverPubRaw, encrypted]);
+}
+
+async function sendPush(subscription, payload) {
+  const { endpoint, keys } = subscription;
+  const url = new URL(endpoint);
+  const audience = `${url.protocol}//${url.host}`;
+  const jwt = await buildVapidJWT(audience);
+  const authHeader = `vapid t=${jwt},k=${VAPID_KEYS.publicKey}`;
+  const encrypted = await encryptPushPayload(payload, keys);
+  const https = require("https");
+  return new Promise((resolve, reject) => {
+    const req = https.request(endpoint, {
+      method: "POST",
+      headers: {
+        "Authorization": authHeader,
+        "Content-Type": "application/octet-stream",
+        "Content-Encoding": "aes128gcm",
+        "TTL": "86400",
+        "Content-Length": encrypted.length,
+      },
+    }, res => { res.resume(); resolve(res.statusCode); });
+    req.on("error", reject);
+    req.write(encrypted);
+    req.end();
+  });
+}
+
+async function broadcastPush(title, body, data) {
+  if (!VAPID_KEYS || pushSubs.size === 0) return;
+  const payload = JSON.stringify({ title, body, data: data || {} });
+  const dead = [];
+  for (const [endpoint, sub] of pushSubs) {
+    try {
+      const status = await sendPush(sub, payload);
+      if (status === 410 || status === 404) dead.push(endpoint);
+    } catch {}
+  }
+  if (dead.length) {
+    dead.forEach(ep => pushSubs.delete(ep));
+    const placeholders = dead.map(() => "?").join(",");
+    await run(`DELETE FROM push_subscriptions WHERE endpoint IN (${placeholders})`, dead).catch(() => {});
+  }
+}
+
+async function initDb() {
+  await run(`
+    CREATE TABLE IF NOT EXISTS trailers (
+      trailer TEXT PRIMARY KEY,
+      direction TEXT,
+      status TEXT,
+      door TEXT,
+      note TEXT,
+      dropType TEXT,
+      updatedAt INTEGER
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS dockplates (
+      door TEXT PRIMARY KEY,
+      status TEXT,
+      note TEXT,
+      updatedAt INTEGER
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS confirmations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      at INTEGER,
+      trailer TEXT,
+      door TEXT,
+      action TEXT,
+      ip TEXT,
+      userAgent TEXT
+    )
+  `);
+  // remove dock plates for doors 18-27 (not physical dock plate doors)
+  await run(`DELETE FROM dockplates WHERE CAST(door AS INTEGER) < 28`);
+  // migrate existing DB — adds action column if it doesn't exist yet
+  try { await run(`ALTER TABLE confirmations ADD COLUMN action TEXT`); } catch (_) {}
+  try { await run(`ALTER TABLE trailers ADD COLUMN carrierType TEXT DEFAULT ''`); } catch (_) {}
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS audit (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      at INTEGER,
+      actorRole TEXT,
+      action TEXT,
+      entityType TEXT,
+      entityId TEXT,
+      details TEXT,
+      ip TEXT,
+      userAgent TEXT
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      endpoint TEXT PRIMARY KEY,
+      subscription TEXT,
+      createdAt INTEGER
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS pins (
+      role TEXT PRIMARY KEY,
+      salt BLOB,
+      hash BLOB,
+      iter INTEGER
+    )
+  `);
+
+  // Seed dock doors 18–42 if missing
+  // Batch seed missing dock plate doors 28-42
+  const existingPlates = new Set((await all(`SELECT door FROM dockplates`)).map(r => r.door));
+  for (let d = 28; d <= 42; d++) {
+    const door = String(d);
+    if (!existingPlates.has(door)) {
+      await run(`INSERT INTO dockplates (door,status,note,updatedAt) VALUES (?,?,?,?)`, [door, "Unknown", "", Date.now()]);
+    }
+  }
+
+  // Seed PINs if none exist
+  for (const role of ["dispatcher", "dock", "supervisor", "admin"]) {
+    const row = await get(`SELECT role FROM pins WHERE role=?`, [role]);
+    if (!row) {
+      const pin =
+        ENV_PINS[role] && ENV_PINS[role].length >= PIN_MIN_LEN
+          ? ENV_PINS[role]
+          : genTempPin();
+      await setPin(role, pin);
+      console.log(`[SECURITY] Initial ${role} PIN set to: ${pin}`);
+      console.log(`[SECURITY] Change it in Supervisor → PIN Management ASAP.`);
+    }
+  }
+}
+
+function genTempPin() {
+  // Cryptographically secure 6-digit PIN
+  return String(crypto.randomInt(100000, 1000000));
+}
+
+function pbkdf2Hash(pin, salt, iter = 140000) {
+  return new Promise((resolve, reject) => {
+    crypto.pbkdf2(pin, salt, iter, 32, "sha256", (err, derived) => {
+      if (err) reject(err);
+      else resolve(derived);
+    });
+  });
+}
+
+async function setPin(role, pin) {
+  const salt = crypto.randomBytes(16);
+  const iter = 140000;
+  const hash = await pbkdf2Hash(pin, salt, iter);
+  await run(
+    `INSERT INTO pins(role,salt,hash,iter) VALUES(?,?,?,?)
+     ON CONFLICT(role) DO UPDATE SET salt=excluded.salt, hash=excluded.hash, iter=excluded.iter`,
+    [role, salt, hash, iter]
+  );
+}
+
+async function verifyPin(role, pin) {
+  const row = await get(`SELECT salt, hash, iter FROM pins WHERE role=?`, [role]);
+  if (!row) return false;
+  const salt = row.salt;
+  const iter = row.iter || 140000;
+  const hash = row.hash;
+  const candidate = await pbkdf2Hash(pin, salt, iter);
+  if (candidate.length !== hash.length) return false;
+  return crypto.timingSafeEqual(candidate, hash);
+}
+
+/* =========================
+   SESSIONS (memory)
+========================= */
+const sessions = new Map(); // sid -> {role, exp}
+
+function newSession(role) {
+  const sid = crypto.randomBytes(24).toString("hex");
+  sessions.set(sid, { role, exp: Date.now() + SESSION_TTL_MS });
+  return sid;
+}
+
+function parseCookies(req) {
+  const h = req.headers.cookie || "";
+  const out = {};
+  h.split(";").forEach((p) => {
+    const i = p.indexOf("=");
+    if (i > -1) out[p.slice(0, i).trim()] = decodeURIComponent(p.slice(i + 1).trim());
+  });
+  return out;
+}
+
+function getSession(req) {
+  const cookies = parseCookies(req);
+  const sid = cookies[COOKIE_NAME];
+  if (!sid) return null;
+  const s = sessions.get(sid);
+  if (!s) return null;
+  if (Date.now() > s.exp) {
+    sessions.delete(sid);
+    return null;
+  }
+  return { sid, ...s };
+}
+
+function setSessionCookie(res, sid) {
+  const secure = process.env.NODE_ENV === "production";
+  res.setHeader(
+    "Set-Cookie",
+    `${COOKIE_NAME}=${encodeURIComponent(sid)}; Path=/; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`
+  );
+}
+
+function clearSessionCookie(res) {
+  res.setHeader(
+    "Set-Cookie",
+    `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`
+  );
+}
+
+function requireRole(roles) {
+  return (req, res, next) => {
+    const s = getSession(req);
+    // admin bypasses all role checks
+    if (!s) return res.status(401).send("Unauthorized");
+    if (s.role !== "admin" && !roles.includes(s.role)) return res.status(401).send("Unauthorized");
+    req.user = { role: s.role };
+    next();
+  };
+}
+
+/* =========================
+   AUDIT / STATE HELPERS
+========================= */
+function ipOf(req) {
+  const xf = req.headers["x-forwarded-for"];
+  if (xf) return String(xf).split(",")[0].trim();
+  return req.socket.remoteAddress || "";
+}
+
+async function audit(req, actorRole, action, entityType, entityId, details) {
+  const at = Date.now();
+  const ip = ipOf(req);
+  const ua = req.headers["user-agent"] || "";
+  let d = "";
+  try { d = JSON.stringify(details || {}); } catch { d = ""; }
+  await run(
+    `INSERT INTO audit(at,actorRole,action,entityType,entityId,details,ip,userAgent)
+     VALUES(?,?,?,?,?,?,?,?)`,
+    [at, actorRole || "unknown", action, entityType, entityId, d, ip, ua]
+  );
+}
+
+async function loadTrailersObject() {
+  const rows = await all(`SELECT * FROM trailers`);
+  const obj = {};
+  for (const r of rows) {
+    obj[r.trailer] = {
+      direction: r.direction || "",
+      status: r.status || "",
+      door: r.door || "",
+      note: r.note || "",
+      dropType: r.dropType || "",
+      updatedAt: r.updatedAt || 0,
+    };
+  }
+  return obj;
+}
+
+async function loadDockPlatesObject() {
+  const rows = await all(`SELECT * FROM dockplates ORDER BY CAST(door AS INTEGER) ASC`);
+  const obj = {};
+  for (const r of rows) {
+    obj[r.door] = {
+      status: r.status || "Unknown",
+      note: r.note || "",
+      updatedAt: r.updatedAt || 0,
+    };
+  }
+  return obj;
+}
+
+async function loadConfirmations(limit = 250) {
+  return all(
+    `SELECT at,trailer,door,action,ip,userAgent FROM confirmations ORDER BY at DESC LIMIT ?`,
+    [limit]
+  );
+}
+
+/* =========================
+   WEBSOCKET
+========================= */
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
+
+function wsBroadcast(type, payload) {
+  const msg = JSON.stringify({ type, payload });
+  for (const client of wss.clients) {
+    if (client.readyState === WebSocket.OPEN) client.send(msg);
+  }
+}
+
+async function broadcastAll() {
+  invalidateTrailers(); invalidatePlates();
+  wsBroadcast("state", await getTrailersCache());
+  wsBroadcast("dockplates", await getPlatesCache());
+  wsBroadcast("confirmations", await loadConfirmations(250));
+  wsBroadcast("version", { version: APP_VERSION });
+}
+async function broadcastTrailers() {
+  invalidateTrailers();
+  wsBroadcast("state", await getTrailersCache());
+}
+async function broadcastPlates() {
+  invalidatePlates();
+  wsBroadcast("dockplates", await getPlatesCache());
+}
+async function broadcastConfirmations() {
+  wsBroadcast("confirmations", await loadConfirmations(250));
+}
+
+/* =========================
+   STATIC FILES + VIEWS
+========================= */
+app.use(express.static(path.join(__dirname, "public")));
+// Serve service worker from root scope
+app.get("/sw.js", (req, res) => {
+  res.setHeader("Service-Worker-Allowed", "/");
+  res.setHeader("Content-Type", "application/javascript");
+  res.sendFile(path.join(__dirname, "sw.js"));
+});
+const INDEX_FILE = path.join(__dirname, "public", "index.html");
+
+function sendIndex(req, res) {
+  res.sendFile(INDEX_FILE);
+}
+
+// Minimal /login page (PIN entry)
+app.get("/login", (req, res) => {
+  const expired = req.query.expired
+    ? `<div style="margin:10px 0;color:#e84848;">Session expired. Please sign in again.</div>`
+    : "";
+  res.setHeader("content-type", "text/html; charset=utf-8");
+  res.end(`<!doctype html>
+<html>
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Wesbell Dispatch</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="/style.css"/>
-  <meta name="theme-color" content="#0a0a0c"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Wesbell Login</title>
+<style>
+  body{margin:0;background:#0a0d12;color:#e2e8f2;font-family:system-ui;padding:22px}
+  .card{max-width:380px;margin:40px auto;background:#121820;border:1px solid #1a2232;border-radius:12px;padding:18px}
+  label{display:block;font-size:12px;margin:10px 0 6px;color:#8a9bb5}
+  input,select{width:100%;padding:12px;border-radius:10px;border:1px solid #213040;background:#0e1218;color:#e2e8f2;font-size:16px}
+  button{width:100%;padding:12px;border-radius:10px;border:1px solid rgba(240,160,48,.2);background:rgba(240,160,48,.09);color:#f0a030;font-weight:700;margin-top:14px;cursor:pointer}
+  .muted{color:#4a5a72;font-size:12px;margin-top:10px;line-height:1.5}
+</style>
 </head>
 <body>
-<a class="skip-link" href="#main-content">Skip to main content</a>
-
-<!-- MODAL -->
-<div class="modal-ov hidden" id="modalOv">
-  <div class="modal">
-    <h4 id="modalTitle">Confirm</h4>
-    <div class="m-sub" id="modalBody"></div>
-    <div class="m-btns">
-      <button class="btn btn-default" id="modalCancel">Cancel</button>
-      <button class="btn btn-danger" id="modalConfirm">Confirm</button>
-    </div>
+  <div class="card">
+    <h2 style="margin:0 0 8px;font-size:18px;">Wesbell Dispatch</h2>
+    <div class="muted">Sign in with your role PIN to unlock controls.</div>
+    ${expired}
+    <label>Role</label>
+    <select id="role">
+      <option value="dispatcher">Dispatcher</option>
+      <option value="dock">Dock</option>
+      <option value="supervisor">Supervisor</option>
+    </select>
+    <label>PIN</label>
+    <input id="pin" type="password" inputmode="numeric" placeholder="Enter PIN" />
+    <button id="go">Sign In</button>
+    <div class="muted">Tip: Supervisor can reset PINs in Supervisor → PIN Management.</div>
   </div>
-</div>
+<script>
+document.getElementById("go").onclick = async () => {
+  const role = document.getElementById("role").value;
+  const pin = document.getElementById("pin").value;
+  const res = await fetch("/api/login", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json","X-Requested-With":"XMLHttpRequest" },
+    body: JSON.stringify({ role, pin })
+  });
+  if(!res.ok){ alert(await res.text()); return; }
+  location.href = role==="supervisor" ? "/supervisor" : (role==="dock" ? "/dock" : "/");
+};
+document.getElementById("pin").addEventListener("keydown", (e)=>{ if(e.key==="Enter") document.getElementById("go").click(); });
+</script>
+</body></html>`);
+});
 
-<!-- TOPBAR -->
-<div class="topbar">
-  <div class="topbar-inner">
-    <div class="brand-block">
-      <div class="brand-mark">W</div>
-      <div>
-        <div class="brand-name">WESBELL</div>
-        <div class="brand-sub">DISPATCH MGT</div>
-      </div>
-    </div>
-    <nav class="nav" aria-label="Main navigation">
-      <a href="/" class="nav-item" id="navDispatch">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x=".5" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor"/><rect x="7" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x=".5" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x="7" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".3"/></svg>
-        Dispatcher
-      </a>
-      <a href="/dock" class="nav-item" id="navDock">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 9h10M3 9V6l3-2.5L9 6v3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Dock
-      </a>
-      <a href="/driver" class="nav-item" id="navDriver">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="4" width="8" height="5" rx="1.2" stroke="currentColor" stroke-width="1.2"/><path d="M9 6.5h1.5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H9" stroke="currentColor" stroke-width="1.2"/><circle cx="3" cy="9" r="1" fill="currentColor"/><circle cx="7" cy="9" r="1" fill="currentColor"/><path d="M1 6.5 2.5 4h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-        Driver
-      </a>
-      <a href="/supervisor" class="nav-item" id="navSupervisor">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="4" r="2" stroke="currentColor" stroke-width="1.2"/><path d="M1.5 10.5c0-1.8 2-3 4.5-3s4.5 1.2 4.5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-        Supervisor
-      </a>
-    </nav>
-    <div class="topbar-right">
-      <div class="chip" role="status" aria-live="polite"><div class="live-dot" id="wsDot"></div><span id="wsText">Connecting</span></div>
-      <div class="chip" id="roleBadge" style="display:none;color:var(--amber);">—</div>
-      <div class="chip">v<span id="verText">—</span></div>
-      <button class="tb-btn" id="btnAudit" style="display:none;">Audit</button>
-      <button class="tb-btn danger" id="btnLogout" style="display:none;">Sign Out</button>
-    </div>
-  </div>
-</div>
+// Serve the single-page app for these routes
+app.get("/", sendIndex);
+app.get("/dock", sendIndex);
+app.get("/driver", sendIndex);
+app.get("/supervisor", sendIndex);
 
-<main id="main-content">
-<!-- ═══════════════════════════════════════════
-     DRIVER VIEW
-═══════════════════════════════════════════ -->
-<div id="driverView" style="display:none;">
-  <div class="driver-shell">
-    <div class="driver-wrap">
+/* =========================
+   API
+========================= */
 
-      <!-- Offline banner -->
-      <div class="offline-banner" id="offlineBanner" style="display:none;">
-        <span>⚠ No connection — submissions blocked until reconnected</span>
-        <div class="offline-dots"><span></span><span></span><span></span></div>
-      </div>
+// whoami
+app.get("/api/whoami", (req, res) => {
+  const s = getSession(req);
+  res.json({ role: s?.role || null, version: APP_VERSION });
+});
 
-      <!-- Ready notification banner -->
-      <div class="ready-notif-banner" id="readyNotifBanner" style="display:none;">
-        <span class="rnb-icon">🟢</span>
-        <span id="readyNotifText">Trailer ready</span>
-        <button onclick="document.getElementById('readyNotifBanner').style.display='none'" class="rnb-close" aria-label="Dismiss notification">✕</button>
-      </div>
+// login
+app.post("/api/login", requireXHR, async (req, res) => {
+  try {
+    const role = String(req.body.role || "").toLowerCase();
+    const pin = String(req.body.pin || "");
+    if (!["dispatcher", "dock", "supervisor", "admin"].includes(role)) return res.status(400).send("Invalid role");
+    if (pin.length < PIN_MIN_LEN) return res.status(400).send("PIN too short");
 
-      <!-- Connection bar -->
-      <div class="driver-conn-bar">
-        <div class="dcb-left">
-          <div class="live-dot" id="driverWsDot"></div>
-          <span id="driverWsText">Connecting…</span>
-          <div class="lookup-spinner" id="lookupSpinner"></div>
-        </div>
-        <span class="dcb-right">v<span id="driverVerText">—</span></span>
-      </div>
+    const ok = await verifyPin(role, pin);
+    await audit(req, role, ok ? "login_success" : "login_failed", "auth", role, {});
+    if (!ok) return res.status(401).send("Invalid PIN");
 
-      <div class="driver-hdr">
-        <h1>Driver Portal</h1>
-        <p>WESBELL DISPATCH MANAGEMENT</p>
-        <button class="push-toggle-btn" id="btnPushToggle" style="display:none;">🔕 Enable Notifications</button>
-      </div>
+    // Invalidate any existing session for this browser before issuing a new one
+    const existing = getSession(req);
+    if (existing?.sid) sessions.delete(existing.sid);
 
-      <!-- ── SCREEN: WHO ARE YOU ── -->
-      <div id="who-screen">
-        <div class="driver-panel active-step">
-          <div class="driver-phd">
-            <span class="driver-phd-title">Select your carrier</span>
-          </div>
-          <div class="driver-pbody">
-            <div class="who-grid">
-              <button class="who-btn" data-who="wesbell">
-                <span class="who-icon">🚛</span>
-                <span class="who-label">Wesbell</span>
-                <span class="who-sub">Drop, shunt or cross dock</span>
-              </button>
-              <button class="who-btn" data-who="outside">
-                <span class="who-icon">🏢</span>
-                <span class="who-label">Outside Carrier</span>
-                <span class="who-sub">Cross dock only</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+    const sid = newSession(role);
+    setSessionCookie(res, sid);
+    res.json({ ok: true, role, version: APP_VERSION });
+  } catch (e) {
+    res.status(500).send("Login error");
+  }
+});
 
-      <!-- ── SCREEN: FLOW SELECTION ── -->
-      <div id="flow-screen" style="display:none;">
-        <div class="driver-panel active-step">
-          <div class="driver-phd">
-            <span class="driver-phd-title">What are you here to do?</span>
-            <button class="btn btn-default btn-sm" id="btnBackToWho">← Back</button>
-          </div>
-          <div class="driver-pbody">
-            <p class="flow-sub" id="flowScreenSub">Select an activity:</p>
-            <div class="flow-grid">
-              <button class="flow-btn" id="flowBtnDrop" data-flow="drop">
-                <span class="flow-icon">📦</span>
-                <span class="flow-label">Drop a Trailer</span>
-                <span class="flow-desc">Park a trailer at a door</span>
-              </button>
-              <button class="flow-btn" data-flow="shunt">
-                <span class="flow-icon">🔀</span>
-                <span class="flow-label">Shunt a Trailer</span>
-                <span class="flow-desc">Move trailer to a different door</span>
-              </button>
-              <button class="flow-btn" data-flow="xdock_pickup">
-                <span class="flow-icon">🔄</span>
-                <span class="flow-label">Cross Dock Pickup</span>
-                <span class="flow-desc">Pick up a loaded trailer</span>
-              </button>
-              <button class="flow-btn" data-flow="xdock_offload">
-                <span class="flow-icon">📥</span>
-                <span class="flow-label">Cross Dock Offload</span>
-                <span class="flow-desc">Drop a loaded trailer to unload</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+// logout
+app.post("/api/logout", requireXHR, (req, res) => {
+  const s = getSession(req);
+  if (s?.sid) sessions.delete(s.sid);
+  clearSessionCookie(res);
+  res.json({ ok: true });
+});
 
+// get trailers state
+app.get("/api/state", async (req, res) => {
+  res.json(await loadTrailersObject());
+});
 
-      <!-- ── SCREEN: SHUNT ── -->
-      <div id="shunt-screen" style="display:none;">
-        <div class="driver-panel active-step">
-          <div class="driver-phd">
-            <span class="driver-phd-title"><span style="color:var(--amber);">🔀</span> Shunt Trailer</span>
-            <button class="btn btn-default btn-sm" id="btnBackToFlow2">← Back</button>
-          </div>
-          <div class="driver-pbody">
-            <label class="fl" for="sh_trailer">Trailer Number</label>
-            <input id="sh_trailer" class="trailer-hero-input" placeholder="e.g. 5312"
-              autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false" aria-label="Trailer number to shunt"/>
+// upsert trailer (dispatcher/dock/supervisor)
+app.post("/api/upsert", requireXHR, requireRole(["dispatcher", "dock", "supervisor", "admin"]), async (req, res) => {
+  const actor = req.user.role;
+  try {
+    const trailer = String(req.body.trailer || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
 
-            <div style="margin:14px 0 6px;font-family:var(--mono);font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;">New Door</div>
-            <div class="assignment-card visible" style="margin-bottom:10px;">
-              <div class="ac-icon">🚪</div>
-              <div class="ac-body">
-                <div class="ac-label">Selected Door</div>
-                <div class="ac-door" id="sh_door_display">Select a door below</div>
-              </div>
-            </div>
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    const now = Date.now();
 
-            <div class="door-picker-grid" id="shuntDoorGrid" style="margin-bottom:14px;"></div>
+    const direction = (req.body.direction !== undefined) ? String(req.body.direction || "").trim() : (existing?.direction || "");
+    const status    = (req.body.status !== undefined)    ? String(req.body.status || "").trim()    : (existing?.status || "");
+    const door      = (req.body.door !== undefined)      ? String(req.body.door || "").trim()      : (existing?.door || "");
+    const note      = (req.body.note !== undefined)      ? String(req.body.note || "").trim()      : (existing?.note || "");
+    const dropType    = (req.body.dropType    !== undefined) ? String(req.body.dropType    || "").trim() : (existing?.dropType    || "");
+    const carrierType = (req.body.carrierType !== undefined) ? String(req.body.carrierType || "").trim() : (existing?.carrierType || "");
 
-            <button class="btn btn-primary btn-full" id="btnDriverShunt" disabled aria-label="Submit shunt">
-              Move Trailer
-            </button>
-          </div>
-        </div>
-      </div>
+    // Role restrictions:
+    // - dock can ONLY change status to Loading / Dock Ready (no other field writes)
+    if (actor === "dock") {
+      const onlyStatus =
+        req.body.status !== undefined &&
+        req.body.direction === undefined &&
+        req.body.door === undefined &&
+        req.body.note === undefined &&
+        req.body.dropType === undefined;
 
-      <!-- ── SCREEN: DRIVER DROP ── -->
-      <div id="drop-screen" style="display:none;">
-        <div class="driver-panel active-step">
-          <div class="driver-phd">
-            <span class="driver-phd-title"><span style="color:var(--amber);">📦</span> Trailer Drop</span>
-            <button class="btn btn-default btn-sm" id="btnBackToFlow">← Back</button>
-          </div>
-          <div class="driver-pbody">
-            <label class="fl" style="margin-bottom:6px;">Your Trailer Number</label>
-            <input id="v_trailer" class="trailer-hero-input" placeholder="e.g. 5312" aria-label="Your trailer number"
-              autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false"/>
+      if (!onlyStatus) return res.status(403).send("Dock can only update trailer status");
+      if (!["Loading", "Dock Ready"].includes(status)) return res.status(403).send("Dock can only set Loading or Dock Ready");
+    }
 
-            <!-- Auto-assigned door -->
-            <div class="assignment-card" id="assignmentCard">
-              <div class="ac-icon">🚪</div>
-              <div class="ac-body">
-                <div class="ac-label">Assigned Door</div>
-                <div class="ac-door" id="ac_door">—</div>
-                <div class="ac-meta" id="ac_meta">Assigned by dispatcher</div>
-                <div class="ac-override" id="ac_override">Choose a different door</div>
-              </div>
-            </div>
+    const allowed = ["Incoming", "Dropped", "Loading", "Dock Ready", "Ready", "Departed", ""];
+    if (!allowed.includes(status)) return res.status(400).send("Invalid status");
 
-            <!-- Manual door picker -->
-            <div class="door-picker-wrap" id="doorPickerWrap">
-              <div class="door-picker-label">Select Your Door (18–42)</div>
-              <div class="door-picker-grid" id="doorPickerGrid"></div>
-            </div>
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt)
+       VALUES(?,?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET
+        direction=excluded.direction,
+        status=excluded.status,
+        door=excluded.door,
+        note=excluded.note,
+        dropType=excluded.dropType,
+        carrierType=excluded.carrierType,
+        updatedAt=excluded.updatedAt`,
+      [trailer, direction, status, door, note, dropType, carrierType, now]
+    );
 
-            <label class="fl" style="margin-top:16px;margin-bottom:6px;">What Are You Dropping?</label>
-            <div class="drop-type-toggle">
-              <button class="drop-type-btn selected" id="dtbEmpty" data-type="Empty">
-                <span class="dtb-icon">📦</span>Empty
-              </button>
-              <button class="drop-type-btn" id="dtbLoaded" data-type="Loaded">
-                <span class="dtb-icon">🏋️</span>Loaded
-              </button>
-            </div>
+    const action = existing ? "trailer_update" : "trailer_create";
+    await audit(req, actor, action, "trailer", trailer, { direction, status, door, dropType, note });
 
-            <button class="driver-submit" id="btnDriverDrop" disabled>
-              <span>Record Drop</span>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </button>
-            <div class="no-safety-note">✓ No safety check required for drops</div>
-          </div>
-        </div>
-      </div>
+    if (req.body.status !== undefined) {
+      await audit(req, actor, "trailer_status_set", "trailer", trailer, { status });
+    }
 
-      <!-- ── SCREEN: CROSS DOCK PICKUP ── -->
-      <div id="xdock-pickup-screen" style="display:none;">
-        <div class="driver-panel active-step">
-          <div class="driver-phd">
-            <span class="driver-phd-title"><span style="color:var(--cyan);">🔄</span> Cross Dock Pickup</span>
-            <button class="btn btn-default btn-sm" id="btnBackToFlow">← Back</button>
-          </div>
-          <div class="driver-pbody">
-            <label class="fl" style="margin-bottom:6px;">Trailer Number to Pick Up</label>
-            <input id="xp_trailer" aria-label="Trailer number for cross dock pickup" class="trailer-hero-input" placeholder="e.g. 5312"
-              autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false"/>
+    // Notify when dispatcher/supervisor sets Ready
+    if (status === "Ready" && (actor === "dispatcher" || actor === "supervisor")) {
+      wsBroadcast("notify", { kind: "ready", trailer, door: door || "" });
+      broadcastPush(
+        "🟢 Trailer Ready",
+        `Trailer ${trailer} is ready for pickup${door ? " at door " + door : ""}`,
+        { trailer, door }
+      ).catch(() => {});
+    }
 
-            <!-- Assignment found -->
-            <div class="assignment-card" id="pickupAssignmentCard" style="border-color:var(--cyan-bd);background:var(--cyan-bg);">
-              <div class="ac-icon">🚪</div>
-              <div class="ac-body">
-                <div class="ac-label" style="color:var(--cyan);">Your Assigned Door</div>
-                <div class="ac-door" id="pac_door">—</div>
-                <div class="ac-meta" id="pac_meta">Assigned by dispatcher</div>
-              </div>
-            </div>
+    await broadcastTrailers();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Upsert failed");
+  }
+});
 
-            <!-- No assignment found -->
-            <div class="no-assignment-msg" id="pickupNoAssignment">
-              <span>⚠️</span>
-              <div>
-                <div style="font-weight:600;color:var(--t0);">No assignment found</div>
-                <div style="font-size:11px;color:var(--t1);margin-top:2px;">Contact your dispatcher — this trailer has no door assigned.</div>
-              </div>
-            </div>
+// delete trailer (dispatcher/supervisor)
+app.post("/api/delete", requireXHR, requireRole(["dispatcher", "supervisor", "admin"]), async (req, res) => {
+  const actor = req.user.role;
+  try {
+    const trailer = String(req.body.trailer || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+    await run(`DELETE FROM trailers WHERE trailer=?`, [trailer]);
+    await audit(req, actor, "trailer_delete", "trailer", trailer, {});
+    await broadcastTrailers();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Delete failed");
+  }
+});
 
-            <button class="driver-submit" id="btnXdockPickup" disabled>
-              <span>Confirm Pickup</span>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </button>
-            <div class="safety-required-note">⚠ Safety check required after this step</div>
-          </div>
-        </div>
-      </div>
+// clear all (supervisor only — too destructive for dispatcher)
+app.post("/api/clear", requireXHR, requireRole(["supervisor", "admin"]), async (req, res) => {
+  const actor = req.user.role;
+  try {
+    await run(`DELETE FROM trailers`);
+    await audit(req, actor, "trailer_clear_all", "trailer", "*", {});
+    await broadcastTrailers();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Clear failed");
+  }
+});
 
-      <!-- ── SCREEN: CROSS DOCK OFFLOAD ── -->
-      <div id="xdock-offload-screen" style="display:none;">
-        <div class="driver-panel active-step">
-          <div class="driver-phd">
-            <span class="driver-phd-title"><span style="color:var(--amber);">📥</span> Cross Dock Offload</span>
-            <button class="btn btn-default btn-sm" id="btnBackToFlow">← Back</button>
-          </div>
-          <div class="driver-pbody">
-            <label class="fl" style="margin-bottom:6px;">Trailer Number You're Offloading</label>
-            <input id="xo_trailer" aria-label="Trailer number for cross dock offload" class="trailer-hero-input" placeholder="e.g. 5312"
-              autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false"/>
+// dock plates get
+app.get("/api/dockplates", async (req, res) => {
+  res.json(await loadDockPlatesObject());
+});
 
-            <!-- Auto-assigned door -->
-            <div class="assignment-card" id="offloadAssignmentCard">
-              <div class="ac-icon">🚪</div>
-              <div class="ac-body">
-                <div class="ac-label">Assigned Door</div>
-                <div class="ac-door" id="oac_door">—</div>
-                <div class="ac-meta" id="oac_meta">Assigned by dispatcher</div>
-                <div class="ac-override" id="oac_override">Choose a different door</div>
-              </div>
-            </div>
+// dock plates set (dock/dispatcher/supervisor)
+app.post("/api/dockplates/set", requireXHR, requireRole(["dock", "dispatcher", "supervisor", "admin"]), async (req, res) => {
+  const actor = req.user.role;
+  try {
+    const door = String(req.body.door || "").trim();
+    const status = String(req.body.status || "Unknown").trim();
+    const note = String(req.body.note || "").trim();
 
-            <!-- Manual door picker -->
-            <div class="door-picker-wrap" id="offloadDoorPickerWrap">
-              <div class="door-picker-label">Select Your Door (18–42)</div>
-              <div class="door-picker-grid" id="offloadDoorPickerGrid"></div>
-            </div>
+    const dNum = Number(door);
+    if (!Number.isFinite(dNum) || dNum < 18 || dNum > 42) return res.status(400).send("Invalid door");
+    if (!["OK", "Service", "Unknown"].includes(status)) return res.status(400).send("Invalid plate status");
 
-            <button class="driver-submit" id="btnXdockOffload" disabled>
-              <span>Confirm Offload</span>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </button>
-            <div class="safety-required-note">⚠ Safety check required after this step</div>
-          </div>
-        </div>
-      </div>
+    await run(
+      `INSERT INTO dockplates(door,status,note,updatedAt) VALUES(?,?,?,?)
+       ON CONFLICT(door) DO UPDATE SET status=excluded.status, note=excluded.note, updatedAt=excluded.updatedAt`,
+      [door, status, note, Date.now()]
+    );
+    await audit(req, actor, "plate_set", "dockplate", door, { status, note });
+    await broadcastPlates();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Dock plate set failed");
+  }
+});
 
-      <!-- ── SCREEN: SAFETY ── -->
-      <div id="safety-screen" style="display:none;">
-        <div class="driver-panel active-step" style="border-color:rgba(32,208,144,.25);">
-          <div class="driver-phd">
-            <span class="driver-phd-title"><span style="color:var(--green);">🛡</span> Safety Confirmation</span>
-          </div>
-          <div class="driver-pbody">
-            <div id="safetyContext" style="margin-bottom:14px;display:flex;gap:6px;flex-wrap:wrap;"></div>
-            <label class="checkline" for="c_loadSecured">
-              <input id="c_loadSecured" type="checkbox"/>
-              <div>
-                <div class="cl-main">Load secured</div>
-                <div class="cl-sub">Straps, locks, and load bars confirmed</div>
-              </div>
-            </label>
-            <label class="checkline" for="c_dockPlateUp">
-              <input id="c_dockPlateUp" type="checkbox"/>
-              <div>
-                <div class="cl-main">Dock plate raised</div>
-                <div class="cl-sub">Plate fully up before departing dock</div>
-              </div>
-            </label>
-            <button class="driver-submit green" id="btnConfirmSafety" disabled>
-              <span>Confirm &amp; Complete</span>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12 13 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </button>
-          </div>
-        </div>
-      </div>
+// driver assignment lookup — no auth required
+// Returns the dispatcher-assigned door for a given trailer
+// so the driver portal can auto-populate the door field.
+app.get("/api/driver/assignment", async (req, res) => {
+  try {
+    const trailer = String(req.query.trailer || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
 
-      <!-- ── SCREEN: DONE ── -->
-      <div id="done-screen" style="display:none;">
-        <div class="driver-panel">
-          <div class="driver-done">
-            <div class="done-ring">✅</div>
-            <div class="done-title">All Done!</div>
-            <div class="done-detail" id="driverDoneDetail"></div>
-            <button class="btn btn-default" style="margin-top:12px;padding:10px 22px;" id="btnDriverRestart">
-              Start Over
-            </button>
-          </div>
-        </div>
-      </div>
+    const row = await get(
+      `SELECT door, direction, status, dropType FROM trailers WHERE trailer=?`,
+      [trailer]
+    );
 
-      <!-- Session history -->
-      <div class="session-history" id="sessionHistory">
-        <div class="sh-hd">
-          <span>This Session</span>
-          <span id="shCount" style="color:var(--t3);">0 submissions</span>
-        </div>
-        <div class="sh-body" id="shBody">
-          <div class="sh-empty">No submissions yet this session.</div>
-        </div>
-      </div>
+    if (!row) return res.json({ found: false });
 
-    </div>
-  </div>
-</div>
+    // Only surface an assignment if the trailer is in an active state
+    // where a door has been assigned but not yet departed.
+    const activeStatuses = ["Incoming", "Dropped", "Loading", "Dock Ready", "Ready"];
+    if (!activeStatuses.includes(row.status)) {
+      return res.json({ found: false });
+    }
 
-<!-- ═══════════════════════════════════════════
-     SUPERVISOR VIEW
-═══════════════════════════════════════════ -->
-<div id="supervisorView" style="display:none;">
-  <div class="sup-shell">
-    <div class="kpi-row" id="supKpis"></div>
-    <div class="sup-grid">
+    res.json({
+      found: true,
+      door: row.door || "",
+      direction: row.direction || "",
+      status: row.status || "",
+      dropType: row.dropType || "",
+    });
+  } catch (e) {
+    res.status(500).send("Lookup failed");
+  }
+});
 
-      <div class="panel" style="grid-column:1/-1;">
-        <div class="panel-hd">
-          <div class="panel-title"><div class="ptdot" style="background:var(--amber)"></div>Live Trailer Board</div>
-          <span class="badge badge-num" id="supCountsPill">0</span>
-        </div>
-        <div class="filter-bar">
-          <div class="field"><label class="fl">Search</label><input id="supSearch" inputmode="search" autocomplete="off" aria-label="Search trailers" placeholder="Trailer / door / note…"/></div>
-          <div class="field"><label class="fl">Direction</label>
-            <select id="supFilterDir" aria-label="Filter by direction"><option value="">All Directions</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
-          </div>
-          <div class="field"><label class="fl">Status</label>
-            <select id="supFilterStatus" aria-label="Filter by status"><option value="">All Statuses</option><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select>
-          </div>
-          <div class="tight"><button class="btn btn-default btn-sm" id="btnSupClearFilters" style="margin-top:14px;">Clear</button></div>
-        </div>
-        <div class="tbl-hd"><span>Trailer</span><span>Dir</span><span>Status</span><span>Door</span><span>Type</span><span>Note</span><span>Updated</span><span></span></div>
-        <div id="supTbody"></div>
-        <div class="board-footer" role="status" aria-live="polite"><span id="supLastUpdated">—</span><span id="supCountStr">—</span></div>
-      </div>
+// driver drop (no login required)
+app.post("/api/driver/drop", requireXHR, async (req, res) => {
+  try {
+    const trailer = String(req.body.trailer || "").trim();
+    const door = String(req.body.door || "").trim();
+    const dropType = String(req.body.dropType || "Empty").trim();
 
-      <div class="panel">
-        <div class="panel-hd">
-          <div class="panel-title"><div class="ptdot" style="background:var(--cyan)"></div>Recent Activity</div>
-          <span class="badge badge-num" id="supAuditCount">0</span>
-        </div>
-        <div class="panel-body" id="supFeed"><div style="color:var(--t2);font-size:11px;font-family:var(--mono);">Loading…</div></div>
-      </div>
+    if (!trailer) return res.status(400).send("Missing trailer");
+    const dNum = Number(door);
+    if (!Number.isFinite(dNum) || dNum < 18 || dNum > 42) return res.status(400).send("Invalid door (18–42)");
+    if (!["Empty", "Loaded"].includes(dropType)) return res.status(400).send("Invalid drop type");
 
-      <div class="panel">
-        <div class="panel-hd">
-          <div class="panel-title"><div class="ptdot" style="background:var(--green)"></div>Safety Confirmations</div>
-          <span class="badge badge-num" id="supConfCount">0</span>
-        </div>
-        <div class="panel-body-flush">
-          <div class="data-tbl-wrap">
-            <table><thead><tr><th>Time</th><th>Trailer</th><th>Door</th><th>Type</th><th>IP</th></tr></thead>
-            <tbody id="supConfBody"><tr><td colspan="5" style="padding:16px;color:var(--t2);">Loading…</td></tr></tbody></table>
-          </div>
-        </div>
-      </div>
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    const now = Date.now();
+    const direction = existing?.direction || "Inbound";
 
-      <div class="panel" style="grid-column:1/-1;">
-        <div class="panel-hd"><div class="panel-title"><div class="ptdot" style="background:var(--amber)"></div>PIN Management</div></div>
-        <div class="panel-body">
-          <div class="infobox infobox-amber" style="margin-bottom:14px;">
-            <div class="ib-title">Security Notice</div>
-            PINs are hashed server-side — cannot be viewed, only reset. All changes are audit-logged and active sessions are invalidated immediately.
-          </div>
-          <div class="pin-row">
-            <div><label class="fl">Dispatcher PIN</label><input type="password" id="pin_dispatcher" placeholder="New PIN (min 4)" aria-label="Dispatcher new PIN" autocomplete="new-password"/></div>
-            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_dispatcher_confirm" placeholder="Repeat" aria-label="Confirm dispatcher PIN" autocomplete="new-password"/></div>
-            <button class="btn btn-success btn-sm" id="btnSetDispatcherPin" style="padding:7px 13px;">Update</button>
-          </div>
-          <div class="pin-row">
-            <div><label class="fl">Dock PIN</label><input type="password" id="pin_dock" placeholder="New PIN (min 4)" aria-label="Dock new PIN" autocomplete="new-password"/></div>
-            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_dock_confirm" placeholder="Repeat" aria-label="Confirm dock PIN" autocomplete="new-password"/></div>
-            <button class="btn btn-success btn-sm" id="btnSetDockPin" style="padding:7px 13px;">Update</button>
-          </div>
-          <div class="pin-row">
-            <div><label class="fl">Supervisor PIN</label><input type="password" id="pin_supervisor" placeholder="New PIN (min 4)" aria-label="Supervisor new PIN" autocomplete="new-password"/></div>
-            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_supervisor_confirm" placeholder="Repeat" aria-label="Confirm supervisor PIN" autocomplete="new-password"/></div>
-            <button class="btn btn-success btn-sm" id="btnSetSupervisorPin" style="padding:7px 13px;">Update</button>
-          </div>
-        </div>
-      </div>
+    // Auto-assign door if none provided and none pre-assigned
+    let assignedDoor = door;
+    if (!assignedDoor) {
+      // Find lowest free door 28-42
+      const occupied = await all(
+        `SELECT door FROM trailers WHERE door IS NOT NULL AND door != '' AND status NOT IN ('Departed','') AND trailer != ?`,
+        [trailer]
+      );
+      const occupiedSet = new Set(occupied.map(r => String(r.door)));
+      for (let d = 28; d <= 42; d++) {
+        if (!occupiedSet.has(String(d))) { assignedDoor = String(d); break; }
+      }
+    }
 
-    </div>
-  </div>
-</div>
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt)
+       VALUES(?,?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET
+        direction=excluded.direction,
+        status=excluded.status,
+        door=excluded.door,
+        dropType=excluded.dropType,
+        carrierType=excluded.carrierType,
+        updatedAt=excluded.updatedAt`,
+      [trailer, direction, "Dropped", assignedDoor || door, existing?.note || "", dropType, carrierType, now]
+    );
 
-<!-- ═══════════════════════════════════════════
-     DOCK VIEW
-═══════════════════════════════════════════ -->
-<div id="dockView" style="display:none;">
-  <div class="dock-shell">
+    await audit(req, "driver", "driver_drop", "trailer", trailer, { door: assignedDoor || door, dropType });
+    await broadcastTrailers();
+    res.json({ ok: true, door: assignedDoor || door || null });
+  } catch (e) {
+    res.status(500).send("Drop failed");
+  }
+});
 
-    <div class="dock-toolbar">
-      <div class="dock-toolbar-left">
-        <div class="live-dot" id="dockWsDot"></div>
-        <span id="dockWsText">Connecting…</span>
-      </div>
-      <div class="dock-filter-wrap">
-        <button class="dock-filter-btn active" data-dock-filter="active" aria-pressed="true">Active trailers</button>
-        <button class="dock-filter-btn" data-dock-filter="all" aria-pressed="false">All trailers</button>
-      </div>
-      <div class="dock-toolbar-right">
-        <span class="badge badge-num" id="dockCount">0</span>
-        <span style="font-family:var(--mono);font-size:10px;color:var(--t2);">trailers</span>
-      </div>
-    </div>
+// cross dock pickup (no login required)
+// Status stays as-is here — moved to Departed only after safety is confirmed
+app.post("/api/crossdock/pickup", requireXHR, async (req, res) => {
+  try {
+    const trailer = String(req.body.trailer || "").trim();
+    const door    = String(req.body.door    || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+    const dNum = Number(door);
+    if (!Number.isFinite(dNum) || dNum < 18 || dNum > 42) return res.status(400).send("Invalid door (18–42)");
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    const now = Date.now();
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
+       VALUES(?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET
+        door=excluded.door, updatedAt=excluded.updatedAt`,
+      [trailer, existing?.direction || "Cross Dock", existing?.status || "Ready", door, existing?.note || "", existing?.dropType || "", now]
+    );
+    await audit(req, "driver", "crossdock_pickup", "trailer", trailer, { door });
+    await broadcastTrailers();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Cross dock pickup failed");
+  }
+});
 
-    <div class="dock-search-bar">
-      <input id="dockSearch" placeholder="Search trailer or door…" autocomplete="off" aria-label="Search dock trailers"/>
-    </div>
-
-    <div class="dock-cards" id="dockCards">
-      <div class="dock-empty">Loading…</div>
-    </div>
-
-    <div class="dock-plates-inline" id="dockPlatesInline">
-      <button class="acc-head" id="dockPlatesToggle2" aria-expanded="false">
-        <span style="display:flex;align-items:center;gap:9px;">Dock Plates (18–42) <span class="badge" id="platesMini2">—</span></span>
-        <span class="chev">▾</span>
-      </button>
-      <div class="acc-body" id="dockPlatesBody2" style="max-height:0px;overflow:hidden;transition:max-height .3s ease;">
-        <div class="plate-grid" id="platesGrid2"></div>
-        <div style="padding:0 12px 10px;font-family:var(--mono);font-size:9px;color:var(--t3);letter-spacing:.04em;">Tap Edit on any door to update status or note.</div>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════════════
-     DISPATCH / DOCK VIEW
-═══════════════════════════════════════════ -->
-<div id="dispatchView" style="display:none;">
-  <div class="page">
-    <div class="grid-main">
-      <div class="col-stack">
-
-        <div class="panel">
-          <div class="panel-hd">
-            <div class="panel-title"><div class="ptdot" style="background:var(--amber)"></div>Trailer Board</div>
-            <span class="badge badge-num" id="countsPill">0</span>
-          </div>
-          <div class="filter-bar">
-            <div class="field"><label class="fl">Search</label><input id="search" placeholder="Trailer, door, note…" aria-label="Search trailers" inputmode="search" autocomplete="off"/></div>
-            <div class="field"><label class="fl">Direction</label>
-              <select id="filterDir" aria-label="Filter by direction"><option value="">All Directions</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
-            </div>
-            <div class="field"><label class="fl">Status</label>
-              <select id="filterStatus" aria-label="Filter by status"><option value="">All Statuses</option><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select>
-            </div>
-            <div class="tight"><button class="btn btn-default btn-sm" id="btnClearFilters" style="margin-top:14px;">Clear</button></div>
-          </div>
-          <div class="tbl-hd">
-            <span>Trailer</span><span>Dir</span><span>Status</span><span>Door</span>
-            <span>Type</span><span>Note</span><span>Updated</span><span id="actionsColHead">Actions</span>
-          </div>
-          <div id="tbody"></div>
-          <div class="board-footer" role="status" aria-live="polite"><span id="lastUpdated">—</span><span id="boardCountStr">—</span></div>
-        </div>
-
-        <div class="panel" id="dockMapCard">
-          <div class="panel-hd">
-            <div class="panel-title"><div class="ptdot" style="background:var(--cyan)"></div>Door Occupancy Map</div>
-            <span class="badge" id="dockMapFreeCount" style="color:var(--green);">—</span>
-          </div>
-          <div class="panel-body" style="padding:10px 12px;">
-            <div class="dock-map-grid" id="dockMapGrid"></div>
-          </div>
-        </div>
-
-        <div class="panel" id="auditCard" style="display:none;">
-          <div class="panel-hd">
-            <div class="panel-title"><div class="ptdot" style="background:var(--t2)"></div>Audit Log</div>
-            <span class="badge badge-num" id="auditCount">0</span>
-          </div>
-          <div class="panel-body-flush">
-            <div class="data-tbl-wrap">
-              <table style="min-width:740px;">
-                <thead><tr><th>Time</th><th>Role</th><th>Action</th><th>Entity</th><th>ID</th><th>Details</th><th>IP</th></tr></thead>
-                <tbody id="auditBody"><tr><td colspan="7" style="padding:16px;color:var(--t2);">Click Audit to load.</td></tr></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div class="panel" id="dockPlatesCard">
-          <button class="acc-head" id="dockPlatesToggle" aria-expanded="false">
-            <span style="display:flex;align-items:center;gap:9px;">Dock Plates (28–42) <span class="badge" id="platesMini">—</span></span>
-            <span class="chev">▾</span>
-          </button>
-          <div class="acc-body" id="dockPlatesBody" style="max-height:0px;overflow:hidden;transition:max-height .3s ease;">
-            <div class="plate-grid" id="platesGrid"></div>
-            <div style="padding:0 12px 10px;font-family:var(--mono);font-size:9px;color:var(--t3);letter-spacing:.04em;">Click Edit on any door to update status or note.</div>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- Side panel -->
-      <div class="panel side-sticky">
-        <div class="panel-hd">
-          <div class="panel-title" id="panelTitle">Controls</div>
-          <span class="badge" id="panelSub">—</span>
-        </div>
-        <div class="panel-body" id="panelBody"></div>
-      </div>
-
-    </div>
-  </div>
-</div>
-
-<!-- TOAST -->
-<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true">
-  <div class="toast-bar" id="toastBar"></div>
-  <strong id="toastTitle">Notification</strong>
-  <div class="t-body" id="toastBody"></div>
-</div>
+// cross dock offload (no login required)
+app.post("/api/crossdock/offload", requireXHR, async (req, res) => {
+  try {
+    const trailer = String(req.body.trailer || "").trim();
+    const door    = String(req.body.door    || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+    const dNum = Number(door);
+    if (!Number.isFinite(dNum) || dNum < 18 || dNum > 42) return res.status(400).send("Invalid door (18–42)");
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    const now = Date.now();
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
+       VALUES(?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET
+        door=excluded.door, status=excluded.status, dropType=excluded.dropType, updatedAt=excluded.updatedAt`,
+      [trailer, existing?.direction || "Cross Dock", "Dropped", door, existing?.note || "", "Loaded", now]
+    );
+    await audit(req, "driver", "crossdock_offload", "trailer", trailer, { door });
+    await broadcastTrailers();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Cross dock offload failed");
+  }
+});
 
 
-</main>
-<script src="/app.js"></script>
-</body>
-</html>
+// VAPID public key (needed by client to subscribe)
+app.get("/api/push/vapid-public-key", (req, res) => {
+  if (!VAPID_KEYS) return res.status(503).send("VAPID not ready");
+  res.json({ publicKey: VAPID_KEYS.publicKey });
+});
+
+// Subscribe to push notifications (no auth — driver portal)
+app.post("/api/push/subscribe", requireXHR, async (req, res) => {
+  try {
+    const sub = req.body;
+    if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) {
+      return res.status(400).send("Invalid subscription");
+    }
+    pushSubs.set(sub.endpoint, sub);
+    await run(
+      `INSERT INTO push_subscriptions(endpoint, subscription, createdAt) VALUES(?,?,?)
+       ON CONFLICT(endpoint) DO UPDATE SET subscription=excluded.subscription`,
+      [sub.endpoint, JSON.stringify(sub), Date.now()]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Subscribe failed");
+  }
+});
+
+// Unsubscribe
+app.post("/api/push/unsubscribe", requireXHR, async (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    if (endpoint) {
+      pushSubs.delete(endpoint);
+      await run(`DELETE FROM push_subscriptions WHERE endpoint=?`, [endpoint]);
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Unsubscribe failed");
+  }
+});
+// ── SHUNT: move trailer to new door, reset to Dropped ──
+app.post("/api/shunt", requireXHR, requireRole(["dispatcher", "dock", "driver", "admin"]), async (req, res) => {
+  try {
+    const actor = req.user?.role || "driver";
+    const trailer = String(req.body.trailer || "").trim();
+    const door    = String(req.body.door    || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+    if (!door)    return res.status(400).send("Missing door");
+
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    if (!existing) return res.status(404).send("Trailer not found");
+
+    const now = Date.now();
+    await run(
+      `UPDATE trailers SET door=?, status='Dropped', updatedAt=? WHERE trailer=?`,
+      [door, now, trailer]
+    );
+    await audit(req, actor, "trailer_shunt", "trailer", trailer, { fromDoor: existing.door || "—", toDoor: door });
+    await broadcastTrailers();
+    res.json({ ok: true, door });
+  } catch (e) {
+    res.status(500).send("Shunt failed");
+  }
+});
+
+// safety confirmation (no login required)
+app.post("/api/confirm-safety", requireXHR, async (req, res) => {
+  try {
+    const trailer = String(req.body.trailer || "").trim();
+    const door = String(req.body.door || "").trim();
+    const loadSecured = !!req.body.loadSecured;
+    const dockPlateUp = !!req.body.dockPlateUp;
+    if (!loadSecured || !dockPlateUp) return res.status(400).send("Both confirmations required");
+
+    const action = String(req.body.action || "safety").trim();
+    const at = Date.now();
+
+    // Cross dock pickup → trailer is leaving, mark Departed
+    // Cross dock offload → trailer is staying, already Dropped, no status change needed
+    if (action === "xdock_pickup" && trailer) {
+      await run(
+        `UPDATE trailers SET status='Departed', updatedAt=? WHERE trailer=?`,
+        [at, trailer]
+      );
+    }
+
+    await run(
+      `INSERT INTO confirmations(at,trailer,door,action,ip,userAgent) VALUES(?,?,?,?,?,?)`,
+      [at, trailer || "", door || "", action, ipOf(req), req.headers["user-agent"] || ""]
+    );
+    await audit(req, "driver", "safety_confirmed", "safety", trailer || "-", { trailer, door, action, loadSecured, dockPlateUp });
+
+    await broadcastTrailers();
+    await broadcastConfirmations();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Confirm failed");
+  }
+});
+
+// audit log (dispatcher/supervisor)
+app.get("/api/audit", requireRole(["dispatcher", "supervisor", "admin"]), async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(500, Number(req.query.limit || 200)));
+    const rows = await all(
+      `SELECT at,actorRole,action,entityType,entityId,details,ip,userAgent
+       FROM audit ORDER BY at DESC LIMIT ?`,
+      [limit]
+    );
+    const out = rows.map((r) => {
+      let details = {};
+      try { details = r.details ? JSON.parse(r.details) : {}; } catch {}
+      return { ...r, details };
+    });
+    res.json(out);
+  } catch (e) {
+    res.status(500).send("Audit failed");
+  }
+});
+
+// supervisor set-pin
+app.post("/api/supervisor/set-pin", requireXHR, requireRole(["supervisor", "admin"]), async (req, res) => {
+  const actor = req.user.role;
+  try {
+    const role = String(req.body.role || "").toLowerCase();
+    const pin = String(req.body.pin || "");
+    if (!["dispatcher", "dock", "supervisor", "admin"].includes(role)) return res.status(400).send("Invalid role");
+    if (pin.length < PIN_MIN_LEN) return res.status(400).send("PIN too short");
+
+    await setPin(role, pin);
+
+    // Invalidate only sessions for the affected role — not the supervisor's own session
+    for (const [sid, s] of sessions.entries()) {
+      if (s.role === role) sessions.delete(sid);
+    }
+
+    await audit(req, actor, "pin_changed", "auth", role, {});
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).send("Set PIN failed");
+  }
+});
+
+/* =========================
+   WS CONNECTION
+========================= */
+wss.on("connection", async (ws) => {
+  try {
+    ws.send(JSON.stringify({ type: "version", payload: { version: APP_VERSION } }));
+    ws.send(JSON.stringify({ type: "state", payload: await loadTrailersObject() }));
+    ws.send(JSON.stringify({ type: "dockplates", payload: await loadDockPlatesObject() }));
+    ws.send(JSON.stringify({ type: "confirmations", payload: await loadConfirmations(250) }));
+  } catch {}
+});
+
+/* =========================
+   START
+========================= */
+initDb()
+  .then(async () => {
+    loadOrGenVapid();
+    // Load existing push subscriptions from DB
+    const subs = await all(`SELECT endpoint, subscription FROM push_subscriptions`);
+    for (const s of subs) {
+      try { pushSubs.set(s.endpoint, JSON.parse(s.subscription)); } catch {}
+    }
+    console.log(`[PUSH] Loaded ${pushSubs.size} push subscriptions`);
+  })
+  .then(() => {
+    server.listen(PORT, () => {
+      console.log(`Wesbell Dispatch running on http://localhost:${PORT}`);
+      console.log(`DB: ${DB_FILE}`);
+    });
+  })
+  .catch((e) => {
+    console.error("DB init failed:", e);
+    process.exit(1);
+  });

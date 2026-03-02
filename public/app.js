@@ -1031,7 +1031,6 @@ if(id==="btnSetAdminPinSup")   return setPin("admin","pin_admin_sup","pin_admin_
     const tog=direct?.dataset?.plateToggle; if(tog){ plateEditOpen[tog]=!plateEditOpen[tog]; renderPlates(); return; }
     const psv=direct?.dataset?.plateSave; if(psv)return plateSave(psv);
   });
-  });
 
   document.addEventListener("change",ev=>{
     const t=ev.target;

@@ -163,9 +163,13 @@
           "Departed":  ["Incoming"],
         };
         const nexts = nextStatuses[r.status] || [];
-        const quickBtns = nexts.map(s => {
-          const btnCls = s==="Ready"?"btn-success":s==="Departed"?"btn-default":"btn-default";
-          return `<button class="btn ${btnCls} btn-sm qs-btn" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}" aria-label="${esc(s)} trailer ${esc(r.trailer)}">${esc(s)}</button>`;
+        const quickBtns = nexts.map((s,i) => {
+          // First option = primary action, rest = secondary small links
+          if(i===0){
+            const btnCls = s==="Ready"?"btn-success":"btn-primary";
+            return `<button class="btn ${btnCls} btn-sm qs-btn" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}" aria-label="${esc(s)} trailer ${esc(r.trailer)}">${esc(s)}</button>`;
+          }
+          return `<button class="btn btn-default btn-sm qs-btn qs-secondary" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}" aria-label="${esc(s)} trailer ${esc(r.trailer)}">${esc(s)}</button>`;
         }).join("");
         acts = `<div class="t-acts">
           ${quickBtns}
@@ -390,7 +394,14 @@
   async function dispSave(){
     const trailer=(el("d_trailer")?.value||"").trim();
     if(!trailer) return toast("Validation error","Trailer number is required.","err");
-    try{ await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,direction:(el("d_direction")?.value||"").trim(),status:(el("d_status")?.value||"").trim(),door:(el("d_door")?.value||"").trim(),note:(el("d_note")?.value||"").trim(),dropType:(el("d_dropType")?.value||"").trim()})}); toast("Saved",`Trailer ${trailer} updated.`,"ok"); }
+    try{
+      await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,direction:(el("d_direction")?.value||"").trim(),status:(el("d_status")?.value||"").trim(),door:(el("d_door")?.value||"").trim(),note:(el("d_note")?.value||"").trim(),dropType:(el("d_dropType")?.value||"").trim()})});
+      toast("Saved",`Trailer ${trailer} updated.`,"ok");
+      // Clear form and focus for next entry
+      ["d_trailer","d_door","d_note"].forEach(id=>{if(el(id))el(id).value="";});
+      el("d_direction").value="Inbound"; el("d_status").value="Incoming"; el("d_dropType").value="";
+      setTimeout(()=>el("d_trailer")?.focus(),50);
+    }
     catch(e){ toast("Save failed",e.message,"err"); }
   }
   async function dispDelete(trailer){
@@ -556,6 +567,7 @@
 
   function selectWho(whoType){
     driverState.whoType=whoType;
+    try{ sessionStorage.setItem("wb_whoType", whoType); }catch{}
     const dropBtn=el("flowBtnDrop");
     if(dropBtn) dropBtn.style.display=whoType==="carrier"?"none":"";
     const sub=el("flowScreenSub");
@@ -817,7 +829,12 @@
     if(p.startsWith("/driver")){
       el("driverView").style.display="";
       el("btnLogout").style.display="none"; el("btnAudit").style.display="none";
-      showScreen("who-screen");
+      // Restore last whoType to skip first screen
+      try{
+        const savedWho = sessionStorage.getItem("wb_whoType");
+        if(savedWho){ driverState.whoType=savedWho; const dropBtn=el("flowBtnDrop"); if(dropBtn)dropBtn.style.display=savedWho==="carrier"?"none":""; showScreen("flow-screen"); }
+        else showScreen("who-screen");
+      }catch{ showScreen("who-screen"); }
       renderSessionHistory();
       initPush();
     } else if(p.startsWith("/supervisor")||ROLE==="supervisor"){
@@ -911,6 +928,10 @@
   el("xo_trailer")?.addEventListener("input",onOffloadTrailerInput);
   el("xo_trailer")?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!el("btnXdockOffload")?.disabled)xdockOffload(); });
   el("dockSearch")?.addEventListener("input", renderDockView);
+  // Dispatcher — Enter on any field submits save
+  ["d_trailer","d_door","d_note","d_direction","d_status","d_dropType"].forEach(id=>{
+    el(id)?.addEventListener("keydown", e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); dispSave(); } });
+  });
   ["search","filterDir","filterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderBoard)));
   ["supSearch","supFilterDir","supFilterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderSupBoard)));
 

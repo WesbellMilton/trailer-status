@@ -992,8 +992,48 @@ if(id==="btnSetAdminPinSup")   return setPin("admin","pin_admin_sup","pin_admin_
     if(act==="dockSet"){ const to=direct?.dataset?.to; if(trId&&to)return dockSet(trId,to); }
     if(act==="markReady"&&trId) return markReady(trId);
 
+    const dmCell = direct?.closest?.("[data-dm-door]");
+    if (dmCell && (ROLE==="dispatcher"||ROLE==="admin")) {
+      const door = dmCell.dataset.dmDoor;
+      const occupied = getOccupiedDoors();
+      const occ = occupied[door];
+      if (!occ) return;
+
+      const nextStatuses = {
+        "Incoming":   ["Dropped","Loading","Dock Ready","Ready","Departed"],
+        "Dropped":    ["Loading","Dock Ready","Ready","Departed"],
+        "Loading":    ["Dock Ready","Ready","Departed"],
+        "Dock Ready": ["Ready","Departed"],
+        "Ready":      ["Departed"],
+        "Departed":   ["Incoming","Dropped"],
+      };
+      const options = nextStatuses[occ.status] || [];
+
+      el("dmModalTitle").textContent = `Trailer ${occ.trailer} — D${door}`;
+      el("dmModalSub").textContent = `Current status: ${occ.status}`;
+      el("dmStatusBtns").innerHTML = options.map(s => {
+        const cls = s==="Ready"?"btn-success":s==="Departed"?"btn-default":s==="Loading"?"btn-primary":"btn-cyan";
+        return `<button class="btn ${cls} btn-full" data-dm-status="${esc(s)}" data-dm-trailer="${esc(occ.trailer)}">${esc(s)}</button>`;
+      }).join("");
+      el("dmModalOv").classList.remove("hidden");
+      return;
+    }
+
+    const dmStatusBtn = direct?.closest?.("[data-dm-status]");
+    if (dmStatusBtn) {
+      const status  = dmStatusBtn.dataset.dmStatus;
+      const trailer = dmStatusBtn.dataset.dmTrailer;
+      el("dmModalOv").classList.add("hidden");
+      try {
+        await apiJson("/api/upsert", { method:"POST", headers:CSRF, body:JSON.stringify({ trailer, status }) });
+        toast("Updated", `${trailer} → ${status}`, "ok");
+      } catch(e) { toast("Update failed", e.message, "err"); }
+      return;
+    }
+
     const tog=direct?.dataset?.plateToggle; if(tog){ plateEditOpen[tog]=!plateEditOpen[tog]; renderPlates(); return; }
     const psv=direct?.dataset?.plateSave; if(psv)return plateSave(psv);
+  });
   });
 
   document.addEventListener("change",ev=>{

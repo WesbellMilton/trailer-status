@@ -908,16 +908,17 @@
     const trId = direct?.dataset?.trailerId || direct?.closest?.("[data-trailer-id]")?.dataset?.trailerId;
 
     if(direct?.closest?.("#dockPlatesToggle")){ setPlatesOpen(el("dockPlatesToggle").getAttribute("aria-expanded")!=="true"); return; }
-    if(direct?.closest?.("#dockPlatesToggle2")){ setPlatesOpen2(el("dockPlatesToggle2").getAttribute("aria-expanded")!=="true"); return; }
-    if(id==="btnLogout") return doLogout();
-    if(id==="btnAudit"){ const s=el("auditCard").style.display!=="none"; el("auditCard").style.display=s?"none":""; if(!s)loadAuditInto(el("auditBody"),el("auditCount"),7); return; }
-    if(id==="btnClearFilters"||id==="btnSupClearFilters"){ ["search","filterDir","filterStatus","supSearch","supFilterDir","supFilterStatus"].forEach(i=>{if(el(i))el(i).value="";}); renderBoard(); renderSupBoard(); return; }
-    if(id==="btnSaveTrailer") return dispSave();
-    if(id==="btnClearAll") return dispClear();
-    if(id==="btnSetDispatcherPin") return setPin("dispatcher","pin_dispatcher","pin_dispatcher_confirm");
-    if(id==="btnSetDockPin") return setPin("dock","pin_dock","pin_dock_confirm");
-    if(id==="btnSetSupervisorPin") return setPin("supervisor","pin_supervisor","pin_supervisor_confirm");
-    if(id==="btnSetAdminPin") return setPin("admin","pin_admin","pin_admin_confirm");
+if(direct?.closest?.("#dockPlatesToggle2")){ setPlatesOpen2(el("dockPlatesToggle2").getAttribute("aria-expanded")!=="true"); return; }
+if(id==="btnLogout") return doLogout();
+if(id==="btnAudit"){ const s=el("auditCard").style.display!=="none"; el("auditCard").style.display=s?"none":""; if(!s)loadAuditInto(el("auditBody"),el("auditCount"),7); return; }
+if(id==="btnClearFilters"||id==="btnSupClearFilters"){ ["search","filterDir","filterStatus","supSearch","supFilterDir","supFilterStatus"].forEach(i=>{if(el(i))el(i).value="";}); renderBoard(); renderSupBoard(); return; }
+if(id==="btnSaveTrailer") return dispSave();
+if(id==="btnClearAll") return dispClear();
+if(id==="btnSetDispatcherPin") return setPin("dispatcher","pin_dispatcher","pin_dispatcher_confirm");
+if(id==="btnSetDockPin")       return setPin("dock","pin_dock","pin_dock_confirm");
+if(id==="btnSetSupervisorPin") return setPin("supervisor","pin_supervisor","pin_supervisor_confirm");
+if(id==="btnSetAdminPin")      return setPin("admin","pin_admin","pin_admin_confirm");
+if(id==="btnSetAdminPinSup")   return setPin("admin","pin_admin_sup","pin_admin_sup_confirm");
 
     const dockFilterBtn=direct?.closest?.("[data-dock-filter]");
     if(dockFilterBtn){

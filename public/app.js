@@ -2,7 +2,7 @@
   const CSRF = {"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"};
   let ROLE = null, VERSION = "", trailers = {}, dockPlates = {}, confirmations = [];
   const plateEditOpen = {};
-  let shuntOpen = {}; // trailer -> true
+  let shuntOpen = {};
   const el = id => document.getElementById(id);
   const path = () => location.pathname.toLowerCase();
   const isDriver = () => path().startsWith("/driver");
@@ -95,14 +95,13 @@
     else if(p.startsWith("/dock")) el("navDock")?.classList.add("active");
     else el("navDispatch")?.classList.add("active");
     const rb=el("roleBadge");
-    if(ROLE){ rb.style.display=""; rb.textContent=ROLE==="admin"?"⚡ ADMIN":ROLE.toUpperCase(); rb.style.color=ROLE==="admin"?"var(--amber)":""; } else { rb.style.display="none"; }
+    if(ROLE){ rb.style.display=""; rb.textContent=ROLE==="admin"?"⚡ ADMIN":ROLE.toUpperCase(); rb.style.color=ROLE==="admin"?"var(--amber)":""; }
+    else { rb.style.display="none"; }
   }
 
-  /* ═══════════════════════════════════════════
-     DOOR OCCUPANCY HELPERS
-  ═══════════════════════════════════════════ */
+  /* ── DOOR OCCUPANCY ── */
   function getOccupiedDoors() {
-    const map = {}; // door -> {trailer, status}
+    const map = {};
     Object.entries(trailers).forEach(([t,r]) => {
       if (r.door && !["Departed",""].includes(r.status)) {
         map[r.door] = { trailer: t, status: r.status };
@@ -127,9 +126,7 @@
     mapEl.innerHTML = html;
   }
 
-  /* ═══════════════════════════════════════════
-     BOARD RENDERING
-  ═══════════════════════════════════════════ */
+  /* ── BOARD ── */
   const prevStatuses={};
   function renderBoardInto(tbodyEl,countEl,countStrEl,sq,dq,stq,readOnly) {
     if(!tbodyEl)return;
@@ -146,17 +143,14 @@
     if(!filt.length){ tbodyEl.innerHTML=`<div class="tbl-empty">No trailers match filters</div>`; return; }
     const canEdit=!readOnly&&(ROLE==="dispatcher"||ROLE==="admin");
     const canDock=!readOnly&&(ROLE==="dock"||ROLE==="admin");
-
     const occupied = getOccupiedDoors();
+
     tbodyEl.innerHTML=filt.map(r=>{
       const rowCls=STATUS_ROW[r.status]||"";
       const flash=(prevStatuses[r.trailer]&&prevStatuses[r.trailer]!==r.status)?" flashing":"";
       prevStatuses[r.trailer]=r.status;
       const readyFlash=(ROLE==="dispatcher"&&!readOnly&&r.status==="Ready")?" ready-flash":"";
-      const door = r.door
-        ? `<span class="t-door">${esc(r.door)}</span>`
-        : `<span style="color:var(--t3)">—</span>`;
-
+      const door = r.door ? `<span class="t-door">${esc(r.door)}</span>` : `<span style="color:var(--t3)">—</span>`;
       const note=r.note?`<span class="t-note" title="${esc(r.note)}">${esc(r.note)}</span>`:`<span style="color:var(--t3)">—</span>`;
       const dtype=r.dropType?`<span style="font-size:10px;color:var(--t2);font-family:var(--mono);">${esc(r.dropType)}</span>`:`<span style="color:var(--t3)">—</span>`;
       const ctag=carrierTag(r.carrierType);
@@ -164,7 +158,6 @@
 
       let acts=`<span style="color:var(--t3)">—</span>`;
       if(canEdit){
-        // Inline quick-status buttons + edit/delete
         const nextStatuses = {
           "Incoming":  ["Dropped","Departed"],
           "Dropped":   ["Loading","Departed"],
@@ -175,7 +168,6 @@
         };
         const nexts = nextStatuses[r.status] || [];
         const quickBtns = nexts.map((s,i) => {
-          // First option = primary action, rest = secondary small links
           if(i===0){
             const btnCls = s==="Ready"?"btn-success":"btn-primary";
             return `<button class="btn ${btnCls} btn-sm qs-btn" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}" aria-label="${esc(s)} trailer ${esc(r.trailer)}">${esc(s)}</button>`;
@@ -191,12 +183,13 @@
         </div>`;
       } else if(canDock){
         if(r.status==="Dropped"||r.status==="Incoming")
-          acts=`<div class="t-acts"><button class="btn btn-default btn-sm" data-act="dockSet" data-to="Loading" data-trailer-id="${esc(r.trailer)}" aria-label="Set trailer ${esc(r.trailer)} to Loading">Loading</button></div>`;
+          acts=`<div class="t-acts"><button class="btn btn-default btn-sm" data-act="dockSet" data-to="Loading" data-trailer-id="${esc(r.trailer)}">Loading</button></div>`;
         else if(r.status==="Loading")
-          acts=`<div class="t-acts"><button class="btn btn-cyan btn-sm" data-act="dockSet" data-to="Dock Ready" data-trailer-id="${esc(r.trailer)}" aria-label="Set trailer ${esc(r.trailer)} to Dock Ready">Dock Ready</button></div>`;
+          acts=`<div class="t-acts"><button class="btn btn-cyan btn-sm" data-act="dockSet" data-to="Dock Ready" data-trailer-id="${esc(r.trailer)}">Dock Ready</button></div>`;
         else
           acts=`<span style="color:var(--t3);font-size:10px;font-family:var(--mono);">${esc(r.status==="Dock Ready"?"Awaiting dispatch":r.status==="Ready"?"Ready":"—")}</span>`;
       }
+
       const shuntPickerHtml = (shuntOpen[r.trailer] && canEdit) ? `
         <div class="shunt-picker" data-shunt-trailer="${esc(r.trailer)}">
           <span class="shunt-label">Move to door:</span>
@@ -208,6 +201,7 @@
           }).join("")}</div>
           <button class="btn btn-default btn-sm" data-act="shuntToggle" data-trailer-id="${esc(r.trailer)}" style="margin-top:4px;">Cancel</button>
         </div>` : "";
+
       const carrierCls=r.carrierType==="Outside"?" carrier-outside":"";
       return `<div class="tbl-row ${rowCls}${flash}${readyFlash}${carrierCls}" data-trailer="${esc(r.trailer)}">
         <span class="t-num">${esc(r.trailer)}</span>
@@ -222,13 +216,12 @@
     }).join("");
   }
 
-  function renderBoard()    {
+  function renderBoard() {
     renderBoardInto(el("tbody"),el("countsPill"),el("boardCountStr"),el("search"),el("filterDir"),el("filterStatus"),false);
     el("lastUpdated").textContent="Updated "+fmtTime(Date.now());
     renderDockMap();
-    // Update free door count badge
     const occupied = getOccupiedDoors();
-    const occupiedInRange = Object.keys(occupied).filter(d => { const n=parseInt(d); return n>=28&&n<=42; }).length;
+    const occupiedInRange = Object.keys(occupied).filter(d=>{ const n=parseInt(d); return n>=28&&n<=42; }).length;
     const freeCount = 15 - occupiedInRange;
     const badge = el("dockMapFreeCount");
     if (badge) badge.textContent = `${freeCount} free`;
@@ -265,7 +258,7 @@
         <div style="display:flex;justify-content:space-between;align-items:center;gap:3px;"><span class="p-door">D${esc(door)}</span>${plateStatusTag(p.status)}</div>
         <div class="p-note">${p.note?esc(p.note):`<span style="color:var(--t3)">—</span>`}</div>
         ${open?`<select data-plate-status="${esc(door)}" style="margin-top:3px;"><option ${p.status==="OK"?"selected":""}>OK</option><option ${p.status==="Service"?"selected":""}>Service</option><option ${p.status==="Unknown"?"selected":""}>Unknown</option></select><input data-plate-note="${esc(door)}" placeholder="Note" value="${esc(p.note||"")}" style="margin-top:3px;"/>`:""}
-        <div class="p-btns" style="margin-top:3px;">${canEdit?`<button class="p-btn" data-plate-toggle="${esc(door)}" aria-label="${open?"Close":"Edit"} door ${esc(door)}">${open?"Close":"Edit"}</button>${open?`<button class="p-btn" data-plate-save="${esc(door)}" aria-label="Save door ${esc(door)}">Save</button>`:""}`:" "}</div>
+        <div class="p-btns" style="margin-top:3px;">${canEdit?`<button class="p-btn" data-plate-toggle="${esc(door)}">${open?"Close":"Edit"}</button>${open?`<button class="p-btn" data-plate-save="${esc(door)}">Save</button>`:""}`:" "}</div>
       </div>`;
     }).join("");
     ["platesGrid","platesGrid2"].forEach(id=>{ const e=el(id); if(e)e.innerHTML=plateHtml; });
@@ -316,9 +309,10 @@
       <div class="field"><label class="fl" for="d_status">Status</label><select id="d_status"><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select></div>
     </div>
     <div class="field-row">
-      <div class="field"><label class="fl" for="d_door">Door (28–42)</label><input id="d_door" placeholder="21" style="font-family:var(--mono);"/></div>
+      <div class="field"><label class="fl" for="d_door">Door (28–42)</label><input id="d_door" placeholder="e.g. 32" style="font-family:var(--mono);"/></div>
       <div class="field"><label class="fl" for="d_dropType">Drop Type</label><select id="d_dropType"><option value="">—</option><option>Empty</option><option>Loaded</option></select></div>
     </div>
+    <div class="field"><label class="fl" for="d_carrierType">Carrier</label><select id="d_carrierType"><option value="">—</option><option>Wesbell</option><option>Outside</option></select></div>
     <div class="field"><label class="fl" for="d_note">Note</label><textarea id="d_note" placeholder="Optional note…"></textarea></div>
     <button class="btn btn-primary btn-full" id="btnSaveTrailer">Save Trailer Record</button>
     <div class="divider"></div>
@@ -329,90 +323,75 @@
     <div class="infobox infobox-cyan"><div class="ib-title">Dock Workflow</div>1. Trailer arrives → tap <strong>Loading</strong><br/>2. Loading done → tap <strong>Dock Ready</strong><br/>3. Dispatcher confirms → driver notified.</div>
     <div style="font-size:11px;color:var(--t2);">No dispatch controls on Dock role.</div>`; }
 
-  /* ═══════════════════════════════════════════
-     DOCK VIEW
-  ═══════════════════════════════════════════ */
-  let dockFilter = "active"; // "active" | "all"
+  /* ── DOCK VIEW ── */
+  let dockFilter = "active";
 
   const DOCK_STATUS_NEXT = {
-    "Incoming":  { label: "→ Loading",   to: "Loading",   cls: "dc-btn-default" },
-    "Dropped":   { label: "→ Loading",   to: "Loading",   cls: "dc-btn-default" },
-    "Loading":   { label: "→ Dock Ready",to: "Dock Ready",cls: "dc-btn-cyan"    },
-    "Dock Ready":{ label: "Awaiting dispatcher", to: null, cls: "" },
-    "Ready":     { label: "Ready for pickup",    to: null, cls: "" },
-    "Departed":  { label: "Departed",            to: null, cls: "" },
+    "Incoming":  { label:"→ Loading",          to:"Loading",    cls:"dc-btn-default" },
+    "Dropped":   { label:"→ Loading",          to:"Loading",    cls:"dc-btn-default" },
+    "Loading":   { label:"→ Dock Ready",       to:"Dock Ready", cls:"dc-btn-cyan"    },
+    "Dock Ready":{ label:"Awaiting dispatcher", to:null,         cls:"" },
+    "Ready":     { label:"Ready for pickup",   to:null,         cls:"" },
+    "Departed":  { label:"Departed",           to:null,         cls:"" },
   };
 
   const DOCK_STATUS_COLOR = {
-    "Incoming":  "dc-incoming",
-    "Dropped":   "dc-dropped",
-    "Loading":   "dc-loading",
-    "Dock Ready":"dc-dockready",
-    "Ready":     "dc-ready",
-    "Departed":  "dc-departed",
+    "Incoming":"dc-incoming","Dropped":"dc-dropped","Loading":"dc-loading",
+    "Dock Ready":"dc-dockready","Ready":"dc-ready","Departed":"dc-departed",
   };
 
   function renderDockView() {
     const cards = el("dockCards");
     const countEl = el("dockCount");
     if (!cards) return;
-
     const q = (el("dockSearch")?.value || "").trim().toLowerCase();
     const rows = Object.entries(trailers)
-      .map(([t, r]) => ({ trailer: t, ...r }))
+      .map(([t,r]) => ({trailer:t,...r}))
       .filter(r => {
-        if (dockFilter === "active" && ["Departed","Ready"].includes(r.status)) return false;
+        if (dockFilter==="active" && ["Departed","Ready"].includes(r.status)) return false;
         if (q && !`${r.trailer} ${r.door||""}`.toLowerCase().includes(q)) return false;
         return true;
       })
-      .sort((a, b) => {
-        // Sort: Loading first, then Dropped/Incoming, then Dock Ready, then rest
-        const order = { "Loading":0, "Dropped":1, "Incoming":2, "Dock Ready":3, "Ready":4, "Departed":5 };
-        return (order[a.status]??9) - (order[b.status]??9) || (b.updatedAt||0) - (a.updatedAt||0);
+      .sort((a,b) => {
+        const order = {"Loading":0,"Dropped":1,"Incoming":2,"Dock Ready":3,"Ready":4,"Departed":5};
+        return (order[a.status]??9)-(order[b.status]??9)||(b.updatedAt||0)-(a.updatedAt||0);
       });
-
     if (countEl) countEl.textContent = rows.length;
-
     if (!rows.length) {
-      cards.innerHTML = `<div class="dock-empty">${q ? "No trailers match search." : dockFilter==="active" ? "No active trailers." : "No trailers on board."}</div>`;
+      cards.innerHTML = `<div class="dock-empty">${q?"No trailers match search.":dockFilter==="active"?"No active trailers.":"No trailers on board."}</div>`;
       return;
     }
-
-    const canAct = ROLE === "dock" || ROLE === "dispatcher" || ROLE === "supervisor" || ROLE === "admin";
-
-    // If not logged in, show a login nudge above the cards
+    const canAct = ROLE==="dock"||ROLE==="dispatcher"||ROLE==="supervisor"||ROLE==="admin";
     const loginNudge = el("dockLoginNudge");
     if (loginNudge) loginNudge.style.display = canAct ? "none" : "";
-
     cards.innerHTML = rows.map(r => {
-      const colorCls = DOCK_STATUS_COLOR[r.status] || "";
+      const colorCls = DOCK_STATUS_COLOR[r.status]||"";
       const next = DOCK_STATUS_NEXT[r.status];
       const hasAction = next?.to && canAct;
-
       return `<div class="dock-card ${colorCls}">
         <div class="dc-top">
           <div class="dc-trailer">${esc(r.trailer)}</div>
-          <div class="dc-door">${r.door ? `D${esc(r.door)}` : `<span style="color:var(--t3)">No door</span>`}</div>
+          <div class="dc-door">${r.door?`D${esc(r.door)}`:`<span style="color:var(--t3)">No door</span>`}</div>
         </div>
         <div class="dc-status-row">
           <span class="dc-status-badge ${colorCls}">${esc(r.status)}</span>
           ${r.carrierType?carrierTag(r.carrierType):""}
-          ${r.updatedAt ? `<span class="dc-ago">${esc(timeAgo(r.updatedAt))}</span>` : ""}
+          ${r.updatedAt?`<span class="dc-ago">${esc(timeAgo(r.updatedAt))}</span>`:""}
         </div>
         ${hasAction
-          ? `<button class="dc-action-btn ${next.cls}" data-act="dockSet" data-to="${esc(next.to)}" data-trailer-id="${esc(r.trailer)}" aria-label="${esc(next.label)} for trailer ${esc(r.trailer)}">${esc(next.label)}</button>`
-          : next?.to
-            ? `<div class="dc-no-action" style="color:var(--t3);font-size:10px;font-family:var(--mono);">Sign in to update</div>`
-            : `<div class="dc-no-action">${esc(next?.label||"—")}</div>`
+          ?`<button class="dc-action-btn ${next.cls}" data-act="dockSet" data-to="${esc(next.to)}" data-trailer-id="${esc(r.trailer)}">${esc(next.label)}</button>`
+          :next?.to
+            ?`<div class="dc-no-action" style="color:var(--t3);font-size:10px;">Sign in to update</div>`
+            :`<div class="dc-no-action">${esc(next?.label||"—")}</div>`
         }
       </div>`;
     }).join("");
   }
 
   function syncDockWsDot(state) {
-    const dot = el("dockWsDot"), txt = el("dockWsText"); if (!dot||!txt) return;
-    dot.className = "live-dot " + state;
-    txt.textContent = state==="ok" ? "Live" : state==="bad" ? "Offline" : "Connecting…";
+    const dot=el("dockWsDot"),txt=el("dockWsText"); if(!dot||!txt)return;
+    dot.className="live-dot "+state;
+    txt.textContent=state==="ok"?"Live":state==="bad"?"Offline":"Connecting…";
   }
 
   function renderRolePanel() {
@@ -429,9 +408,16 @@
     const trailer=(el("d_trailer")?.value||"").trim();
     if(!trailer) return toast("Validation error","Trailer number is required.","err");
     try{
-      await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,direction:(el("d_direction")?.value||"").trim(),status:(el("d_status")?.value||"").trim(),door:(el("d_door")?.value||"").trim(),note:(el("d_note")?.value||"").trim(),dropType:(el("d_dropType")?.value||"").trim(),carrierType:(el("d_carrierType")?.value||"").trim()})});
+      await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({
+        trailer,
+        direction:(el("d_direction")?.value||"").trim(),
+        status:(el("d_status")?.value||"").trim(),
+        door:(el("d_door")?.value||"").trim(),
+        note:(el("d_note")?.value||"").trim(),
+        dropType:(el("d_dropType")?.value||"").trim(),
+        carrierType:(el("d_carrierType")?.value||"").trim(),
+      })});
       toast("Saved",`Trailer ${trailer} updated.`,"ok");
-      // Clear form and focus for next entry
       ["d_trailer","d_door","d_note"].forEach(id=>{if(el(id))el(id).value="";});
       el("d_direction").value="Inbound"; el("d_status").value="Incoming"; el("d_dropType").value=""; if(el("d_carrierType"))el("d_carrierType").value="";
       setTimeout(()=>el("d_trailer")?.focus(),50);
@@ -476,117 +462,82 @@
     catch(e){ toast("Update failed",e.message,"err"); }
   }
 
-  /* ═══════════════════════════════════════════
-     DRIVER PORTAL — CONNECTION & OFFLINE
-  ═══════════════════════════════════════════ */
+  /* ── DRIVER PORTAL ── */
   let _wsOnline = false;
 
   function setDriverOnline(online) {
     _wsOnline = online;
     const banner = el("offlineBanner");
     if (!banner) return;
-    if (online) {
-      banner.style.display = "none";
-    } else {
-      banner.style.display = "flex";
-    }
-    // Block submit buttons when offline
+    banner.style.display = online ? "none" : "flex";
     ["btnDriverDrop","btnXdockPickup","btnXdockOffload","btnConfirmSafety"].forEach(id => {
-      const btn = el(id);
-      if (!btn) return;
-      if (!online) {
-        btn.dataset.offlineDisabled = "1";
-        btn.disabled = true;
-      } else {
+      const btn = el(id); if (!btn) return;
+      if (!online) { btn.dataset.offlineDisabled="1"; btn.disabled=true; }
+      else {
         if (btn.dataset.offlineDisabled) {
           delete btn.dataset.offlineDisabled;
-          // Re-evaluate proper disabled state
-          updateDropSubmitState();
-          updateOffloadSubmitState();
-          updateSafetySubmitState();
+          updateDropSubmitState(); updateOffloadSubmitState(); updateSafetySubmitState();
         }
       }
     });
   }
 
-
-  /* ═══════════════════════════════════════════
-     WEB PUSH — DRIVER PORTAL
-  ═══════════════════════════════════════════ */
+  /* ── PUSH ── */
   let _pushSub = null;
 
   async function initPush() {
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    if (!("serviceWorker" in navigator)||!("PushManager" in window)) return;
     try {
-      const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      const reg = await navigator.serviceWorker.register("/sw.js",{scope:"/"});
       await navigator.serviceWorker.ready;
-      // Check existing subscription
       _pushSub = await reg.pushManager.getSubscription();
       updatePushBtn();
-    } catch(e) { console.warn("SW registration failed:", e); }
+    } catch(e){ console.warn("SW registration failed:",e); }
   }
 
   async function subscribePush() {
     if (!("serviceWorker" in navigator)) return toast("Not supported","Push not supported in this browser.","err");
     try {
       const reg = await navigator.serviceWorker.ready;
-      const { publicKey } = await apiJson("/api/push/vapid-public-key");
-      _pushSub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
-      });
-      await apiJson("/api/push/subscribe", { method:"POST", headers:CSRF, body:JSON.stringify(_pushSub) });
+      const {publicKey} = await apiJson("/api/push/vapid-public-key");
+      _pushSub = await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(publicKey)});
+      await apiJson("/api/push/subscribe",{method:"POST",headers:CSRF,body:JSON.stringify(_pushSub)});
       updatePushBtn();
       toast("Notifications on","You'll be notified when your trailer is ready.","ok");
-    } catch(e) {
-      toast("Notifications blocked","Enable notifications in browser settings.","err");
-    }
+    } catch(e){ toast("Notifications blocked","Enable notifications in browser settings.","err"); }
   }
 
   async function unsubscribePush() {
     if (!_pushSub) return;
     try {
-      await apiJson("/api/push/unsubscribe", { method:"POST", headers:CSRF, body:JSON.stringify({ endpoint: _pushSub.endpoint }) });
+      await apiJson("/api/push/unsubscribe",{method:"POST",headers:CSRF,body:JSON.stringify({endpoint:_pushSub.endpoint})});
       await _pushSub.unsubscribe();
       _pushSub = null;
       updatePushBtn();
       toast("Notifications off","Push notifications disabled.","warn");
-    } catch(e) { toast("Error",e.message,"err"); }
+    } catch(e){ toast("Error",e.message,"err"); }
   }
 
   function updatePushBtn() {
-    const btn = el("btnPushToggle"); if (!btn) return;
-    if (!("PushManager" in window)) { btn.style.display="none"; return; }
-    btn.style.display = "";
-    if (_pushSub) {
-      btn.textContent = "🔔 Notifications On";
-      btn.classList.add("push-on");
-    } else {
-      btn.textContent = "🔕 Enable Notifications";
-      btn.classList.remove("push-on");
-    }
+    const btn=el("btnPushToggle"); if(!btn)return;
+    if(!("PushManager" in window)){ btn.style.display="none"; return; }
+    btn.style.display="";
+    if(_pushSub){ btn.textContent="🔔 Notifications On"; btn.classList.add("push-on"); }
+    else { btn.textContent="🔕 Enable Notifications"; btn.classList.remove("push-on"); }
   }
 
   function urlBase64ToUint8Array(base64String) {
-    const padding = "=".repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-    const raw = atob(base64);
-    return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+    const padding="=".repeat((4-base64String.length%4)%4);
+    const base64=(base64String+padding).replace(/-/g,"+").replace(/_/g,"/");
+    const raw=atob(base64);
+    return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
   }
 
-  /* ═══════════════════════════════════════════
-     DRIVER PORTAL STATE
-  ═══════════════════════════════════════════ */
+  /* ── DRIVER STATE ── */
   const driverState = {
-    whoType: null,
-    flowType: null,
-    trailer: "",
-    assignedDoor: "",
-    selectedDoor: "",
-    dropType: "Empty",
-    overrideMode: false,
-    sessionDrops: [],
-    shuntDoor: "",
+    whoType:null, flowType:null, trailer:"", assignedDoor:"",
+    selectedDoor:"", dropType:"Empty", overrideMode:false,
+    sessionDrops:[], shuntDoor:"",
   };
   try { const s=sessionStorage.getItem("wb_driver_session"); if(s) driverState.sessionDrops=JSON.parse(s); } catch {}
   function saveSessionHistory(){ try{ sessionStorage.setItem("wb_driver_session",JSON.stringify(driverState.sessionDrops)); }catch{} }
@@ -609,10 +560,10 @@
 
   function selectWho(whoType){
     driverState.whoType=whoType;
-    try{ sessionStorage.setItem("wb_whoType", whoType); }catch{}
+    try{ sessionStorage.setItem("wb_whoType",whoType); }catch{}
     const dropBtn=el("flowBtnDrop");
     const shuntBtn=document.querySelector("[data-flow='shunt']");
-    const isOutside = whoType==="outside";
+    const isOutside=whoType==="outside";
     if(dropBtn) dropBtn.style.display=isOutside?"none":"";
     if(shuntBtn) shuntBtn.style.display=isOutside?"none":"";
     const sub=el("flowScreenSub");
@@ -644,11 +595,11 @@
     else if(flowType==="xdock_offload"){ resetOffloadScreen(); showScreen("xdock-offload-screen"); setTimeout(()=>el("xo_trailer")?.focus(),100); }
   }
 
-  /* ── FLOW 0: SHUNT ── */
+  /* ── SHUNT ── */
   function resetShuntScreen(){
-    if(el("sh_trailer")){ el("sh_trailer").value=""; }
+    if(el("sh_trailer")) el("sh_trailer").value="";
     driverState.shuntDoor="";
-    el("sh_door_display")&&(el("sh_door_display").textContent="Select a door below");
+    if(el("sh_door_display")) el("sh_door_display").textContent="Select a door below";
     buildShuntDoorPicker();
     updateShuntSubmitState();
   }
@@ -661,7 +612,7 @@
       const ds=String(d);
       const occ=occupied[ds]&&occupied[ds].trailer!==shTrailer;
       const sel=driverState.shuntDoor===ds;
-      html+=`<button class="door-btn${occ?" occupied":""}${sel?" selected":""}" data-act="shuntPickDoor" data-door="${ds}" aria-label="Door ${ds}${occ?" occupied":""}">${ds}${occ?`<span class="door-btn-sub">In use</span>`:""}</button>`;
+      html+=`<button class="door-btn${occ?" occupied":""}${sel?" selected":""}" data-act="shuntPickDoor" data-door="${ds}">${ds}${occ?`<span class="door-btn-sub">In use</span>`:""}</button>`;
     }
     grid.innerHTML=html;
   }
@@ -670,7 +621,7 @@
     btn.disabled=!((el("sh_trailer")?.value||"").trim()&&driverState.shuntDoor)||!_wsOnline;
   }
 
-  /* ── FLOW 1: DRIVER DROP ── */
+  /* ── DRIVER DROP ── */
   function resetDropScreen(){
     if(el("v_trailer")){ el("v_trailer").value=""; el("v_trailer").classList.remove("has-value"); }
     el("assignmentCard")?.classList.remove("visible");
@@ -680,7 +631,6 @@
   }
   function updateDropSubmitState(){
     const btn=el("btnDriverDrop"); if(!btn)return;
-    // Door is optional — server auto-assigns if none selected
     btn.disabled=!driverState.trailer.trim()||!_wsOnline;
   }
 
@@ -699,7 +649,7 @@
     }catch(e){ toast("Submission failed",e.message,"err"); }
   }
 
-  /* ── FLOW 2: CROSS DOCK PICKUP ── */
+  /* ── XDOCK PICKUP ── */
   function resetPickupScreen(){
     if(el("xp_trailer")){ el("xp_trailer").value=""; el("xp_trailer").classList.remove("has-value"); }
     el("pickupAssignmentCard")?.classList.remove("visible");
@@ -719,7 +669,7 @@
   }
   async function xdockPickup(){
     if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
-    const{trailer,selectedDoor:door}=driverState;
+    const {trailer,selectedDoor:door}=driverState;
     if(!trailer) return toast("Required","Enter trailer number.","err");
     if(!door) return toast("No assignment","This trailer has no door assignment. Contact your dispatcher.","warn");
     try{
@@ -730,7 +680,7 @@
     }catch(e){ toast("Submission failed",e.message,"err"); }
   }
 
-  /* ── FLOW 3: CROSS DOCK OFFLOAD ── */
+  /* ── XDOCK OFFLOAD ── */
   function resetOffloadScreen(){
     if(el("xo_trailer")){ el("xo_trailer").value=""; el("xo_trailer").classList.remove("has-value"); }
     el("offloadAssignmentCard")?.classList.remove("visible");
@@ -755,7 +705,7 @@
   }
   async function xdockOffload(){
     if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
-    const{trailer,selectedDoor:door}=driverState;
+    const {trailer,selectedDoor:door}=driverState;
     if(!trailer) return toast("Required","Enter trailer number.","err");
     if(!door) return toast("Required","Select a door.","err");
     try{
@@ -766,8 +716,8 @@
     }catch(e){ toast("Submission failed",e.message,"err"); }
   }
 
-  /* ── SHARED LOOKUP ── */
-  async function lookupAssignment(trailer, context){
+  /* ── LOOKUP ── */
+  async function lookupAssignment(trailer,context){
     const spinner=el("lookupSpinner"); if(spinner)spinner.classList.add("visible");
     try{
       const res=await fetch(`/api/driver/assignment?trailer=${encodeURIComponent(trailer)}`,{headers:{"X-Requested-With":"XMLHttpRequest"}});
@@ -916,11 +866,15 @@
     if(p.startsWith("/driver")){
       el("driverView").style.display="";
       el("btnLogout").style.display="none"; el("btnAudit").style.display="none";
-      // Restore last whoType to skip first screen
       try{
-        const savedWho = sessionStorage.getItem("wb_whoType");
-        if(savedWho){ driverState.whoType=savedWho; const isOutside=savedWho==="outside"; const dropBtn=el("flowBtnDrop"); if(dropBtn)dropBtn.style.display=isOutside?"none":""; const shuntBtn=document.querySelector("[data-flow='shunt']"); if(shuntBtn)shuntBtn.style.display=isOutside?"none":""; showScreen("flow-screen"); }
-        else showScreen("who-screen");
+        const savedWho=sessionStorage.getItem("wb_whoType");
+        if(savedWho){
+          driverState.whoType=savedWho;
+          const isOutside=savedWho==="outside";
+          const dropBtn=el("flowBtnDrop"); if(dropBtn)dropBtn.style.display=isOutside?"none":"";
+          const shuntBtn=document.querySelector("[data-flow='shunt']"); if(shuntBtn)shuntBtn.style.display=isOutside?"none":"";
+          showScreen("flow-screen");
+        } else showScreen("who-screen");
       }catch{ showScreen("who-screen"); }
       renderSessionHistory();
       initPush();
@@ -930,12 +884,10 @@
     } else if(p.startsWith("/dock")){
       el("dockView").style.display=""; el("dockView").classList.add("view-fade");
       el("btnLogout").style.display=ROLE?"":"none"; el("btnAudit").style.display="none";
-
     } else {
       el("dispatchView").style.display=""; el("dispatchView").classList.add("view-fade");
       el("btnLogout").style.display=ROLE?"":"none";
       el("btnAudit").style.display=(ROLE==="dispatcher"||ROLE==="admin")?"":"none";
-      // Admin: show admin panel
       const adminPanel=el("adminPanel");
       if(adminPanel) adminPanel.style.display=ROLE==="admin"?"":"none";
     }
@@ -948,12 +900,15 @@
     else if(!isDriver()){ renderRolePanel(); renderBoard(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
   }
 
-  /* ═══════════════════════════════════════════
-     GLOBAL CLICK HANDLER
-  ═══════════════════════════════════════════ */
-  document.addEventListener("click", async ev=>{
-    const direct=ev.target;
-    const id=direct?.id;
+  /* ── GLOBAL CLICK HANDLER ── */
+  // FIX #1: 'act' declared at the TOP of the handler so it's never in the temporal dead zone
+  document.addEventListener("click", async ev => {
+    const direct = ev.target;
+    const id = direct?.id;
+
+    // Declare act early — was declared late in the original causing TDZ ReferenceError
+    const act = direct?.dataset?.act || direct?.closest?.("[data-act]")?.dataset?.act;
+    const trId = direct?.dataset?.trailerId || direct?.closest?.("[data-trailer-id]")?.dataset?.trailerId;
 
     if(direct?.closest?.("#dockPlatesToggle")){ setPlatesOpen(el("dockPlatesToggle").getAttribute("aria-expanded")!=="true"); return; }
     if(direct?.closest?.("#dockPlatesToggle2")){ setPlatesOpen2(el("dockPlatesToggle2").getAttribute("aria-expanded")!=="true"); return; }
@@ -966,52 +921,70 @@
     if(id==="btnSetDockPin") return setPin("dock","pin_dock","pin_dock_confirm");
     if(id==="btnSetSupervisorPin") return setPin("supervisor","pin_supervisor","pin_supervisor_confirm");
     if(id==="btnSetAdminPin") return setPin("admin","pin_admin","pin_admin_confirm");
-    // Dock filter buttons
-    const dockFilterBtn = direct?.closest?.("[data-dock-filter]");
-    if(dockFilterBtn){ 
-      dockFilter = dockFilterBtn.dataset.dockFilter;
+
+    const dockFilterBtn=direct?.closest?.("[data-dock-filter]");
+    if(dockFilterBtn){
+      dockFilter=dockFilterBtn.dataset.dockFilter;
       document.querySelectorAll(".dock-filter-btn").forEach(b=>{
-        const active = b.dataset.dockFilter===dockFilter;
-        b.classList.toggle("active", active);
-        b.setAttribute("aria-pressed", active?"true":"false");
+        const active=b.dataset.dockFilter===dockFilter;
+        b.classList.toggle("active",active);
+        b.setAttribute("aria-pressed",active?"true":"false");
       });
-      renderDockView(); return; 
+      renderDockView(); return;
     }
+
     const whoBtn=direct?.closest?.("[data-who]"); if(whoBtn){ selectWho(whoBtn.dataset.who); return; }
     const flowBtn=direct?.closest?.("[data-flow]"); if(flowBtn){ selectFlow(flowBtn.dataset.flow); return; }
     if(id==="btnBackToWho"){ showScreen("who-screen"); return; }
     if(id==="btnBackToFlow2"||direct?.dataset?.flowBack){ showScreen("flow-screen"); return; }
-    if(id==="btnBackToFlow"){ const isOutside=driverState.whoType==="outside"; const dropBtn=el("flowBtnDrop"); if(dropBtn)dropBtn.style.display=isOutside?"none":""; const shuntBtn=document.querySelector("[data-flow='shunt']"); if(shuntBtn)shuntBtn.style.display=isOutside?"none":""; showScreen("flow-screen"); return; }
-    if(id==="btnDriverDrop") return driverDrop();
-    if(id==="btnXdockPickup") return xdockPickup();
-    if(id==="btnXdockOffload") return xdockOffload();
+    if(id==="btnBackToFlow"){
+      const isOutside=driverState.whoType==="outside";
+      const dropBtn=el("flowBtnDrop"); if(dropBtn)dropBtn.style.display=isOutside?"none":"";
+      const shuntBtn=document.querySelector("[data-flow='shunt']"); if(shuntBtn)shuntBtn.style.display=isOutside?"none":"";
+      showScreen("flow-screen"); return;
+    }
+    if(id==="btnDriverDrop")    return driverDrop();
+    if(id==="btnXdockPickup")   return xdockPickup();
+    if(id==="btnXdockOffload")  return xdockOffload();
     if(id==="btnConfirmSafety") return confSafety();
-    if(id==="btnDriverShunt") return driverShunt();
+    if(id==="btnDriverShunt")   return driverShunt();
     if(id==="btnDriverRestart") return driverRestart();
-    if(id==="btnPushToggle") return _pushSub ? unsubscribePush() : subscribePush();
+    if(id==="btnPushToggle")    return _pushSub ? unsubscribePush() : subscribePush();
+
+    // FIX #1: act is now declared above, so this check is safe
     if(act==="shuntPickDoor"){
       const d=direct?.dataset?.door||direct?.closest?.("[data-door]")?.dataset?.door;
-      if(d){ driverState.shuntDoor=d; buildShuntDoorPicker(); el("sh_door_display")&&(el("sh_door_display").textContent="Door "+d); updateShuntSubmitState(); } return;
+      if(d){ driverState.shuntDoor=d; buildShuntDoorPicker(); if(el("sh_door_display"))el("sh_door_display").textContent="Door "+d; updateShuntSubmitState(); }
+      return;
     }
+
     if(id==="ac_override"){ driverState.overrideMode=true; driverState.assignedDoor=""; driverState.selectedDoor=""; showDoorPicker("doorPickerWrap","doorPickerGrid"); updateDropSubmitState(); return; }
     if(id==="oac_override"){ driverState.overrideMode=true; driverState.assignedDoor=""; driverState.selectedDoor=""; showDoorPicker("offloadDoorPickerWrap","offloadDoorPickerGrid"); updateOffloadSubmitState(); return; }
+
     const doorBtn=direct?.closest?.("[data-door]");
     if(doorBtn&&doorBtn.dataset.door){
       driverState.selectedDoor=doorBtn.dataset.door; driverState.overrideMode=true;
       buildDoorPicker(doorBtn.dataset.picker||"doorPickerGrid");
       updateDropSubmitState(); updateOffloadSubmitState(); return;
     }
+
     const dtBtn=direct?.closest?.("[data-type]");
     if(dtBtn&&dtBtn.dataset.type){ driverState.dropType=dtBtn.dataset.type; el("dtbEmpty")?.classList.toggle("selected",driverState.dropType==="Empty"); el("dtbLoaded")?.classList.toggle("selected",driverState.dropType==="Loaded"); return; }
-    const act=direct?.dataset?.act||direct?.closest?.("[data-act]")?.dataset?.act;
-    const trId=direct?.dataset?.trailerId||direct?.closest?.("[data-trailer-id]")?.dataset?.trailerId;
+
     if(act==="shuntToggle"&&trId){ shuntOpen[trId]=!shuntOpen[trId]; renderBoard(); return; }
     if(act==="shuntDoor"&&trId){ const door=direct?.dataset?.door||direct?.closest?.("[data-door]")?.dataset?.door; if(door)return shuntTrailer(trId,door); }
     if(act==="delete"&&trId) return dispDelete(trId);
     if(act==="quickStatus"){ const to=direct?.dataset?.to||direct?.closest?.("[data-to]")?.dataset?.to; if(trId&&to)return quickStatus(trId,to); }
-    if(act==="edit"&&trId){ const r=trailers[trId]; if(!r)return; el("d_trailer").value=trId; el("d_direction").value=r.direction||"Inbound"; el("d_status").value=r.status||"Incoming"; el("d_door").value=r.door||""; el("d_note").value=r.note||""; el("d_dropType").value=r.dropType||""; if(el("d_carrierType"))el("d_carrierType").value=r.carrierType||""; toast("Record loaded",`Editing trailer ${trId}`,"ok"); return; }
+    if(act==="edit"&&trId){
+      const r=trailers[trId]; if(!r)return;
+      el("d_trailer").value=trId; el("d_direction").value=r.direction||"Inbound"; el("d_status").value=r.status||"Incoming";
+      el("d_door").value=r.door||""; el("d_note").value=r.note||""; el("d_dropType").value=r.dropType||"";
+      if(el("d_carrierType"))el("d_carrierType").value=r.carrierType||"";
+      toast("Record loaded",`Editing trailer ${trId}`,"ok"); return;
+    }
     if(act==="dockSet"){ const to=direct?.dataset?.to; if(trId&&to)return dockSet(trId,to); }
     if(act==="markReady"&&trId) return markReady(trId);
+
     const tog=direct?.dataset?.plateToggle; if(tog){ plateEditOpen[tog]=!plateEditOpen[tog]; renderPlates(); return; }
     const psv=direct?.dataset?.plateSave; if(psv)return plateSave(psv);
   });
@@ -1028,17 +1001,14 @@
   el("xo_trailer")?.addEventListener("input",onOffloadTrailerInput);
   el("xo_trailer")?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!el("btnXdockOffload")?.disabled)xdockOffload(); });
   el("sh_trailer")?.addEventListener("input",()=>{ buildShuntDoorPicker(); updateShuntSubmitState(); });
-  el("dockSearch")?.addEventListener("input", renderDockView);
-  // Dispatcher — Enter on any field submits save
+  el("dockSearch")?.addEventListener("input",renderDockView);
   ["d_trailer","d_door","d_note","d_direction","d_status","d_dropType","d_carrierType"].forEach(id=>{
-    el(id)?.addEventListener("keydown", e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); dispSave(); } });
+    el(id)?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); dispSave(); } });
   });
   ["search","filterDir","filterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderBoard)));
   ["supSearch","supFilterDir","supFilterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderSupBoard)));
 
-  /* ═══════════════════════════════════════════
-     WEBSOCKET
-  ═══════════════════════════════════════════ */
+  /* ── WEBSOCKET ── */
   let wsRetry=0;
   function wsStatus(s){
     el("wsDot").className="live-dot "+(s==="ok"?"ok":s==="bad"?"bad":"warn");
@@ -1056,19 +1026,13 @@
     ws.onmessage=evt=>{
       lastMsg=Date.now();
       let msg; try{msg=JSON.parse(evt.data);}catch{return;}
-      const{type,payload}=msg||{};
-      if(type==="state"){
-        trailers=payload||{};
-        renderBoard(); renderSupBoard();
-        if(isDock()) renderDockView();
-        if(isAdmin()) renderBoard();
-      }
+      const {type,payload}=msg||{};
+      if(type==="state"){ trailers=payload||{}; renderBoard(); renderSupBoard(); if(isDock())renderDockView(); if(isAdmin())renderBoard(); }
       else if(type==="dockplates"){ dockPlates=payload||{}; if(!isDriver()&&!isSuper())renderPlates(); }
       else if(type==="confirmations"){ confirmations=Array.isArray(payload)?payload:[]; renderSupConf(); }
       else if(type==="version"){ VERSION=payload?.version||VERSION; el("verText").textContent=VERSION||"—"; if(el("driverVerText"))el("driverVerText").textContent=VERSION||"—"; }
       else if(type==="notify"&&payload?.kind==="ready"){
-        // Prominent ready notification — toast + driver banner
-        toast("🟢 Trailer Ready",`${payload.trailer} is READY${payload.door?" at door "+payload.door:""}.`,"ok", 8000);
+        toast("🟢 Trailer Ready",`${payload.trailer} is READY${payload.door?" at door "+payload.door:""}.`,"ok",8000);
         if(isDriver()){
           const banner=el("readyNotifBanner");
           if(banner){

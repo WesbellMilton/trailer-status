@@ -120,8 +120,8 @@ el("dmModalOv").addEventListener("click", e => { if(e.target===el("dmModalOv")) 
     const ds = String(d);
     const occ = occupied[ds];
     const cls = occ ? `dm-occupied dm-${(STATUS_ROW[occ.status]||"r-incoming").replace("r-","")}` : "dm-free";
-    const clickable = occ && canEdit ? ` dm-clickable" tabindex="0" role="button" aria-label="Change status of trailer ${occ.trailer} at door ${ds}` : "";
-    html += `<div class="dm-cell ${cls}${clickable}" data-dm-door="${ds}">
+    const clickable = occ && canEdit ? ` dm-clickable` : "";
+html += `<div class="dm-cell ${cls}${clickable}" data-dm-door="${ds}" ${occ && canEdit ? `tabindex="0" role="button" aria-label="Change status of trailer ${esc(occ.trailer)} at door ${ds}"` : ""}>
       <span class="dm-door">D${ds}</span>
       ${occ
         ? `<span class="dm-trailer">${esc(occ.trailer)}</span><span class="dm-status">${esc(occ.status)}</span>`

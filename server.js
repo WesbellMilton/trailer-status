@@ -326,7 +326,6 @@ async function audit(req, actorRole, action, entityType, entityId, details) {
   );
 }
 
-// FIX #5: carrierType included
 async function loadTrailersObject() {
   const rows = await all(`SELECT * FROM trailers`);
   const obj = {};
@@ -497,8 +496,11 @@ app.post("/api/upsert", requireXHR, requireRole(["dispatcher","dock","supervisor
     }
 
     // Auto-set Incoming for Wesbell drops from driver portal
-const isDriverDrop = req.body.flow === "drop" && carrierType === "wesbell";
-const finalStatus = isDriverDrop ? "Incoming" : status;
+    const isDriverDrop = req.body.flow === "drop" && carrierType.toLowerCase() === "wesbell";
+    const finalStatus  = isDriverDrop ? "Incoming" : status;
+
+    const allowed = ["Incoming","Dropped","Loading","Dock Ready","Ready","Departed",""];
+    if (!allowed.includes(finalStatus)) return res.status(400).send("Invalid status");
 
     await run(
       `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt)
@@ -507,13 +509,13 @@ const finalStatus = isDriverDrop ? "Incoming" : status;
          direction=excluded.direction, status=excluded.status, door=excluded.door,
          note=excluded.note, dropType=excluded.dropType, carrierType=excluded.carrierType,
          updatedAt=excluded.updatedAt`,
-      [trailer, direction, status, door, note, dropType, carrierType, now]
+      [trailer, direction, finalStatus, door, note, dropType, carrierType, now]
     );
 
-    await audit(req, actor, existing ? "trailer_update" : "trailer_create", "trailer", trailer, { direction, status, door, dropType, note });
-    if (req.body.status !== undefined) await audit(req, actor, "trailer_status_set", "trailer", trailer, { status });
+    await audit(req, actor, existing ? "trailer_update" : "trailer_create", "trailer", trailer, { direction, status: finalStatus, door, dropType, note });
+    if (req.body.status !== undefined || isDriverDrop) await audit(req, actor, "trailer_status_set", "trailer", trailer, { status: finalStatus });
 
-    if (status === "Ready" && ["dispatcher","supervisor","admin"].includes(actor)) {
+    if (finalStatus === "Ready" && ["dispatcher","supervisor","admin"].includes(actor)) {
       wsBroadcast("notify", { kind: "ready", trailer, door: door || "" });
       broadcastPush("🟢 Trailer Ready", `Trailer ${trailer} is ready${door ? " at door " + door : ""}`, { trailer, door }).catch(() => {});
     }
@@ -535,7 +537,6 @@ app.post("/api/delete", requireXHR, requireRole(["dispatcher","supervisor","admi
   } catch (e) { res.status(500).send("Delete failed"); }
 });
 
-// FIX #4: dispatcher added — UI exposes Clear All to dispatchers
 app.post("/api/clear", requireXHR, requireRole(["dispatcher","supervisor","admin"]), async (req, res) => {
   const actor = req.user.role;
   try {
@@ -585,13 +586,12 @@ app.get("/api/driver/assignment", async (req, res) => {
   } catch (e) { res.status(500).send("Lookup failed"); }
 });
 
-// FIX #2: carrierType was never declared → crashed every driver drop
 app.post("/api/driver/drop", requireXHR, async (req, res) => {
   try {
     const trailer     = String(req.body.trailer     || "").trim();
     const door        = String(req.body.door        || "").trim();
     const dropType    = String(req.body.dropType    || "Empty").trim();
-    const carrierType = String(req.body.carrierType || "Wesbell").trim(); // FIX
+    const carrierType = String(req.body.carrierType || "Wesbell").trim();
 
     if (!trailer) return res.status(400).send("Missing trailer");
     if (door) {
@@ -617,13 +617,14 @@ app.post("/api/driver/drop", requireXHR, async (req, res) => {
       }
     }
 
+    // Driver drops always land as Incoming
     await run(
       `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt)
        VALUES(?,?,?,?,?,?,?,?)
        ON CONFLICT(trailer) DO UPDATE SET
          direction=excluded.direction, status=excluded.status, door=excluded.door,
          dropType=excluded.dropType, carrierType=excluded.carrierType, updatedAt=excluded.updatedAt`,
-      [trailer, direction, "Dropped", assignedDoor || "", existing?.note || "", dropType, carrierType, now]
+      [trailer, direction, "Incoming", assignedDoor || "", existing?.note || "", dropType, carrierType, now]
     );
 
     await audit(req, "driver", "driver_drop", "trailer", trailer, { door: assignedDoor || "", dropType, carrierType });
@@ -672,14 +673,11 @@ app.post("/api/crossdock/offload", requireXHR, async (req, res) => {
   } catch (e) { res.status(500).send("Cross dock offload failed"); }
 });
 
-// FIX #3: removed requireRole — drivers have no session.
-// Authenticated staff calls are still validated; unauthenticated driver calls pass through.
 app.post("/api/shunt", requireXHR, async (req, res) => {
   try {
     const session = getSession(req);
     const actor   = session?.role || "driver";
 
-    // If caller IS authenticated, only dispatcher/dock/admin allowed
     if (session && !["dispatcher","dock","admin"].includes(session.role))
       return res.status(403).send("Unauthorized");
 
@@ -760,7 +758,6 @@ app.post("/api/supervisor/set-pin", requireXHR, requireRole(["supervisor","admin
     if (!["dispatcher","dock","supervisor","admin"].includes(role)) return res.status(400).send("Invalid role");
     if (pin.length < PIN_MIN_LEN) return res.status(400).send("PIN too short");
     await setPin(role, pin);
-    // Invalidate all active sessions for that role
     for (const [sid, s] of sessions.entries()) if (s.role === role) sessions.delete(sid);
     await audit(req, actor, "pin_changed", "auth", role, {});
     res.json({ ok: true });

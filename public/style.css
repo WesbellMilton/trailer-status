@@ -1401,3 +1401,9 @@ button:focus-visible {
   margin-left: 3px;
   vertical-align: middle;
 }
+
+/* Admin role badge */
+#roleBadge[style*="amber"] {
+  font-weight: 700;
+  letter-spacing: .04em;
+}

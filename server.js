@@ -1,403 +1,121 @@
-// server.js — Wesbell Dispatch (WS realtime + Web Push)
+// server.js — Wesbell Dispatch
+// FIXES:
+//   1. /api/driver/drop: carrierType was never declared → ReferenceError crash
+//   2. /api/shunt: removed "driver" from requireRole (drivers have no session); route now public like /api/driver/drop
+//   3. /api/clear: added "dispatcher" to allowed roles (UI shows button to dispatchers)
+//   4. loadTrailersObject: carrierType now included in returned object
+
 const express = require("express");
 const http = require("http");
 const path = require("path");
 const WebSocket = require("ws");
+const sqlite3 = require("sqlite3").verbose();
 const crypto = require("crypto");
-const cookieParser = require("cookie-parser");
-const webpush = require("web-push");
 
 const app = express();
-app.use(express.json({ limit: "300kb" }));
+app.use(express.json({ limit: "200kb" }));
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
 
-// Serve /public at ROOT (so /sw.js works)
-const PUBLIC_DIR = path.join(__dirname, "public");
-app.use(express.static(PUBLIC_DIR));
-
-// ─────────────────────────────────────────────
-// Simple in-memory state (swap to SQLite later if you want)
-// ─────────────────────────────────────────────
-let trailers = {};        // { [trailerNum]: {direction,status,door,note,dropType,carrierType,updatedAt} }
-let dockPlates = {};      // { [door]: {status,note,updatedAt} }
-let confirmations = [];   // array of {at,trailer,door,action,ip}
-
-const VERSION = "5.0.0";
-
-// ─────────────────────────────────────────────
-// Very-light auth (PINs + session cookie)
-// - Replace with your SQLite/session system later if needed
-// ─────────────────────────────────────────────
+const PORT = process.env.PORT || 3000;
+const DB_FILE = process.env.DB_FILE || path.join(__dirname, "wesbell.sqlite");
+const APP_VERSION = process.env.APP_VERSION || "3.2.0";
+const PIN_MIN_LEN = 4;
+const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
 const COOKIE_NAME = "wb_session";
-const SESSIONS = new Map(); // sid -> { role, createdAt }
-const PINS = {
-  dispatcher: process.env.PIN_DISPATCHER || "1111",
-  dock:       process.env.PIN_DOCK       || "2222",
-  supervisor: process.env.PIN_SUPERVISOR || "3333",
-  admin:      process.env.PIN_ADMIN      || "9999"
+
+const ENV_PINS = {
+  dispatcher: process.env.DISPATCHER_PIN || "",
+  dock:       process.env.DOCK_PIN       || "",
+  supervisor: process.env.SUPERVISOR_PIN || "",
+  admin:      process.env.ADMIN_PIN      || "",
 };
 
-function makeSid() {
-  return crypto.randomBytes(24).toString("hex");
+function requireXHR(req, res, next) {
+  const h = (req.get("X-Requested-With") || "").toLowerCase();
+  if (h !== "xmlhttprequest") return res.status(400).send("Bad request");
+  next();
 }
 
-function getRole(req) {
-  const sid = req.cookies[COOKIE_NAME];
-  if (!sid) return null;
-  const s = SESSIONS.get(sid);
-  return s?.role || null;
-}
+/* ── DB ── */
+const db = new sqlite3.Database(DB_FILE);
+const run = (sql, p=[]) => new Promise((res,rej) => db.run(sql,p,function(e){e?rej(e):res(this);}));
+const get = (sql, p=[]) => new Promise((res,rej) => db.get(sql,p,(e,r)=>{e?rej(e):res(r);}));
+const all = (sql, p=[]) => new Promise((res,rej) => db.all(sql,p,(e,r)=>{e?rej(e):res(r);}));
 
-function requireRole(roles) {
-  return (req, res, next) => {
-    const role = getRole(req);
-    if (!role) return res.status(401).json({ error: "not_authenticated" });
-    if (Array.isArray(roles) && roles.length && !roles.includes(role)) {
-      return res.status(403).json({ error: "forbidden" });
+/* ── VAPID / PUSH ── */
+const VAPID_FILE = process.env.VAPID_FILE || path.join(__dirname, "vapid.json");
+let VAPID_KEYS = null;
+const pushSubs = new Map();
+
+let _trailersCache = null;
+let _platesCache   = null;
+async function getTrailersCache() { if(!_trailersCache) _trailersCache=await loadTrailersObject(); return _trailersCache; }
+async function getPlatesCache()   { if(!_platesCache)   _platesCache=await loadDockPlatesObject(); return _platesCache; }
+function invalidateTrailers() { _trailersCache = null; }
+function invalidatePlates()   { _platesCache   = null; }
+
+function loadOrGenVapid() {
+  const fs = require("fs");
+  try {
+    if (fs.existsSync(VAPID_FILE)) {
+      VAPID_KEYS = JSON.parse(fs.readFileSync(VAPID_FILE,"utf8"));
+      console.log("[VAPID] Loaded existing keys"); return;
     }
-    req.role = role;
-    next();
-  };
-}
-
-// ─────────────────────────────────────────────
-// Web Push (VAPID)
-// - IMPORTANT: set env vars in Render:
-//   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT
-// - OR run once locally to generate a pair (see note below)
-// ─────────────────────────────────────────────
-const VAPID_PUBLIC_KEY  = process.env.VAPID_PUBLIC_KEY  || "";
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
-const VAPID_SUBJECT     = process.env.VAPID_SUBJECT     || "mailto:dispatch@example.com";
-
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-} else {
-  console.warn("⚠️ Web Push disabled: missing VAPID keys (VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY).");
-}
-
-// store subscriptions in memory
-const PUSH_SUBS = new Map(); // endpoint -> subscription json
-
-// ─────────────────────────────────────────────
-// HTTP routes
-// ─────────────────────────────────────────────
-
-// Single-page app routes all serve index.html
-const SPA_ROUTES = ["/", "/dock", "/driver", "/supervisor", "/login"];
-SPA_ROUTES.forEach((r) => {
-  app.get(r, (req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
-});
-
-// Auth APIs
-app.post("/api/login", (req, res) => {
-  const { role, pin } = req.body || {};
-  if (!role || !pin) return res.status(400).json({ error: "missing_fields" });
-  const expected = PINS[String(role).toLowerCase()];
-  if (!expected || String(pin) !== String(expected)) return res.status(401).json({ error: "bad_pin" });
-
-  const sid = makeSid();
-  SESSIONS.set(sid, { role: String(role).toLowerCase(), createdAt: Date.now() });
-  res.cookie(COOKIE_NAME, sid, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: false // Render uses HTTPS at edge; ok if false here, but you can set true if you prefer
-  });
-  res.json({ ok: true, role: String(role).toLowerCase() });
-});
-
-app.post("/api/logout", (req, res) => {
-  const sid = req.cookies[COOKIE_NAME];
-  if (sid) SESSIONS.delete(sid);
-  res.clearCookie(COOKIE_NAME);
-  res.json({ ok: true });
-});
-
-app.get("/api/whoami", (req, res) => {
-  const role = getRole(req);
-  res.json({ role, version: VERSION });
-});
-
-// State APIs
-app.get("/api/state", (req, res) => res.json(trailers));
-app.get("/api/dockplates", (req, res) => res.json(dockPlates));
-app.get("/api/confirmations", (req, res) => res.json(confirmations));
-
-// Driver assignment lookup
-app.get("/api/driver/assignment", (req, res) => {
-  const t = String(req.query.trailer || "").trim();
-  if (!t) return res.json({ found: false });
-  const r = trailers[t];
-  if (!r) return res.json({ found: false });
-  res.json({ found: true, trailer: t, door: r.door || "", direction: r.direction || "", status: r.status || "" });
-});
-
-// Upsert trailer (dispatcher/admin/dock can change statuses; your UI already gates it)
-app.post("/api/upsert", requireRole(["dispatcher", "dock", "admin", "supervisor"]), (req, res) => {
-  const role = req.role;
-  const { trailer } = req.body || {};
-  const t = String(trailer || "").trim();
-  if (!t) return res.status(400).json({ error: "trailer_required" });
-
-  const before = trailers[t] || {};
-  const next = {
-    ...before,
-    ...cleanTrailerPatch(req.body || {}),
-    updatedAt: Date.now()
-  };
-  trailers[t] = next;
-
-  broadcastWS({ type: "state", payload: trailers });
-  broadcastWS({ type: "version", payload: { version: VERSION } });
-
-  // If this transition becomes READY, broadcast a notify + push
-  if (before.status !== "Ready" && next.status === "Ready") {
-    const payload = { kind: "ready", trailer: t, door: next.door || "" };
-    broadcastWS({ type: "notify", payload });
-    sendPushToAll({
-      title: "Trailer Ready",
-      body: `${t} is READY${next.door ? ` at door ${next.door}` : ""}.`,
-      url: "/driver"
+  } catch {}
+  try {
+    const { publicKey, privateKey } = crypto.generateKeyPairSync("ec",{
+      namedCurve:"P-256",
+      publicKeyEncoding:{type:"spki",format:"der"},
+      privateKeyEncoding:{type:"pkcs8",format:"der"},
     });
-  }
-
-  audit(role, "trailer_update", "trailer", t, { patch: req.body });
-  res.json({ ok: true });
-});
-
-function cleanTrailerPatch(body) {
-  const patch = {};
-  ["direction", "status", "door", "note", "dropType", "carrierType"].forEach((k) => {
-    if (body[k] !== undefined) patch[k] = String(body[k] ?? "").trim();
-  });
-  return patch;
+    const pubRaw = publicKey.slice(26);
+    let privRaw;
+    for(let i=0;i<privateKey.length-34;i++){
+      if(privateKey[i]===0x04&&privateKey[i+1]===0x20){ privRaw=privateKey.slice(i+2,i+34); break; }
+    }
+    if(!privRaw) throw new Error("Could not extract private key bytes");
+    VAPID_KEYS = { publicKey:pubRaw.toString("base64url"), privateKey:privRaw.toString("base64url") };
+    fs.writeFileSync(VAPID_FILE, JSON.stringify(VAPID_KEYS));
+    console.log("[VAPID] Generated new key pair");
+  } catch(e) { console.error("[VAPID] Key generation failed:",e.message); }
 }
 
-app.post("/api/delete", requireRole(["dispatcher", "admin"]), (req, res) => {
-  const t = String(req.body?.trailer || "").trim();
-  if (!t) return res.status(400).json({ error: "trailer_required" });
-  delete trailers[t];
-  broadcastWS({ type: "state", payload: trailers });
-  audit(req.role, "trailer_delete", "trailer", t, {});
-  res.json({ ok: true });
-});
+const b64url    = buf => Buffer.isBuffer(buf)?buf.toString("base64url"):Buffer.from(buf).toString("base64url");
+const fromb64url = s  => Buffer.from(s,"base64url");
 
-app.post("/api/clear", requireRole(["dispatcher", "admin"]), (req, res) => {
-  trailers = {};
-  broadcastWS({ type: "state", payload: trailers });
-  audit(req.role, "trailer_clear_all", "trailer", "*", {});
-  res.json({ ok: true });
-});
-
-// Shunt trailer (move to a new door)
-app.post("/api/shunt", requireRole(["dispatcher", "admin", "dock"]), (req, res) => {
-  const t = String(req.body?.trailer || "").trim();
-  const door = String(req.body?.door || "").trim();
-  if (!t || !door) return res.status(400).json({ error: "missing_fields" });
-
-  const before = trailers[t] || { direction: "Inbound", status: "Dropped" };
-  trailers[t] = {
-    ...before,
-    door,
-    status: "Dropped",
-    updatedAt: Date.now()
-  };
-
-  broadcastWS({ type: "state", payload: trailers });
-  audit(req.role, "trailer_update", "trailer", t, { shuntTo: door });
-  res.json({ ok: true });
-});
-
-// Driver drop endpoint (no auth needed)
-app.post("/api/driver/drop", (req, res) => {
-  const { trailer, door, dropType, carrierType } = req.body || {};
-  const t = String(trailer || "").trim();
-  let d = String(door || "").trim();
-  if (!t) return res.status(400).json({ error: "trailer_required" });
-
-  // auto-assign door if not provided
-  if (!d) d = pickFreeDoor() || "";
-
-  const existing = trailers[t] || {};
-  trailers[t] = {
-    ...existing,
-    trailer: t,
-    direction: existing.direction || "Inbound",
-    status: "Dropped",
-    door: d,
-    dropType: String(dropType || existing.dropType || "").trim(),
-    carrierType: String(carrierType || existing.carrierType || "").trim(),
-    updatedAt: Date.now()
-  };
-
-  broadcastWS({ type: "state", payload: trailers });
-  audit("driver", "driver_drop", "trailer", t, { door: d, dropType, carrierType });
-  res.json({ ok: true, door: d });
-});
-
-function pickFreeDoor() {
-  const occupied = new Set();
-  Object.values(trailers).forEach((r) => {
-    if (r?.door && r.status !== "Departed") occupied.add(String(r.door));
-  });
-  for (let d = 28; d <= 42; d++) {
-    const ds = String(d);
-    if (!occupied.has(ds)) return ds;
-  }
-  return null;
+async function hkdf(salt,ikm,info,len){
+  const prk = crypto.createHmac("sha256",salt).update(ikm).digest();
+  const t   = crypto.createHmac("sha256",prk).update(Buffer.concat([info,Buffer.alloc(1,1)])).digest();
+  return t.slice(0,len);
 }
 
-// Cross dock endpoints
-app.post("/api/crossdock/pickup", (req, res) => {
-  const t = String(req.body?.trailer || "").trim();
-  const door = String(req.body?.door || "").trim();
-  if (!t || !door) return res.status(400).json({ error: "missing_fields" });
-  audit("driver", "crossdock_pickup", "trailer", t, { door });
-  res.json({ ok: true });
-});
-
-app.post("/api/crossdock/offload", (req, res) => {
-  const t = String(req.body?.trailer || "").trim();
-  const door = String(req.body?.door || "").trim();
-  if (!t || !door) return res.status(400).json({ error: "missing_fields" });
-
-  const existing = trailers[t] || {};
-  trailers[t] = {
-    ...existing,
-    direction: "Cross Dock",
-    status: existing.status || "Dropped",
-    door,
-    updatedAt: Date.now()
-  };
-
-  broadcastWS({ type: "state", payload: trailers });
-  audit("driver", "crossdock_offload", "trailer", t, { door });
-  res.json({ ok: true });
-});
-
-// Safety confirmation
-app.post("/api/confirm-safety", (req, res) => {
-  const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "";
-  const { trailer, door, action } = req.body || {};
-  confirmations.unshift({
-    at: Date.now(),
-    trailer: String(trailer || "").trim(),
-    door: String(door || "").trim(),
-    action: String(action || "").trim(),
-    ip: String(ip)
+async function buildVapidJWT(audience){
+  const header = b64url(JSON.stringify({typ:"JWT",alg:"ES256"}));
+  const now    = Math.floor(Date.now()/1000);
+  const payload= b64url(JSON.stringify({aud:audience,exp:now+12*3600,sub:"mailto:dispatch@wesbell.com"}));
+  const sigInput=`${header}.${payload}`;
+  const privBytes=fromb64url(VAPID_KEYS.privateKey);
+  const privKey=crypto.createPrivateKey({
+    key:Buffer.concat([
+      Buffer.from("308187020100301306072a8648ce3d020106082a8648ce3d030107046d306b0201010420","hex"),
+      privBytes,
+      Buffer.from("a144034200","hex"),
+      fromb64url(VAPID_KEYS.publicKey),
+    ]),
+    format:"der", type:"pkcs8",
   });
-  confirmations = confirmations.slice(0, 500);
-  broadcastWS({ type: "confirmations", payload: confirmations });
-  audit("driver", "safety_confirmed", "confirm", String(trailer || ""), { door, action });
-  res.json({ ok: true });
-});
-
-// Dock plates
-app.post("/api/dockplates/set", requireRole(["dispatcher", "dock", "admin"]), (req, res) => {
-  const door = String(req.body?.door || "").trim();
-  const status = String(req.body?.status || "Unknown").trim();
-  const note = String(req.body?.note || "").trim();
-  if (!door) return res.status(400).json({ error: "door_required" });
-
-  dockPlates[door] = { status, note, updatedAt: Date.now() };
-  broadcastWS({ type: "dockplates", payload: dockPlates });
-  audit(req.role, "plate_set", "plate", door, { status, note });
-  res.json({ ok: true });
-});
-
-// Push endpoints
-app.get("/api/push/vapid-public-key", (req, res) => {
-  if (!VAPID_PUBLIC_KEY) return res.status(503).json({ error: "push_disabled_no_vapid" });
-  res.json({ publicKey: VAPID_PUBLIC_KEY });
-});
-
-app.post("/api/push/subscribe", (req, res) => {
-  const sub = req.body;
-  if (!sub?.endpoint) return res.status(400).json({ error: "bad_subscription" });
-  PUSH_SUBS.set(sub.endpoint, sub);
-  res.json({ ok: true });
-});
-
-app.post("/api/push/unsubscribe", (req, res) => {
-  const endpoint = String(req.body?.endpoint || "");
-  if (endpoint) PUSH_SUBS.delete(endpoint);
-  res.json({ ok: true });
-});
-
-// Audit feed (simple)
-let AUDIT = []; // newest first
-app.get("/api/audit", requireRole(["dispatcher", "admin", "supervisor"]), (req, res) => {
-  const limit = Math.max(1, Math.min(500, parseInt(req.query.limit || "200", 10)));
-  res.json(AUDIT.slice(0, limit));
-});
-
-function audit(actorRole, action, entityType, entityId, details) {
-  const ip = ""; // keep simple, can add x-forwarded-for later
-  AUDIT.unshift({
-    at: Date.now(),
-    actorRole,
-    action,
-    entityType,
-    entityId,
-    details: details || {},
-    ip
-  });
-  AUDIT = AUDIT.slice(0, 1000);
+  const sig=crypto.sign(null,Buffer.from(sigInput),{key:privKey,dsaEncoding:"ieee-p1363"});
+  return `${sigInput}.${b64url(sig)}`;
 }
 
-// ─────────────────────────────────────────────
-// WebSocket realtime
-// ─────────────────────────────────────────────
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
-
-function broadcastWS(msgObj) {
-  const msg = JSON.stringify(msgObj);
-  wss.clients.forEach((c) => {
-    if (c.readyState === WebSocket.OPEN) c.send(msg);
+async function encryptPushPayload(plaintext,keys){
+  const serverKeys=crypto.generateKeyPairSync("ec",{namedCurve:"P-256"});
+  const serverPubRaw=serverKeys.publicKey.export({type:"spki",format:"der"}).slice(26);
+  const clientPubRaw=fromb64url(keys.p256dh);
+  const authSecret=fromb64url(keys.auth);
+  const clientPub=crypto.createPublicKey({
+    key:Buffer.concat([Buffer.from("3059301306072a8648ce3d020106082a8648ce3d030107034200","hex"),clientPubRaw]),
+    format:"der",type:"spki",
   });
-}
-
-wss.on("connection", (ws) => {
-  ws.send(JSON.stringify({ type: "version", payload: { version: VERSION } }));
-  ws.send(JSON.stringify({ type: "state", payload: trailers }));
-  ws.send(JSON.stringify({ type: "dockplates", payload: dockPlates }));
-  ws.send(JSON.stringify({ type: "confirmations", payload: confirmations }));
-});
-
-// ─────────────────────────────────────────────
-// Push helper
-// ─────────────────────────────────────────────
-async function sendPushToAll({ title, body, url }) {
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
-  const payload = JSON.stringify({ title, body, url });
-
-  const subs = Array.from(PUSH_SUBS.values());
-  await Promise.allSettled(
-    subs.map(async (sub) => {
-      try {
-        await webpush.sendNotification(sub, payload);
-      } catch (e) {
-        // If subscription is dead, remove it
-        if (e?.statusCode === 410 || e?.statusCode === 404) {
-          PUSH_SUBS.delete(sub.endpoint);
-        }
-      }
-    })
-  );
-}
-
-// ─────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log("✅ Server running on port", PORT));
-
-/*
-VAPID NOTE (LOCAL):
-You can generate keys once with:
-  node -e "const webpush=require('web-push'); console.log(webpush.generateVAPIDKeys())"
-Then set in Render env vars:
-  VAPID_PUBLIC_KEY=...
-  VAPID_PRIVATE_KEY=...
-  VAPID_SUBJECT=mailto:you@company.com
-*/
+  const sharedSecret=crypto.diffieHellman({privateKey:serverKeys.privateKey,publicKey:clientPub});
+  const prk=await hkdf(authSecret,sharedSecret,Buffer.concat([Buffer.from("WebPush: info\x00"),clientPubRaw,

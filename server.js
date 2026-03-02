@@ -496,8 +496,9 @@ app.post("/api/upsert", requireXHR, requireRole(["dispatcher","dock","supervisor
       if (!["Loading","Dock Ready"].includes(status)) return res.status(403).send("Dock can only set Loading or Dock Ready");
     }
 
-    const allowed = ["Incoming","Dropped","Loading","Dock Ready","Ready","Departed",""];
-    if (!allowed.includes(status)) return res.status(400).send("Invalid status");
+    // Auto-set Incoming for Wesbell drops from driver portal
+const isDriverDrop = req.body.flow === "drop" && carrierType === "wesbell";
+const finalStatus = isDriverDrop ? "Incoming" : status;
 
     await run(
       `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt)

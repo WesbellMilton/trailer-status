@@ -73,6 +73,13 @@
   function statusTag(s) {
     return `<span class="stag ${STATUS_TAG[s]||"stag-unknown"}"><span class="sp"></span>${esc(s||"—")}</span>`;
   }
+  function carrierTag(c) {
+    if(!c) return "";
+    const isWesbell = c==="Wesbell";
+    const cls = isWesbell ? "stag-ready" : "stag-dropped";
+    const icon = isWesbell ? "🚛" : "🏢";
+    return `<span class="stag ${cls}" style="font-size:9px;padding:1px 5px;" title="Carrier: ${esc(c)}">${icon} ${esc(c)}</span>`;
+  }
   function plateStatusTag(s) {
     const cls = s==="OK"?"stag-ready":s==="Service"?"stag-loading":"stag-unknown";
     return `<span class="stag ${cls}" style="font-size:9px;padding:1px 5px;"><span class="sp"></span>${esc(s||"Unknown")}</span>`;
@@ -150,6 +157,7 @@
 
       const note=r.note?`<span class="t-note" title="${esc(r.note)}">${esc(r.note)}</span>`:`<span style="color:var(--t3)">—</span>`;
       const dtype=r.dropType?`<span style="font-size:10px;color:var(--t2);font-family:var(--mono);">${esc(r.dropType)}</span>`:`<span style="color:var(--t3)">—</span>`;
+      const ctag=carrierTag(r.carrierType);
       const ago=r.updatedAt?timeAgo(r.updatedAt):"";
 
       let acts=`<span style="color:var(--t3)">—</span>`;
@@ -203,7 +211,7 @@
         <span class="t-dir">${esc(r.direction||"—")}</span>
         <span>${statusTag(r.status)}</span>
         <span>${door}</span>
-        <span>${dtype}</span>
+        <span>${ctag||dtype}</span>
         <span>${note}</span>
         <span class="t-time" title="${esc(fmtTime(r.updatedAt))}">${esc(ago)}</span>
         <span>${acts}</span>
@@ -379,6 +387,7 @@
         </div>
         <div class="dc-status-row">
           <span class="dc-status-badge ${colorCls}">${esc(r.status)}</span>
+          ${r.carrierType?carrierTag(r.carrierType):""}
           ${r.updatedAt ? `<span class="dc-ago">${esc(timeAgo(r.updatedAt))}</span>` : ""}
         </div>
         ${hasAction
@@ -408,11 +417,11 @@
     const trailer=(el("d_trailer")?.value||"").trim();
     if(!trailer) return toast("Validation error","Trailer number is required.","err");
     try{
-      await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,direction:(el("d_direction")?.value||"").trim(),status:(el("d_status")?.value||"").trim(),door:(el("d_door")?.value||"").trim(),note:(el("d_note")?.value||"").trim(),dropType:(el("d_dropType")?.value||"").trim()})});
+      await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,direction:(el("d_direction")?.value||"").trim(),status:(el("d_status")?.value||"").trim(),door:(el("d_door")?.value||"").trim(),note:(el("d_note")?.value||"").trim(),dropType:(el("d_dropType")?.value||"").trim(),carrierType:(el("d_carrierType")?.value||"").trim()})});
       toast("Saved",`Trailer ${trailer} updated.`,"ok");
       // Clear form and focus for next entry
       ["d_trailer","d_door","d_note"].forEach(id=>{if(el(id))el(id).value="";});
-      el("d_direction").value="Inbound"; el("d_status").value="Incoming"; el("d_dropType").value="";
+      el("d_direction").value="Inbound"; el("d_status").value="Incoming"; el("d_dropType").value=""; if(el("d_carrierType"))el("d_carrierType").value="";
       setTimeout(()=>el("d_trailer")?.focus(),50);
     }
     catch(e){ toast("Save failed",e.message,"err"); }
@@ -590,9 +599,12 @@
     driverState.whoType=whoType;
     try{ sessionStorage.setItem("wb_whoType", whoType); }catch{}
     const dropBtn=el("flowBtnDrop");
-    if(dropBtn) dropBtn.style.display=whoType==="carrier"?"none":"";
+    const shuntBtn=document.querySelector("[data-flow='shunt']");
+    const isOutside = whoType==="outside";
+    if(dropBtn) dropBtn.style.display=isOutside?"none":"";
+    if(shuntBtn) shuntBtn.style.display=isOutside?"none":"";
     const sub=el("flowScreenSub");
-    if(sub) sub.textContent=whoType==="carrier"?"Select your cross dock activity:":"What are you here to do?";
+    if(sub) sub.textContent=isOutside?"Select your cross dock activity:":"What are you here to do?";
     showScreen("flow-screen");
   }
 
@@ -665,7 +677,8 @@
     const {trailer,selectedDoor:door,dropType}=driverState;
     if(!trailer) return toast("Required","Enter your trailer number.","err");
     try{
-      const res=await apiJson("/api/driver/drop",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door,dropType})});
+      const carrierType=driverState.whoType==="outside"?"Outside":"Wesbell";
+      const res=await apiJson("/api/driver/drop",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door,dropType,carrierType})});
       const assignedDoor=res?.door||door;
       driverState.selectedDoor=assignedDoor;
       driverState.sessionDrops.push({trailer,door:assignedDoor,dropType,flowType:"drop",at:Date.now(),safetyDone:true});
@@ -894,7 +907,7 @@
       // Restore last whoType to skip first screen
       try{
         const savedWho = sessionStorage.getItem("wb_whoType");
-        if(savedWho){ driverState.whoType=savedWho; const dropBtn=el("flowBtnDrop"); if(dropBtn)dropBtn.style.display=savedWho==="carrier"?"none":""; showScreen("flow-screen"); }
+        if(savedWho){ driverState.whoType=savedWho; const isOutside=savedWho==="outside"; const dropBtn=el("flowBtnDrop"); if(dropBtn)dropBtn.style.display=isOutside?"none":""; const shuntBtn=document.querySelector("[data-flow='shunt']"); if(shuntBtn)shuntBtn.style.display=isOutside?"none":""; showScreen("flow-screen"); }
         else showScreen("who-screen");
       }catch{ showScreen("who-screen"); }
       renderSessionHistory();
@@ -979,7 +992,7 @@
     if(act==="shuntDoor"&&trId){ const door=direct?.dataset?.door||direct?.closest?.("[data-door]")?.dataset?.door; if(door)return shuntTrailer(trId,door); }
     if(act==="delete"&&trId) return dispDelete(trId);
     if(act==="quickStatus"){ const to=direct?.dataset?.to||direct?.closest?.("[data-to]")?.dataset?.to; if(trId&&to)return quickStatus(trId,to); }
-    if(act==="edit"&&trId){ const r=trailers[trId]; if(!r)return; el("d_trailer").value=trId; el("d_direction").value=r.direction||"Inbound"; el("d_status").value=r.status||"Incoming"; el("d_door").value=r.door||""; el("d_note").value=r.note||""; el("d_dropType").value=r.dropType||""; toast("Record loaded",`Editing trailer ${trId}`,"ok"); return; }
+    if(act==="edit"&&trId){ const r=trailers[trId]; if(!r)return; el("d_trailer").value=trId; el("d_direction").value=r.direction||"Inbound"; el("d_status").value=r.status||"Incoming"; el("d_door").value=r.door||""; el("d_note").value=r.note||""; el("d_dropType").value=r.dropType||""; if(el("d_carrierType"))el("d_carrierType").value=r.carrierType||""; toast("Record loaded",`Editing trailer ${trId}`,"ok"); return; }
     if(act==="dockSet"){ const to=direct?.dataset?.to; if(trId&&to)return dockSet(trId,to); }
     if(act==="markReady"&&trId) return markReady(trId);
     const tog=direct?.dataset?.plateToggle; if(tog){ plateEditOpen[tog]=!plateEditOpen[tog]; renderPlates(); return; }
@@ -1000,7 +1013,7 @@
   el("sh_trailer")?.addEventListener("input",()=>{ buildShuntDoorPicker(); updateShuntSubmitState(); });
   el("dockSearch")?.addEventListener("input", renderDockView);
   // Dispatcher — Enter on any field submits save
-  ["d_trailer","d_door","d_note","d_direction","d_status","d_dropType"].forEach(id=>{
+  ["d_trailer","d_door","d_note","d_direction","d_status","d_dropType","d_carrierType"].forEach(id=>{
     el(id)?.addEventListener("keydown", e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); dispSave(); } });
   });
   ["search","filterDir","filterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderBoard)));

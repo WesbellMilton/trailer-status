@@ -165,19 +165,19 @@
         const nexts = nextStatuses[r.status] || [];
         const quickBtns = nexts.map(s => {
           const btnCls = s==="Ready"?"btn-success":s==="Departed"?"btn-default":"btn-default";
-          return `<button class="btn ${btnCls} btn-sm qs-btn" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}">${esc(s)}</button>`;
+          return `<button class="btn ${btnCls} btn-sm qs-btn" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}" aria-label="${esc(s)} trailer ${esc(r.trailer)}">${esc(s)}</button>`;
         }).join("");
         acts = `<div class="t-acts">
           ${quickBtns}
-          ${r.status==="Dock Ready"?`<button class="btn btn-success btn-sm" data-act="markReady" data-trailer-id="${esc(r.trailer)}" style="font-weight:800;">✓ Ready</button>`:""}
-          <button class="btn btn-default btn-sm" data-act="edit" data-trailer-id="${esc(r.trailer)}">Edit</button>
-          <button class="btn btn-danger btn-sm" data-act="delete" data-trailer-id="${esc(r.trailer)}">Del</button>
+          ${r.status==="Dock Ready"?`<button class="btn btn-success btn-sm" data-act="markReady" data-trailer-id="${esc(r.trailer)}" style="font-weight:800;" aria-label="Mark trailer ${esc(r.trailer)} ready">✓ Ready</button>`:""}
+          <button class="btn btn-default btn-sm" data-act="edit" data-trailer-id="${esc(r.trailer)}" aria-label="Edit trailer ${esc(r.trailer)}">Edit</button>
+          <button class="btn btn-danger btn-sm" data-act="delete" data-trailer-id="${esc(r.trailer)}" aria-label="Delete trailer ${esc(r.trailer)}">Del</button>
         </div>`;
       } else if(canDock){
         if(r.status==="Dropped"||r.status==="Incoming")
-          acts=`<div class="t-acts"><button class="btn btn-default btn-sm" data-act="dockSet" data-to="Loading" data-trailer-id="${esc(r.trailer)}">Loading</button></div>`;
+          acts=`<div class="t-acts"><button class="btn btn-default btn-sm" data-act="dockSet" data-to="Loading" data-trailer-id="${esc(r.trailer)}" aria-label="Set trailer ${esc(r.trailer)} to Loading">Loading</button></div>`;
         else if(r.status==="Loading")
-          acts=`<div class="t-acts"><button class="btn btn-cyan btn-sm" data-act="dockSet" data-to="Dock Ready" data-trailer-id="${esc(r.trailer)}">Dock Ready</button></div>`;
+          acts=`<div class="t-acts"><button class="btn btn-cyan btn-sm" data-act="dockSet" data-to="Dock Ready" data-trailer-id="${esc(r.trailer)}" aria-label="Set trailer ${esc(r.trailer)} to Dock Ready">Dock Ready</button></div>`;
         else
           acts=`<span style="color:var(--t3);font-size:10px;font-family:var(--mono);">${esc(r.status==="Dock Ready"?"Awaiting dispatch":r.status==="Ready"?"Ready":"—")}</span>`;
       }
@@ -232,7 +232,7 @@
         <div style="display:flex;justify-content:space-between;align-items:center;gap:3px;"><span class="p-door">D${esc(door)}</span>${plateStatusTag(p.status)}</div>
         <div class="p-note">${p.note?esc(p.note):`<span style="color:var(--t3)">—</span>`}</div>
         ${open?`<select data-plate-status="${esc(door)}" style="margin-top:3px;"><option ${p.status==="OK"?"selected":""}>OK</option><option ${p.status==="Service"?"selected":""}>Service</option><option ${p.status==="Unknown"?"selected":""}>Unknown</option></select><input data-plate-note="${esc(door)}" placeholder="Note" value="${esc(p.note||"")}" style="margin-top:3px;"/>`:""}
-        <div class="p-btns" style="margin-top:3px;">${canEdit?`<button class="p-btn" data-plate-toggle="${esc(door)}">${open?"Close":"Edit"}</button>${open?`<button class="p-btn" data-plate-save="${esc(door)}">Save</button>`:""}`:" "}</div>
+        <div class="p-btns" style="margin-top:3px;">${canEdit?`<button class="p-btn" data-plate-toggle="${esc(door)}" aria-label="${open?"Close":"Edit"} door ${esc(door)}">${open?"Close":"Edit"}</button>${open?`<button class="p-btn" data-plate-save="${esc(door)}" aria-label="Save door ${esc(door)}">Save</button>`:""}`:" "}</div>
       </div>`;
     }).join("");
     ["platesGrid","platesGrid2"].forEach(id=>{ const e=el(id); if(e)e.innerHTML=plateHtml; });
@@ -277,16 +277,16 @@
 
   function dispPanelHtml(){ return `
     <div class="infobox infobox-amber"><div class="ib-title">Dispatcher Controls</div>Add and manage trailers. Use inline buttons on each row for quick status changes.</div>
-    <div class="field"><label class="fl">Trailer Number</label><input id="d_trailer" placeholder="e.g. 5312" autocomplete="off" style="font-family:var(--mono);font-weight:500;"/></div>
+    <div class="field"><label class="fl" for="d_trailer">Trailer Number</label><input id="d_trailer" placeholder="e.g. 5312" autocomplete="off" style="font-family:var(--mono);font-weight:500;"/></div>
     <div class="field-row">
-      <div class="field"><label class="fl">Direction</label><select id="d_direction"><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select></div>
-      <div class="field"><label class="fl">Status</label><select id="d_status"><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select></div>
+      <div class="field"><label class="fl" for="d_direction">Direction</label><select id="d_direction"><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select></div>
+      <div class="field"><label class="fl" for="d_status">Status</label><select id="d_status"><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select></div>
     </div>
     <div class="field-row">
-      <div class="field"><label class="fl">Door (18–42)</label><input id="d_door" placeholder="21" style="font-family:var(--mono);"/></div>
-      <div class="field"><label class="fl">Drop Type</label><select id="d_dropType"><option value="">—</option><option>Empty</option><option>Loaded</option></select></div>
+      <div class="field"><label class="fl" for="d_door">Door (28–42)</label><input id="d_door" placeholder="21" style="font-family:var(--mono);"/></div>
+      <div class="field"><label class="fl" for="d_dropType">Drop Type</label><select id="d_dropType"><option value="">—</option><option>Empty</option><option>Loaded</option></select></div>
     </div>
-    <div class="field"><label class="fl">Note</label><textarea id="d_note" placeholder="Optional note…"></textarea></div>
+    <div class="field"><label class="fl" for="d_note">Note</label><textarea id="d_note" placeholder="Optional note…"></textarea></div>
     <button class="btn btn-primary btn-full" id="btnSaveTrailer">Save Trailer Record</button>
     <div class="divider"></div>
     <button class="btn btn-danger btn-full" id="btnClearAll">Clear All Trailers</button>
@@ -360,7 +360,7 @@
           ${r.updatedAt ? `<span class="dc-ago">${esc(timeAgo(r.updatedAt))}</span>` : ""}
         </div>
         ${hasAction
-          ? `<button class="dc-action-btn ${next.cls}" data-act="dockSet" data-to="${esc(next.to)}" data-trailer-id="${esc(r.trailer)}">${esc(next.label)}</button>`
+          ? `<button class="dc-action-btn ${next.cls}" data-act="dockSet" data-to="${esc(next.to)}" data-trailer-id="${esc(r.trailer)}" aria-label="${esc(next.label)} for trailer ${esc(r.trailer)}">${esc(next.label)}</button>`
           : `<div class="dc-no-action">${esc(next?.label||"—")}</div>`
         }
       </div>`;
@@ -856,7 +856,11 @@
     const dockFilterBtn = direct?.closest?.("[data-dock-filter]");
     if(dockFilterBtn){ 
       dockFilter = dockFilterBtn.dataset.dockFilter;
-      document.querySelectorAll(".dock-filter-btn").forEach(b=>b.classList.toggle("active", b.dataset.dockFilter===dockFilter));
+      document.querySelectorAll(".dock-filter-btn").forEach(b=>{
+        const active = b.dataset.dockFilter===dockFilter;
+        b.classList.toggle("active", active);
+        b.setAttribute("aria-pressed", active?"true":"false");
+      });
       renderDockView(); return; 
     }
     const whoBtn=direct?.closest?.("[data-who]"); if(whoBtn){ selectWho(whoBtn.dataset.who); return; }

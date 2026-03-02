@@ -1004,9 +1004,9 @@ if(id==="btnSetAdminPinSup")   return setPin("admin","pin_admin_sup","pin_admin_
         "Ready":      ["Departed"],
         "Departed":   ["Incoming","Dropped"],
       };
-   const options = nextStatuses[occ.status] || [];
-el("dmModalTitle").textContent = `Trailer ${occ.trailer} — D${door}`;
-el("dmModalSub").textContent = `Current status: ${occ.status}`;
+  const options = occ ? (nextStatuses[occ.status] || []) : ["Incoming","Dropped","Loading","Dock Ready","Ready","Departed"];
+el("dmModalTitle").textContent = occ ? `Trailer ${occ.trailer} — D${door}` : `Door ${door} — Empty`;
+el("dmModalSub").textContent = occ ? `Current status: ${occ.status}` : "No trailer assigned";
 const btns = el("dmStatusBtns");
 btns.innerHTML = "";
 options.forEach(s => {

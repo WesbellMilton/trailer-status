@@ -584,13 +584,18 @@
 
       <!-- FIX #3: btnClearAll removed from here — lives only in adminPanel.
            Dispatcher clear is now btnClearAllDisp with its own unique ID. -->
-      <div id="adminPanel" class="panel" style="display:none;">
-        <div class="panel-hd">
-          <div class="panel-title"><span class="ptdot" style="background:var(--amber)"></span>⚡ Admin Controls</div>
-        </div>
-        <div class="panel-body">
-          <div class="infobox infobox-amber" style="margin-bottom:12px;">
-            <div class="ib-title">Master Access</div>
+     <div id="adminPanel" class="panel" style="display:none;">
+  <div class="panel-hd">
+    <div class="panel-title"><span class="ptdot" style="background:var(--amber)"></span>⚡ Admin Controls</div>
+  </div>
+  <div class="panel-body">
+    <div class="infobox infobox-amber" style="margin-bottom:12px;">
+      <div class="ib-title">Master Access</div>
+      Full control over all roles and settings.
+    </div>
+    <div class="divider"></div>
+    <button class="btn btn-danger btn-sm" id="btnClearAll" style="width:100%;">⚠ Clear All Trailers</button>
+  </div>
             Full control over all roles and settings.
           </div>
           <div class="divider"></div>

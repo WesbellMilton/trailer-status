@@ -377,10 +377,16 @@
       return;
     }
 
+    const canAct = ROLE === "dock" || ROLE === "dispatcher" || ROLE === "supervisor";
+
+    // If not logged in, show a login nudge above the cards
+    const loginNudge = el("dockLoginNudge");
+    if (loginNudge) loginNudge.style.display = canAct ? "none" : "";
+
     cards.innerHTML = rows.map(r => {
       const colorCls = DOCK_STATUS_COLOR[r.status] || "";
       const next = DOCK_STATUS_NEXT[r.status];
-      const hasAction = next?.to;
+      const hasAction = next?.to && canAct;
 
       return `<div class="dock-card ${colorCls}">
         <div class="dc-top">
@@ -394,7 +400,9 @@
         </div>
         ${hasAction
           ? `<button class="dc-action-btn ${next.cls}" data-act="dockSet" data-to="${esc(next.to)}" data-trailer-id="${esc(r.trailer)}" aria-label="${esc(next.label)} for trailer ${esc(r.trailer)}">${esc(next.label)}</button>`
-          : `<div class="dc-no-action">${esc(next?.label||"—")}</div>`
+          : next?.to
+            ? `<div class="dc-no-action" style="color:var(--t3);font-size:10px;font-family:var(--mono);">Sign in to update</div>`
+            : `<div class="dc-no-action">${esc(next?.label||"—")}</div>`
         }
       </div>`;
     }).join("");

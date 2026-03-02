@@ -1306,3 +1306,70 @@ button:focus-visible {
   padding: 3px 7px !important;
 }
 .qs-secondary:hover { opacity: 1; }
+
+/* ═══════════════════════════════════════════
+   SHUNT — inline door picker on board rows
+═══════════════════════════════════════════ */
+.shunt-picker {
+  grid-column: 1 / -1;
+  padding: 10px 12px 12px;
+  background: var(--s0);
+  border-top: 1px solid var(--b0);
+  border-left: 3px solid var(--amber);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.shunt-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--t2);
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  white-space: nowrap;
+}
+.shunt-doors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+}
+.shunt-door-btn {
+  padding: 5px 9px;
+  border-radius: var(--r);
+  border: 1px solid var(--b1);
+  background: var(--s2);
+  color: var(--t1);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .12s;
+  position: relative;
+}
+.shunt-door-btn:hover:not(:disabled) {
+  border-color: var(--amber-bd);
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+.shunt-door-btn.current {
+  border-color: var(--b0);
+  color: var(--t3);
+  cursor: not-allowed;
+  opacity: .4;
+}
+.shunt-door-btn.occ {
+  border-color: var(--violet-bd);
+  color: var(--violet);
+  background: var(--violet-bg);
+}
+.shunt-occ-dot {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--violet);
+  margin-left: 3px;
+  vertical-align: middle;
+}

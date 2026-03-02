@@ -8,6 +8,7 @@
   const isDriver = () => path().startsWith("/driver");
   const isSuper  = () => path().startsWith("/supervisor");
   const isDock   = () => path().startsWith("/dock");
+  const isAdmin  = () => ROLE === "admin";
 
   const fmtTime = ms => {
     if (!ms) return "";
@@ -94,7 +95,7 @@
     else if(p.startsWith("/dock")) el("navDock")?.classList.add("active");
     else el("navDispatch")?.classList.add("active");
     const rb=el("roleBadge");
-    if(ROLE){ rb.style.display=""; rb.textContent=ROLE.toUpperCase(); } else { rb.style.display="none"; }
+    if(ROLE){ rb.style.display=""; rb.textContent=ROLE==="admin"?"⚡ ADMIN":ROLE.toUpperCase(); rb.style.color=ROLE==="admin"?"var(--amber)":""; } else { rb.style.display="none"; }
   }
 
   /* ═══════════════════════════════════════════
@@ -143,8 +144,8 @@
     if(countEl) countEl.textContent=filt.length;
     if(countStrEl) countStrEl.textContent=`${filt.length} trailer${filt.length===1?"":"s"} shown`;
     if(!filt.length){ tbodyEl.innerHTML=`<div class="tbl-empty">No trailers match filters</div>`; return; }
-    const canEdit=!readOnly&&ROLE==="dispatcher";
-    const canDock=!readOnly&&ROLE==="dock";
+    const canEdit=!readOnly&&(ROLE==="dispatcher"||ROLE==="admin");
+    const canDock=!readOnly&&(ROLE==="dock"||ROLE==="admin");
 
     const occupied = getOccupiedDoors();
     tbodyEl.innerHTML=filt.map(r=>{
@@ -251,7 +252,7 @@
 
   function renderPlates() {
     if(isDriver()||isSuper())return;
-    const canEdit=ROLE==="dispatcher"||ROLE==="dock";
+    const canEdit=ROLE==="dispatcher"||ROLE==="dock"||ROLE==="admin";
     const doors=[]; for(let d=28;d<=42;d++) doors.push(String(d));
     const v=Object.values(dockPlates||{});
     const summary=`${v.filter(p=>p?.status==="OK").length} OK · ${v.filter(p=>p?.status==="Service").length} Svc`;
@@ -377,7 +378,7 @@
       return;
     }
 
-    const canAct = ROLE === "dock" || ROLE === "dispatcher" || ROLE === "supervisor";
+    const canAct = ROLE === "dock" || ROLE === "dispatcher" || ROLE === "supervisor" || ROLE === "admin";
 
     // If not logged in, show a login nudge above the cards
     const loginNudge = el("dockLoginNudge");
@@ -415,6 +416,7 @@
   }
 
   function renderRolePanel() {
+    if(ROLE==="admin"){ el("panelTitle").textContent="Admin"; el("panelSub").textContent="Master access"; el("panelBody").innerHTML=dispPanelHtml(); el("btnLogout").style.display=""; el("btnAudit").style.display=""; renderPlates(); return; }
     if(ROLE==="dispatcher"){ el("panelTitle").textContent="Dispatcher"; el("panelSub").textContent="Full control"; el("panelBody").innerHTML=dispPanelHtml(); el("btnLogout").style.display=""; el("btnAudit").style.display=""; renderPlates(); return; }
     if(ROLE==="dock"){ el("panelTitle").textContent="Dock"; el("panelSub").textContent="Loading / Dock Ready"; el("panelBody").innerHTML=dockPanelHtml(); el("btnLogout").style.display=""; el("btnAudit").style.display="none"; renderPlates(); return; }
     el("panelTitle").textContent="Not Authenticated"; el("panelSub").textContent="—";
@@ -932,12 +934,16 @@
     } else {
       el("dispatchView").style.display=""; el("dispatchView").classList.add("view-fade");
       el("btnLogout").style.display=ROLE?"":"none";
-      el("btnAudit").style.display=ROLE==="dispatcher"?"":"none";
+      el("btnAudit").style.display=(ROLE==="dispatcher"||ROLE==="admin")?"":"none";
+      // Admin: show admin panel
+      const adminPanel=el("adminPanel");
+      if(adminPanel) adminPanel.style.display=ROLE==="admin"?"":"none";
     }
     highlightNav();
     try{ trailers=await apiJson("/api/state"); }catch{ trailers={}; }
     if(!isDriver()&&!isSuper()){ try{ dockPlates=await apiJson("/api/dockplates"); }catch{ dockPlates={}; } }
-    if(isSuper()||ROLE==="supervisor"){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0); }
+    if(isSuper()||ROLE==="supervisor"||ROLE==="admin"){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0); }
+    if(ROLE==="admin"){ renderBoard(); renderRolePanel(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
     else if(isDock()){ renderDockView(); renderPlates(); }
     else if(!isDriver()){ renderRolePanel(); renderBoard(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
   }
@@ -959,6 +965,7 @@
     if(id==="btnSetDispatcherPin") return setPin("dispatcher","pin_dispatcher","pin_dispatcher_confirm");
     if(id==="btnSetDockPin") return setPin("dock","pin_dock","pin_dock_confirm");
     if(id==="btnSetSupervisorPin") return setPin("supervisor","pin_supervisor","pin_supervisor_confirm");
+    if(id==="btnSetAdminPin") return setPin("admin","pin_admin","pin_admin_confirm");
     // Dock filter buttons
     const dockFilterBtn = direct?.closest?.("[data-dock-filter]");
     if(dockFilterBtn){ 

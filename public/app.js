@@ -35,8 +35,9 @@
   function toast(title, body, type, duration) {
     el("toastTitle").textContent = title;
     el("toastBody").textContent = body||"";
-    el("toastBar").className = "toast-bar "+(type==="ok"?"ok":type==="warn"?"warn":"err");
-    const t=el("toast"); t.style.display="block";
+    const t=el("toast");
+    t.className = "toast "+(type==="ok"?"t-ok":type==="warn"?"t-warn":"t-err");
+    t.style.display="block";
     clearTimeout(toast._t);
     toast._t = setTimeout(()=>t.style.display="none", duration||4500);
   }
@@ -206,7 +207,8 @@
           }).join("")}</div>
           <button class="btn btn-default btn-sm" data-act="shuntToggle" data-trailer-id="${esc(r.trailer)}" style="margin-top:4px;">Cancel</button>
         </div>` : "";
-      return `<div class="tbl-row ${rowCls}${flash}${readyFlash}" data-trailer="${esc(r.trailer)}">
+      const carrierCls=r.carrierType==="Outside"?" carrier-outside":"";
+      return `<div class="tbl-row ${rowCls}${flash}${readyFlash}${carrierCls}" data-trailer="${esc(r.trailer)}">
         <span class="t-num">${esc(r.trailer)}</span>
         <span class="t-dir">${esc(r.direction||"—")}</span>
         <span>${statusTag(r.status)}</span>
@@ -913,14 +915,14 @@
       renderSessionHistory();
       initPush();
     } else if(p.startsWith("/supervisor")||ROLE==="supervisor"){
-      el("supervisorView").style.display="";
+      el("supervisorView").style.display=""; el("supervisorView").classList.add("view-fade");
       el("btnLogout").style.display=""; el("btnAudit").style.display="none";
     } else if(p.startsWith("/dock")){
-      el("dockView").style.display="";
+      el("dockView").style.display=""; el("dockView").classList.add("view-fade");
       el("btnLogout").style.display=ROLE?"":"none"; el("btnAudit").style.display="none";
 
     } else {
-      el("dispatchView").style.display="";
+      el("dispatchView").style.display=""; el("dispatchView").classList.add("view-fade");
       el("btnLogout").style.display=ROLE?"":"none";
       el("btnAudit").style.display=ROLE==="dispatcher"?"":"none";
     }

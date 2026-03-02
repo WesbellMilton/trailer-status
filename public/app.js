@@ -995,7 +995,6 @@ if(id==="btnSetAdminPinSup")   return setPin("admin","pin_admin_sup","pin_admin_
       const door = dmCell.dataset.dmDoor;
       const occupied = getOccupiedDoors();
       const occ = occupied[door];
-      if (!occ) return;
 
       const nextStatuses = {
         "Incoming":   ["Dropped","Loading","Dock Ready","Ready","Departed"],

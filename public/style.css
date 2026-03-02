@@ -394,6 +394,9 @@ textarea{min-height:60px;resize:vertical}
 .dm-trailer{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--t0)}
 .dm-status{font-size:9px;color:var(--t2);letter-spacing:.03em;margin-top:1px}
 .dm-free-label{font-size:9px;color:var(--green);letter-spacing:.04em;margin-top:auto}
+.dm-clickable{cursor:pointer;transition:filter .15s,transform .12s}
+.dm-clickable:hover{filter:brightness(1.25);transform:scale(1.04)}
+.dm-clickable:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 
 /* ═══════════════════════════════════════════
    QUICK STATUS BUTTONS

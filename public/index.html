@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/style.css"/>
 </head>
 <body>
+<a class="skip-link" href="#main-content">Skip to main content</a>
 
 <!-- MODAL -->
 <div class="modal-ov hidden" id="modalOv">
@@ -33,7 +34,7 @@
         <div class="brand-sub">DISPATCH MGT</div>
       </div>
     </div>
-    <nav class="nav">
+    <nav class="nav" aria-label="Main navigation">
       <a href="/" class="nav-item" id="navDispatch">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x=".5" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor"/><rect x="7" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x=".5" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x="7" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".3"/></svg>
         Dispatcher
@@ -52,7 +53,7 @@
       </a>
     </nav>
     <div class="topbar-right">
-      <div class="chip"><div class="live-dot" id="wsDot"></div><span id="wsText">Connecting</span></div>
+      <div class="chip" role="status" aria-live="polite"><div class="live-dot" id="wsDot"></div><span id="wsText">Connecting</span></div>
       <div class="chip" id="roleBadge" style="display:none;color:var(--amber);">—</div>
       <div class="chip">v<span id="verText">—</span></div>
       <button class="tb-btn" id="btnAudit" style="display:none;">Audit</button>
@@ -61,6 +62,7 @@
   </div>
 </div>
 
+<main id="main-content">
 <!-- ═══════════════════════════════════════════
      DRIVER VIEW
 ═══════════════════════════════════════════ -->
@@ -78,7 +80,7 @@
       <div class="ready-notif-banner" id="readyNotifBanner" style="display:none;">
         <span class="rnb-icon">🟢</span>
         <span id="readyNotifText">Trailer ready</span>
-        <button onclick="document.getElementById('readyNotifBanner').style.display='none'" class="rnb-close">✕</button>
+        <button onclick="document.getElementById('readyNotifBanner').style.display='none'" class="rnb-close" aria-label="Dismiss notification">✕</button>
       </div>
 
       <!-- Connection bar -->
@@ -159,7 +161,7 @@
           </div>
           <div class="driver-pbody">
             <label class="fl" style="margin-bottom:6px;">Your Trailer Number</label>
-            <input id="v_trailer" class="trailer-hero-input" placeholder="e.g. 5312"
+            <input id="v_trailer" class="trailer-hero-input" placeholder="e.g. 5312" aria-label="Your trailer number"
               autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false"/>
 
             <!-- Auto-assigned door -->
@@ -207,7 +209,7 @@
           </div>
           <div class="driver-pbody">
             <label class="fl" style="margin-bottom:6px;">Trailer Number to Pick Up</label>
-            <input id="xp_trailer" class="trailer-hero-input" placeholder="e.g. 5312"
+            <input id="xp_trailer" aria-label="Trailer number for cross dock pickup" class="trailer-hero-input" placeholder="e.g. 5312"
               autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false"/>
 
             <!-- Assignment found -->
@@ -247,7 +249,7 @@
           </div>
           <div class="driver-pbody">
             <label class="fl" style="margin-bottom:6px;">Trailer Number You're Offloading</label>
-            <input id="xo_trailer" class="trailer-hero-input" placeholder="e.g. 5312"
+            <input id="xo_trailer" aria-label="Trailer number for cross dock offload" class="trailer-hero-input" placeholder="e.g. 5312"
               autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false"/>
 
             <!-- Auto-assigned door -->
@@ -349,18 +351,18 @@
           <span class="badge badge-num" id="supCountsPill">0</span>
         </div>
         <div class="filter-bar">
-          <div class="field"><label class="fl">Search</label><input id="supSearch" placeholder="Trailer / door / note…"/></div>
+          <div class="field"><label class="fl">Search</label><input id="supSearch" aria-label="Search trailers" placeholder="Trailer / door / note…"/></div>
           <div class="field"><label class="fl">Direction</label>
-            <select id="supFilterDir"><option value="">All Directions</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
+            <select id="supFilterDir" aria-label="Filter by direction"><option value="">All Directions</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
           </div>
           <div class="field"><label class="fl">Status</label>
-            <select id="supFilterStatus"><option value="">All Statuses</option><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select>
+            <select id="supFilterStatus" aria-label="Filter by status"><option value="">All Statuses</option><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select>
           </div>
           <div class="tight"><button class="btn btn-default btn-sm" id="btnSupClearFilters" style="margin-top:14px;">Clear</button></div>
         </div>
         <div class="tbl-hd"><span>Trailer</span><span>Dir</span><span>Status</span><span>Door</span><span>Type</span><span>Note</span><span>Updated</span><span></span></div>
         <div id="supTbody"></div>
-        <div class="board-footer"><span id="supLastUpdated">—</span><span id="supCountStr">—</span></div>
+        <div class="board-footer" role="status" aria-live="polite"><span id="supLastUpdated">—</span><span id="supCountStr">—</span></div>
       </div>
 
       <div class="panel">
@@ -392,18 +394,18 @@
             PINs are hashed server-side — cannot be viewed, only reset. All changes are audit-logged and active sessions are invalidated immediately.
           </div>
           <div class="pin-row">
-            <div><label class="fl">Dispatcher PIN</label><input type="password" id="pin_dispatcher" placeholder="New PIN (min 4)" autocomplete="new-password"/></div>
-            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_dispatcher_confirm" placeholder="Repeat" autocomplete="new-password"/></div>
+            <div><label class="fl">Dispatcher PIN</label><input type="password" id="pin_dispatcher" placeholder="New PIN (min 4)" aria-label="Dispatcher new PIN" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_dispatcher_confirm" placeholder="Repeat" aria-label="Confirm dispatcher PIN" autocomplete="new-password"/></div>
             <button class="btn btn-success btn-sm" id="btnSetDispatcherPin" style="padding:7px 13px;">Update</button>
           </div>
           <div class="pin-row">
-            <div><label class="fl">Dock PIN</label><input type="password" id="pin_dock" placeholder="New PIN (min 4)" autocomplete="new-password"/></div>
-            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_dock_confirm" placeholder="Repeat" autocomplete="new-password"/></div>
+            <div><label class="fl">Dock PIN</label><input type="password" id="pin_dock" placeholder="New PIN (min 4)" aria-label="Dock new PIN" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_dock_confirm" placeholder="Repeat" aria-label="Confirm dock PIN" autocomplete="new-password"/></div>
             <button class="btn btn-success btn-sm" id="btnSetDockPin" style="padding:7px 13px;">Update</button>
           </div>
           <div class="pin-row">
-            <div><label class="fl">Supervisor PIN</label><input type="password" id="pin_supervisor" placeholder="New PIN (min 4)" autocomplete="new-password"/></div>
-            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_supervisor_confirm" placeholder="Repeat" autocomplete="new-password"/></div>
+            <div><label class="fl">Supervisor PIN</label><input type="password" id="pin_supervisor" placeholder="New PIN (min 4)" aria-label="Supervisor new PIN" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_supervisor_confirm" placeholder="Repeat" aria-label="Confirm supervisor PIN" autocomplete="new-password"/></div>
             <button class="btn btn-success btn-sm" id="btnSetSupervisorPin" style="padding:7px 13px;">Update</button>
           </div>
         </div>
@@ -425,8 +427,8 @@
         <span id="dockWsText">Connecting…</span>
       </div>
       <div class="dock-filter-wrap">
-        <button class="dock-filter-btn active" data-dock-filter="active">Active</button>
-        <button class="dock-filter-btn" data-dock-filter="all">All</button>
+        <button class="dock-filter-btn active" data-dock-filter="active" aria-pressed="true">Active trailers</button>
+        <button class="dock-filter-btn" data-dock-filter="all" aria-pressed="false">All trailers</button>
       </div>
       <div class="dock-toolbar-right">
         <span class="badge badge-num" id="dockCount">0</span>
@@ -435,7 +437,7 @@
     </div>
 
     <div class="dock-search-bar">
-      <input id="dockSearch" placeholder="Search trailer or door…" autocomplete="off"/>
+      <input id="dockSearch" placeholder="Search trailer or door…" autocomplete="off" aria-label="Search dock trailers"/>
     </div>
 
     <div class="dock-cards" id="dockCards">
@@ -470,12 +472,12 @@
             <span class="badge badge-num" id="countsPill">0</span>
           </div>
           <div class="filter-bar">
-            <div class="field"><label class="fl">Search</label><input id="search" placeholder="Trailer, door, note…"/></div>
+            <div class="field"><label class="fl">Search</label><input id="search" placeholder="Trailer, door, note…" aria-label="Search trailers"/></div>
             <div class="field"><label class="fl">Direction</label>
-              <select id="filterDir"><option value="">All Directions</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
+              <select id="filterDir" aria-label="Filter by direction"><option value="">All Directions</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
             </div>
             <div class="field"><label class="fl">Status</label>
-              <select id="filterStatus"><option value="">All Statuses</option><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select>
+              <select id="filterStatus" aria-label="Filter by status"><option value="">All Statuses</option><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select>
             </div>
             <div class="tight"><button class="btn btn-default btn-sm" id="btnClearFilters" style="margin-top:14px;">Clear</button></div>
           </div>
@@ -484,7 +486,7 @@
             <span>Type</span><span>Note</span><span>Updated</span><span id="actionsColHead">Actions</span>
           </div>
           <div id="tbody"></div>
-          <div class="board-footer"><span id="lastUpdated">—</span><span id="boardCountStr">—</span></div>
+          <div class="board-footer" role="status" aria-live="polite"><span id="lastUpdated">—</span><span id="boardCountStr">—</span></div>
         </div>
 
         <div class="panel" id="dockMapCard">
@@ -539,13 +541,14 @@
 </div>
 
 <!-- TOAST -->
-<div class="toast" id="toast">
+<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true">
   <div class="toast-bar" id="toastBar"></div>
   <strong id="toastTitle">Notification</strong>
   <div class="t-body" id="toastBody"></div>
 </div>
 
 
+</main>
 <script src="/app.js"></script>
 </body>
 </html>

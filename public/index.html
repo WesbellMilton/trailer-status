@@ -66,6 +66,7 @@
 </div>
 
 <main id="main-content">
+
 <!-- ═══════════════════════════════════════════
      DRIVER VIEW
 ═══════════════════════════════════════════ -->
@@ -160,7 +161,6 @@
         </div>
       </div>
 
-
       <!-- ── SCREEN: SHUNT ── -->
       <div id="shunt-screen" style="display:none;">
         <div class="driver-panel active-step">
@@ -203,7 +203,6 @@
             <input id="v_trailer" class="trailer-hero-input" placeholder="e.g. 5312" aria-label="Your trailer number"
               autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false"/>
 
-            <!-- Auto-assigned door -->
             <div class="assignment-card" id="assignmentCard">
               <div class="ac-icon">🚪</div>
               <div class="ac-body">
@@ -214,9 +213,8 @@
               </div>
             </div>
 
-            <!-- Manual door picker -->
             <div class="door-picker-wrap" id="doorPickerWrap">
-              <div class="door-picker-label">Select Your Door (18–42)</div>
+              <div class="door-picker-label">Select Your Door (28–42)</div>
               <div class="door-picker-grid" id="doorPickerGrid"></div>
             </div>
 
@@ -251,7 +249,6 @@
             <input id="xp_trailer" aria-label="Trailer number for cross dock pickup" class="trailer-hero-input" placeholder="e.g. 5312"
               autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false"/>
 
-            <!-- Assignment found -->
             <div class="assignment-card" id="pickupAssignmentCard" style="border-color:var(--cyan-bd);background:var(--cyan-bg);">
               <div class="ac-icon">🚪</div>
               <div class="ac-body">
@@ -261,7 +258,6 @@
               </div>
             </div>
 
-            <!-- No assignment found -->
             <div class="no-assignment-msg" id="pickupNoAssignment">
               <span>⚠️</span>
               <div>
@@ -291,7 +287,6 @@
             <input id="xo_trailer" aria-label="Trailer number for cross dock offload" class="trailer-hero-input" placeholder="e.g. 5312"
               autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false"/>
 
-            <!-- Auto-assigned door -->
             <div class="assignment-card" id="offloadAssignmentCard">
               <div class="ac-icon">🚪</div>
               <div class="ac-body">
@@ -302,9 +297,8 @@
               </div>
             </div>
 
-            <!-- Manual door picker -->
             <div class="door-picker-wrap" id="offloadDoorPickerWrap">
-              <div class="door-picker-label">Select Your Door (18–42)</div>
+              <div class="door-picker-label">Select Your Door (28–42)</div>
               <div class="door-picker-grid" id="offloadDoorPickerGrid"></div>
             </div>
 
@@ -425,6 +419,7 @@
         </div>
       </div>
 
+      <!-- FIX #1: Admin PIN row added to supervisor PIN panel -->
       <div class="panel" style="grid-column:1/-1;">
         <div class="panel-hd"><div class="panel-title"><div class="ptdot" style="background:var(--amber)"></div>PIN Management</div></div>
         <div class="panel-body">
@@ -446,6 +441,12 @@
             <div><label class="fl">Supervisor PIN</label><input type="password" id="pin_supervisor" placeholder="New PIN (min 4)" aria-label="Supervisor new PIN" autocomplete="new-password"/></div>
             <div><label class="fl">Confirm PIN</label><input type="password" id="pin_supervisor_confirm" placeholder="Repeat" aria-label="Confirm supervisor PIN" autocomplete="new-password"/></div>
             <button class="btn btn-success btn-sm" id="btnSetSupervisorPin" style="padding:7px 13px;">Update</button>
+          </div>
+          <!-- FIX #1: Admin PIN row -->
+          <div class="pin-row">
+            <div><label class="fl">Admin PIN</label><input type="password" id="pin_admin_sup" placeholder="New PIN (min 4)" aria-label="Admin new PIN" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_admin_sup_confirm" placeholder="Repeat" aria-label="Confirm admin PIN" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetAdminPinSup" style="padding:7px 13px;">Update</button>
           </div>
         </div>
       </div>
@@ -484,9 +485,10 @@
       <div class="dock-empty">Loading…</div>
     </div>
 
+    <!-- FIX #2: label corrected from (18–42) to (28–42) -->
     <div class="dock-plates-inline" id="dockPlatesInline">
       <button class="acc-head" id="dockPlatesToggle2" aria-expanded="false">
-        <span style="display:flex;align-items:center;gap:9px;">Dock Plates (18–42) <span class="badge" id="platesMini2">—</span></span>
+        <span style="display:flex;align-items:center;gap:9px;">Dock Plates (28–42) <span class="badge" id="platesMini2">—</span></span>
         <span class="chev">▾</span>
       </button>
       <div class="acc-body" id="dockPlatesBody2" style="max-height:0px;overflow:hidden;transition:max-height .3s ease;">
@@ -499,7 +501,7 @@
 </div>
 
 <!-- ═══════════════════════════════════════════
-     DISPATCH / DOCK VIEW
+     DISPATCH VIEW
 ═══════════════════════════════════════════ -->
 <div id="dispatchView" style="display:none;">
   <div class="page">
@@ -554,6 +556,7 @@
           </div>
         </div>
 
+        <!-- FIX #2: label corrected to (28–42) -->
         <div class="panel" id="dockPlatesCard">
           <button class="acc-head" id="dockPlatesToggle" aria-expanded="false">
             <span style="display:flex;align-items:center;gap:9px;">Dock Plates (28–42) <span class="badge" id="platesMini">—</span></span>
@@ -567,11 +570,11 @@
 
       </div>
 
-
-      <!-- Admin Panel — only visible when role=admin -->
+      <!-- FIX #3: btnClearAll removed from here — lives only in adminPanel.
+           Dispatcher clear is now btnClearAllDisp with its own unique ID. -->
       <div id="adminPanel" class="panel" style="display:none;">
         <div class="panel-hd">
-          <div class="panel-title"><span class="ptdot" style="background:var(--amber)"></span>&#9889; Admin Controls</div>
+          <div class="panel-title"><span class="ptdot" style="background:var(--amber)"></span>⚡ Admin Controls</div>
         </div>
         <div class="panel-body">
           <div class="infobox infobox-amber" style="margin-bottom:12px;">
@@ -586,11 +589,12 @@
           </div>
           <button class="btn btn-primary btn-sm" id="btnSetAdminPin" style="width:100%;margin-bottom:12px;">Update Admin PIN</button>
           <div class="divider"></div>
-          <button class="btn btn-danger btn-sm" id="btnClearAll" style="width:100%;">&#9888; Clear All Trailers</button>
+          <!-- FIX #3: unique ID btnClearAll only here in adminPanel -->
+          <button class="btn btn-danger btn-sm" id="btnClearAll" style="width:100%;">⚠ Clear All Trailers</button>
         </div>
       </div>
 
-      <!-- Side panel -->
+      <!-- Side panel — dispatcher/dock controls injected here by app.js -->
       <div class="panel side-sticky">
         <div class="panel-hd">
           <div class="panel-title" id="panelTitle">Controls</div>
@@ -609,7 +613,6 @@
   <strong id="toastTitle">Notification</strong>
   <div class="t-body" id="toastBody"></div>
 </div>
-
 
 </main>
 <script src="/app.js"></script>

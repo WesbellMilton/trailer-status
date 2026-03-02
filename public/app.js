@@ -181,10 +181,15 @@
         else
           acts=`<span style="color:var(--t3);font-size:10px;font-family:var(--mono);">${esc(r.status==="Dock Ready"?"Awaiting dispatch":r.status==="Ready"?"Ready":"—")}</span>`;
       }
-      return `<div class="tbl-row ${rowCls}${flash}${readyFlash}">
-        <span class="t-num">${esc(r.trailer)}</span><span class="t-dir">${esc(r.direction||"—")}</span>
-        <span>${statusTag(r.status)}</span><span>${door}</span><span>${dtype}</span><span>${note}</span>
-        <span class="t-time" title="${esc(fmtTime(r.updatedAt))}">${esc(ago)}</span><span>${acts}</span>
+      return `<div class="tbl-row ${rowCls}${flash}${readyFlash}" data-trailer="${esc(r.trailer)}">
+        <span class="t-num">${esc(r.trailer)}</span>
+        <span class="t-dir">${esc(r.direction||"—")}</span>
+        <span>${statusTag(r.status)}</span>
+        <span>${door}</span>
+        <span>${dtype}</span>
+        <span>${note}</span>
+        <span class="t-time" title="${esc(fmtTime(r.updatedAt))}">${esc(ago)}</span>
+        <span>${acts}</span>
       </div>`;
     }).join("");
   }

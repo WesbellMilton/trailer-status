@@ -942,7 +942,7 @@
     highlightNav();
     try{ trailers=await apiJson("/api/state"); }catch{ trailers={}; }
     if(!isDriver()&&!isSuper()){ try{ dockPlates=await apiJson("/api/dockplates"); }catch{ dockPlates={}; } }
-    if(isSuper()||ROLE==="supervisor"||ROLE==="admin"){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0); }
+    if(isSuper()||ROLE==="supervisor"){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0); }
     if(ROLE==="admin"){ renderBoard(); renderRolePanel(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
     else if(isDock()){ renderDockView(); renderPlates(); }
     else if(!isDriver()){ renderRolePanel(); renderBoard(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
@@ -980,8 +980,8 @@
     const whoBtn=direct?.closest?.("[data-who]"); if(whoBtn){ selectWho(whoBtn.dataset.who); return; }
     const flowBtn=direct?.closest?.("[data-flow]"); if(flowBtn){ selectFlow(flowBtn.dataset.flow); return; }
     if(id==="btnBackToWho"){ showScreen("who-screen"); return; }
-    if(id==="btnBackToFlow2"){ showScreen("flow-screen"); return; }
-    if(id==="btnBackToFlow"){ const isCarrier=driverState.whoType==="carrier"; const dropBtn=el("flowBtnDrop"); if(dropBtn)dropBtn.style.display=isCarrier?"none":""; showScreen("flow-screen"); return; }
+    if(id==="btnBackToFlow2"||direct?.dataset?.flowBack){ showScreen("flow-screen"); return; }
+    if(id==="btnBackToFlow"){ const isOutside=driverState.whoType==="outside"; const dropBtn=el("flowBtnDrop"); if(dropBtn)dropBtn.style.display=isOutside?"none":""; const shuntBtn=document.querySelector("[data-flow='shunt']"); if(shuntBtn)shuntBtn.style.display=isOutside?"none":""; showScreen("flow-screen"); return; }
     if(id==="btnDriverDrop") return driverDrop();
     if(id==="btnXdockPickup") return xdockPickup();
     if(id==="btnXdockOffload") return xdockOffload();
@@ -1061,6 +1061,7 @@
         trailers=payload||{};
         renderBoard(); renderSupBoard();
         if(isDock()) renderDockView();
+        if(isAdmin()) renderBoard();
       }
       else if(type==="dockplates"){ dockPlates=payload||{}; if(!isDriver()&&!isSuper())renderPlates(); }
       else if(type==="confirmations"){ confirmations=Array.isArray(payload)?payload:[]; renderSupConf(); }

@@ -908,7 +908,6 @@ html += `<div class="dm-cell ${cls}${clickable}" data-dm-door="${ds}" ${occ && c
  document.addEventListener("click", async ev => {
   console.log("CLICK", ev.target, ev.target.dataset);  // ADD THIS LINE
   const direct = ev.target;
-    const direct = ev.target;
     const id = direct?.id;
 
     // Declare act early — was declared late in the original causing TDZ ReferenceError

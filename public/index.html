@@ -140,6 +140,11 @@
                 <span class="flow-label">Drop a Trailer</span>
                 <span class="flow-desc">Park a trailer at a door</span>
               </button>
+              <button class="flow-btn" data-flow="shunt">
+                <span class="flow-icon">🔀</span>
+                <span class="flow-label">Shunt a Trailer</span>
+                <span class="flow-desc">Move trailer to a different door</span>
+              </button>
               <button class="flow-btn" data-flow="xdock_pickup">
                 <span class="flow-icon">🔄</span>
                 <span class="flow-label">Cross Dock Pickup</span>
@@ -151,6 +156,37 @@
                 <span class="flow-desc">Drop a loaded trailer to unload</span>
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ── SCREEN: SHUNT ── -->
+      <div id="shunt-screen" style="display:none;">
+        <div class="driver-panel active-step">
+          <div class="driver-phd">
+            <span class="driver-phd-title"><span style="color:var(--amber);">🔀</span> Shunt Trailer</span>
+            <button class="btn btn-default btn-sm" id="btnBackToFlow2">← Back</button>
+          </div>
+          <div class="driver-pbody">
+            <label class="fl" for="sh_trailer">Trailer Number</label>
+            <input id="sh_trailer" class="trailer-hero-input" placeholder="e.g. 5312"
+              autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false" aria-label="Trailer number to shunt"/>
+
+            <div style="margin:14px 0 6px;font-family:var(--mono);font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;">New Door</div>
+            <div class="assignment-card visible" style="margin-bottom:10px;">
+              <div class="ac-icon">🚪</div>
+              <div class="ac-body">
+                <div class="ac-label">Selected Door</div>
+                <div class="ac-door" id="sh_door_display">Select a door below</div>
+              </div>
+            </div>
+
+            <div class="door-picker-grid" id="shuntDoorGrid" style="margin-bottom:14px;"></div>
+
+            <button class="btn btn-primary btn-full" id="btnDriverShunt" disabled aria-label="Submit shunt">
+              Move Trailer
+            </button>
           </div>
         </div>
       </div>

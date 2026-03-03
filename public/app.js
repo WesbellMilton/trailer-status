@@ -39,6 +39,11 @@
     const t=el("toast");
     t.className = "toast "+(type==="ok"?"t-ok":type==="warn"?"t-warn":"t-err");
     t.style.display="block";
+    t.style.transform="";
+    t.classList.remove("swipe-out");
+    if (type==="ok") haptic("success");
+    else if (type==="err") haptic("error");
+    else haptic("light");
     clearTimeout(toast._t);
     toast._t = setTimeout(()=>t.style.display="none", duration||4500);
   }
@@ -311,18 +316,18 @@
 
   function dispPanelHtml(){ return `
     <div class="infobox infobox-amber"><div class="ib-title">Dispatcher Controls</div>Add and manage trailers. Use inline buttons on each row for quick status changes.</div>
-    <div class="field"><label class="fl" for="d_trailer">Trailer Number</label><input id="d_trailer" placeholder="e.g. 5312" autocomplete="off" style="font-family:var(--mono);font-weight:500;"/></div>
+    <div class="field"><label class="fl" for="d_trailer">Trailer Number</label><input id="d_trailer" placeholder="e.g. 5312" autocomplete="off" inputmode="numeric" autocorrect="off" autocapitalize="none" spellcheck="false" style="font-family:var(--mono);font-weight:500;"/></div>
     <div class="field-row">
       <div class="field"><label class="fl" for="d_direction">Direction</label><select id="d_direction"><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select></div>
       <div class="field"><label class="fl" for="d_status">Status</label><select id="d_status"><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select></div>
     </div>
     <div class="field-row">
-      <div class="field"><label class="fl" for="d_door">Door (28–42)</label><input id="d_door" placeholder="e.g. 32" style="font-family:var(--mono);"/></div>
+      <div class="field"><label class="fl" for="d_door">Door (28–42)</label><input id="d_door" placeholder="e.g. 32" inputmode="numeric" autocomplete="off" style="font-family:var(--mono);"/></div>
       <div class="field"><label class="fl" for="d_dropType">Drop Type</label><select id="d_dropType"><option value="">—</option><option>Empty</option><option>Loaded</option></select></div>
     </div>
     <div class="field"><label class="fl" for="d_carrierType">Carrier</label><select id="d_carrierType"><option value="">—</option><option>Wesbell</option><option>Outside</option></select></div>
     <div class="field"><label class="fl" for="d_note">Note</label><textarea id="d_note" placeholder="Optional note…"></textarea></div>
-    <button class="btn btn-primary btn-full" id="btnSaveTrailer">Save Trailer Record</button>`; }
+    <button class="btn btn-primary btn-full" id="btnSaveTrailer" style="min-height:48px;">Save Trailer Record</button>`; }
 
   function dockPanelHtml(){ return `
     <div class="infobox infobox-cyan"><div class="ib-title">Dock Workflow</div>1. Trailer arrives → tap <strong>Loading</strong><br/>2. Loading done → tap <strong>Dock Ready</strong><br/>3. Dispatcher confirms → driver notified.</div>
@@ -447,11 +452,20 @@
     }catch(e){ toast("Shunt failed",e.message,"err"); }
   }
   async function quickStatus(trailer, status){
+    haptic("medium");
     try{ await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})}); toast("Updated",`${trailer} → ${status}`,"ok"); }
     catch(e){ toast("Update failed",e.message,"err"); }
   }
-  async function dockSet(trailer,status){ try{ await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})}); toast("Updated",`${trailer} → ${status}`,"ok"); } catch(e){ toast("Update failed",e.message,"err"); } }
-  async function markReady(trailer){ try{ await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status:"Ready"})}); toast("Trailer Ready",`${trailer} marked Ready.`,"ok"); } catch(e){ toast("Update failed",e.message,"err"); } }
+  async function dockSet(trailer,status){
+    haptic("medium");
+    try{ await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})}); toast("Updated",`${trailer} → ${status}`,"ok"); }
+    catch(e){ toast("Update failed",e.message,"err"); }
+  }
+  async function markReady(trailer){
+    haptic("success");
+    try{ await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status:"Ready"})}); toast("Trailer Ready",`${trailer} marked Ready.`,"ok"); }
+    catch(e){ toast("Update failed",e.message,"err"); }
+  }
   async function plateSave(door){
     const status=(document.querySelector(`[data-plate-status="${CSS.escape(door)}"]`)?.value||"").trim();
     const note=(document.querySelector(`[data-plate-note="${CSS.escape(door)}"]`)?.value||"").trim();
@@ -856,6 +870,213 @@
     setDriverOnline(state==="ok");
   }
 
+  /* ── HAPTIC FEEDBACK ── */
+  function haptic(type) {
+    if (!navigator.vibrate) return;
+    if (type === "light") navigator.vibrate(8);
+    else if (type === "medium") navigator.vibrate(18);
+    else if (type === "success") navigator.vibrate([8,50,8]);
+    else if (type === "error") navigator.vibrate([30,60,30]);
+  }
+
+  /* ── SWIPE TO DISMISS TOAST ── */
+  function initToastSwipe() {
+    const t = el("toast");
+    if (!t) return;
+    let startX = 0, startY = 0, dx = 0;
+    t.addEventListener("touchstart", e => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      dx = 0;
+      t.classList.add("swiping");
+    }, {passive:true});
+    t.addEventListener("touchmove", e => {
+      dx = e.touches[0].clientX - startX;
+      const dy = Math.abs(e.touches[0].clientY - startY);
+      if (Math.abs(dx) < dy) return; // vertical swipe — ignore
+      if (dx > 0) t.style.transform = `translateX(${dx}px)`;
+    }, {passive:true});
+    t.addEventListener("touchend", () => {
+      t.classList.remove("swiping");
+      if (dx > 80) {
+        t.classList.add("swipe-out");
+        setTimeout(() => { t.style.display="none"; t.classList.remove("swipe-out"); t.style.transform=""; }, 200);
+      } else {
+        t.style.transform = "";
+      }
+      dx = 0;
+    }, {passive:true});
+  }
+
+  /* ── PULL TO REFRESH ── */
+  function initPullToRefresh() {
+    let startY = 0, pulling = false, triggered = false;
+    const ind = el("ptrIndicator");
+    const txt = el("ptrText");
+    const spin = el("ptrSpinner");
+    if (!ind) return;
+
+    document.addEventListener("touchstart", e => {
+      if (window.scrollY === 0) { startY = e.touches[0].clientY; pulling = true; triggered = false; }
+    }, {passive:true});
+
+    document.addEventListener("touchmove", e => {
+      if (!pulling) return;
+      const dy = e.touches[0].clientY - startY;
+      if (dy > 10 && window.scrollY === 0) {
+        ind.classList.add("ptr-visible");
+        if (dy > 70 && !triggered) {
+          txt.textContent = "↑ Release to refresh";
+        } else if (dy <= 70) {
+          txt.textContent = "↓ Pull to refresh";
+        }
+      }
+    }, {passive:true});
+
+    document.addEventListener("touchend", async e => {
+      if (!pulling) return;
+      pulling = false;
+      const dy = e.changedTouches[0].clientY - startY;
+      if (dy > 70 && window.scrollY === 0 && !triggered) {
+        triggered = true;
+        ind.classList.add("ptr-loading");
+        spin.style.display = "block";
+        txt.textContent = "Refreshing…";
+        haptic("light");
+        try {
+          trailers = await apiJson("/api/state") || {};
+          dockPlates = await apiJson("/api/dockplates") || {};
+          renderBoard(); renderDockView(); renderPlates(); renderSupBoard();
+          haptic("success");
+        } catch {}
+        await new Promise(r => setTimeout(r, 600));
+      }
+      ind.classList.remove("ptr-visible","ptr-loading");
+      spin.style.display = "none";
+      txt.textContent = "↓ Pull to refresh";
+    }, {passive:true});
+  }
+
+  /* ── BOTTOM NAV SYNC ── */
+  function syncBottomNav() {
+    const p = path();
+    ["bnDispatch","bnDock","bnDriver","bnSupervisor"].forEach(id => el(id)?.classList.remove("active"));
+    if (p.startsWith("/supervisor")) el("bnSupervisor")?.classList.add("active");
+    else if (p.startsWith("/driver"))   el("bnDriver")?.classList.add("active");
+    else if (p.startsWith("/dock"))     el("bnDock")?.classList.add("active");
+    else                                el("bnDispatch")?.classList.add("active");
+  }
+
+  /* ── SWIPE BETWEEN VIEWS ── */
+  function initSwipeViews() {
+    const VIEWS = ["/", "/dock", "/driver", "/supervisor"];
+    const currentIdx = () => {
+      const p = path();
+      if (p.startsWith("/supervisor")) return 3;
+      if (p.startsWith("/driver"))     return 2;
+      if (p.startsWith("/dock"))       return 1;
+      return 0;
+    };
+
+    let touchStartX = 0, touchStartY = 0, touchStartTime = 0;
+    const MIN_SWIPE_DISTANCE = 60;
+    const MAX_VERTICAL_RATIO = 0.6; // ignore if mostly vertical
+    const MAX_SWIPE_TIME = 350;     // ms
+
+    // Don't swipe when interacting with scrollable content or inputs
+    const isSwipable = (target) => {
+      const blocked = ["INPUT","TEXTAREA","SELECT"];
+      if (blocked.includes(target.tagName)) return false;
+      // Don't swipe on horizontally scrollable containers
+      let el = target;
+      while (el && el !== document.body) {
+        const style = getComputedStyle(el);
+        const overflowX = style.overflowX;
+        if ((overflowX === "auto" || overflowX === "scroll") && el.scrollWidth > el.clientWidth) return false;
+        el = el.parentElement;
+      }
+      return true;
+    };
+
+    document.addEventListener("touchstart", e => {
+      if (!isSwipable(e.target)) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchStartTime = Date.now();
+    }, {passive:true});
+
+    document.addEventListener("touchend", e => {
+      if (!touchStartX) return;
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      const dt = Date.now() - touchStartTime;
+      touchStartX = 0;
+
+      if (Math.abs(dx) < MIN_SWIPE_DISTANCE) return;
+      if (Math.abs(dy) / Math.abs(dx) > MAX_VERTICAL_RATIO) return;
+      if (dt > MAX_SWIPE_TIME) return;
+      if (!isSwipable(e.target)) return;
+
+      const idx = currentIdx();
+      if (dx < 0 && idx < VIEWS.length - 1) {
+        // swipe left → next view
+        haptic("light");
+        location.href = VIEWS[idx + 1];
+      } else if (dx > 0 && idx > 0) {
+        // swipe right → previous view
+        haptic("light");
+        location.href = VIEWS[idx - 1];
+      }
+    }, {passive:true});
+  }
+
+  /* ── PWA INSTALL PROMPT ── */
+  let _deferredInstallPrompt = null;
+  function initPwaInstall() {
+    window.addEventListener("beforeinstallprompt", e => {
+      e.preventDefault();
+      _deferredInstallPrompt = e;
+      // Show install button if we have one in the topbar
+      const btn = el("btnInstallPwa");
+      if (btn) btn.style.display = "";
+    });
+    window.addEventListener("appinstalled", () => {
+      _deferredInstallPrompt = null;
+      const btn = el("btnInstallPwa");
+      if (btn) btn.style.display = "none";
+      toast("App installed", "Wesbell Dispatch added to home screen.", "ok");
+    });
+    const btn = el("btnInstallPwa");
+    if (btn) {
+      btn.addEventListener("click", async () => {
+        if (!_deferredInstallPrompt) return;
+        _deferredInstallPrompt.prompt();
+        const { outcome } = await _deferredInstallPrompt.userChoice;
+        if (outcome === "accepted") haptic("success");
+        _deferredInstallPrompt = null;
+        btn.style.display = "none";
+      });
+    }
+  }
+
+  /* ── KEYBOARD AVOIDANCE ── */
+  function initKeyboardAvoidance() {
+    const inputs = ["v_trailer","xp_trailer","xo_trailer","sh_trailer","d_trailer","d_door"];
+    inputs.forEach(id => {
+      el(id)?.addEventListener("focus", () => {
+        setTimeout(() => el(id)?.scrollIntoView({behavior:"smooth",block:"center"}), 300);
+      }, {passive:true});
+    });
+    // Visual Viewport API — push bottom nav up when keyboard opens
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", () => {
+        const offset = window.innerHeight - window.visualViewport.height;
+        const bn = document.querySelector(".bottom-nav");
+        if (bn) bn.style.transform = offset > 100 ? `translateY(-${offset}px)` : "";
+      });
+    }
+  }
+
   async function loadInitial(){
     try{ const w=await apiJson("/api/whoami"); ROLE=w?.role; VERSION=w?.version||""; }
     catch{ ROLE=null; VERSION=""; }
@@ -1045,6 +1266,15 @@
 
   el("v_trailer")?.addEventListener("input",onTrailerInput);
   el("v_trailer")?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!el("btnDriverDrop")?.disabled)driverDrop(); });
+  // Set inputmode on trailer inputs for numeric keypad on mobile
+  ["v_trailer","xp_trailer","xo_trailer","sh_trailer"].forEach(id=>{
+    const inp=el(id); if(!inp)return;
+    inp.setAttribute("inputmode","numeric");
+    inp.setAttribute("autocomplete","off");
+    inp.setAttribute("autocorrect","off");
+    inp.setAttribute("autocapitalize","none");
+    inp.setAttribute("spellcheck","false");
+  });
   el("xp_trailer")?.addEventListener("input",onPickupTrailerInput);
   el("xo_trailer")?.addEventListener("input",onOffloadTrailerInput);
   el("xo_trailer")?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!el("btnXdockOffload")?.disabled)xdockOffload(); });
@@ -1093,5 +1323,13 @@
       }
     };
   }
-  loadInitial().then(connectWs);
+  loadInitial().then(() => {
+    syncBottomNav();
+    initToastSwipe();
+    initPullToRefresh();
+    initKeyboardAvoidance();
+    initSwipeViews();
+    initPwaInstall();
+    connectWs();
+  });
 })();

@@ -838,3 +838,12 @@ button,.btn,.nav-item,.who-btn,.flow-btn,.door-btn,.drop-type-btn,
 @media(max-width:480px){
   #btnInstallPwa span{display:none}
 }
+
+/* ═══════════════════════════════════════════
+   DRIVER FULL RESET BUTTON
+═══════════════════════════════════════════ */
+#btnDriverFullReset:hover,
+#btnDriverFullReset:active{
+  color:var(--t1);
+  border-color:var(--b2);
+}

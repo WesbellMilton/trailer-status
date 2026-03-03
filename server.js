@@ -539,10 +539,10 @@ document.getElementById("pin").focus();
 </script></body></html>`);
 });
 
-app.get("/",           guardPage(["dispatcher","admin"]),          sendIndex);
-app.get("/dock",       guardPage(["dock","admin"]),                 sendIndex);
-app.get("/driver",     guardPage(["__driver__"]),                   sendIndex);
-app.get("/supervisor", guardPage(["supervisor","admin"]),           sendIndex);
+app.get("/",           guardPage(["dispatcher","admin"]),                    sendIndex);
+app.get("/dock",       guardPage(["dock","admin"]),                          sendIndex);
+app.get("/driver",     guardPage(["__driver__","admin"]),                    sendIndex);
+app.get("/supervisor", guardPage(["supervisor","admin"]),                    sendIndex);
 
 /* ══════════════════════════════════════════
    API — AUTH
@@ -550,7 +550,10 @@ app.get("/supervisor", guardPage(["supervisor","admin"]),           sendIndex);
 app.get("/api/whoami", (req, res) => {
   const s = getSession(req);
   const role = s?.role || null;
-  const redirectTo = role ? (ROLE_HOME[role] || "/") : "/driver";
+  // Admin can visit any page freely — no redirect hint
+  // Drivers have no session — no redirect hint (client handles /driver default)
+  // Other roles get redirected to their home if they land on the wrong page
+  const redirectTo = (role && role !== "admin") ? (ROLE_HOME[role] || "/") : null;
   res.json({ role, version: APP_VERSION, redirectTo });
 });
 

@@ -405,6 +405,17 @@ async function broadcastConfirmations() {                       wsBroadcast("con
    STATIC / VIEWS
 ══════════════════════════════════════════ */
 app.use(express.static(path.join(__dirname, "public")));
+// Serve icon files and splash screens from project root
+app.use(express.static(__dirname, {
+  index: false,
+  dotfiles: "ignore",
+  setHeaders(res, filePath) {
+    // Long cache for immutable assets
+    if (/\.(png|ico|jpg|webp)$/.test(filePath)) {
+      res.setHeader("Cache-Control", "public, max-age=604800, immutable");
+    }
+  }
+}));
 app.get("/sw.js", (req, res) => {
   res.setHeader("Service-Worker-Allowed", "/");
   res.setHeader("Content-Type", "application/javascript");

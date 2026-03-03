@@ -1008,7 +1008,7 @@ app.post("/api/driver/drop",       requireXHR, requireDriverAccess, async (req, 
     if (!trailer) return res.status(400).send("Missing trailer");
     if (door) {
       const dNum = Number(door);
-      if (!Number.isFinite(dNum) || dNum < 18 || dNum > 42) return res.status(400).send("Invalid door (18–42)");
+      if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send("Invalid door (28–42)");
     }
     if (!["Empty","Loaded"].includes(dropType)) return res.status(400).send("Invalid drop type");
 
@@ -1064,7 +1064,7 @@ app.post("/api/crossdock/pickup",  requireXHR, requireDriverAccess, async (req, 
     const door    = String(req.body.door    || "").trim();
     if (!trailer) return res.status(400).send("Missing trailer");
     const dNum = Number(door);
-    if (!Number.isFinite(dNum) || dNum < 18 || dNum > 42) return res.status(400).send("Invalid door (18–42)");
+    if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send("Invalid door (28–42)");
     const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
     // Status is intentionally preserved here — Departed is set by /api/confirm-safety
     // after the driver completes the safety checklist. This two-step design means
@@ -1088,7 +1088,7 @@ app.post("/api/crossdock/offload", requireXHR, requireDriverAccess, async (req, 
     const door    = String(req.body.door    || "").trim();
     if (!trailer) return res.status(400).send("Missing trailer");
     const dNum = Number(door);
-    if (!Number.isFinite(dNum) || dNum < 18 || dNum > 42) return res.status(400).send("Invalid door (18–42)");
+    if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send("Invalid door (28–42)");
     const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
     // Duplicate guard: warn if trailer is already active (not Departed) with a different door
     const ACTIVE_STATUSES = ["Incoming","Dropped","Loading","Dock Ready","Ready"];

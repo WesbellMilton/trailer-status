@@ -674,7 +674,17 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
   /* Toast — full width at bottom */
   .toast{right:8px;left:8px;width:auto;bottom:12px}
 
-  /* Pin rows on supervisor */
+  /* Dock toolbar — prevent staff button from getting squashed */
+  .dock-toolbar{flex-wrap:wrap;gap:6px}
+  .dock-toolbar-left{flex:0 0 auto}
+  .dock-toolbar-right{flex:0 0 auto;margin-left:auto}
+  .dock-filter-wrap{order:3;flex:0 0 100%;justify-content:center;margin:0}
+
+  /* Staff login modal — sheet from bottom */
+  #staffLoginOv{align-items:flex-end;padding:0}
+  #staffLoginOv .modal{max-width:100%;width:100%;border-radius:var(--r2) var(--r2) 0 0;padding:20px 16px 36px;max-height:90vh;overflow-y:auto}
+
+  /* PIN rows — stack vertically on mobile */
   .pin-row{grid-template-columns:1fr;gap:6px}
   .pin-row .btn{width:100%;min-height:44px}
 }
@@ -761,6 +771,16 @@ button,.btn,.nav-item,.who-btn,.flow-btn,.door-btn,.drop-type-btn,
   main{padding-bottom:64px}
   .dock-shell{padding-bottom:calc(80px + 64px)}
   .driver-shell{padding-bottom:calc(48px + 64px)}
+  /* Management view needs bottom padding for bottom nav */
+  .sup-shell{padding-bottom:80px}
+  /* Staff login button — shrink label on tight toolbars */
+  #btnDockStaffLogin,#btnDriverStaffLogin{font-size:10px;padding:4px 8px}
+  /* Staff modal sheets up from bottom on mobile */
+  #staffLoginOv{align-items:flex-end;padding:0}
+  #staffLoginOv .modal{max-width:100%;width:100%;border-radius:var(--r2) var(--r2) 0 0;padding:20px 16px 32px;max-height:90vh;overflow-y:auto}
+  /* Management table needs horizontal scroll on tablet */
+  #managementView .panel:has(.tbl-hd){overflow-x:auto;-webkit-overflow-scrolling:touch}
+  #managementView #supTbody,#managementView .tbl-hd{min-width:560px}
 }
 
 /* ═══════════════════════════════════════════
@@ -807,10 +827,14 @@ button,.btn,.nav-item,.who-btn,.flow-btn,.door-btn,.drop-type-btn,
 @supports(padding-bottom:env(safe-area-inset-bottom)){
   .driver-shell{padding-bottom:calc(48px + env(safe-area-inset-bottom))}
   .dock-shell{padding-bottom:calc(144px + env(safe-area-inset-bottom))}
+  .sup-shell{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
   .toast{bottom:calc(72px + env(safe-area-inset-bottom))}
-  .modal{padding-bottom:calc(32px + env(safe-area-inset-bottom))}
+  .modal-ov:not(#staffLoginOv){padding-bottom:env(safe-area-inset-bottom)}
+  #staffLoginOv .modal{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
   .topbar{padding-top:env(safe-area-inset-top)}
   .bottom-nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))}
+  /* Compensate for taller topbar */
+  .dock-toolbar{top:calc(52px + env(safe-area-inset-top))}
 }
 
 /* ═══════════════════════════════════════════

@@ -1,20 +1,42 @@
 {
-  "name": "wesbell-dispatch",
-  "version": "3.2.0",
-  "description": "Wesbell Dispatch - multi-role trailer status board",
-  "main": "server.js",
-  "type": "commonjs",
-  "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
-  },
-  "engines": { "node": ">=18" },
-  "dependencies": {
-    "express": "^4.19.2",
-    "sqlite3": "^5.1.7",
-    "ws": "^8.17.1"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.0"
-  }
+  "name": "Wesbell Dispatch",
+  "short_name": "Dispatch",
+  "description": "Wesbell Dispatch Management System",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0d12",
+  "theme_color": "#0a0d12",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "categories": ["productivity", "utilities"],
+  "shortcuts": [
+    {
+      "name": "Driver Portal",
+      "short_name": "Driver",
+      "description": "Submit a trailer drop or cross dock",
+      "url": "/driver",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Dock View",
+      "short_name": "Dock",
+      "description": "Update dock loading status",
+      "url": "/dock",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
 }

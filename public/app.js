@@ -27,8 +27,8 @@
 
   async function apiJson(url, opts) {
     const res = await fetch(url, opts);
-    if (res.status===401) { location.href="/login?expired=1&from="+encodeURIComponent(location.pathname); return; }
-    if (res.status===403) { console.warn("Forbidden:", url); return; }
+    if (res.status===401) { location.href="/login?expired=1&from="+encodeURIComponent(location.pathname); throw new Error("401"); }
+    if (res.status===403) { console.warn("Forbidden:", url); throw new Error("403"); }
     if (!res.ok) { const t=await res.text().catch(()=>""); throw new Error(t||"HTTP "+res.status); }
     const ct = res.headers.get("content-type")||"";
     return ct.includes("application/json") ? res.json() : {};
@@ -161,7 +161,7 @@
 
     tbodyEl.innerHTML=filt.map(r=>{
       const rowCls=STATUS_ROW[r.status]||"";
-      const flash=(prevStatuses[r.trailer]&&prevStatuses[r.trailer]!==r.status)?" flashing":"";
+      const flash=(r.trailer in prevStatuses && prevStatuses[r.trailer]!==r.status)?" flashing":"";
       prevStatuses[r.trailer]=r.status;
       const readyFlash=((ROLE==="dispatcher"||ROLE==="management")&&!readOnly&&r.status==="Ready")?" ready-flash":"";
       const door = r.door ? `<span class="t-door">${esc(r.door)}</span>` : `<span style="color:var(--t3)">—</span>`;
@@ -232,7 +232,7 @@
 
   function renderBoard() {
     renderBoardInto(el("tbody"),el("countsPill"),el("boardCountStr"),el("search"),el("filterDir"),el("filterStatus"),false);
-    el("lastUpdated").textContent="Updated "+fmtTime(Date.now());
+    const lu=el("lastUpdated"); if(lu) lu.textContent="Updated "+fmtTime(Date.now());
     renderDockMap();
     const occupied = getOccupiedDoors();
     const occupiedInRange = Object.keys(occupied).filter(d=>{ const n=parseInt(d); return n>=28&&n<=42; }).length;
@@ -242,7 +242,7 @@
   }
   function renderSupBoard() {
     renderBoardInto(el("supTbody"),el("supCountsPill"),el("supCountStr"),el("supSearch"),el("supFilterDir"),el("supFilterStatus"),true);
-    el("supLastUpdated").textContent="Updated "+fmtTime(Date.now());
+    const slu=el("supLastUpdated"); if(slu) slu.textContent="Updated "+fmtTime(Date.now());
     renderKpis();
   }
 
@@ -257,15 +257,15 @@
     ];
     el("supKpis").innerHTML=kpis.map(k=>`<div class="kpi ${k.cls}"><div class="k-val" data-target="${k.val}">0</div><div class="k-lbl">${k.lbl}</div></div>`).join("");
     // Count-up animation
-    el("supKpis").querySelectorAll(".k-val[data-target]").forEach(el=>{
-      const target=parseInt(el.dataset.target)||0;
-      if(target===0){ el.textContent="0"; return; }
+    el("supKpis").querySelectorAll(".k-val[data-target]").forEach(kpiEl=>{
+      const target=parseInt(kpiEl.dataset.target)||0;
+      if(target===0){ kpiEl.textContent="0"; return; }
       const dur=Math.min(600, target*80);
       const start=performance.now();
       const tick=now=>{
         const t=Math.min(1,(now-start)/dur);
-        const eased=1-Math.pow(1-t,3); // ease-out cubic
-        el.textContent=Math.round(eased*target);
+        const eased=1-Math.pow(1-t,3);
+        kpiEl.textContent=Math.round(eased*target);
         if(t<1) requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
@@ -601,12 +601,16 @@
 
   const ALL_SCREENS=["who-screen","flow-screen","shunt-screen","drop-screen","xdock-pickup-screen","xdock-offload-screen","safety-screen","done-screen"];
   let _currentScreen="who-screen";
+  const _screenExitTimers={};
 
   function showScreen(id, forceBack=false){
     const prev=_currentScreen;
     const prevEl=el(prev);
     const nextEl=el(id);
     if(!nextEl) return;
+
+    // Cancel any in-flight exit timer for the previous screen
+    if(_screenExitTimers[prev]){ clearTimeout(_screenExitTimers[prev]); delete _screenExitTimers[prev]; }
 
     // Determine slide direction based on screen order
     const prevIdx=ALL_SCREENS.indexOf(prev);
@@ -618,7 +622,7 @@
       prevEl.classList.remove("screen-enter","screen-enter-back","screen-exit");
       void prevEl.offsetWidth;
       prevEl.classList.add("screen-exit");
-      setTimeout(()=>{ prevEl.style.display="none"; prevEl.classList.remove("screen-exit"); },180);
+      _screenExitTimers[prev]=setTimeout(()=>{ prevEl.style.display="none"; prevEl.classList.remove("screen-exit"); delete _screenExitTimers[prev]; },180);
     }
 
     // Hide all others immediately
@@ -1005,8 +1009,12 @@
         txt.textContent = "Refreshing…";
         haptic("light");
         try {
-          trailers = await apiJson("/api/state") || {};
-          dockPlates = await apiJson("/api/dockplates") || {};
+          const [t, p] = await Promise.all([
+            apiJson("/api/state").catch(()=>null),
+            apiJson("/api/dockplates").catch(()=>null),
+          ]);
+          if(t) trailers = t;
+          if(p) dockPlates = p;
           renderBoard(); renderDockView(); renderPlates(); renderSupBoard();
           haptic("success");
         } catch {}
@@ -1214,8 +1222,8 @@
       if(adminPanel) adminPanel.style.display=ROLE==="admin"?"":"none";
     }
     highlightNav();
-    try{ trailers=await apiJson("/api/state"); }catch{ trailers={}; }
-    if(!isDriver()&&!isSuper()){ try{ dockPlates=await apiJson("/api/dockplates"); }catch{ dockPlates={}; } }
+    try{ const t=await apiJson("/api/state"); trailers=t||{}; }catch{ trailers={}; }
+    if(!isDriver()&&!isSuper()){ try{ const p=await apiJson("/api/dockplates"); dockPlates=p||{}; }catch{ dockPlates={}; } }
     if(isSuper()){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0);
       // Admin PIN row — only visible to admin
       const adminPinRow = el("adminPinRow");
@@ -1276,6 +1284,10 @@
       });
       renderDockView(); return;
     }
+
+    // Generic dismiss handler (replaces inline onclick)
+    const dismissId=direct?.dataset?.dismiss||direct?.closest?.("[data-dismiss]")?.dataset?.dismiss;
+    if(dismissId){ const d=el(dismissId); if(d)d.style.display="none"; return; }
 
     const whoBtn=direct?.closest?.("[data-who]"); if(whoBtn){ selectWho(whoBtn.dataset.who); return; }
     const flowBtn=direct?.closest?.("[data-flow]"); if(flowBtn){ selectFlow(flowBtn.dataset.flow); return; }

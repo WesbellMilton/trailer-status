@@ -915,6 +915,147 @@
   function showDoorPicker(wrapId,gridId){ buildDoorPicker(gridId); el(wrapId||"doorPickerWrap")?.classList.add("visible"); el("assignmentCard")?.classList.remove("visible"); }
   function hideDoorPicker(wrapId){ el(wrapId||"doorPickerWrap")?.classList.remove("visible"); }
 
+  /* ── ISSUE REPORT STATE & CAMERA ── */
+  const issueState = { photoData: null, photoMime: null };
+
+  function resetIssueReport() {
+    issueState.photoData = null;
+    issueState.photoMime = null;
+    const chk = el("c_hasIssue");
+    if (chk) chk.checked = false;
+    const irb = el("issueReportBody"); if(irb) irb.style.display = "none";
+    el("issueNote") && (el("issueNote").value = "");
+    if (el("issuePhotoInput")) el("issuePhotoInput").value = "";
+    setIssuePhotoPreview(null);
+  }
+
+  function setIssuePhotoPreview(dataUrl) {
+    const zone   = el("issuePhotoZone");
+    const empty  = el("ipzEmpty");
+    const prev   = el("ipzPreview");
+    const remove = el("btnRemovePhoto");
+    if (!zone || !empty || !prev || !remove) return;
+    if (dataUrl) {
+      prev.src = dataUrl;
+      prev.style.display = "";
+      empty.style.display = "none";
+      remove.style.display = "";
+      zone.classList.add("has-photo");
+    } else {
+      prev.src = "";
+      prev.style.display = "none";
+      empty.style.display = "";
+      remove.style.display = "none";
+      zone.classList.remove("has-photo");
+    }
+  }
+
+  function initIssueCamera() {
+    const zone  = el("issuePhotoZone");
+    const input = el("issuePhotoInput");
+    const chk   = el("c_hasIssue");
+    const body  = el("issueReportBody");
+    if (!zone || !input || !chk || !body) return;
+
+    // Toggle issue panel open/close
+    chk.addEventListener("change", () => {
+      body.style.display = chk.checked ? "" : "none";
+      if (!chk.checked) resetIssueReport();
+    });
+
+    // Tap photo zone → open camera
+    zone.addEventListener("click", () => {
+      if (issueState.photoData) return; // already has photo — let remove button handle it
+      input.click();
+    });
+
+    // Remove photo button
+    el("btnRemovePhoto")?.addEventListener("click", e => {
+      e.stopPropagation();
+      issueState.photoData = null;
+      issueState.photoMime = null;
+      if (input) input.value = "";
+      setIssuePhotoPreview(null);
+    });
+
+    // Process selected/captured photo
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith("image/")) return toast("Invalid file", "Please select an image.", "err");
+      if (file.size > 8 * 1024 * 1024) return toast("Too large", "Photo must be under 8 MB.", "err");
+
+      const reader = new FileReader();
+      reader.onload = e => {
+        const result = e.target.result; // data:image/jpeg;base64,...
+        const commaIdx = result.indexOf(",");
+        issueState.photoMime = file.type;
+        issueState.photoData = result.slice(commaIdx + 1); // strip data URL prefix
+        setIssuePhotoPreview(result);
+        haptic("light");
+      };
+      reader.onerror = () => toast("Photo error", "Could not read the photo. Try again.", "err");
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /* ── ISSUE REPORTS MANAGEMENT PANEL ── */
+  async function loadIssueReports() {
+    const body     = el("supIssueBody");
+    const countEl  = el("supIssueCount");
+    if (!body) return;
+    try {
+      const rows = await apiJson("/api/issue-reports?limit=50");
+      if (countEl) countEl.textContent = rows.length;
+      if (!rows.length) {
+        body.innerHTML = `<div style="padding:24px;text-align:center;color:var(--t3);font-family:var(--mono);font-size:11px;">No issue reports yet.</div>`;
+        return;
+      }
+      body.innerHTML = rows.map(r => {
+        const hasPhoto = !!r.photo_data;
+        const thumb = hasPhoto
+          ? `<div class="issue-thumb-wrap" data-issue-id="${r.id}" data-issue-mime="${esc(r.photo_mime||'image/jpeg')}">
+               <img src="/api/issue-reports/${r.id}/photo" alt="Issue photo" loading="lazy"/>
+             </div>`
+          : `<div class="issue-thumb-wrap"><div class="issue-thumb-empty">📷</div></div>`;
+        const noteHtml = r.note
+          ? `<div class="issue-note">${esc(r.note)}</div>`
+          : `<div class="issue-no-note">No description provided</div>`;
+        return `<div class="issue-card">
+          ${thumb}
+          <div class="issue-body">
+            <div class="issue-meta">
+              <span class="issue-trailer">${esc(r.trailer||"—")}</span>
+              ${r.door?`<span class="issue-door">D${esc(r.door)}</span>`:""}
+              <span class="issue-badge">⚠ Issue</span>
+              <span class="issue-time">${esc(timeAgo(r.at))}</span>
+            </div>
+            ${noteHtml}
+          </div>
+        </div>`;
+      }).join("");
+    } catch(e) { body.innerHTML = `<div style="padding:16px;color:var(--red);font-size:12px;">${esc(e.message)}</div>`; }
+  }
+
+  /* ── LIGHTBOX ── */
+  function initIssueLightbox() {
+    const lb    = el("issueLightbox");
+    const img   = el("issueLightboxImg");
+    const close = el("issueLightboxClose");
+    if (!lb || !img || !close) return;
+    function openLb(src) { img.src = src; lb.classList.add("open"); document.body.style.overflow = "hidden"; }
+    function closeLb()   { lb.classList.remove("open"); img.src = ""; document.body.style.overflow = ""; }
+    close.addEventListener("click", e => { e.stopPropagation(); closeLb(); });
+    lb.addEventListener("click", closeLb);
+    img.addEventListener("click", e => e.stopPropagation());
+    document.addEventListener("keydown", e => { if(e.key==="Escape" && lb.classList.contains("open")) closeLb(); });
+    // Delegate thumb clicks from management panel
+    document.addEventListener("click", ev => {
+      const thumb = ev.target.closest?.("[data-issue-id]");
+      if (thumb) { openLb(`/api/issue-reports/${thumb.dataset.issueId}/photo`); }
+    });
+  }
+
   function showSafetyScreen(){
     const ctx=el("safetyContext");
     if(ctx){
@@ -927,6 +1068,7 @@
     }
     if(el("c_loadSecured"))el("c_loadSecured").checked=false;
     if(el("c_dockPlateUp"))el("c_dockPlateUp").checked=false;
+    resetIssueReport();
     updateSafetySubmitState();
     showScreen("safety-screen");
   }
@@ -934,13 +1076,36 @@
   async function confSafety(){
     if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
     if(!el("c_loadSecured")?.checked||!el("c_dockPlateUp")?.checked) return toast("Incomplete","Both safety items must be confirmed.","err");
+    const hasIssue = el("c_hasIssue")?.checked;
+    const issueNote = (el("issueNote")?.value||"").trim();
+    // Require at least a note or photo if issue is checked
+    if(hasIssue && !issueNote && !issueState.photoData) return toast("Describe the issue","Add a note or photo before submitting.","warn");
+    const btn = el("btnConfirmSafety");
+    const btnSpan = btn?.querySelector("span");
+    if(btn){ btn.disabled=true; if(btnSpan) btnSpan.textContent="Submitting…"; }
     try{
       await apiJson("/api/confirm-safety",{method:"POST",headers:CSRF,body:JSON.stringify({trailer:driverState.trailer,door:driverState.selectedDoor,loadSecured:true,dockPlateUp:true,action:driverState.flowType})});
+      // Submit issue report if flagged (fire-and-forget after safety succeeds)
+      if(hasIssue){
+        try{
+          await apiJson("/api/report-issue",{method:"POST",headers:CSRF,body:JSON.stringify({
+            trailer: driverState.trailer,
+            door: driverState.selectedDoor||driverState.shuntDoor||"",
+            note: issueNote,
+            photo_data: issueState.photoData||null,
+            photo_mime: issueState.photoMime||null,
+          })});
+          toast("Issue reported","Your report has been sent to management.","ok");
+        }catch(ie){ toast("Issue report failed",ie.message,"warn"); }
+      }
       const last=driverState.sessionDrops[driverState.sessionDrops.length-1];
       if(last&&last.trailer===driverState.trailer) last.safetyDone=true;
       saveSessionHistory(); renderSessionHistory();
       showDoneScreen(driverState.flowType);
-    }catch(e){ toast("Submission failed",e.message,"err"); }
+    }catch(e){
+      toast("Submission failed",e.message,"err");
+      if(btn){ btn.disabled=false; if(btnSpan) btnSpan.textContent="Confirm & Complete"; }
+    }
   }
 
   function showDoneScreen(flowType){
@@ -1254,7 +1419,7 @@
     highlightNav();
     try{ const t=await apiJson("/api/state"); trailers=t||{}; }catch{ trailers={}; }
     if(!isDriver()&&!isSuper()){ try{ const p=await apiJson("/api/dockplates"); dockPlates=p||{}; }catch{ dockPlates={}; } }
-    if(isSuper()){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0);
+    if(isSuper()){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0); loadIssueReports();
       // Admin PIN row — only visible to admin
       const adminPinRow = el("adminPinRow");
       if(adminPinRow) adminPinRow.style.display = ROLE==="admin" ? "" : "none";
@@ -1612,6 +1777,8 @@
     initPwaInstall();
     initStaffLogin();
     initStaffLogin._sync?.();
+    initIssueCamera();
+    initIssueLightbox();
     connectWs();
   });
 })();

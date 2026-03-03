@@ -703,12 +703,138 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
 }
 
 /* ═══════════════════════════════════════════
+   TOUCH ACTION — prevent double-tap zoom
+═══════════════════════════════════════════ */
+button,.btn,.nav-item,.who-btn,.flow-btn,.door-btn,.drop-type-btn,
+.dc-action-btn,.dock-filter-btn,.driver-submit,.checkline,
+.shunt-door-btn,.dm-cell,.p-btn,.tb-btn,.acc-head,.bn-item{
+  touch-action:manipulation;
+}
+
+/* ═══════════════════════════════════════════
+   PULL TO REFRESH
+═══════════════════════════════════════════ */
+.ptr-indicator{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  height:0;overflow:hidden;transition:height .2s ease;
+  font-family:var(--mono);font-size:11px;color:var(--t2);letter-spacing:.04em;
+  background:var(--bg);
+}
+.ptr-indicator.ptr-visible{height:48px}
+.ptr-indicator.ptr-loading{height:48px}
+.ptr-spinner{
+  width:16px;height:16px;border:2px solid var(--b1);
+  border-top-color:var(--amber);border-radius:50%;
+  animation:spin .7s linear infinite;flex-shrink:0;
+}
+
+/* ═══════════════════════════════════════════
+   BOTTOM NAV (mobile only)
+═══════════════════════════════════════════ */
+.bottom-nav{
+  display:none;
+  position:fixed;bottom:0;left:0;right:0;z-index:200;
+  background:rgba(10,13,18,.95);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border-top:1px solid var(--b0);
+  padding:6px 0 8px;
+}
+.bottom-nav-inner{
+  display:flex;align-items:stretch;justify-content:space-around;
+  max-width:480px;margin:0 auto;
+}
+.bn-item{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;flex:1;padding:4px 8px;
+  font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--t2);text-decoration:none;
+  border:none;background:transparent;cursor:pointer;
+  transition:color .15s;touch-action:manipulation;min-height:48px;
+}
+.bn-item svg{width:18px;height:18px;opacity:.6;transition:opacity .15s}
+.bn-item.active{color:var(--amber)}
+.bn-item.active svg{opacity:1}
+.bn-item:active{opacity:.7}
+
+@media(max-width:768px){
+  .bottom-nav{display:block}
+  .topbar .nav{display:none}
+  main{padding-bottom:64px}
+  .dock-shell{padding-bottom:calc(80px + 64px)}
+  .driver-shell{padding-bottom:calc(48px + 64px)}
+}
+
+/* ═══════════════════════════════════════════
+   SWIPE TOAST DISMISS
+═══════════════════════════════════════════ */
+.toast{transition:transform .2s ease,opacity .2s ease,display 0s}
+.toast.swiping{transition:none}
+.toast.swipe-out{transform:translateX(120%);opacity:0}
+
+/* ═══════════════════════════════════════════
+   LANDSCAPE MODE
+═══════════════════════════════════════════ */
+@media(max-width:900px) and (orientation:landscape){
+  .driver-shell{padding:8px 16px 16px}
+  .driver-wrap{max-width:100%;flex-direction:row;flex-wrap:wrap;align-items:flex-start;gap:10px}
+  .driver-conn-bar{flex:0 0 100%}
+  .driver-hdr{flex:0 0 100%;padding:2px 0 4px}
+  .driver-panel{flex:1 1 calc(50% - 5px);min-width:0}
+  .session-history{flex:1 1 calc(50% - 5px);min-width:0}
+  .who-grid{grid-template-columns:repeat(2,1fr)}
+  .flow-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .door-picker-grid{grid-template-columns:repeat(6,1fr) !important}
+  .dock-shell{flex-direction:row;flex-wrap:wrap;max-width:100%}
+  .dock-toolbar{flex:0 0 100%}
+  .dock-search-bar{flex:0 0 100%}
+  .dock-cards{flex:1;overflow-y:auto;max-height:calc(100vh - 160px)}
+  .dock-plates-inline{flex:0 0 280px;margin:0 0 0 8px;align-self:flex-start;position:sticky;top:110px}
+  .trailer-hero-input{font-size:22px !important}
+  .checkline{min-height:56px}
+  .driver-submit{min-height:52px}
+}
+
+/* ═══════════════════════════════════════════
+   SCROLL SNAP — dock cards feel native
+═══════════════════════════════════════════ */
+@media(max-width:480px){
+  .dock-cards{scroll-snap-type:y proximity;-webkit-overflow-scrolling:touch}
+  .dock-card{scroll-snap-align:start}
+}
+
+/* ═══════════════════════════════════════════
    SAFE AREA (iPhone notch / home indicator)
 ═══════════════════════════════════════════ */
 @supports(padding-bottom:env(safe-area-inset-bottom)){
-  .driver-shell{padding-bottom:calc(40px + env(safe-area-inset-bottom))}
-  .dock-shell{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
-  .toast{bottom:calc(16px + env(safe-area-inset-bottom))}
+  .driver-shell{padding-bottom:calc(48px + env(safe-area-inset-bottom))}
+  .dock-shell{padding-bottom:calc(144px + env(safe-area-inset-bottom))}
+  .toast{bottom:calc(72px + env(safe-area-inset-bottom))}
   .modal{padding-bottom:calc(32px + env(safe-area-inset-bottom))}
   .topbar{padding-top:env(safe-area-inset-top)}
+  .bottom-nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))}
+}
+
+/* ═══════════════════════════════════════════
+   SWIPE VIEW TRANSITION HINT
+═══════════════════════════════════════════ */
+@media(max-width:768px){
+  /* Subtle edge indicator when on non-first/last view */
+  .view-fade{animation:viewSlideIn .22s cubic-bezier(.22,1,.36,1)}
+  @keyframes viewSlideIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+}
+
+/* ═══════════════════════════════════════════
+   PWA INSTALL BUTTON
+═══════════════════════════════════════════ */
+#btnInstallPwa{
+  border-color:var(--amber-bd);
+  color:var(--amber);
+  background:var(--amber-bg);
+  animation:installPulse 2.5s ease-in-out infinite;
+}
+@keyframes installPulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(240,160,48,0)}
+  50%{box-shadow:0 0 0 4px rgba(240,160,48,.15)}
+}
+@media(max-width:480px){
+  #btnInstallPwa span{display:none}
 }

@@ -396,20 +396,26 @@
       const colorCls = DOCK_STATUS_COLOR[r.status]||"";
       const next = DOCK_STATUS_NEXT[r.status];
       const hasAction = next?.to && canAct;
+      const statusDot = {"Loading":"var(--amber)","Dock Ready":"var(--cyan)","Ready":"var(--green)","Dropped":"var(--violet)","Incoming":"var(--t2)","Departed":"var(--t3)"}[r.status]||"var(--t3)";
       return `<div class="dock-card ${colorCls}">
         <div class="dc-top">
-          <div class="dc-trailer">${esc(r.trailer)}</div>
-          <div class="dc-door">${r.door?`D${esc(r.door)}`:`<span style="color:var(--t3)">No door</span>`}</div>
+          <div class="dc-trailer-block">
+            <div class="dc-trailer">${esc(r.trailer)}</div>
+            ${r.note?`<div class="dc-note">${esc(r.note)}</div>`:""}
+          </div>
+          <div class="dc-right-block">
+            ${r.door?`<div class="dc-door-badge">D${esc(r.door)}</div>`:`<div class="dc-door-empty">No door</div>`}
+            <div class="dc-status-pill" style="--dot:${statusDot}">${esc(r.status)}</div>
+          </div>
         </div>
-        <div class="dc-status-row">
-          <span class="dc-status-badge ${colorCls}">${esc(r.status)}</span>
+        <div class="dc-meta-row">
           ${r.carrierType?carrierTag(r.carrierType):""}
           ${r.updatedAt?`<span class="dc-ago">${esc(timeAgo(r.updatedAt))}</span>`:""}
         </div>
         ${hasAction
           ?`<button class="dc-action-btn ${next.cls}" data-act="dockSet" data-to="${esc(next.to)}" data-trailer-id="${esc(r.trailer)}">${esc(next.label)}</button>`
           :next?.to
-            ?`<div class="dc-no-action" style="color:var(--t3);font-size:10px;">Sign in to update</div>`
+            ?`<button class="dc-action-btn dc-btn-signin" data-act="openStaffLogin">🔑 Sign in to update</button>`
             :`<div class="dc-no-action">${esc(next?.label||"—")}</div>`
         }
       </div>`;
@@ -1283,6 +1289,8 @@
       body.style.maxHeight=open?"0px":(body.scrollHeight+40)+"px";
       return;
     }
+    // Dock card "sign in to update" quick button
+    if(act==="openStaffLogin"){ el("btnDockStaffLogin")?.click(); return; }
     if(id==="btnLogout") return doLogout();
     if(id==="btnAudit"){ const s=el("auditCard").style.display!=="none"; el("auditCard").style.display=s?"none":""; if(!s)loadAuditInto(el("auditBody"),el("auditCount"),7); return; }
     if(id==="btnClearFilters"||id==="btnSupClearFilters"){ ["search","filterDir","filterStatus","supSearch","supFilterDir","supFilterStatus"].forEach(i=>{if(el(i))el(i).value="";}); renderBoard(); renderSupBoard(); return; }

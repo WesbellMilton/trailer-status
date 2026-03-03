@@ -1149,9 +1149,10 @@
       }catch{ showScreen("who-screen"); }
       renderSessionHistory();
       initPush();
-    } else if(p.startsWith("/management")||ROLE==="management"){
+    } else if(p.startsWith("/management")){
       el("managementView").style.display=""; el("managementView").classList.add("view-fade");
-      el("btnLogout").style.display=""; el("btnAudit").style.display="none";
+      el("btnLogout").style.display=""; 
+      el("btnAudit").style.display=(ROLE==="management"||ROLE==="admin")?"":"none";
     } else if(p.startsWith("/dock")){
       el("dockView").style.display=""; el("dockView").classList.add("view-fade");
       el("btnLogout").style.display=ROLE?"":"none"; el("btnAudit").style.display="none";
@@ -1165,14 +1166,15 @@
     highlightNav();
     try{ trailers=await apiJson("/api/state"); }catch{ trailers={}; }
     if(!isDriver()&&!isSuper()){ try{ dockPlates=await apiJson("/api/dockplates"); }catch{ dockPlates={}; } }
-    if(isSuper()||ROLE==="management"){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0);
+    if(isSuper()){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0);
       // Admin PIN row — only visible to admin
       const adminPinRow = el("adminPinRow");
       if(adminPinRow) adminPinRow.style.display = ROLE==="admin" ? "" : "none";
     }
-    if(ROLE==="admin"){ renderBoard(); renderRolePanel(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
+    if(ROLE==="admin" && !isSuper()){ renderBoard(); renderRolePanel(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
+    else if(ROLE==="management" && !isSuper()){ renderRolePanel(); renderBoard(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
     else if(isDock()){ renderDockView(); renderPlates(); }
-    else if(!isDriver()){ renderRolePanel(); renderBoard(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
+    else if(!isDriver()&&!isSuper()){ renderRolePanel(); renderBoard(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
   }
 
   /* ── GLOBAL CLICK HANDLER ── */
@@ -1192,8 +1194,12 @@
     if(id==="btnSetDispatcherPin") return setPin("dispatcher","pin_dispatcher","pin_dispatcher_confirm");
     if(id==="btnSetDockPin")       return setPin("dock","pin_dock","pin_dock_confirm");
     if(id==="btnSetManagementPin") return setPin("management","pin_management","pin_management_confirm");
-    if(id==="btnSetAdminPin")      return setPin("admin","pin_admin","pin_admin_confirm");
     if(id==="btnSetAdminPinSup")   return setPin("admin","pin_admin_sup","pin_admin_sup_confirm");
+    // Admin panel PIN buttons (dispatch view)
+    if(id==="btnSetDispatcherPinA") return setPin("dispatcher","pin_dispatcher_a","pin_dispatcher_a_confirm");
+    if(id==="btnSetDockPinA")       return setPin("dock","pin_dock_a","pin_dock_a_confirm");
+    if(id==="btnSetManagementPinA") return setPin("management","pin_management_a","pin_management_a_confirm");
+    if(id==="btnSetAdminPinA")      return setPin("admin","pin_admin_a","pin_admin_a_confirm");
 
     const dockFilterBtn=direct?.closest?.("[data-dock-filter]");
     if(dockFilterBtn){
@@ -1359,9 +1365,9 @@
       lastMsg=Date.now();
       let msg; try{msg=JSON.parse(evt.data);}catch{return;}
       const {type,payload}=msg||{};
-      if(type==="state"){ trailers=payload||{}; renderBoard(); renderSupBoard(); if(isDock())renderDockView(); if(isAdmin())renderBoard(); }
-      else if(type==="dockplates"){ dockPlates=payload||{}; if(!isDriver()&&!isSuper())renderPlates(); }
-      else if(type==="confirmations"){ confirmations=Array.isArray(payload)?payload:[]; renderSupConf(); }
+      if(type==="state"){ trailers=payload||{}; renderBoard(); if(isSuper())renderSupBoard(); if(isDock())renderDockView(); if(isAdmin()&&!isSuper())renderBoard(); }
+      else if(type==="dockplates"){ dockPlates=payload||{}; if(!isDriver()&&!isSuper()) renderPlates(); }
+      else if(type==="confirmations"){ confirmations=Array.isArray(payload)?payload:[]; if(isSuper())renderSupConf(); }
       else if(type==="version"){ VERSION=payload?.version||VERSION; el("verText").textContent=VERSION||"—"; if(el("driverVerText"))el("driverVerText").textContent=VERSION||"—"; }
       else if(type==="notify"&&payload?.kind==="ready"){
         toast("🟢 Trailer Ready",`${payload.trailer} is READY${payload.door?" at door "+payload.door:""}.`,"ok",8000);

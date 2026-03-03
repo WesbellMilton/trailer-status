@@ -1181,3 +1181,122 @@ button,.btn,.nav-item,.who-btn,.flow-btn,.door-btn,.drop-type-btn,
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms !important;animation-delay:.01ms !important;transition-duration:.01ms !important}
 }
+
+/* ═══════════════════════════════════════════
+   DEVICE-SPECIFIC OPTIMIZATIONS
+   iPhone 14/15/16/17 (390px) · Pro Max (430-440px)
+   Samsung Galaxy S24/S25 (360px) · Plus/Ultra (384px)
+═══════════════════════════════════════════ */
+
+/* ── Samsung Galaxy S24/S25 base (360px) ── */
+@media only screen and (max-width:390px) and (-webkit-min-device-pixel-ratio:2){
+  /* Tighter padding to maximise usable space on 360px viewport */
+  .driver-pbody{padding:10px 12px}
+  .driver-shell{padding:6px 8px 40px}
+  .dock-cards{padding:6px 10px;gap:7px}
+  .dock-card{padding:11px 13px}
+  .dc-trailer{font-size:22px !important}
+  .dc-door-badge{font-size:18px !important;padding:3px 8px !important}
+  .dc-action-btn{font-size:15px !important;min-height:56px !important;padding:14px !important}
+  .who-btn{min-height:76px}
+  .flow-btn{min-height:56px;padding:10px 12px}
+  .door-picker-grid{grid-template-columns:repeat(4,1fr) !important;gap:4px}
+  .door-btn{min-height:48px;font-size:13px}
+  .driver-submit{min-height:56px;font-size:14px}
+  .checkline{padding:12px;min-height:60px}
+  .kpi .k-val{font-size:22px !important}
+  .plate-grid{grid-template-columns:repeat(3,1fr) !important}
+  /* Bottom nav label stays readable */
+  .bn-item{font-size:8px}
+}
+
+/* ── Samsung Galaxy S24+/S25+ / Ultra (384px) ── */
+@media only screen and (min-width:375px) and (max-width:414px) and (-webkit-min-device-pixel-ratio:2.5){
+  .driver-shell{padding:10px 12px 40px}
+  .driver-pbody{padding:14px}
+  .dock-cards{padding:8px 14px}
+  .door-picker-grid{grid-template-columns:repeat(4,1fr) !important}
+}
+
+/* ── iPhone 14 / 15 / 16 / 17 standard & Pro (390px @3x) ── */
+@media only screen and (width:390px) and (-webkit-device-pixel-ratio:3){
+  .driver-shell{padding:10px 14px 40px}
+  .trailer-hero-input{font-size:26px !important}
+  .dc-trailer{font-size:26px !important}
+  .door-picker-grid{grid-template-columns:repeat(4,1fr) !important;gap:6px}
+  .door-btn{min-height:54px}
+  .who-btn{min-height:88px}
+  .flow-btn{min-height:62px}
+  .driver-submit{min-height:60px}
+  /* Dynamic Island clearance — extra top padding on driver topbar */
+  .driver-topbar{margin-top:4px}
+}
+
+/* ── iPhone 14 Pro Max / 15 Pro Max / 16 Pro Max (430px @3x) ── */
+@media only screen and (min-width:428px) and (max-width:435px) and (-webkit-device-pixel-ratio:3){
+  /* More room — can show more content */
+  .driver-wrap{max-width:460px}
+  .door-picker-grid{grid-template-columns:repeat(5,1fr) !important;gap:7px}
+  .door-btn{min-height:56px;font-size:14px}
+  .who-grid{gap:14px}
+  .who-btn{min-height:100px}
+  .flow-btn{min-height:68px;padding:16px 18px}
+  .dc-trailer{font-size:30px !important}
+  .dc-door-badge{font-size:24px !important;padding:6px 14px !important}
+  .dc-action-btn{min-height:64px !important;font-size:17px !important}
+  .dock-cards{padding:10px 18px}
+  .driver-submit{min-height:64px;font-size:15px}
+  .kpi .k-val{font-size:32px}
+}
+
+/* ── iPhone 17 Pro Max (440px @3x) ── */
+@media only screen and (min-width:436px) and (max-width:450px) and (-webkit-device-pixel-ratio:3){
+  .driver-wrap{max-width:470px}
+  .door-picker-grid{grid-template-columns:repeat(5,1fr) !important;gap:8px}
+  .door-btn{min-height:58px;font-size:15px}
+  .who-btn{min-height:104px}
+  .flow-btn{min-height:70px;padding:16px 20px}
+  .dc-trailer{font-size:32px !important}
+  .dc-door-badge{font-size:26px !important;padding:6px 16px !important}
+  .dc-action-btn{min-height:66px !important;font-size:18px !important}
+  .dock-cards{padding:10px 20px}
+  .driver-submit{min-height:66px;font-size:16px}
+}
+
+/* ── iOS Safari — fix 100vh including browser chrome ── */
+@supports(-webkit-touch-callout:none){
+  .driver-shell{min-height:-webkit-fill-available}
+  .dock-shell{min-height:-webkit-fill-available}
+  /* Prevent rubber-band overscroll on main shell */
+  body{overscroll-behavior-y:none}
+  .modal-ov{overscroll-behavior:contain}
+}
+
+/* ── High DPR — sharper borders on retina screens ── */
+@media(-webkit-min-device-pixel-ratio:2),(min-resolution:192dpi){
+  .panel,.dock-card,.driver-panel,.driver-topbar,.modal{
+    border-width:.5px;
+  }
+  .tbl-row{border-bottom-width:.5px}
+  .panel-hd,.driver-phd,.tbl-hd{border-bottom-width:.5px}
+}
+
+/* ── Tall phones (19.5:9 aspect ratio — most modern flagships) ── */
+@media(max-width:480px) and (min-aspect-ratio:9/19){
+  /* Give dock cards a bit more breathing room on tall screens */
+  .dock-cards{padding-bottom:20px}
+  /* Slightly larger tap targets since there's vertical space */
+  .dc-action-btn{min-height:62px !important}
+  .driver-submit{min-height:62px}
+  .flow-btn{min-height:66px}
+}
+
+/* ── Fix iOS input zoom (font-size must be >=16px on focus) ── */
+@media(max-width:480px){
+  input[type="text"],input[type="number"],input[type="password"],
+  input[type="email"],select,textarea{
+    font-size:16px !important;
+  }
+  /* But keep hero input large */
+  .trailer-hero-input{font-size:24px !important}
+}

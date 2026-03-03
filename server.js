@@ -210,6 +210,9 @@ async function initDb() {
     id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, trailer TEXT,
     door TEXT, note TEXT, photo_data TEXT, photo_mime TEXT, ip TEXT, userAgent TEXT
   )`);
+  await run(`CREATE TABLE IF NOT EXISTS pins (
+    role TEXT PRIMARY KEY, salt BLOB, hash BLOB, iter INTEGER
+  )`);
 
   // Migrations (safe to re-run)
   await run(`DELETE FROM dockplates WHERE CAST(door AS INTEGER) < 28`);
@@ -327,6 +330,11 @@ function requireDriverAccess(req, res, next) {
   next();
 }
 
+// Issue reports can come from drivers (no session) OR dock/dispatcher/management/admin
+function requireIssueAccess(req, res, next) {
+  next();
+}
+
 // Dock workers can only advance status through dock-appropriate transitions.
 // Dispatchers/admin can do anything. This prevents a dock worker from e.g.
 // marking a trailer Ready or Departed by hitting the API directly.
@@ -422,7 +430,7 @@ async function broadcastConfirmations() {
 /* ══════════════════════════════════════════
    STATIC / VIEWS
 ══════════════════════════════════════════ */
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname)));
 // Serve ONLY image assets from project root (icons + splash screens)
 // Uses an allowlist so server.js, .env, sqlite, etc. are never exposed
 const ASSET_ALLOWLIST = /^\/(icon-[\w-]+\.png|apple-touch-icon\.png|favicon\.ico|splash\/splash-[\w-]+\.png)$/;
@@ -437,7 +445,7 @@ app.get("/sw.js", (req, res) => {
   res.sendFile(path.join(__dirname, "sw.js"));
 });
 
-const INDEX_FILE = path.join(__dirname, "public", "index.html");
+const INDEX_FILE = path.join(__dirname, "index.html");
 const sendIndex  = (_, res) => res.sendFile(INDEX_FILE);
 
 /* ── ROLE → ALLOWED PATHS ── */
@@ -963,7 +971,7 @@ app.post("/api/dockplates/set", requireXHR, requireRole(["dock","dispatcher","ma
     const status = String(req.body.status || "Unknown").trim();
     const note   = String(req.body.note   || "").trim();
     const dNum = Number(door);
-    if (!Number.isFinite(dNum) || dNum < 18 || dNum > 42) return res.status(400).send("Invalid door");
+    if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send("Invalid door");
     if (!["OK","Service","Unknown"].includes(status)) return res.status(400).send("Invalid plate status");
     await run(
       `INSERT INTO dockplates(door,status,note,updatedAt) VALUES(?,?,?,?)
@@ -1117,6 +1125,8 @@ app.post("/api/shunt", requireXHR, async (req, res) => {
     const door    = String(req.body.door    || "").trim();
     if (!trailer) return res.status(400).send("Missing trailer");
     if (!door)    return res.status(400).send("Missing door");
+    const dNum = Number(door);
+    if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send("Invalid door (28–42)");
 
     const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
     if (!existing) return res.status(404).send("Trailer not found");
@@ -1230,7 +1240,10 @@ app.post("/api/confirm-safety", requireXHR, requireDriverAccess, async (req, res
 // Max ~4 MB base64 image
 const MAX_PHOTO_BYTES = 4 * 1024 * 1024;
 
-app.post("/api/report-issue", requireXHR, requireDriverAccess, async (req, res) => {
+app.post("/api/report-issue", requireXHR, requireIssueAccess, async (req, res) => {
+  // Allow drivers (no session) and all authenticated roles to file issue reports
+  const s = getSession(req);
+  const actorRole = s?.role || "driver";
   try {
     const trailer  = String(req.body.trailer  || "").trim();
     const door     = String(req.body.door     || "").trim();
@@ -1256,7 +1269,8 @@ app.post("/api/report-issue", requireXHR, requireDriverAccess, async (req, res) 
       [at, trailer, door, note, photoData || null, photoMime || null,
        ipOf(req), req.headers["user-agent"] || ""]
     );
-    await audit(req, "driver", "issue_reported", "trailer", trailer, { door, hasPhoto: !!photoData, note: note.slice(0, 80) });
+    await audit(req, actorRole, "issue_reported", "trailer", trailer, { door, hasPhoto: !!photoData, note: note.slice(0, 80) });
+    broadcastPush("⚠️ Issue Report", `Trailer ${trailer}${door ? " at door " + door : ""}${note ? ": " + note.slice(0, 60) : ""}`, { trailer, door }).catch(() => {});
     res.json({ ok: true, id: result.lastID });
   } catch (e) { res.status(500).send("Report failed"); }
 });

@@ -431,18 +431,25 @@ function guardPage(allowedRoles) {
     const s = getSession(req);
     const role = s?.role || null;
 
-    // No session — only /driver is accessible unauthenticated
+    // No session
     if (!role) {
+      // Driver page is the only one that doesn't need a login
       if (allowedRoles.includes("__driver__")) return next();
-      // Authenticated roles hitting /driver → redirect to their home
-      return res.redirect(302, "/driver");
+      // Everyone else gets sent to login with context so they come back to the right page
+      return res.redirect(302, `/login?from=${encodeURIComponent(req.path)}`);
     }
 
-    // Logged-in user hitting the wrong page → redirect to their home
+    // Admin can go anywhere
+    if (role === "admin") return next();
+
+    // Dispatcher and supervisor can VIEW any page (read-only context)
+    // The API layer enforces what they can actually do
+    if (role === "dispatcher" || role === "supervisor") return next();
+
+    // Dock and other specific roles — must match their allowed pages
     if (!allowedRoles.includes(role)) {
       const home = roleHome(role);
-      if (home) return res.redirect(302, home);
-      return res.redirect(302, "/");
+      return res.redirect(302, home || "/");
     }
 
     next();

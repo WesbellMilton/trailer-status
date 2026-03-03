@@ -817,6 +817,39 @@
   </div>
 </div>
 
+<!-- ── Dock Issue Report Modal ── -->
+<div class="modal-ov hidden" id="dockIssueOv">
+  <div class="modal" style="max-width:420px;">
+    <h4>⚠ Report Trailer Issue</h4>
+    <div class="m-sub" id="dockIssueCtx" style="margin-bottom:14px;font-family:var(--mono);font-size:11px;color:var(--t2);letter-spacing:.04em;"></div>
+
+    <!-- Photo zone -->
+    <input type="file" id="dockIssuePhotoInput" accept="image/*" capture="environment" style="display:none;" aria-label="Take photo"/>
+    <div class="issue-photo-zone" id="dockIssuePhotoZone">
+      <div id="dockIssueEmpty" class="ipz-empty">
+        <span class="ipz-icon">📷</span>
+        <span class="ipz-label">Tap to take photo</span>
+        <span class="ipz-sub">Optional — helps document the issue</span>
+      </div>
+      <img class="ipz-preview" id="dockIssuePrev" alt="Issue photo preview" style="display:none;"/>
+      <button class="ipz-remove" id="dockIssueRemovePhoto" style="display:none;" aria-label="Remove photo">✕</button>
+    </div>
+
+    <!-- Note -->
+    <div class="field" style="margin-top:14px;">
+      <label class="fl" for="dockIssueNote">Describe the issue</label>
+      <textarea id="dockIssueNote" rows="3" placeholder="e.g. Rear door damaged, missing load bar, spill in bay 3…" style="resize:none;font-size:16px;line-height:1.5;"></textarea>
+    </div>
+
+    <div id="dockIssueErr" style="display:none;padding:8px 10px;border-radius:6px;background:var(--red-bg);border:1px solid var(--red-bd);color:var(--red);font-size:12px;font-family:var(--mono);margin-top:8px;"></div>
+
+    <div class="m-btns" style="margin-top:16px;">
+      <button class="btn" id="dockIssueCancelBtn">Cancel</button>
+      <button class="btn btn-red" id="dockIssueSubmitBtn">Submit Report</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Issue photo lightbox ── -->
 <div class="issue-lightbox" id="issueLightbox">
   <button class="issue-lightbox-close" id="issueLightboxClose" aria-label="Close photo">✕</button>

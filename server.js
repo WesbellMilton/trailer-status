@@ -310,6 +310,35 @@ function requireRole(roles) {
   };
 }
 
+// Driver endpoints — accessible without any session (personal phones, no login)
+// But if a session IS present it must NOT be a dock or dispatcher (they shouldn't
+// be submitting driver actions)
+function requireDriverAccess(req, res, next) {
+  const s = getSession(req);
+  if (s && ["dock","dispatcher","supervisor"].includes(s.role)) {
+    return res.status(403).send("Driver endpoint — not accessible from this role");
+  }
+  next();
+}
+
+// Dock workers can only advance status through dock-appropriate transitions.
+// Dispatchers/admin can do anything. This prevents a dock worker from e.g.
+// marking a trailer Ready or Departed by hitting the API directly.
+function requireDockStatusAllowed(req, res, next) {
+  const s = getSession(req);
+  if (!s) return res.status(401).send("Unauthorized");
+  if (s.role === "admin" || s.role === "dispatcher") return next();
+  if (s.role === "dock") {
+    const status = req.body?.status;
+    const DOCK_ALLOWED = ["Loading", "Dock Ready"]; // dock workers may only set these
+    if (status && !DOCK_ALLOWED.includes(status)) {
+      return res.status(403).send(`Dock role cannot set status: ${status}`);
+    }
+    return next();
+  }
+  return res.status(403).send("Unauthorized");
+}
+
 /* ══════════════════════════════════════════
    HELPERS
 ══════════════════════════════════════════ */
@@ -383,60 +412,146 @@ app.get("/sw.js", (req, res) => {
 const INDEX_FILE = path.join(__dirname, "public", "index.html");
 const sendIndex  = (_, res) => res.sendFile(INDEX_FILE);
 
+/* ── ROLE → ALLOWED PATHS ── */
+const ROLE_HOME = {
+  dispatcher: "/",
+  admin:      "/",
+  dock:       "/dock",
+  supervisor: "/supervisor",
+  // drivers have no session — they always land on /driver
+};
+
+// Returns the canonical home path for a role (or null for unauthenticated driver)
+function roleHome(role) { return ROLE_HOME[role] || null; }
+
+// Middleware: enforce that a logged-in role can only view their own page.
+// Drivers (no session) are always allowed on /driver only.
+function guardPage(allowedRoles) {
+  return (req, res, next) => {
+    const s = getSession(req);
+    const role = s?.role || null;
+
+    // No session — only /driver is accessible unauthenticated
+    if (!role) {
+      if (allowedRoles.includes("__driver__")) return next();
+      // Authenticated roles hitting /driver → redirect to their home
+      return res.redirect(302, "/driver");
+    }
+
+    // Logged-in user hitting the wrong page → redirect to their home
+    if (!allowedRoles.includes(role)) {
+      const home = roleHome(role);
+      if (home) return res.redirect(302, home);
+      return res.redirect(302, "/");
+    }
+
+    next();
+  };
+}
+
 app.get("/login", (req, res) => {
-  const expired = req.query.expired
-    ? `<div style="margin:10px 0;color:#e84848;">Session expired. Please sign in again.</div>`
+  const expired  = req.query.expired === "1";
+  const fromPath = req.query.from || req.get("Referer") || "";
+  
+  // Detect context from where they're trying to go
+  // /dock?expired=1 → pre-select dock, hide other roles
+  // /driver has no login (no session needed for driver view)
+  const isDock  = fromPath.includes("/dock");
+  const isSup   = fromPath.includes("/supervisor");
+  
+  // Build role options — dock workers only see "Dock", supervisors see more
+  const roleOptions = isDock
+    ? `<option value="dock" selected>Dock</option>`
+    : isSup
+    ? `<option value="supervisor" selected>Supervisor</option><option value="admin">⚡ Admin</option>`
+    : `<option value="dispatcher" selected>Dispatcher</option><option value="dock">Dock</option><option value="supervisor">Supervisor</option><option value="admin">⚡ Admin</option>`;
+
+  const contextMsg = isDock
+    ? `<div style="padding:8px 10px;border-radius:6px;background:rgba(32,192,208,.08);border:1px solid rgba(32,192,208,.2);color:#20c0d0;font-size:12px;margin-bottom:10px;">🏭 Dock sign-in</div>`
+    : isSup
+    ? `<div style="padding:8px 10px;border-radius:6px;background:rgba(240,160,48,.08);border:1px solid rgba(240,160,48,.2);color:#f0a030;font-size:12px;margin-bottom:10px;">📊 Supervisor sign-in</div>`
     : "";
+
   res.setHeader("content-type", "text/html; charset=utf-8");
   res.end(`<!doctype html><html><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Wesbell Login</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<title>Wesbell Sign In</title>
 <style>
-body{margin:0;background:#0a0d12;color:#e2e8f2;font-family:system-ui;padding:22px}
-.card{max-width:380px;margin:40px auto;background:#121820;border:1px solid #1a2232;border-radius:12px;padding:18px}
-label{display:block;font-size:12px;margin:10px 0 6px;color:#8a9bb5}
-input,select{width:100%;padding:12px;border-radius:10px;border:1px solid #213040;background:#0e1218;color:#e2e8f2;font-size:16px}
-button{width:100%;padding:12px;border-radius:10px;border:1px solid rgba(240,160,48,.2);background:rgba(240,160,48,.09);color:#f0a030;font-weight:700;margin-top:14px;cursor:pointer}
-.muted{color:#4a5a72;font-size:12px;margin-top:10px;line-height:1.5}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a0d12;color:#e2e8f2;font-family:system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+.card{width:100%;max-width:360px;background:#121820;border:1px solid #1a2232;border-radius:14px;padding:22px;box-shadow:0 12px 48px rgba(0,0,0,.7)}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+.brand-mark{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#f0a030,#c04800);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#000;flex-shrink:0}
+.brand-name{font-size:14px;font-weight:600;letter-spacing:.06em}
+.brand-sub{font-size:10px;color:#4a5a72;letter-spacing:.06em}
+label{display:block;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;margin:14px 0 6px;color:#4a5a72}
+input,select{width:100%;padding:13px 14px;border-radius:8px;border:1px solid #213040;background:#0e1218;color:#e2e8f2;font-size:16px;outline:none;-webkit-appearance:none;transition:border-color .15s}
+input:focus,select:focus{border-color:#f0a030;box-shadow:0 0 0 3px rgba(240,160,48,.1)}
+.err{display:none;padding:9px 12px;border-radius:6px;background:rgba(232,72,72,.1);border:1px solid rgba(232,72,72,.25);color:#e84848;font-size:13px;margin-top:10px}
+.err.show{display:block}
+button{width:100%;padding:14px;border-radius:10px;border:1px solid rgba(240,160,48,.25);background:rgba(240,160,48,.09);color:#f0a030;font-size:15px;font-weight:700;margin-top:16px;cursor:pointer;touch-action:manipulation;letter-spacing:.03em;transition:background .15s}
+button:active{background:rgba(240,160,48,.18)}
+.hint{color:#2d3d52;font-size:11px;margin-top:12px;line-height:1.5;text-align:center}
 </style></head><body>
 <div class="card">
-  <h2 style="margin:0 0 8px;font-size:18px;">Wesbell Dispatch</h2>
-  <div class="muted">Sign in with your role PIN to unlock controls.</div>
-  ${expired}
+  <div class="brand">
+    <div class="brand-mark">W</div>
+    <div><div class="brand-name">WESBELL</div><div class="brand-sub">DISPATCH</div></div>
+  </div>
+  ${contextMsg}
+  ${expired ? `<div style="padding:8px 10px;border-radius:6px;background:rgba(232,72,72,.08);border:1px solid rgba(232,72,72,.2);color:#e84848;font-size:12px;margin-bottom:10px;">⚠ Session expired — please sign in again.</div>` : ""}
   <label>Role</label>
-  <select id="role">
-    <option value="dispatcher">Dispatcher</option>
-    <option value="dock">Dock</option>
-    <option value="supervisor">Supervisor</option>
-    <option value="admin">⚡ Admin</option>
-  </select>
+  <select id="role">${roleOptions}</select>
   <label>PIN</label>
-  <input id="pin" type="password" inputmode="numeric" placeholder="Enter PIN"/>
-  <button id="go">Sign In</button>
-  <div class="muted">Tip: Supervisor can reset PINs in Supervisor → PIN Management.</div>
+  <input id="pin" type="password" inputmode="numeric" placeholder="Enter PIN" autocomplete="current-password"/>
+  <div class="err" id="errMsg"></div>
+  <button id="go">Sign In →</button>
+  <div class="hint">Contact your supervisor if you don't have a PIN.</div>
 </div>
 <script>
-document.getElementById("go").onclick=async()=>{
-  const role=document.getElementById("role").value,pin=document.getElementById("pin").value;
-  const res=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},body:JSON.stringify({role,pin})});
-  if(!res.ok){alert(await res.text());return;}
-  location.href=role==="supervisor"?"/supervisor":(role==="dock"?"/dock":"/");
-};
-document.getElementById("pin").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("go").click();});
+const ROLE_HOME = {dispatcher:"/",admin:"/",dock:"/dock",supervisor:"/supervisor"};
+const btn = document.getElementById("go");
+const err = document.getElementById("errMsg");
+async function doLogin() {
+  const role = document.getElementById("role").value;
+  const pin  = document.getElementById("pin").value;
+  if (!pin) { err.textContent = "Enter your PIN."; err.classList.add("show"); return; }
+  btn.disabled = true; btn.textContent = "Signing in…";
+  err.classList.remove("show");
+  try {
+    const res = await fetch("/api/login", {
+      method:"POST",
+      headers:{"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},
+      body:JSON.stringify({role,pin})
+    });
+    if (!res.ok) { err.textContent = await res.text(); err.classList.add("show"); return; }
+    location.href = ROLE_HOME[role] || "/";
+  } catch(e) {
+    err.textContent = "Connection error. Try again."; err.classList.add("show");
+  } finally {
+    btn.disabled = false; btn.textContent = "Sign In →";
+  }
+}
+btn.addEventListener("click", doLogin);
+document.getElementById("pin").addEventListener("keydown", e => { if(e.key==="Enter") doLogin(); });
+document.getElementById("pin").focus();
 </script></body></html>`);
 });
 
-app.get("/",          sendIndex);
-app.get("/dock",      sendIndex);
-app.get("/driver",    sendIndex);
-app.get("/supervisor",sendIndex);
+app.get("/",           guardPage(["dispatcher","admin"]),          sendIndex);
+app.get("/dock",       guardPage(["dock","admin"]),                 sendIndex);
+app.get("/driver",     guardPage(["__driver__"]),                   sendIndex);
+app.get("/supervisor", guardPage(["supervisor","admin"]),           sendIndex);
 
 /* ══════════════════════════════════════════
    API — AUTH
 ══════════════════════════════════════════ */
 app.get("/api/whoami", (req, res) => {
   const s = getSession(req);
-  res.json({ role: s?.role || null, version: APP_VERSION });
+  const role = s?.role || null;
+  const redirectTo = role ? (ROLE_HOME[role] || "/") : "/driver";
+  res.json({ role, version: APP_VERSION, redirectTo });
 });
 
 app.post("/api/login", requireXHR, async (req, res) => {
@@ -468,7 +583,7 @@ app.post("/api/logout", requireXHR, (req, res) => {
 ══════════════════════════════════════════ */
 app.get("/api/state", async (req, res) => res.json(await loadTrailersObject()));
 
-app.post("/api/upsert", requireXHR, requireRole(["dispatcher","dock","supervisor","admin"]), async (req, res) => {
+app.post("/api/upsert", requireXHR, requireDockStatusAllowed, async (req, res) => {
   const actor = req.user.role;
   try {
     const trailer = String(req.body.trailer || "").trim();
@@ -586,7 +701,7 @@ app.get("/api/driver/assignment", async (req, res) => {
   } catch (e) { res.status(500).send("Lookup failed"); }
 });
 
-app.post("/api/driver/drop", requireXHR, async (req, res) => {
+app.post("/api/driver/drop",       requireXHR, requireDriverAccess, async (req, res) => {
   try {
     const trailer     = String(req.body.trailer     || "").trim();
     const door        = String(req.body.door        || "").trim();
@@ -633,7 +748,7 @@ app.post("/api/driver/drop", requireXHR, async (req, res) => {
   } catch (e) { res.status(500).send("Drop failed"); }
 });
 
-app.post("/api/crossdock/pickup", requireXHR, async (req, res) => {
+app.post("/api/crossdock/pickup",  requireXHR, requireDriverAccess, async (req, res) => {
   try {
     const trailer = String(req.body.trailer || "").trim();
     const door    = String(req.body.door    || "").trim();
@@ -653,7 +768,7 @@ app.post("/api/crossdock/pickup", requireXHR, async (req, res) => {
   } catch (e) { res.status(500).send("Cross dock pickup failed"); }
 });
 
-app.post("/api/crossdock/offload", requireXHR, async (req, res) => {
+app.post("/api/crossdock/offload", requireXHR, requireDriverAccess, async (req, res) => {
   try {
     const trailer = String(req.body.trailer || "").trim();
     const door    = String(req.body.door    || "").trim();
@@ -767,7 +882,7 @@ app.post("/api/supervisor/set-pin", requireXHR, requireRole(["supervisor","admin
 /* ══════════════════════════════════════════
    API — SAFETY CONFIRM
 ══════════════════════════════════════════ */
-app.post("/api/confirm-safety", requireXHR, async (req, res) => {
+app.post("/api/confirm-safety", requireXHR, requireDriverAccess, async (req, res) => {
   try {
     const trailer    = String(req.body.trailer    || "").trim();
     const door       = String(req.body.door       || "").trim();

@@ -432,28 +432,30 @@ function guardPage(allowedRoles) {
     const s = getSession(req);
     const role = s?.role || null;
 
-    // No session
+    // No session — allow if page accepts unauthenticated (__driver__), otherwise login
     if (!role) {
-      // Driver page is the only one that doesn't need a login
       if (allowedRoles.includes("__driver__")) return next();
-      // Everyone else gets sent to login with context so they come back to the right page
       return res.redirect(302, `/login?from=${encodeURIComponent(req.path)}`);
     }
 
-    // Admin can go anywhere
+    // Admin goes anywhere, no questions asked
     if (role === "admin") return next();
 
-    // Dispatcher and management can VIEW any page (read-only context)
-    // The API layer enforces what they can actually do
-    if (role === "dispatcher" || role === "management") return next();
+    // Management can go anywhere authenticated pages exist
+    if (role === "management") return next();
 
-    // Dock and other specific roles — must match their allowed pages
-    if (!allowedRoles.includes(role)) {
-      const home = roleHome(role);
-      return res.redirect(302, home || "/");
+    // Dispatcher can view board, dock, and driver pages
+    if (role === "dispatcher") return next();
+
+    // Dock workers locked to /dock and /driver only
+    if (role === "dock") {
+      if (allowedRoles.includes("dock")) return next();
+      return res.redirect(302, "/dock");
     }
 
-    next();
+    // Any other authenticated role — send home
+    const home = roleHome(role);
+    return res.redirect(302, home || "/");
   };
 }
 
@@ -547,10 +549,10 @@ document.getElementById("pin").focus();
 </script></body></html>`);
 });
 
-app.get("/",           guardPage(["dispatcher","admin"]),                    sendIndex);
-app.get("/dock",       guardPage(["dock","admin"]),                          sendIndex);
-app.get("/driver",     guardPage(["__driver__","admin"]),                    sendIndex);
-app.get("/management", guardPage(["management","admin"]),                    sendIndex);
+app.get("/",           guardPage(["dispatcher","management","admin"]),              sendIndex);
+app.get("/dock",       guardPage(["dock","dispatcher","management","admin","__driver__"]), sendIndex);
+app.get("/driver",     guardPage(["__driver__","dock","dispatcher","management","admin"]), sendIndex);
+app.get("/management", guardPage(["management","admin"]),                              sendIndex);
 
 /* ══════════════════════════════════════════
    API — AUTH

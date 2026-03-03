@@ -461,7 +461,11 @@ app.use((req, res, next) => {
   if (req.path === "/sw.js") {
     res.setHeader("Service-Worker-Allowed", "/");
     res.setHeader("Content-Type", "application/javascript");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     return res.sendFile(path.join(__dirname, "sw.js"), err => { if (err && !res.headersSent) res.status(404).end(); });
+  }
+  if (req.path === "/manifest.json") {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   }
   if (!SAFE_FILES.test(req.path)) return next();
   if (/\.(png|ico)$/.test(req.path)) res.setHeader("Cache-Control", "public, max-age=604800, immutable");

@@ -504,10 +504,8 @@ app.get("/login", (req, res) => {
   const expired  = req.query.expired === "1";
   const fromPath = req.query.from || "";
 
-  // Drivers never need login — send straight to /driver
   if (fromPath.includes("/driver")) return res.redirect(302, "/driver");
 
-  // Already authenticated — bounce to their home page
   if (!expired) {
     const s = getSession(req);
     if (s?.role) return res.redirect(302, ROLE_HOME[s.role] || "/");
@@ -516,26 +514,83 @@ app.get("/login", (req, res) => {
   const isDock = fromPath.includes("/dock");
   const isSup  = fromPath.includes("/management");
 
-  const roleOptions = isDock
-    ? `<option value="dock" selected>Dock</option>`
-    : isSup
-    ? `<option value="management" selected>Management</option><option value="admin">&#9889; Admin</option>`
-    : `<option value="dispatcher" selected>Dispatcher</option><option value="dock">Dock</option><option value="management">Management</option><option value="admin">&#9889; Admin</option>`;
+  // ── DOCK: simple friendly login ──────────────────────────────────────────
+  if (isDock) {
+    res.setHeader("content-type", "text/html; charset=utf-8");
+    const expiredHtml = expired ? '<div class="exp-banner">Session expired — sign in again</div>' : "";
+    return res.end(`<!doctype html><html lang="en"><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<title>Wesbell Dock</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#060b10;--card:#0d1620;--border:#1a2535;--amber:#f0a030;--cyan:#20c0d0;--red:#e84848;--t0:#e8eef8;--t1:#8a9db8;--t2:#4a5e78;--mono:"DM Mono",monospace;--sans:"DM Sans",system-ui,sans-serif}
+html,body{height:100%;-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--t0);font-family:var(--sans);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;min-height:100vh;gap:0}
+.logo{font-family:var(--mono);font-size:11px;letter-spacing:.15em;color:var(--t2);text-transform:uppercase;margin-bottom:32px;display:flex;align-items:center;gap:10px}
+.logo-mark{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--amber),#c07020);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#000}
+.heading{font-family:var(--mono);font-size:clamp(28px,8vw,42px);font-weight:700;color:var(--t0);letter-spacing:.04em;text-align:center;margin-bottom:6px}
+.sub{font-family:var(--mono);font-size:12px;color:var(--t2);letter-spacing:.08em;text-align:center;margin-bottom:36px}
+.exp-banner{background:rgba(232,72,72,.1);border:1px solid rgba(232,72,72,.25);color:var(--red);font-family:var(--mono);font-size:12px;letter-spacing:.04em;padding:10px 16px;border-radius:8px;margin-bottom:20px;text-align:center;width:100%;max-width:340px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px 24px;width:100%;max-width:340px}
+.pin-label{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--t2);margin-bottom:10px;display:block}
+.pin-input{width:100%;padding:18px 16px;border-radius:10px;border:2px solid var(--border);background:#080f18;color:var(--t0);font-family:var(--mono);font-size:28px;font-weight:700;letter-spacing:.2em;text-align:center;outline:none;-webkit-appearance:none;transition:border-color .15s;margin-bottom:20px}
+.pin-input:focus{border-color:var(--cyan)}
+.pin-input::placeholder{color:var(--t2);letter-spacing:.1em;font-size:20px}
+.sign-btn{width:100%;padding:18px;border-radius:12px;border:none;background:linear-gradient(135deg,var(--cyan),#18a0ae);color:#000;font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:.08em;cursor:pointer;touch-action:manipulation;transition:opacity .15s,transform .1s;-webkit-tap-highlight-color:transparent}
+.sign-btn:active{opacity:.85;transform:scale(.98)}
+.sign-btn:disabled{opacity:.4;cursor:not-allowed}
+.err-msg{display:none;margin-top:14px;color:var(--red);font-family:var(--mono);font-size:12px;letter-spacing:.04em;text-align:center}
+.err-msg.show{display:block}
+.hint{font-family:var(--mono);font-size:10px;color:var(--t2);text-align:center;margin-top:20px;letter-spacing:.04em}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.logo{animation:fadeUp .3s ease both}
+.heading{animation:fadeUp .3s .06s ease both}
+.sub{animation:fadeUp .3s .1s ease both}
+.card{animation:fadeUp .3s .14s ease both}
+</style></head><body>
+<div class="logo"><div class="logo-mark">W</div>WESBELL DISPATCH</div>
+<div class="heading">DOCK LOGIN</div>
+<div class="sub">ENTER YOUR DOCK PIN</div>
+${expiredHtml}
+<div class="card">
+  <label class="pin-label" for="pin">PIN</label>
+  <input id="pin" class="pin-input" type="password" inputmode="numeric" placeholder="- - - -" autocomplete="current-password" maxlength="12"/>
+  <button class="sign-btn" id="go">SIGN IN</button>
+  <div class="err-msg" id="em"></div>
+</div>
+<div class="hint">Contact management if you need a PIN.</div>
+<script>
+(function(){
+  var btn=document.getElementById("go"),pin=document.getElementById("pin"),em=document.getElementById("em");
+  function doLogin(){
+    var p=pin.value.trim();
+    if(!p){em.textContent="Enter your PIN.";em.classList.add("show");return;}
+    btn.disabled=true;btn.textContent="SIGNING IN...";em.classList.remove("show");
+    fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},body:JSON.stringify({role:"dock",pin:p})})
+    .then(function(r){if(!r.ok){r.text().then(function(t){em.textContent=t;em.classList.add("show");});return;}location.href="/dock";})
+    .catch(function(){em.textContent="Connection error.";em.classList.add("show");})
+    .finally(function(){btn.disabled=false;btn.textContent="SIGN IN";});
+  }
+  btn.addEventListener("click",doLogin);
+  pin.addEventListener("keydown",function(e){if(e.key==="Enter")doLogin();});
+  pin.focus();
+})();
+</script></body></html>`);
+  }
 
-  const contextBadge = isDock
-    ? `<div class="ctx-badge ctx-dock">&#127981; Dock sign-in</div>`
-    : isSup
-    ? `<div class="ctx-badge ctx-mgmt">&#128202; Management sign-in</div>`
-    : "";
+  // ── DISPATCHER / MANAGEMENT / ADMIN: full dashboard login ────────────────
+  const roleOptions = isSup
+    ? '<option value="management" selected>Management</option><option value="admin">&#9889; Admin</option>'
+    : '<option value="dispatcher" selected>Dispatcher</option><option value="management">Management</option><option value="admin">&#9889; Admin</option>';
 
   const expiredBanner = expired
-    ? `<div class="ctx-badge ctx-err">&#9888; Session expired &#8212; please sign in again.</div>`
+    ? '<div class="ctx-badge ctx-err">&#9888; Session expired &#8212; please sign in again.</div>'
     : "";
 
   res.setHeader("content-type", "text/html; charset=utf-8");
-  res.end(`<!doctype html>
-<html lang="en">
-<head>
+  res.end(`<!doctype html><html lang="en"><head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
 <title>Wesbell Dispatch</title>
@@ -545,16 +600,15 @@ app.get("/login", (req, res) => {
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#070a0f;--s0:#0c1018;--s1:#101620;--s2:#151e2a;
-  --b0:#1a2535;--b1:#1f2e42;--b2:#263650;
+  --bg:#070a0f;--s0:#0c1018;--s1:#101620;
+  --b0:#1a2535;--b1:#1f2e42;
   --t0:#e8eef8;--t1:#8a9db8;--t2:#4a5e78;--t3:#293848;
   --amber:#f0a030;--amber-d:#c07020;
   --cyan:#20c0d0;--green:#20d090;--red:#e84848;
-  --mono:'DM Mono',monospace;--sans:'DM Sans',system-ui,sans-serif;--display:'Bebas Neue',sans-serif;
+  --mono:"DM Mono",monospace;--sans:"DM Sans",system-ui,sans-serif;--display:"Bebas Neue",sans-serif;
 }
 html{height:100%;-webkit-font-smoothing:antialiased}
 body{min-height:100vh;background:var(--bg);color:var(--t0);font-family:var(--sans);display:grid;grid-template-columns:1fr 380px;overflow:hidden}
-body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");opacity:.5}
 /* ── Dashboard ── */
 .dashboard{position:relative;z-index:1;display:flex;flex-direction:column;padding:44px 52px 36px;background:linear-gradient(135deg,#070c14 0%,#0a1020 60%,#08111c 100%);border-right:1px solid var(--b0);overflow:hidden}
 .dashboard::after{content:"";position:absolute;top:-80px;left:-80px;width:600px;height:600px;background:radial-gradient(ellipse at center,rgba(240,160,48,.055) 0%,transparent 70%);pointer-events:none}
@@ -572,7 +626,6 @@ body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;bac
 .date-day{font-family:var(--display);font-size:clamp(26px,3.5vw,42px);color:var(--t1);letter-spacing:.04em}
 .date-full{font-family:var(--mono);font-size:clamp(11px,1vw,13px);color:var(--t2);letter-spacing:.06em;text-transform:uppercase}
 .divider{height:1px;background:linear-gradient(90deg,var(--b1) 0%,transparent 100%);margin-bottom:32px;position:relative;z-index:1}
-/* Weather */
 .weather-block{display:flex;align-items:flex-start;gap:20px;margin-bottom:36px;position:relative;z-index:1;min-height:60px}
 .weather-icon{font-size:48px;line-height:1;flex-shrink:0}
 .weather-temp{font-family:var(--display);font-size:clamp(36px,4.5vw,56px);color:var(--t0);line-height:1}
@@ -582,7 +635,6 @@ body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;bac
 .wm{font-family:var(--mono);font-size:11px;color:var(--t2)}
 .wm span{color:var(--t1)}
 .weather-msg{font-family:var(--mono);font-size:12px;color:var(--t3);letter-spacing:.04em;padding:8px 0}
-/* Calendar */
 .cal-wrap{flex:1;position:relative;z-index:1}
 .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .cal-month{font-family:var(--display);font-size:clamp(20px,2.5vw,30px);color:var(--t1);letter-spacing:.06em}
@@ -592,22 +644,19 @@ body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;bac
 .cal-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:clamp(10px,1.1vw,12px);color:var(--t2);border-radius:5px}
 .cal-cell.other{color:var(--t3)}
 .cal-cell.today{background:var(--amber);color:#000;font-weight:700;box-shadow:0 2px 10px rgba(240,160,48,.35)}
-/* Footer */
 .db-footer{position:relative;z-index:1;display:flex;align-items:center;gap:8px;margin-top:20px;padding-top:14px;border-top:1px solid var(--b0)}
 .live-dot{width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:beat 2.4s ease-in-out infinite}
 @keyframes beat{0%,100%{box-shadow:0 0 0 0 rgba(32,208,144,.6)}50%{box-shadow:0 0 0 5px rgba(32,208,144,0)}}
 .footer-txt{font-family:var(--mono);font-size:10px;color:var(--t2);letter-spacing:.06em}
 /* ── Login Panel ── */
-.login-panel{position:relative;z-index:1;display:flex;flex-direction:column;justify-content:center;padding:48px 40px;background:var(--s0);overflow-y:auto}
-.lp-brand{display:flex;align-items:center;gap:10px;margin-bottom:40px}
+.login-panel{position:relative;z-index:1;display:flex;flex-direction:column;justify-content:flex-start;padding:40px 40px 36px;padding-top:max(40px,env(safe-area-inset-top,40px));background:var(--s0);overflow-y:auto}
+.lp-brand{display:flex;align-items:center;gap:10px;margin-bottom:32px}
 .lp-mark{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,var(--amber),var(--amber-d));display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px;font-weight:700;color:#000;box-shadow:0 3px 12px rgba(240,120,0,.25);flex-shrink:0}
 .lp-name{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.1em;color:var(--t1)}
 .lp-sub2{font-size:9px;color:var(--t2);letter-spacing:.08em;margin-top:1px}
 .lp-heading{font-family:var(--display);font-size:36px;color:var(--t0);letter-spacing:.04em;margin-bottom:4px}
-.lp-tagline{font-family:var(--mono);font-size:11px;color:var(--t2);letter-spacing:.06em;margin-bottom:32px}
+.lp-tagline{font-family:var(--mono);font-size:11px;color:var(--t2);letter-spacing:.06em;margin-bottom:28px}
 .ctx-badge{padding:8px 12px;border-radius:6px;font-family:var(--mono);font-size:11px;letter-spacing:.04em;margin-bottom:14px}
-.ctx-dock{background:rgba(32,192,208,.08);border:1px solid rgba(32,192,208,.2);color:var(--cyan)}
-.ctx-mgmt{background:rgba(240,160,48,.08);border:1px solid rgba(240,160,48,.2);color:var(--amber)}
 .ctx-err{background:rgba(232,72,72,.08);border:1px solid rgba(232,72,72,.2);color:var(--red)}
 .fl{display:block;font-family:var(--mono);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);margin:0 0 7px}
 .fi{width:100%;padding:14px 16px;border-radius:8px;border:1px solid var(--b1);background:var(--s1);color:var(--t0);font-family:var(--mono);font-size:16px;outline:none;-webkit-appearance:none;transition:border-color .15s,box-shadow .15s;margin-bottom:16px}
@@ -624,64 +673,40 @@ body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;bac
 .lp-hint{font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:.04em;text-align:center;margin-top:20px;line-height:1.6}
 /* ── Mobile ── */
 @media(max-width:768px){
-  body{grid-template-columns:1fr;grid-template-rows:auto auto;overflow-y:auto;height:auto;min-height:100vh}
-  .dashboard{padding:24px 20px 20px;border-right:none;border-bottom:1px solid var(--b0)}
-  .db-brand{margin-bottom:20px}
-  .clock-time{font-size:clamp(54px,15vw,80px)}
-  .date-row{margin-bottom:18px}
-  .divider{margin-bottom:16px}
-  .weather-block{margin-bottom:14px}
+  body{grid-template-columns:1fr;grid-template-rows:auto 1fr;overflow-y:auto;height:auto;min-height:100vh}
+  .dashboard{padding:20px 20px 16px;border-right:none;border-bottom:1px solid var(--b0);flex-direction:row;flex-wrap:wrap;align-items:center;gap:12px 20px}
+  .db-brand{margin-bottom:0;flex:1 0 auto}
+  .clock-wrap{order:-1;flex:0 0 100%;margin-bottom:0}
+  .clock-time{font-size:clamp(48px,14vw,72px)}
+  .clock-secs{display:none}
+  .date-row{flex:0 0 100%;margin-bottom:0}
+  .divider{display:none}
+  .weather-block{flex:1 1 50%;min-height:0;margin-bottom:0}
+  .weather-icon{font-size:28px}
+  .weather-temp{font-size:clamp(22px,6vw,32px)}
+  .weather-unit{font-size:11px}
+  .weather-desc{font-size:9px}
+  .weather-meta{gap:8px}
   .cal-wrap{display:none}
-  .db-footer{margin-top:4px}
-  .login-panel{padding:28px 20px 36px;min-height:auto}
-  .lp-brand{margin-bottom:22px}
-  .lp-heading{font-size:26px}
-  .lp-tagline{margin-bottom:22px}
+  .db-footer{flex:0 0 100%;margin-top:8px;padding-top:8px}
+  .login-panel{padding:28px 20px max(28px,env(safe-area-inset-bottom,28px));justify-content:flex-start}
+  .lp-brand{margin-bottom:20px}
 }
 @media(max-width:480px){
-  .dashboard{padding:18px 16px 16px}
-  .db-brand{margin-bottom:16px}
-  .clock-time{font-size:clamp(46px,16vw,70px)}
-  .date-row{margin-bottom:14px;gap:8px}
-  .weather-block{margin-bottom:12px}
-  .weather-icon{font-size:34px}
-  .weather-temp{font-size:clamp(28px,8vw,42px)}
-  .divider{margin-bottom:12px}
-  .db-footer{display:none}
-  .login-panel{padding:20px 16px 30px}
+  .dashboard{padding:14px 16px 12px;gap:8px 16px}
+  .clock-time{font-size:clamp(40px,16vw,60px)}
+  .weather-block{flex:0 0 100%}
+  .login-panel{padding:20px 16px max(24px,env(safe-area-inset-bottom,24px))}
   .lp-brand{margin-bottom:16px}
-  .lp-heading{font-size:22px}
-  .lp-tagline{font-size:10px;margin-bottom:18px}
+  .lp-heading{font-size:28px}
+  .lp-tagline{font-size:10px;margin-bottom:20px}
   .fi{font-size:16px!important;padding:13px 14px}
   .sign-btn{padding:14px;font-size:13px}
 }
-@media(max-width:360px){
-  .dashboard{padding:14px}
-  .clock-time{font-size:clamp(40px,17vw,60px)}
-  .divider{display:none}
-  .login-panel{padding:16px 14px 26px}
-}
-@supports(padding:env(safe-area-inset-top)){
-  .dashboard{padding-top:max(44px,calc(18px + env(safe-area-inset-top)))}
-  @media(max-width:768px){
-    .dashboard{padding-top:max(24px,calc(12px + env(safe-area-inset-top)))}
-    .login-panel{padding-bottom:max(36px,calc(14px + env(safe-area-inset-bottom)))}
-  }
-}
-/* ── Animations ── */
-@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-.db-brand{animation:fadeUp .35s ease both}
-.clock-wrap{animation:fadeUp .35s .07s ease both}
-.date-row{animation:fadeUp .35s .12s ease both}
-.divider{animation:fadeUp .3s .16s ease both}
-.weather-block{animation:fadeUp .35s .2s ease both}
-.cal-wrap{animation:fadeUp .35s .25s ease both}
-.db-footer{animation:fadeUp .3s .3s ease both}
-.login-panel{animation:fadeUp .35s .08s ease both}
-</style>
-</head>
-<body>
-
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.db-brand,.clock-wrap,.date-row,.weather-block,.cal-wrap,.db-footer{animation:fadeUp .3s ease both}
+.login-panel{animation:fadeUp .3s .06s ease both}
+</style></head><body>
 <div class="dashboard">
   <div class="db-brand">
     <div class="db-mark">W</div>
@@ -697,12 +722,8 @@ body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;bac
   <div class="divider"></div>
   <div class="weather-block" id="wb"><div class="weather-msg">Fetching weather&hellip;</div></div>
   <div class="cal-wrap" id="cal"></div>
-  <div class="db-footer">
-    <div class="live-dot"></div>
-    <div class="footer-txt" id="ft">WESBELL DISPATCH</div>
-  </div>
+  <div class="db-footer"><div class="live-dot"></div><div class="footer-txt" id="ft">WESBELL DISPATCH</div></div>
 </div>
-
 <div class="login-panel">
   <div class="lp-brand">
     <div class="lp-mark">W</div>
@@ -710,95 +731,53 @@ body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;bac
   </div>
   <div class="lp-heading">SIGN IN</div>
   <div class="lp-tagline">ENTER YOUR ROLE &amp; PIN TO CONTINUE</div>
-  ${contextBadge}
   ${expiredBanner}
   <label class="fl" for="role">Role</label>
   <select id="role" class="fi">${roleOptions}</select>
   <label class="fl" for="pin">PIN</label>
   <input id="pin" class="fi" type="password" inputmode="numeric" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="current-password"/>
   <div class="err-msg" id="em"></div>
-  <button class="sign-btn" id="go"><span>SIGN IN</span><span class="arrow">&rarr;</span></button>
+  <button class="sign-btn" id="go"><span id="btn-lbl">SIGN IN</span><span class="arrow">&rarr;</span></button>
   <div class="lp-hint">Contact management if you need a PIN.</div>
 </div>
-
 <script>
 (function(){
-  // Clock
-  function tick(){
-    var n=new Date(),h=n.getHours(),m=n.getMinutes(),s=n.getSeconds(),ap=h>=12?"PM":"AM";
-    h=h%12||12;
-    document.getElementById("ch").textContent=String(h).padStart(2,"0");
-    document.getElementById("cm").textContent=String(m).padStart(2,"0");
-    document.getElementById("cs").textContent=String(s).padStart(2,"0");
-    document.getElementById("ca").textContent=ap;
-  }
-  tick(); setInterval(tick,1000);
-
-  // Date
-  var now=new Date();
   var DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
   var MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  var now=new Date();
+  function tick(){var n=new Date(),h=n.getHours(),m=n.getMinutes(),s=n.getSeconds(),ap=h>=12?"PM":"AM";h=h%12||12;document.getElementById("ch").textContent=String(h).padStart(2,"0");document.getElementById("cm").textContent=String(m).padStart(2,"0");document.getElementById("cs").textContent=String(s).padStart(2,"0");document.getElementById("ca").textContent=ap;}
+  tick();setInterval(tick,1000);
   document.getElementById("dd").textContent=DAYS[now.getDay()];
   document.getElementById("df").textContent=MONTHS[now.getMonth()]+" "+now.getDate()+", "+now.getFullYear();
   document.getElementById("ft").textContent="WESBELL DISPATCH \u00b7 "+DAYS[now.getDay()].toUpperCase();
-
-  // Calendar
-  var y=now.getFullYear(),mo=now.getMonth();
-  var first=new Date(y,mo,1).getDay(),dim=new Date(y,mo+1,0).getDate(),dipm=new Date(y,mo,0).getDate();
-  var h='<div class="cal-head"><span class="cal-month">'+MONTHS[mo].toUpperCase()+'</span><span class="cal-year">'+y+'</span></div>';
-  h+='<div class="cal-grid">';
-  ["SU","MO","TU","WE","TH","FR","SA"].forEach(function(d){h+='<div class="cal-dow">'+d+'</div>';});
-  for(var i=first-1;i>=0;i--) h+='<div class="cal-cell other">'+(dipm-i)+'</div>';
-  for(var d=1;d<=dim;d++) h+='<div class="cal-cell'+(d===now.getDate()?" today":"")+'">'+d+'</div>';
-  var filled=first+dim,rem=filled%7===0?0:7-(filled%7);
-  for(var d=1;d<=rem;d++) h+='<div class="cal-cell other">'+d+'</div>';
-  h+='</div>';
-  document.getElementById("cal").innerHTML=h;
-
-  // Weather via Open-Meteo (no key needed)
-  var WMO={0:"☀️",1:"🌤",2:"⛅",3:"☁️",45:"🌫",48:"🌫",51:"🌦",53:"🌦",55:"🌧",61:"🌧",63:"🌧",65:"🌧",71:"🌨",73:"❄️",75:"❄️",80:"🌦",81:"🌦",82:"⛈",95:"⛈",96:"⛈",99:"⛈"};
+  (function(){var y=now.getFullYear(),mo=now.getMonth(),first=new Date(y,mo,1).getDay(),dim=new Date(y,mo+1,0).getDate(),dipm=new Date(y,mo,0).getDate(),c="",i,d;
+  c+='<div class="cal-head"><span class="cal-month">'+MONTHS[mo].toUpperCase()+'</span><span class="cal-year">'+y+'</span></div><div class="cal-grid">';
+  ["SU","MO","TU","WE","TH","FR","SA"].forEach(function(x){c+='<div class="cal-dow">'+x+'</div>';});
+  for(i=first-1;i>=0;i--)c+='<div class="cal-cell other">'+(dipm-i)+'</div>';
+  for(d=1;d<=dim;d++)c+='<div class="cal-cell'+(d===now.getDate()?" today":"")+'" >'+d+'</div>';
+  var rem=(first+dim)%7===0?0:7-(first+dim)%7;for(d=1;d<=rem;d++)c+='<div class="cal-cell other">'+d+'</div>';
+  c+='</div>';document.getElementById("cal").innerHTML=c;})();
+  var WMO={0:"\u2600\ufe0f",1:"\ud83c\udf24",2:"\u26c5",3:"\u2601\ufe0f",45:"\ud83c\udf2b",48:"\ud83c\udf2b",51:"\ud83c\udf26",53:"\ud83c\udf26",55:"\ud83c\udf27",61:"\ud83c\udf27",63:"\ud83c\udf27",65:"\ud83c\udf27",71:"\ud83c\udf28",73:"\u2744\ufe0f",75:"\u2744\ufe0f",80:"\ud83c\udf26",81:"\ud83c\udf26",82:"\u26c8",95:"\u26c8",96:"\u26c8",99:"\u26c8"};
   var DESC={0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",45:"Fog",48:"Icy fog",51:"Light drizzle",53:"Drizzle",55:"Heavy drizzle",61:"Light rain",63:"Rain",65:"Heavy rain",71:"Light snow",73:"Snow",75:"Heavy snow",80:"Light showers",81:"Showers",82:"Violent showers",95:"Thunderstorm",96:"Thunderstorm w/ hail",99:"Heavy thunderstorm"};
-  if(navigator.geolocation){
-    navigator.geolocation.getCurrentPosition(function(pos){
-      var lat=pos.coords.latitude,lon=pos.coords.longitude;
-      fetch("https://api.open-meteo.com/v1/forecast?latitude="+lat+"&longitude="+lon+"&current=temperature_2m,weathercode,windspeed_10m,relative_humidity_2m&temperature_unit=celsius&windspeed_unit=kmh&timezone=auto")
-      .then(function(r){return r.json();})
-      .then(function(d){
-        var c=d.current,code=c.weathercode,icon=WMO[code]||"\ud83c\udf21",desc=DESC[code]||"",temp=Math.round(c.temperature_2m),wind=Math.round(c.windspeed_10m),hum=Math.round(c.relative_humidity_2m);
-        document.getElementById("wb").innerHTML=
-          '<div class="weather-icon">'+icon+'</div>'+
-          '<div><div><span class="weather-temp">'+temp+'</span><span class="weather-unit">\u00b0C</span></div>'+
-          '<div class="weather-desc">'+desc+'</div>'+
-          '<div class="weather-meta"><div class="wm">\ud83d\udca8 <span>'+wind+' km/h</span></div><div class="wm">\ud83d\udca7 <span>'+hum+'%</span></div></div></div>';
-      }).catch(function(){document.getElementById("wb").innerHTML='<div class="weather-msg">Weather unavailable</div>';});
-    },function(){document.getElementById("wb").innerHTML='<div class="weather-msg">Enable location for weather</div>';},{timeout:8000});
-  } else {
-    document.getElementById("wb").innerHTML='<div class="weather-msg">Weather unavailable</div>';
-  }
-
-  // Login
-  var ROLE_HOME={dispatcher:"/",admin:"/",dock:"/dock",management:"/management"};
-  var btn=document.getElementById("go"),em=document.getElementById("em");
+  if(navigator.geolocation){navigator.geolocation.getCurrentPosition(function(pos){var lat=pos.coords.latitude,lon=pos.coords.longitude;fetch("https://api.open-meteo.com/v1/forecast?latitude="+lat+"&longitude="+lon+"&current=temperature_2m,weathercode,windspeed_10m,relative_humidity_2m&temperature_unit=celsius&windspeed_unit=kmh&timezone=auto").then(function(r){return r.json();}).then(function(data){var c=data.current,code=c.weathercode,icon=WMO[code]||"\ud83c\udf21",desc=DESC[code]||"",temp=Math.round(c.temperature_2m),wind=Math.round(c.windspeed_10m),hum=Math.round(c.relative_humidity_2m);document.getElementById("wb").innerHTML='<div class="weather-icon">'+icon+'</div><div><div><span class="weather-temp">'+temp+'</span><span class="weather-unit">\u00b0C</span></div><div class="weather-desc">'+desc+'</div><div class="weather-meta"><div class="wm">\ud83d\udca8 <span>'+wind+' km/h</span></div><div class="wm">\ud83d\udca7 <span>'+hum+'%</span></div></div></div>';}).catch(function(){document.getElementById("wb").innerHTML='<div class="weather-msg">Weather unavailable</div>';});},function(){document.getElementById("wb").innerHTML='<div class="weather-msg">Enable location for weather</div>';},{timeout:8000});}else{document.getElementById("wb").innerHTML='<div class="weather-msg">Weather unavailable</div>';}
+  var ROLE_HOME={dispatcher:"/",admin:"/",management:"/management"};
+  var btn=document.getElementById("go"),lbl=document.getElementById("btn-lbl"),em=document.getElementById("em");
   function doLogin(){
     var role=document.getElementById("role").value,pin=document.getElementById("pin").value;
     if(!pin){em.textContent="Enter your PIN.";em.classList.add("show");return;}
-    var lbl=btn.querySelector("span");
-    btn.disabled=true;if(lbl)lbl.textContent="SIGNING IN...";em.classList.remove("show");
+    btn.disabled=true;lbl.textContent="SIGNING IN...";em.classList.remove("show");
     fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},body:JSON.stringify({role:role,pin:pin})})
-    .then(function(r){
-      if(!r.ok){r.text().then(function(t){em.textContent=t;em.classList.add("show");});return;}
-      location.href=ROLE_HOME[role]||"/";
-    }).catch(function(){em.textContent="Connection error. Try again.";em.classList.add("show");})
-    .finally(function(){btn.disabled=false;if(lbl)lbl.textContent="SIGN IN";});
+    .then(function(r){if(!r.ok){r.text().then(function(t){em.textContent=t;em.classList.add("show");});return;}location.href=ROLE_HOME[role]||"/";})
+    .catch(function(){em.textContent="Connection error. Try again.";em.classList.add("show");})
+    .finally(function(){btn.disabled=false;lbl.textContent="SIGN IN";});
   }
   btn.addEventListener("click",doLogin);
   document.getElementById("pin").addEventListener("keydown",function(e){if(e.key==="Enter")doLogin();});
   document.getElementById("pin").focus();
 })();
-</script>
-</body>
-</html>`);
+</script></body></html>`);
 });
+
 
 app.get("/",           guardPage(["dispatcher","management","admin"]),              sendIndex);
 app.get("/dock",       guardPage(["dock","dispatcher","management","admin","__driver__"]), sendIndex);
@@ -821,11 +800,44 @@ app.get("/api/whoami", (req, res) => {
 /* ══════════════════════════════════════════
    RATE LIMITING — LOGIN
 ══════════════════════════════════════════ */
-// Rate limiting removed
+const loginAttempts = new Map(); // ip → { count, resetAt }
+const LOGIN_MAX     = 5;         // attempts before lockout
+const LOGIN_WINDOW  = 60_000;    // 1 minute window
+const LOGIN_LOCKOUT = 5 * 60_000;// 5 minute lockout after exceeding max
+
+// Prune stale entries every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, v] of loginAttempts.entries()) if (v.resetAt < now) loginAttempts.delete(ip);
+}, 10 * 60_000).unref();
+
+function checkLoginRate(ip) {
+  const now = Date.now();
+  let entry = loginAttempts.get(ip);
+  if (!entry || entry.resetAt < now) {
+    entry = { count: 0, resetAt: now + LOGIN_WINDOW };
+    loginAttempts.set(ip, entry);
+  }
+  entry.count++;
+  if (entry.count > LOGIN_MAX) {
+    // Extend lockout on each additional attempt
+    entry.resetAt = now + LOGIN_LOCKOUT;
+    return { blocked: true, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
+  }
+  return { blocked: false, remaining: LOGIN_MAX - entry.count };
+}
+
+function resetLoginRate(ip) {
+  loginAttempts.delete(ip);
+}
 
 app.post("/api/login", requireXHR, async (req, res) => {
   try {
     const ip = ipOf(req);
+    const rate = checkLoginRate(ip);
+    if (rate.blocked) {
+      return res.status(429).send(`Too many attempts. Try again in ${rate.retryAfter}s.`);
+    }
     const role = String(req.body.role || "").toLowerCase();
     const pin  = String(req.body.pin  || "");
     if (!["dispatcher","dock","management","admin"].includes(role)) return res.status(400).send("Invalid role");
@@ -833,7 +845,7 @@ app.post("/api/login", requireXHR, async (req, res) => {
     const ok = await verifyPin(role, pin);
     await audit(req, role, ok ? "login_success" : "login_failed", "auth", role, {});
     if (!ok) return res.status(401).send("Invalid PIN");
-
+    resetLoginRate(ip); // Clear counter on successful login
     const existing = getSession(req);
     if (existing?.sid) sessions.delete(existing.sid);
     const sid = newSession(role);

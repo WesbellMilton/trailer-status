@@ -636,7 +636,7 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
   .field-row{flex-direction:column !important;gap:8px}
   .panel-body{padding:12px !important}
   .panel-hd{padding:10px 12px}
-  input,select,textarea{padding:10px 12px;font-size:15px}
+  input,select,textarea{padding:10px 12px;font-size:16px}
 
   /* Dock plates */
   .plate-grid{grid-template-columns:repeat(3,1fr) !important;gap:4px;padding:8px}
@@ -737,7 +737,8 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
 ═══════════════════════════════════════════ */
 button,.btn,.nav-item,.who-btn,.flow-btn,.door-btn,.drop-type-btn,
 .dc-action-btn,.dock-filter-btn,.driver-submit,.checkline,
-.shunt-door-btn,.dm-cell,.p-btn,.tb-btn,.acc-head,.bn-item{
+.shunt-door-btn,.dm-cell,.p-btn,.tb-btn,.acc-head,.bn-item,
+.issue-toggle-label,.issue-photo-zone,.ipz-remove{
   touch-action:manipulation;
 }
 
@@ -855,6 +856,9 @@ button,.btn,.nav-item,.who-btn,.flow-btn,.door-btn,.drop-type-btn,
   .bottom-nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))}
   /* Compensate for taller topbar */
   .dock-toolbar{top:calc(52px + env(safe-area-inset-top))}
+  /* Lightbox close button stays below status bar on notch phones */
+  .issue-lightbox{padding-top:max(16px, env(safe-area-inset-top))}
+  .issue-lightbox-close{top:calc(16px + env(safe-area-inset-top))}
 }
 
 /* ═══════════════════════════════════════════
@@ -1167,6 +1171,76 @@ button,.btn,.nav-item,.who-btn,.flow-btn,.door-btn,.drop-type-btn,
 .plate:nth-child(5)  { animation-delay:.09s }
 .plate:nth-child(6)  { animation-delay:.11s }
 .plate:nth-child(n+7){ animation-delay:.13s }
+
+/* ═══════════════════════════════════════════
+   ISSUE REPORT — safety screen
+═══════════════════════════════════════════ */
+
+/* Toggle row */
+.issue-toggle-wrap{margin-top:10px;border-radius:var(--r);border:1px solid var(--b1);overflow:hidden;transition:border-color .2s}
+.issue-toggle-wrap:has(input:checked){border-color:rgba(232,72,72,.4);background:rgba(232,72,72,.04)}
+.issue-toggle-label{display:flex;align-items:center;gap:14px;padding:14px 16px;cursor:pointer;min-height:60px;-webkit-tap-highlight-color:transparent}
+.issue-toggle-label input[type="checkbox"]{width:22px;height:22px;accent-color:var(--red);cursor:pointer;flex-shrink:0}
+.itl-body{flex:1}
+.itl-main{font-weight:600;font-size:14px;color:var(--t1)}
+.itl-sub{font-size:11px;color:var(--t2);margin-top:2px}
+.issue-toggle-wrap:has(input:checked) .itl-main{color:var(--red)}
+
+/* Expandable body */
+.issue-report-body{padding:0 14px 14px;border-top:1px solid var(--b0);background:rgba(232,72,72,.03);animation:issueBodyIn .2s ease both}
+@keyframes issueBodyIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+/* Photo zone */
+.issue-photo-zone{position:relative;border-radius:var(--r);border:2px dashed var(--b2);background:var(--s0);min-height:130px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;transition:border-color .2s;margin-top:12px;-webkit-tap-highlight-color:transparent}
+.issue-photo-zone:hover{border-color:var(--red)}
+.issue-photo-zone:active{opacity:.85}
+.ipz-empty{display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;padding:20px}
+.ipz-icon{font-size:28px;opacity:.6}
+.ipz-label{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--t1);letter-spacing:.04em}
+.ipz-sub{font-size:10px;color:var(--t3);letter-spacing:.03em}
+.ipz-preview{width:100%;height:100%;object-fit:cover;position:absolute;inset:0;border-radius:calc(var(--r) - 2px)}
+.ipz-remove{position:absolute;top:8px;right:8px;z-index:2;width:28px;height:28px;border-radius:50%;border:none;background:rgba(10,13,18,.75);color:var(--t0);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);-webkit-tap-highlight-color:transparent}
+.ipz-remove:hover{background:var(--red-bg);color:var(--red)}
+.issue-photo-zone.has-photo{border-style:solid;border-color:rgba(232,72,72,.4);min-height:200px}
+
+/* Issue textarea */
+.issue-report-body textarea{margin-top:0;border-radius:var(--r);min-height:80px}
+
+/* ═══════════════════════════════════════════
+   ISSUE REPORTS — management panel
+═══════════════════════════════════════════ */
+.issue-card{display:flex;gap:14px;padding:14px 16px;border-bottom:1px solid var(--b0);align-items:flex-start;transition:background .15s}
+.issue-card:last-child{border-bottom:none}
+.issue-card:hover{background:rgba(232,72,72,.03)}
+.issue-thumb-wrap{flex-shrink:0;width:72px;height:72px;border-radius:var(--r);overflow:hidden;border:1px solid var(--b1);background:var(--s2);cursor:pointer;position:relative}
+.issue-thumb-wrap img{width:100%;height:100%;object-fit:cover;transition:transform .2s}
+.issue-thumb-wrap:hover img{transform:scale(1.06)}
+.issue-thumb-empty{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--t3)}
+.issue-body{flex:1;min-width:0}
+.issue-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px}
+.issue-trailer{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--t0)}
+.issue-door{font-family:var(--mono);font-size:12px;color:var(--amber)}
+.issue-time{font-family:var(--mono);font-size:10px;color:var(--t3)}
+.issue-note{font-size:12px;color:var(--t1);line-height:1.55}
+.issue-no-note{font-size:11px;color:var(--t3);font-style:italic}
+.issue-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.05em;background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd);text-transform:uppercase}
+
+/* Lightbox */
+.issue-lightbox{position:fixed;inset:0;z-index:800;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;padding:16px;cursor:pointer}
+.issue-lightbox.open{display:flex;animation:overlayIn .18s ease both}
+.issue-lightbox img{max-width:100%;max-height:90vh;border-radius:var(--r2);box-shadow:var(--sh-lg);cursor:default;animation:modalIn .22s var(--ease-spring) both}
+.issue-lightbox-close{position:absolute;top:16px;right:16px;width:36px;height:36px;border-radius:50%;border:none;background:rgba(255,255,255,.1);color:var(--t0);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px)}
+.issue-lightbox-close:hover{background:rgba(255,255,255,.2)}
+
+/* ── Issue report — mobile ── */
+@media(max-width:480px){
+  .issue-toggle-label{min-height:64px;padding:14px}
+  .issue-toggle-label input[type="checkbox"]{width:26px;height:26px}
+  .itl-main{font-size:14px}
+  .issue-photo-zone{min-height:160px}
+  .issue-photo-zone.has-photo{min-height:220px}
+  .issue-lightbox-close{width:44px;height:44px;font-size:20px}
+}
 
 /* ── Reduced motion ── */
 @media(prefers-reduced-motion:reduce) {

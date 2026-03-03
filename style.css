@@ -187,6 +187,7 @@ textarea{min-height:60px;resize:vertical}
 .plate.p-ok{border-color:var(--green-bd);background:var(--green-bg)}
 .plate.p-service{border-color:rgba(240,160,48,.4);background:rgba(240,160,48,.08)}
 .plate.p-out-of-order{border-color:var(--red-bd);background:var(--red-bg)}
+.plate.p-out-of-order{border-color:var(--red-bd);background:var(--red-bg)}
 .plate .p-door{font-family:var(--mono);font-size:8px;color:var(--t3);letter-spacing:.04em}
 .plate .p-note{font-size:9px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .plate .p-btns{display:flex;gap:2px;margin-top:2px}
@@ -214,7 +215,7 @@ textarea{min-height:60px;resize:vertical}
 /* ═══════════════════════════════════════════
    MODAL
 ═══════════════════════════════════════════ */
-.modal-ov{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:16px}
+.modal-ov{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:16px;overscroll-behavior:contain}
 .modal-ov.hidden{display:none}
 .modal{background:var(--s2);border:1px solid var(--b2);border-radius:var(--r2);padding:22px;max-width:380px;width:100%;box-shadow:var(--sh-lg)}
 .modal h4{font-size:14px;font-weight:700;margin-bottom:6px;color:var(--t0);font-family:var(--mono);letter-spacing:.04em}
@@ -617,7 +618,7 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
   .qs-secondary{opacity:.7}
 
   /* Filters */
-  .filter-bar{flex-direction:column !important;gap:8px;padding:10px}
+  .filter-bar{flex-direction:column !important;gap:8px;padding:10px;position:sticky;top:48px;z-index:9;background:var(--s0);border-bottom:1px solid var(--b0)}
   .filter-bar .field{min-width:0 !important;flex:1 1 100%}
   .filter-bar .tight{margin-top:0 !important}
   .filter-bar input,.filter-bar select{padding:10px 12px;font-size:14px}
@@ -634,7 +635,7 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
 
   /* Dock map modal — sheet-style on mobile */
   .modal-ov{align-items:flex-end;padding:0}
-  .modal{max-width:100%;width:100%;border-radius:var(--r2) var(--r2) 0 0;padding:20px 16px 32px;max-height:85vh;overflow-y:auto}
+  .modal{max-width:100%;width:100%;border-radius:var(--r2) var(--r2) 0 0;padding:20px 16px 32px;max-height:85vh;overflow-y:auto;overscroll-behavior:contain}
   #dmStatusBtns .btn{min-height:52px;font-size:15px}
   .modal .m-btns{justify-content:stretch}
   .modal .m-btns .btn{flex:1;min-height:44px}
@@ -700,7 +701,7 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
   .shunt-door-btn{padding:10px 12px;font-size:13px;min-height:44px}
 
   /* Toast — full width at bottom */
-  .toast{right:8px;left:8px;width:auto;bottom:12px}
+  .toast{right:8px;left:8px;width:auto;bottom:calc(64px + 8px)}
 
   /* Dock toolbar — prevent staff button from getting squashed */
   .dock-toolbar{flex-wrap:wrap;gap:6px}
@@ -709,8 +710,8 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
   .dock-filter-wrap{order:3;flex:0 0 100%;justify-content:center;margin:0}
 
   /* Staff login modal — sheet from bottom */
-  #staffLoginOv{align-items:flex-end;padding:0}
-  #staffLoginOv .modal{max-width:100%;width:100%;border-radius:var(--r2) var(--r2) 0 0;padding:20px 16px 36px;max-height:90vh;overflow-y:auto}
+  #staffLoginOv,#dockIssueOv{align-items:flex-end;padding:0}
+  #staffLoginOv .modal,#dockIssueOv .modal{max-width:100%;width:100%;border-radius:var(--r2) var(--r2) 0 0;padding:20px 16px 36px;max-height:90vh;overflow-y:auto;overscroll-behavior:contain}
 
   /* PIN rows — stack vertically on mobile */
   .pin-row{grid-template-columns:1fr;gap:6px}

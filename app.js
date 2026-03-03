@@ -627,7 +627,7 @@
       </div>`).join("");
   }
 
-  const ALL_SCREENS=["who-screen","flow-screen","shunt-screen","drop-screen","xdock-pickup-screen","xdock-offload-screen","safety-screen","done-screen"];
+  const ALL_SCREENS=["who-screen","flow-screen","omw-screen","omw-confirm-screen","shunt-screen","drop-screen","xdock-pickup-screen","xdock-offload-screen","safety-screen","done-screen"];
   let _currentScreen="who-screen";
   const _screenExitTimers={};
 
@@ -674,9 +674,11 @@
     try{ sessionStorage.setItem("wb_whoType",whoType); }catch{}
     const dropBtn=el("flowBtnDrop");
     const shuntBtn=document.querySelector("[data-flow='shunt']");
+    const omwBtn=el("flowBtnOmw");
     const isOutside=whoType==="outside";
     if(dropBtn) dropBtn.style.display=isOutside?"none":"";
     if(shuntBtn) shuntBtn.style.display=isOutside?"none":"";
+    if(omwBtn) omwBtn.style.display=isOutside?"none":"";  // Only Wesbell drivers can mark OMW
     const sub=el("flowScreenSub");
     if(sub) sub.textContent=isOutside?"Select your cross dock activity:":"What are you here to do?";
     showScreen("flow-screen");
@@ -704,6 +706,45 @@
     else if(flowType==="drop"){ resetDropScreen(); showScreen("drop-screen"); setTimeout(()=>el("v_trailer")?.focus(),100); }
     else if(flowType==="xdock_pickup"){ resetPickupScreen(); showScreen("xdock-pickup-screen"); setTimeout(()=>el("xp_trailer")?.focus(),100); }
     else if(flowType==="xdock_offload"){ resetOffloadScreen(); showScreen("xdock-offload-screen"); setTimeout(()=>el("xo_trailer")?.focus(),100); }
+    else if(flowType==="omw"){ resetOmwScreen(); showScreen("omw-screen"); setTimeout(()=>el("omw_trailer")?.focus(),100); }
+  }
+
+  /* ── ON MY WAY ── */
+  function resetOmwScreen(){
+    if(el("omw_trailer")) el("omw_trailer").value="";
+    if(el("omw_eta")) el("omw_eta").value="";
+    if(el("omw_err")) el("omw_err").style.display="none";
+    updateOmwSubmitState();
+  }
+  function updateOmwSubmitState(){
+    const btn=el("btnOmwSubmit");
+    if(!btn)return;
+    const trailer=(el("omw_trailer")?.value||"").trim();
+    btn.disabled=!trailer;
+  }
+  async function submitOmw(){
+    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
+    const trailer=(el("omw_trailer")?.value||"").trim().toUpperCase();
+    const eta=parseInt(el("omw_eta")?.value)||null;
+    const errEl=el("omw_err");
+    if(!trailer){ if(errEl){errEl.textContent="Enter your trailer number.";errEl.style.display="";} return; }
+    if(errEl) errEl.style.display="none";
+    const btn=el("btnOmwSubmit");
+    btn.disabled=true; btn.textContent="Notifying…";
+    try{
+      const res=await apiJson("/api/driver/omw",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,eta})});
+      const door=res?.door||"";
+      el("omwDoorNum").textContent=door||"TBD";
+      el("omwConfirmTitle").textContent=res?.alreadyActive?`Already on board — Door ${door}`:`Door ${door} assigned!`;
+      el("omwConfirmSub").textContent=res?.alreadyActive
+        ?`Trailer ${trailer} is already ${res.status}. Your door is ${door}.`
+        :`Dispatch has been notified. Head to door ${door}.`;
+      el("omwEtaDisplay").textContent=eta?`ETA ~${eta} minutes`:"";
+      showScreen("omw-confirm-screen");
+    }catch(e){
+      if(errEl){errEl.textContent=e.message||"Submission failed.";errEl.style.display="";}
+      btn.disabled=false; btn.textContent="📍 Notify Dispatch";
+    }
   }
 
   /* ── SHUNT ── */
@@ -1618,10 +1659,14 @@
       return;
     }
     if(id==="btnBackToFlow2"||direct?.dataset?.flowBack){ showScreen("flow-screen",true); return; }
+    if(id==="btnBackToFlow5"){ showScreen("flow-screen",true); return; }
+    if(id==="btnOmwSubmit")   return submitOmw();
+    if(id==="btnOmwDone")     return driverRestart();
     if(id==="btnBackToFlow"){
       const isOutside=driverState.whoType==="outside";
       const dropBtn=el("flowBtnDrop"); if(dropBtn)dropBtn.style.display=isOutside?"none":"";
       const shuntBtn=document.querySelector("[data-flow='shunt']"); if(shuntBtn)shuntBtn.style.display=isOutside?"none":"";
+      const omwBtn=el("flowBtnOmw"); if(omwBtn)omwBtn.style.display=isOutside?"none":"";
       showScreen("flow-screen",true); return;
     }
     if(id==="btnDriverDrop")    return driverDrop();
@@ -1756,6 +1801,8 @@
 
   el("v_trailer")?.addEventListener("input",onTrailerInput);
   el("v_trailer")?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!el("btnDriverDrop")?.disabled)driverDrop(); });
+  el("omw_trailer")?.addEventListener("input", updateOmwSubmitState);
+  el("omw_trailer")?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!el("btnOmwSubmit")?.disabled)submitOmw(); });
   // Set inputmode on trailer inputs for numeric keypad on mobile
   ["v_trailer","xp_trailer","xo_trailer","sh_trailer"].forEach(id=>{
     const inp=el(id); if(!inp)return;

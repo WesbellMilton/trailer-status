@@ -782,13 +782,15 @@ body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;bac
   function doLogin(){
     var role=document.getElementById("role").value,pin=document.getElementById("pin").value;
     if(!pin){em.textContent="Enter your PIN.";em.classList.add("show");return;}
-    btn.disabled=true;btn.innerHTML="<span>SIGNING IN\u2026</span>";em.classList.remove("show");
+    var lbl=btn.querySelector("span");
+    btn.disabled=true;if(lbl)lbl.textContent="SIGNING IN...";em.classList.remove("show");
     fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},body:JSON.stringify({role:role,pin:pin})})
     .then(function(r){
       if(!r.ok){r.text().then(function(t){em.textContent=t;em.classList.add("show");});return;}
       location.href=ROLE_HOME[role]||"/";
     }).catch(function(){em.textContent="Connection error. Try again.";em.classList.add("show");})
-    .finally(function(){btn.disabled=false;btn.innerHTML='<span>SIGN IN</span><span class="arrow">&rarr;</span>';});
+    .finally(function(){btn.disabled=false;if(lbl)lbl.textContent="SIGN IN";});
+  }
   btn.addEventListener("click",doLogin);
   document.getElementById("pin").addEventListener("keydown",function(e){if(e.key==="Enter")doLogin();});
   document.getElementById("pin").focus();

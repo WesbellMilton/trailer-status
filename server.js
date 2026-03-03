@@ -594,7 +594,7 @@ ${expiredHtml}
   // ── DISPATCHER / MANAGEMENT / ADMIN: full dashboard login ────────────────
   const roleOptions = isSup
     ? '<option value="management" selected>Management</option><option value="admin">&#9889; Admin</option>'
-    : '<option value="dispatcher" selected>Dispatcher</option><option value="management">Management</option><option value="admin">&#9889; Admin</option>';
+    : '<option value="dispatcher" selected>Dispatcher</option><option value="dock">Dock</option><option value="management">Management</option><option value="admin">&#9889; Admin</option>';
 
   const expiredBanner = expired
     ? '<div class="ctx-badge ctx-err">&#9888; Session expired &#8212; please sign in again.</div>'
@@ -771,7 +771,7 @@ body{min-height:100vh;background:var(--bg);color:var(--t0);font-family:var(--san
   var WMO={0:"\u2600\ufe0f",1:"\ud83c\udf24",2:"\u26c5",3:"\u2601\ufe0f",45:"\ud83c\udf2b",48:"\ud83c\udf2b",51:"\ud83c\udf26",53:"\ud83c\udf26",55:"\ud83c\udf27",61:"\ud83c\udf27",63:"\ud83c\udf27",65:"\ud83c\udf27",71:"\ud83c\udf28",73:"\u2744\ufe0f",75:"\u2744\ufe0f",80:"\ud83c\udf26",81:"\ud83c\udf26",82:"\u26c8",95:"\u26c8",96:"\u26c8",99:"\u26c8"};
   var DESC={0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",45:"Fog",48:"Icy fog",51:"Light drizzle",53:"Drizzle",55:"Heavy drizzle",61:"Light rain",63:"Rain",65:"Heavy rain",71:"Light snow",73:"Snow",75:"Heavy snow",80:"Light showers",81:"Showers",82:"Violent showers",95:"Thunderstorm",96:"Thunderstorm w/ hail",99:"Heavy thunderstorm"};
   if(navigator.geolocation){navigator.geolocation.getCurrentPosition(function(pos){var lat=pos.coords.latitude,lon=pos.coords.longitude;fetch("https://api.open-meteo.com/v1/forecast?latitude="+lat+"&longitude="+lon+"&current=temperature_2m,weathercode,windspeed_10m,relative_humidity_2m&temperature_unit=celsius&windspeed_unit=kmh&timezone=auto").then(function(r){return r.json();}).then(function(data){var c=data.current,code=c.weathercode,icon=WMO[code]||"\ud83c\udf21",desc=DESC[code]||"",temp=Math.round(c.temperature_2m),wind=Math.round(c.windspeed_10m),hum=Math.round(c.relative_humidity_2m);document.getElementById("wb").innerHTML='<div class="weather-icon">'+icon+'</div><div><div><span class="weather-temp">'+temp+'</span><span class="weather-unit">\u00b0C</span></div><div class="weather-desc">'+desc+'</div><div class="weather-meta"><div class="wm">\ud83d\udca8 <span>'+wind+' km/h</span></div><div class="wm">\ud83d\udca7 <span>'+hum+'%</span></div></div></div>';}).catch(function(){document.getElementById("wb").innerHTML='<div class="weather-msg">Weather unavailable</div>';});},function(){document.getElementById("wb").innerHTML='<div class="weather-msg">Enable location for weather</div>';},{timeout:8000});}else{document.getElementById("wb").innerHTML='<div class="weather-msg">Weather unavailable</div>';}
-  var ROLE_HOME={dispatcher:"/",admin:"/",management:"/management"};
+  var ROLE_HOME={dispatcher:"/",admin:"/",dock:"/dock",management:"/management"};
   var btn=document.getElementById("go"),lbl=document.getElementById("btn-lbl"),em=document.getElementById("em");
   function doLogin(){
     var role=document.getElementById("role").value,pin=document.getElementById("pin").value;

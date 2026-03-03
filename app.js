@@ -193,7 +193,7 @@
   }
 
   function renderPlates() {
-    if(isDriver()||isSuper())return;
+    if(isDriver())return;
     const canEdit=ROLE==="dispatcher"||ROLE==="dock"||ROLE==="management"||ROLE==="admin";
     const doors=[]; for(let d=28;d<=42;d++) doors.push(String(d));
     const v=Object.values(dockPlates||{});
@@ -364,8 +364,7 @@
       return;
     }
     try{ await apiJson("/api/logout",{method:"POST",headers:CSRF}); }catch{}
-    // Pass current path so home screen pre-selects the right role
-    location.href="/login?from="+encodeURIComponent(location.pathname);
+    location.href="/login";
   }
   async function dispSave(){
     const trailer=(el("d_trailer")?.value||"").trim();
@@ -1449,11 +1448,11 @@
     }
     highlightNav();
     try{ const t=await apiJson("/api/state"); trailers=t||{}; }catch{ trailers={}; }
-    if(!isDriver()&&!isSuper()){
+    if(!isDriver()){
       try{ const p=await apiJson("/api/dockplates"); dockPlates=p||{}; }catch{ dockPlates={}; }
       try{ const b=await apiJson("/api/doorblocks"); doorBlocks=b||{}; }catch{ doorBlocks={}; }
     }
-    if(isSuper()){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0); loadIssueReports();
+    if(isSuper()){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0); loadIssueReports(); renderPlates();
       // Admin PIN row — only visible to admin
       const adminPinRow = el("adminPinRow");
       if(adminPinRow) adminPinRow.style.display = ROLE==="admin" ? "" : "none";
@@ -1713,7 +1712,7 @@
       let msg; try{msg=JSON.parse(evt.data);}catch{return;}
       const {type,payload}=msg||{};
       if(type==="state"){ trailers=payload||{}; renderBoard(); if(isSuper())renderSupBoard(); if(isDock())renderDockView(); if(isAdmin()&&!isSuper())renderBoard(); }
-      else if(type==="dockplates"){ dockPlates=payload||{}; if(!isDriver()&&!isSuper()) renderPlates(); }
+      else if(type==="dockplates"){ dockPlates=payload||{}; if(!isDriver()) renderPlates(); }
       else if(type==="doorblocks"){ doorBlocks=payload||{}; renderDockMap(); renderBoard(); }
       else if(type==="confirmations"){ confirmations=Array.isArray(payload)?payload:[]; if(isSuper())renderSupConf(); }
       else if(type==="version"){ VERSION=payload?.version||VERSION; el("verText").textContent=VERSION||"—"; }
@@ -1812,7 +1811,7 @@
       try { await apiJson("/api/logout", { method: "POST", headers: CSRF }); } catch {}
       haptic("light");
       closeModal();
-      location.href = "/login?from=" + encodeURIComponent(location.pathname);
+      location.href = "/login";
     });
 
     // Update staff button appearance based on auth state

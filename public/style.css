@@ -501,6 +501,13 @@ textarea{min-height:60px;resize:vertical}
 .dc-issue-btn:active{transform:scale(.98)}
 
 .dock-plates-inline{margin:0 16px 80px;border-radius:var(--r2);border:1px solid var(--b1);background:var(--s0);overflow:hidden}
+.dock-plates-inline .plate-grid{grid-template-columns:repeat(5,1fr);gap:4px;padding:10px}
+@media(max-width:480px){.dock-plates-inline .plate-grid{grid-template-columns:repeat(4,1fr);gap:3px;padding:8px}}
+.dock-plates-inline .plate{min-height:0;padding:5px 4px;gap:2px}
+.dock-plates-inline .plate .p-door{font-size:8px}
+.dock-plates-inline .plate .p-note{font-size:9px}
+.dock-plates-inline .plate .p-btns{gap:2px}
+.dock-plates-inline .plate .p-btn{padding:2px 4px;font-size:8px}
 
 /* ═══════════════════════════════════════════
    PUSH TOGGLE

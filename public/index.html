@@ -419,6 +419,34 @@
                 <div class="cl-sub">Plate fully up before departing dock</div>
               </div>
             </label>
+
+            <!-- ── ISSUE REPORT (optional) ── -->
+            <div class="issue-toggle-wrap">
+              <label class="issue-toggle-label" for="c_hasIssue">
+                <input id="c_hasIssue" type="checkbox"/>
+                <div class="itl-body">
+                  <div class="itl-main">⚠ Report a trailer issue</div>
+                  <div class="itl-sub">Damage, missing items, unsafe condition</div>
+                </div>
+              </label>
+            </div>
+
+            <div class="issue-report-body" id="issueReportBody" style="display:none;">
+              <!-- Camera / file input -->
+              <input type="file" id="issuePhotoInput" accept="image/*" capture="environment" style="display:none;" aria-label="Take photo"/>
+              <div class="issue-photo-zone" id="issuePhotoZone">
+                <div class="ipz-empty" id="ipzEmpty">
+                  <span class="ipz-icon">📷</span>
+                  <span class="ipz-label">Tap to take photo</span>
+                  <span class="ipz-sub">Optional — helps document the issue</span>
+                </div>
+                <img class="ipz-preview" id="ipzPreview" alt="Issue photo preview" style="display:none;"/>
+                <button class="ipz-remove" id="btnRemovePhoto" style="display:none;" aria-label="Remove photo">✕</button>
+              </div>
+              <label class="fl" style="margin:12px 0 5px;">Describe the issue</label>
+              <textarea id="issueNote" placeholder="e.g. Rear door damaged, missing load bar, spill in bay 3…" rows="3" style="resize:none;font-size:16px;line-height:1.5;"></textarea>
+            </div>
+
             <button class="driver-submit green" id="btnConfirmSafety" disabled>
               <span>Confirm &amp; Complete</span>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12 13 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -512,6 +540,16 @@
             <table><thead><tr><th>Time</th><th>Trailer</th><th>Door</th><th>Type</th><th>IP</th></tr></thead>
             <tbody id="supConfBody"><tr><td colspan="5" style="padding:16px;color:var(--t2);">Loading…</td></tr></tbody></table>
           </div>
+        </div>
+      </div>
+
+      <div class="panel" style="grid-column:1/-1;">
+        <div class="panel-hd">
+          <div class="panel-title"><div class="ptdot" style="background:var(--red)"></div>Trailer Issue Reports</div>
+          <span class="badge badge-num" id="supIssueCount">0</span>
+        </div>
+        <div class="panel-body-flush" id="supIssueBody">
+          <div style="padding:24px;text-align:center;color:var(--t3);font-family:var(--mono);font-size:11px;">No issue reports yet.</div>
         </div>
       </div>
 
@@ -777,6 +815,12 @@
       <button class="btn btn-danger btn-sm btn-full" id="staffLogoutBtn">Sign Out</button>
     </div>
   </div>
+</div>
+
+<!-- ── Issue photo lightbox ── -->
+<div class="issue-lightbox" id="issueLightbox">
+  <button class="issue-lightbox-close" id="issueLightboxClose" aria-label="Close photo">✕</button>
+  <img id="issueLightboxImg" src="" alt="Issue photo"/>
 </div>
 
 </body>

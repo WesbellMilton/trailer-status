@@ -6,7 +6,7 @@
   const el = id => document.getElementById(id);
   const path = () => location.pathname.toLowerCase();
   const isDriver = () => path().startsWith("/driver");
-  const isSuper  = () => path().startsWith("/supervisor");
+  const isSuper  = () => path().startsWith("/management");
   const isDock   = () => path().startsWith("/dock");
   const isAdmin  = () => ROLE === "admin";
 
@@ -96,9 +96,9 @@
   }
 
   function highlightNav() {
-    ["navDispatch","navDock","navDriver","navSupervisor"].forEach(id=>el(id)?.classList.remove("active"));
+    ["navDispatch","navDock","navDriver","navManagement"].forEach(id=>el(id)?.classList.remove("active"));
     const p=path();
-    if(p.startsWith("/supervisor")) el("navSupervisor")?.classList.add("active");
+    if(p.startsWith("/management")) el("navManagement")?.classList.add("active");
     else if(p.startsWith("/driver")) el("navDriver")?.classList.add("active");
     else if(p.startsWith("/dock")) el("navDock")?.classList.add("active");
     else el("navDispatch")?.classList.add("active");
@@ -121,7 +121,7 @@
   function renderDockMap() {
     const mapEl = el("dockMapGrid"); if (!mapEl) return;
     const occupied = getOccupiedDoors();
-    const canEdit = ROLE==="dispatcher"||ROLE==="admin";
+    const canEdit = ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin";
     let html = "";
     for (let d=28; d<=42; d++) {
       const ds = String(d);
@@ -155,7 +155,7 @@
     if(countEl) countEl.textContent=filt.length;
     if(countStrEl) countStrEl.textContent=`${filt.length} trailer${filt.length===1?"":"s"} shown`;
     if(!filt.length){ tbodyEl.innerHTML=`<div class="tbl-empty">No trailers match filters</div>`; return; }
-    const canEdit=!readOnly&&(ROLE==="dispatcher"||ROLE==="admin");
+    const canEdit=!readOnly&&(ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin");
     const canDock=!readOnly&&(ROLE==="dock"||ROLE==="admin");
     const occupied = getOccupiedDoors();
 
@@ -163,7 +163,7 @@
       const rowCls=STATUS_ROW[r.status]||"";
       const flash=(prevStatuses[r.trailer]&&prevStatuses[r.trailer]!==r.status)?" flashing":"";
       prevStatuses[r.trailer]=r.status;
-      const readyFlash=(ROLE==="dispatcher"&&!readOnly&&r.status==="Ready")?" ready-flash":"";
+      const readyFlash=((ROLE==="dispatcher"||ROLE==="management")&&!readOnly&&r.status==="Ready")?" ready-flash":"";
       const door = r.door ? `<span class="t-door">${esc(r.door)}</span>` : `<span style="color:var(--t3)">—</span>`;
       const note=r.note?`<span class="t-note" title="${esc(r.note)}">${esc(r.note)}</span>`:`<span style="color:var(--t3)">—</span>`;
       const dtype=r.dropType?`<span style="font-size:10px;color:var(--t2);font-family:var(--mono);">${esc(r.dropType)}</span>`:`<span style="color:var(--t3)">—</span>`;
@@ -259,7 +259,7 @@
 
   function renderPlates() {
     if(isDriver()||isSuper())return;
-    const canEdit=ROLE==="dispatcher"||ROLE==="dock"||ROLE==="admin";
+    const canEdit=ROLE==="dispatcher"||ROLE==="dock"||ROLE==="management"||ROLE==="admin";
     const doors=[]; for(let d=28;d<=42;d++) doors.push(String(d));
     const v=Object.values(dockPlates||{});
     const summary=`${v.filter(p=>p?.status==="OK").length} OK · ${v.filter(p=>p?.status==="Service").length} Svc`;
@@ -372,7 +372,7 @@
       cards.innerHTML = `<div class="dock-empty">${q?"No trailers match search.":dockFilter==="active"?"No active trailers.":"No trailers on board."}</div>`;
       return;
     }
-    const canAct = ROLE==="dock"||ROLE==="dispatcher"||ROLE==="supervisor"||ROLE==="admin";
+    const canAct = ROLE==="dock"||ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin";
     const loginNudge = el("dockLoginNudge");
     if (loginNudge) loginNudge.style.display = canAct ? "none" : "";
     cards.innerHTML = rows.map(r => {
@@ -407,7 +407,7 @@
 
   function renderRolePanel() {
     if(ROLE==="admin"){ el("panelTitle").textContent="Admin"; el("panelSub").textContent="Master access"; el("panelBody").innerHTML=dispPanelHtml(); el("btnLogout").style.display=""; el("btnAudit").style.display=""; renderPlates(); return; }
-    if(ROLE==="dispatcher"){ el("panelTitle").textContent="Dispatcher"; el("panelSub").textContent="Full control"; el("panelBody").innerHTML=dispPanelHtml(); el("btnLogout").style.display=""; el("btnAudit").style.display=""; renderPlates(); return; }
+    if(ROLE==="dispatcher"||ROLE==="management"){ el("panelTitle").textContent=ROLE==="management"?"Management":"Dispatcher"; el("panelSub").textContent="Full control"; el("panelBody").innerHTML=dispPanelHtml(); el("btnLogout").style.display=""; el("btnAudit").style.display=""; renderPlates(); return; }
     if(ROLE==="dock"){ el("panelTitle").textContent="Dock"; el("panelSub").textContent="Loading / Dock Ready"; el("panelBody").innerHTML=dockPanelHtml(); el("btnLogout").style.display=""; el("btnAudit").style.display="none"; renderPlates(); return; }
     el("panelTitle").textContent="Not Authenticated"; el("panelSub").textContent="—";
     el("panelBody").innerHTML=`<div style="color:var(--t2);font-size:12px;line-height:1.6;">Please <a href="/login">sign in</a> to access controls.</div>`;
@@ -487,7 +487,7 @@
     if(pin.length<4) return toast("PIN too short","Minimum 4 characters.","err");
     if(pin!==conf) return toast("PINs do not match","Enter matching PINs.","err");
     if(!await showModal("Update PIN",`Change the ${role} PIN? Active sessions will be invalidated.`))return;
-    try{ await apiJson("/api/supervisor/set-pin",{method:"POST",headers:CSRF,body:JSON.stringify({role,pin})}); toast("PIN updated",`${role} PIN changed.`,"ok"); el(inputId).value=""; el(confirmId).value=""; }
+    try{ await apiJson("/api/management/set-pin",{method:"POST",headers:CSRF,body:JSON.stringify({role,pin})}); toast("PIN updated",`${role} PIN changed.`,"ok"); el(inputId).value=""; el(confirmId).value=""; }
     catch(e){ toast("Update failed",e.message,"err"); }
   }
 
@@ -971,20 +971,20 @@
   /* ── BOTTOM NAV SYNC ── */
   function syncBottomNav() {
     const p = path();
-    ["bnDispatch","bnDock","bnDriver","bnSupervisor"].forEach(id => el(id)?.classList.remove("active"));
+    ["bnDispatch","bnDock","bnDriver","bnManagement"].forEach(id => el(id)?.classList.remove("active"));
 
-    if (p.startsWith("/supervisor")) {
-      el("bnSupervisor")?.classList.add("active");
-      // Supervisor — hide driver tab
+    if (p.startsWith("/management")) {
+      el("bnManagement")?.classList.add("active");
+      // Management — hide driver tab
       if(el("bnDriver")) el("bnDriver").style.display="none";
     } else if (p.startsWith("/driver")) {
       el("bnDriver")?.classList.add("active");
       // Driver page — hide all other tabs, driver has no access elsewhere
-      ["bnDispatch","bnDock","bnSupervisor"].forEach(id=>{ if(el(id)) el(id).style.display="none"; });
+      ["bnDispatch","bnDock","bnManagement"].forEach(id=>{ if(el(id)) el(id).style.display="none"; });
     } else if (p.startsWith("/dock")) {
       el("bnDock")?.classList.add("active");
-      // Dock page — hide driver and supervisor tabs
-      ["bnDriver","bnSupervisor"].forEach(id=>{ if(el(id)) el(id).style.display="none"; });
+      // Dock page — hide driver and management tabs
+      ["bnDriver","bnManagement"].forEach(id=>{ if(el(id)) el(id).style.display="none"; });
     } else {
       el("bnDispatch")?.classList.add("active");
       // Dispatch — hide driver tab
@@ -998,9 +998,9 @@
     // Driver and dock are locked — no swipe navigation allowed
     if (p.startsWith("/driver") || p.startsWith("/dock")) return;
 
-    const VIEWS = ["/", "/supervisor"];
-    // Dispatchers/admin can swipe between / and /supervisor
-    const currentIdx = () => p.startsWith("/supervisor") ? 1 : 0;
+    const VIEWS = ["/", "/management"];
+    // Dispatchers/admin can swipe between / and /management
+    const currentIdx = () => p.startsWith("/management") ? 1 : 0;
 
     let touchStartX = 0, touchStartY = 0, touchStartTime = 0;
     const MIN_SWIPE_DISTANCE = 60;
@@ -1116,7 +1116,7 @@
     if(el("driverVerText"))el("driverVerText").textContent=VERSION||"—";
 
     el("driverView").style.display="none";
-    el("supervisorView").style.display="none";
+    el("managementView").style.display="none";
     el("dockView").style.display="none";
     el("dispatchView").style.display="none";
 
@@ -1149,8 +1149,8 @@
       }catch{ showScreen("who-screen"); }
       renderSessionHistory();
       initPush();
-    } else if(p.startsWith("/supervisor")||ROLE==="supervisor"){
-      el("supervisorView").style.display=""; el("supervisorView").classList.add("view-fade");
+    } else if(p.startsWith("/management")||ROLE==="management"){
+      el("managementView").style.display=""; el("managementView").classList.add("view-fade");
       el("btnLogout").style.display=""; el("btnAudit").style.display="none";
     } else if(p.startsWith("/dock")){
       el("dockView").style.display=""; el("dockView").classList.add("view-fade");
@@ -1158,14 +1158,18 @@
     } else {
       el("dispatchView").style.display=""; el("dispatchView").classList.add("view-fade");
       el("btnLogout").style.display=ROLE?"":"none";
-      el("btnAudit").style.display=(ROLE==="dispatcher"||ROLE==="admin")?"":"none";
+      el("btnAudit").style.display=(ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin")?"":"none";
       const adminPanel=el("adminPanel");
       if(adminPanel) adminPanel.style.display=ROLE==="admin"?"":"none";
     }
     highlightNav();
     try{ trailers=await apiJson("/api/state"); }catch{ trailers={}; }
     if(!isDriver()&&!isSuper()){ try{ dockPlates=await apiJson("/api/dockplates"); }catch{ dockPlates={}; } }
-    if(isSuper()||ROLE==="supervisor"){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0); }
+    if(isSuper()||ROLE==="management"){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0);
+      // Admin PIN row — only visible to admin
+      const adminPinRow = el("adminPinRow");
+      if(adminPinRow) adminPinRow.style.display = ROLE==="admin" ? "" : "none";
+    }
     if(ROLE==="admin"){ renderBoard(); renderRolePanel(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
     else if(isDock()){ renderDockView(); renderPlates(); }
     else if(!isDriver()){ renderRolePanel(); renderBoard(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
@@ -1187,7 +1191,7 @@
     if(id==="btnClearAll") return dispClear();
     if(id==="btnSetDispatcherPin") return setPin("dispatcher","pin_dispatcher","pin_dispatcher_confirm");
     if(id==="btnSetDockPin")       return setPin("dock","pin_dock","pin_dock_confirm");
-    if(id==="btnSetSupervisorPin") return setPin("supervisor","pin_supervisor","pin_supervisor_confirm");
+    if(id==="btnSetManagementPin") return setPin("management","pin_management","pin_management_confirm");
     if(id==="btnSetAdminPin")      return setPin("admin","pin_admin","pin_admin_confirm");
     if(id==="btnSetAdminPinSup")   return setPin("admin","pin_admin_sup","pin_admin_sup_confirm");
 
@@ -1260,7 +1264,7 @@
 
     // Dock map cell click — open status modal for any door (occupied or empty)
     const dmCell = direct?.closest?.("[data-dm-door]");
-    if (dmCell && (ROLE==="dispatcher"||ROLE==="admin")) {
+    if (dmCell && (ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin")) {
       const door = dmCell.dataset.dmDoor;
       const occupied = getOccupiedDoors();
       const occ = occupied[door];

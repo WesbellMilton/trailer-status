@@ -245,7 +245,51 @@
                 <span class="flow-label">Cross Dock Offload</span>
                 <span class="flow-desc">Drop a loaded trailer to unload</span>
               </button>
+              <button class="flow-btn" id="flowBtnOmw" data-flow="omw" style="display:none;">
+                <span class="flow-icon">🚛</span>
+                <span class="flow-label">On My Way</span>
+                <span class="flow-desc">Let dispatch know you're coming — get a door</span>
+              </button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SCREEN: ON MY WAY ── -->
+      <div id="omw-screen" style="display:none;">
+        <div class="driver-panel active-step">
+          <div class="driver-phd">
+            <span class="driver-phd-title"><span style="color:var(--amber);">🚛</span> On My Way</span>
+            <button class="btn btn-default btn-sm" id="btnBackToFlow5">← Back</button>
+          </div>
+          <div class="driver-pbody">
+            <div class="field">
+              <label class="fl" for="omw_trailer">Trailer Number</label>
+              <input id="omw_trailer" class="trailer-hero-input" placeholder="e.g. 4821" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" inputmode="numeric"/>
+            </div>
+            <div class="field">
+              <label class="fl" for="omw_eta">ETA (minutes away) <span style="color:var(--t3);font-weight:400;">— optional</span></label>
+              <input id="omw_eta" type="number" min="1" max="240" placeholder="e.g. 30" inputmode="numeric" autocomplete="off" style="font-size:16px;"/>
+            </div>
+            <div id="omw_err" style="display:none;padding:8px 10px;border-radius:6px;background:var(--red-bg);border:1px solid var(--red-bd);color:var(--red);font-size:12px;margin-bottom:10px;"></div>
+            <button class="btn btn-success driver-submit" id="btnOmwSubmit" disabled>📍 Notify Dispatch</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SCREEN: OMW CONFIRMED ── -->
+      <div id="omw-confirm-screen" style="display:none;">
+        <div class="driver-panel active-step" style="text-align:center;">
+          <div class="driver-pbody" style="padding:28px 16px 24px;">
+            <div style="font-size:48px;margin-bottom:10px;">🚛</div>
+            <div style="font-size:22px;font-weight:700;color:var(--t0);margin-bottom:6px;" id="omwConfirmTitle">Door assigned!</div>
+            <div style="font-size:14px;color:var(--t1);margin-bottom:20px;" id="omwConfirmSub">Dispatch has been notified.</div>
+            <div class="assignment-card" id="omwAssignmentCard" style="margin-bottom:20px;">
+              <div class="ac-label">YOUR DOOR</div>
+              <div class="ac-door" id="omwDoorNum">—</div>
+              <div class="ac-meta" id="omwEtaDisplay" style="font-size:11px;color:var(--t2);"></div>
+            </div>
+            <button class="btn btn-default" id="btnOmwDone">Done</button>
           </div>
         </div>
       </div>

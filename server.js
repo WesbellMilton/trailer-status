@@ -510,105 +510,527 @@ function guardPage(allowedRoles) {
 
 app.get("/login", (req, res) => {
   const expired  = req.query.expired === "1";
-  // Only use the explicit ?from= param (set by session-expiry redirects).
-  // Never fall back to Referer — that would pre-select the dock role after
-  // a normal logout from the dock page.
   const fromPath = req.query.from || "";
 
-  // Already authenticated — bounce straight to their home page
-  // This prevents the browser back button from stranding them on the login form
+  // Already authenticated — bounce to their home page
   if (!expired) {
     const s = getSession(req);
-    if (s?.role) {
-      const home = ROLE_HOME[s.role] || "/";
-      return res.redirect(302, home);
-    }
+    if (s?.role) return res.redirect(302, ROLE_HOME[s.role] || "/");
   }
-  
-  // Detect context from where they're trying to go
-  // /dock?expired=1 → pre-select dock, hide other roles
-  // /driver has no login (no session needed for driver view)
-  const isDock  = fromPath.includes("/dock");
-  const isSup   = fromPath.includes("/management");
-  
-  // Build role options — dock workers only see "Dock", managements see more
+
+  const isDock = fromPath.includes("/dock");
+  const isSup  = fromPath.includes("/management");
+
   const roleOptions = isDock
     ? `<option value="dock" selected>Dock</option>`
     : isSup
     ? `<option value="management" selected>Management</option><option value="admin">⚡ Admin</option>`
     : `<option value="dispatcher" selected>Dispatcher</option><option value="dock">Dock</option><option value="management">Management</option><option value="admin">⚡ Admin</option>`;
 
-  const contextMsg = isDock
-    ? `<div style="padding:8px 10px;border-radius:6px;background:rgba(32,192,208,.08);border:1px solid rgba(32,192,208,.2);color:#20c0d0;font-size:12px;margin-bottom:10px;">🏭 Dock sign-in</div>`
+  const contextBadge = isDock
+    ? `<div class="ctx-badge ctx-dock">🏭 Dock sign-in</div>`
     : isSup
-    ? `<div style="padding:8px 10px;border-radius:6px;background:rgba(240,160,48,.08);border:1px solid rgba(240,160,48,.2);color:#f0a030;font-size:12px;margin-bottom:10px;">📊 Management sign-in</div>`
+    ? `<div class="ctx-badge ctx-mgmt">📊 Management sign-in</div>`
+    : "";
+
+  const expiredBanner = expired
+    ? `<div class="ctx-badge ctx-err">⚠ Session expired — please sign in again.</div>`
     : "";
 
   res.setHeader("content-type", "text/html; charset=utf-8");
-  res.end(`<!doctype html><html><head>
+  res.end(`<!doctype html>
+<html lang="en">
+<head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
-<title>Wesbell Sign In</title>
+<title>Wesbell Dispatch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:#0a0d12;color:#e2e8f2;font-family:system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
-.card{width:100%;max-width:360px;background:#121820;border:1px solid #1a2232;border-radius:14px;padding:22px;box-shadow:0 12px 48px rgba(0,0,0,.7)}
-.brand{display:flex;align-items:center;gap:10px;margin-bottom:18px}
-.brand-mark{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#f0a030,#c04800);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#000;flex-shrink:0}
-.brand-name{font-size:14px;font-weight:600;letter-spacing:.06em}
-.brand-sub{font-size:10px;color:#4a5a72;letter-spacing:.06em}
-label{display:block;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;margin:14px 0 6px;color:#4a5a72}
-input,select{width:100%;padding:13px 14px;border-radius:8px;border:1px solid #213040;background:#0e1218;color:#e2e8f2;font-size:16px;outline:none;-webkit-appearance:none;transition:border-color .15s}
-input:focus,select:focus{border-color:#f0a030;box-shadow:0 0 0 3px rgba(240,160,48,.1)}
-.err{display:none;padding:9px 12px;border-radius:6px;background:rgba(232,72,72,.1);border:1px solid rgba(232,72,72,.25);color:#e84848;font-size:13px;margin-top:10px}
-.err.show{display:block}
-button{width:100%;padding:14px;border-radius:10px;border:1px solid rgba(240,160,48,.25);background:rgba(240,160,48,.09);color:#f0a030;font-size:15px;font-weight:700;margin-top:16px;cursor:pointer;touch-action:manipulation;letter-spacing:.03em;transition:background .15s}
-button:active{background:rgba(240,160,48,.18)}
-.hint{color:#2d3d52;font-size:11px;margin-top:12px;line-height:1.5;text-align:center}
-</style></head><body>
-<div class="card">
-  <div class="brand">
-    <div class="brand-mark">W</div>
-    <div><div class="brand-name">WESBELL</div><div class="brand-sub">DISPATCH</div></div>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#070a0f;
+  --s0:#0c1018;--s1:#101620;--s2:#151e2a;
+  --b0:#1a2535;--b1:#1f2e42;--b2:#263650;
+  --t0:#e8eef8;--t1:#8a9db8;--t2:#4a5e78;--t3:#293848;
+  --amber:#f0a030;--amber-d:#c07020;
+  --cyan:#20c0d0;--green:#20d090;--red:#e84848;
+  --mono:'DM Mono',monospace;
+  --sans:'DM Sans',system-ui,sans-serif;
+  --display:'Bebas Neue',sans-serif;
+}
+html{height:100%;-webkit-font-smoothing:antialiased}
+body{
+  min-height:100vh;background:var(--bg);color:var(--t0);
+  font-family:var(--sans);
+  display:grid;
+  grid-template-columns:1fr 380px;
+  grid-template-rows:1fr;
+  overflow:hidden;
+}
+
+/* ── Noise grain overlay ── */
+body::before{
+  content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  opacity:.5;
+}
+
+/* ════════════════════════════
+   LEFT — DASHBOARD PANEL
+════════════════════════════ */
+.dashboard{
+  position:relative;z-index:1;
+  display:flex;flex-direction:column;
+  padding:44px 52px 36px;
+  gap:0;
+  background:linear-gradient(135deg, #070c14 0%, #0a1020 60%, #08111c 100%);
+  border-right:1px solid var(--b0);
+  overflow:hidden;
+}
+
+/* ambient glow behind clock */
+.dashboard::after{
+  content:"";position:absolute;
+  top:-80px;left:-80px;
+  width:600px;height:600px;
+  background:radial-gradient(ellipse at center, rgba(240,160,48,.055) 0%, transparent 70%);
+  pointer-events:none;
+}
+
+/* ── Brand ── */
+.db-brand{display:flex;align-items:center;gap:12px;margin-bottom:44px;position:relative;z-index:1}
+.db-mark{
+  width:40px;height:40px;border-radius:10px;
+  background:linear-gradient(135deg,var(--amber) 0%,var(--amber-d) 100%);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:15px;font-weight:700;color:#000;
+  box-shadow:0 4px 16px rgba(240,120,0,.3);
+  flex-shrink:0;
+}
+.db-brand-text .db-name{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.1em;color:var(--t0)}
+.db-brand-text .db-sub{font-size:10px;color:var(--t2);letter-spacing:.08em;margin-top:1px}
+
+/* ── Clock ── */
+.clock-wrap{position:relative;z-index:1;margin-bottom:8px}
+.clock-time{
+  font-family:var(--display);
+  font-size:clamp(80px,10vw,136px);
+  line-height:.9;
+  color:var(--t0);
+  letter-spacing:.01em;
+  text-shadow:0 0 60px rgba(240,160,48,.12);
+}
+.clock-time .colon{
+  color:var(--amber);
+  animation:colonBlink 1s step-start infinite;
+}
+@keyframes colonBlink{0%,49%{opacity:1}50%,100%{opacity:.2}}
+.clock-ampm{
+  font-family:var(--mono);font-size:18px;font-weight:500;
+  color:var(--amber);letter-spacing:.1em;
+  margin-left:8px;vertical-align:super;font-size:clamp(14px,2vw,22px);
+}
+
+/* ── Date ── */
+.date-row{
+  display:flex;align-items:baseline;gap:12px;
+  margin-bottom:36px;position:relative;z-index:1;
+}
+.date-day{font-family:var(--display);font-size:clamp(28px,4vw,44px);color:var(--t1);letter-spacing:.04em}
+.date-full{font-family:var(--mono);font-size:clamp(11px,1.2vw,14px);color:var(--t2);letter-spacing:.06em;text-transform:uppercase}
+
+/* ── Divider ── */
+.db-divider{height:1px;background:linear-gradient(90deg,var(--b1) 0%,transparent 100%);margin-bottom:32px;position:relative;z-index:1}
+
+/* ── Weather ── */
+.weather-block{display:flex;align-items:flex-start;gap:20px;margin-bottom:36px;position:relative;z-index:1}
+.weather-icon{font-size:48px;line-height:1;flex-shrink:0;filter:drop-shadow(0 2px 8px rgba(0,0,0,.5))}
+.weather-main{}
+.weather-temp{font-family:var(--display);font-size:clamp(38px,5vw,58px);color:var(--t0);line-height:1;letter-spacing:.02em}
+.weather-unit{font-family:var(--mono);font-size:16px;color:var(--t2);vertical-align:super}
+.weather-desc{font-family:var(--mono);font-size:12px;color:var(--t1);letter-spacing:.06em;text-transform:uppercase;margin-top:4px}
+.weather-meta{display:flex;gap:16px;margin-top:8px}
+.weather-meta-item{font-family:var(--mono);font-size:11px;color:var(--t2);display:flex;align-items:center;gap:4px}
+.weather-meta-item span{color:var(--t1)}
+.weather-loading{font-family:var(--mono);font-size:12px;color:var(--t3);letter-spacing:.06em;padding:12px 0}
+
+/* ── Calendar ── */
+.cal-wrap{flex:1;position:relative;z-index:1;min-height:0}
+.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.cal-month{font-family:var(--display);font-size:clamp(22px,3vw,32px);color:var(--t1);letter-spacing:.06em}
+.cal-year{font-family:var(--mono);font-size:13px;color:var(--t2);letter-spacing:.08em}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-dow{
+  font-family:var(--mono);font-size:10px;letter-spacing:.08em;
+  color:var(--t3);text-align:center;padding:4px 0 8px;text-transform:uppercase;
+}
+.cal-cell{
+  aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:clamp(11px,1.2vw,13px);
+  color:var(--t2);border-radius:6px;
+  transition:background .12s,color .12s;
+  cursor:default;position:relative;
+}
+.cal-cell.other-month{color:var(--t3)}
+.cal-cell.today{
+  background:var(--amber);color:#000;font-weight:700;
+  box-shadow:0 2px 12px rgba(240,160,48,.35);
+}
+.cal-cell.today::after{display:none}
+
+/* ── Footer status ── */
+.db-footer{
+  position:relative;z-index:1;
+  display:flex;align-items:center;gap:8px;
+  margin-top:20px;padding-top:16px;
+  border-top:1px solid var(--b0);
+}
+.db-footer-dot{width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:beat 2.4s ease-in-out infinite}
+@keyframes beat{0%,100%{box-shadow:0 0 0 0 rgba(32,208,144,.6)}50%{box-shadow:0 0 0 5px rgba(32,208,144,0)}}
+.db-footer-text{font-family:var(--mono);font-size:10px;color:var(--t2);letter-spacing:.06em}
+
+/* ════════════════════════════
+   RIGHT — LOGIN PANEL
+════════════════════════════ */
+.login-panel{
+  position:relative;z-index:1;
+  display:flex;flex-direction:column;justify-content:center;
+  padding:48px 40px;
+  background:var(--s0);
+  overflow-y:auto;
+}
+
+.lp-brand{display:flex;align-items:center;gap:10px;margin-bottom:40px}
+.lp-mark{
+  width:36px;height:36px;border-radius:9px;
+  background:linear-gradient(135deg,var(--amber),var(--amber-d));
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:13px;font-weight:700;color:#000;
+  box-shadow:0 3px 12px rgba(240,120,0,.25);flex-shrink:0;
+}
+.lp-brand-name{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.1em;color:var(--t1)}
+.lp-brand-sub{font-size:9px;color:var(--t2);letter-spacing:.08em;margin-top:1px}
+
+.lp-heading{font-family:var(--display);font-size:36px;color:var(--t0);letter-spacing:.04em;margin-bottom:4px}
+.lp-sub{font-family:var(--mono);font-size:11px;color:var(--t2);letter-spacing:.06em;margin-bottom:32px}
+
+.ctx-badge{
+  padding:8px 12px;border-radius:6px;font-family:var(--mono);
+  font-size:11px;letter-spacing:.04em;margin-bottom:14px;
+}
+.ctx-dock{background:rgba(32,192,208,.08);border:1px solid rgba(32,192,208,.2);color:var(--cyan)}
+.ctx-mgmt{background:rgba(240,160,48,.08);border:1px solid rgba(240,160,48,.2);color:var(--amber)}
+.ctx-err {background:rgba(232,72,72,.08); border:1px solid rgba(232,72,72,.2); color:var(--red)}
+
+.field-label{
+  display:block;font-family:var(--mono);font-size:10px;font-weight:500;
+  text-transform:uppercase;letter-spacing:.1em;color:var(--t2);margin:0 0 7px;
+}
+.field-input{
+  width:100%;padding:14px 16px;border-radius:8px;
+  border:1px solid var(--b1);background:var(--s1);
+  color:var(--t0);font-family:var(--mono);font-size:16px;
+  outline:none;-webkit-appearance:none;
+  transition:border-color .15s,box-shadow .15s;
+  margin-bottom:16px;
+}
+.field-input:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(240,160,48,.1)}
+.field-input::placeholder{color:var(--t3)}
+
+.sign-btn{
+  width:100%;padding:16px;border-radius:10px;
+  border:1px solid rgba(240,160,48,.3);
+  background:rgba(240,160,48,.1);
+  color:var(--amber);font-family:var(--mono);font-size:14px;
+  font-weight:500;letter-spacing:.08em;
+  cursor:pointer;touch-action:manipulation;
+  transition:all .15s;margin-top:4px;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+}
+.sign-btn:hover{background:rgba(240,160,48,.16);border-color:rgba(240,160,48,.5)}
+.sign-btn:active{background:rgba(240,160,48,.22);transform:scale(.99)}
+.sign-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.sign-btn .arrow{transition:transform .15s}
+.sign-btn:hover .arrow{transform:translateX(3px)}
+
+.err-msg{
+  display:none;padding:10px 12px;border-radius:6px;
+  background:rgba(232,72,72,.08);border:1px solid rgba(232,72,72,.2);
+  color:var(--red);font-family:var(--mono);font-size:12px;
+  letter-spacing:.03em;margin-top:12px;
+}
+.err-msg.show{display:block}
+
+.lp-hint{
+  font-family:var(--mono);font-size:10px;color:var(--t3);
+  letter-spacing:.04em;text-align:center;margin-top:20px;line-height:1.6;
+}
+
+/* ════════════════════════════
+   MOBILE — stacked layout
+════════════════════════════ */
+@media(max-width:768px){
+  body{grid-template-columns:1fr;grid-template-rows:auto 1fr;overflow:auto}
+  .dashboard{
+    padding:28px 24px 24px;gap:0;
+    border-right:none;border-bottom:1px solid var(--b0);
+  }
+  .clock-time{font-size:clamp(60px,16vw,90px)}
+  .db-brand{margin-bottom:28px}
+  .cal-wrap{display:none} /* hide calendar on small screens, keep clock + weather */
+  .db-divider{margin-bottom:20px}
+  .weather-block{margin-bottom:20px}
+  .db-footer{margin-top:0}
+  .login-panel{padding:32px 24px 40px}
+  .lp-brand{margin-bottom:28px}
+  .lp-heading{font-size:28px}
+}
+@media(max-width:480px){
+  .dashboard{padding:20px 18px 20px}
+  .clock-time{font-size:clamp(52px,18vw,80px)}
+  .weather-icon{font-size:36px}
+  .weather-temp{font-size:clamp(30px,8vw,46px)}
+  .login-panel{padding:24px 18px 32px}
+}
+@supports(padding:env(safe-area-inset-top)){
+  .dashboard{padding-top:max(44px,calc(20px + env(safe-area-inset-top)))}
+  @media(max-width:768px){
+    .dashboard{padding-top:max(28px,calc(16px + env(safe-area-inset-top)))}
+    .login-panel{padding-bottom:max(40px,calc(16px + env(safe-area-inset-bottom)))}
+  }
+}
+
+/* ── Entrance animations ── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.db-brand{animation:fadeUp .4s ease both}
+.clock-wrap{animation:fadeUp .4s .08s ease both}
+.date-row{animation:fadeUp .4s .14s ease both}
+.db-divider{animation:fadeUp .3s .18s ease both}
+.weather-block{animation:fadeUp .4s .22s ease both}
+.cal-wrap{animation:fadeUp .4s .28s ease both}
+.db-footer{animation:fadeUp .3s .34s ease both}
+.login-panel{animation:fadeUp .4s .1s ease both}
+</style>
+</head>
+<body>
+
+<!-- ── LEFT: Dashboard ── -->
+<div class="dashboard">
+
+  <div class="db-brand">
+    <div class="db-mark">W</div>
+    <div class="db-brand-text">
+      <div class="db-name">WESBELL</div>
+      <div class="db-sub">DISPATCH SYSTEM</div>
+    </div>
   </div>
-  ${contextMsg}
-  ${expired ? `<div style="padding:8px 10px;border-radius:6px;background:rgba(232,72,72,.08);border:1px solid rgba(232,72,72,.2);color:#e84848;font-size:12px;margin-bottom:10px;">⚠ Session expired — please sign in again.</div>` : ""}
-  <label>Role</label>
-  <select id="role">${roleOptions}</select>
-  <label>PIN</label>
-  <input id="pin" type="password" inputmode="numeric" placeholder="Enter PIN" autocomplete="current-password"/>
-  <div class="err" id="errMsg"></div>
-  <button id="go">Sign In →</button>
-  <div class="hint">Contact your management if you don't have a PIN.</div>
+
+  <div class="clock-wrap">
+    <div class="clock-time" id="clockTime">
+      <span id="clockH">--</span><span class="colon">:</span><span id="clockM">--</span><span id="clockS" style="font-size:.55em;color:var(--t2);margin-left:4px">--</span>
+    </div>
+    <span class="clock-ampm" id="clockAmpm"></span>
+  </div>
+
+  <div class="date-row">
+    <span class="date-day" id="dateDay"></span>
+    <span class="date-full" id="dateFull"></span>
+  </div>
+
+  <div class="db-divider"></div>
+
+  <div class="weather-block" id="weatherBlock">
+    <div class="weather-loading" id="weatherLoading">Fetching weather…</div>
+  </div>
+
+  <div class="cal-wrap" id="calWrap"></div>
+
+  <div class="db-footer">
+    <div class="db-footer-dot"></div>
+    <div class="db-footer-text" id="footerText">WESBELL DISPATCH · LOADING…</div>
+  </div>
+
 </div>
+
+<!-- ── RIGHT: Login ── -->
+<div class="login-panel">
+
+  <div class="lp-brand">
+    <div class="lp-mark">W</div>
+    <div>
+      <div class="lp-brand-name">WESBELL</div>
+      <div class="lp-brand-sub">DISPATCH</div>
+    </div>
+  </div>
+
+  <div class="lp-heading">SIGN IN</div>
+  <div class="lp-sub">ENTER YOUR ROLE &amp; PIN TO CONTINUE</div>
+
+  ${contextBadge}
+  ${expiredBanner}
+
+  <label class="field-label" for="role">Role</label>
+  <select id="role" class="field-input">${roleOptions}</select>
+
+  <label class="field-label" for="pin">PIN</label>
+  <input id="pin" class="field-input" type="password" inputmode="numeric" placeholder="••••••" autocomplete="current-password"/>
+
+  <div class="err-msg" id="errMsg"></div>
+
+  <button class="sign-btn" id="go">
+    <span>SIGN IN</span>
+    <span class="arrow">→</span>
+  </button>
+
+  <div class="lp-hint">Contact management if you need a PIN.</div>
+
+</div>
+
 <script>
-const ROLE_HOME = {dispatcher:"/",admin:"/",dock:"/dock",management:"/management"};
-const btn = document.getElementById("go");
-const err = document.getElementById("errMsg");
-async function doLogin() {
-  const role = document.getElementById("role").value;
-  const pin  = document.getElementById("pin").value;
-  if (!pin) { err.textContent = "Enter your PIN."; err.classList.add("show"); return; }
-  btn.disabled = true; btn.textContent = "Signing in…";
+/* ── Clock ── */
+function tickClock(){
+  const now=new Date();
+  let h=now.getHours(),m=now.getMinutes(),s=now.getSeconds();
+  const ampm=h>=12?"PM":"AM";
+  h=h%12||12;
+  document.getElementById("clockH").textContent=String(h).padStart(2,"0");
+  document.getElementById("clockM").textContent=String(m).padStart(2,"0");
+  document.getElementById("clockS").textContent=String(s).padStart(2,"0");
+  document.getElementById("clockAmpm").textContent=ampm;
+}
+tickClock();
+setInterval(tickClock,1000);
+
+/* ── Date ── */
+(function(){
+  const now=new Date();
+  const days=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const months=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  document.getElementById("dateDay").textContent=days[now.getDay()];
+  document.getElementById("dateFull").textContent=months[now.getMonth()]+" "+now.getDate()+", "+now.getFullYear();
+  document.getElementById("footerText").textContent=
+    "WESBELL DISPATCH · "+days[now.getDay()].toUpperCase()+" "+months[now.getMonth()].toUpperCase().slice(0,3)+" "+now.getDate();
+})();
+
+/* ── Calendar ── */
+(function(){
+  const now=new Date();
+  const y=now.getFullYear(),mo=now.getMonth();
+  const months=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const first=new Date(y,mo,1).getDay();
+  const daysInMonth=new Date(y,mo+1,0).getDate();
+  const daysInPrev=new Date(y,mo,0).getDate();
+  const wrap=document.getElementById("calWrap");
+  let html='<div class="cal-header"><span class="cal-month">'+months[mo].toUpperCase()+'</span><span class="cal-year">'+y+'</span></div>';
+  html+='<div class="cal-grid">';
+  ["SU","MO","TU","WE","TH","FR","SA"].forEach(d=>html+='<div class="cal-dow">'+d+'</div>');
+  // Prev month fill
+  for(let i=first-1;i>=0;i--) html+='<div class="cal-cell other-month">'+(daysInPrev-i)+'</div>';
+  // Current month
+  for(let d=1;d<=daysInMonth;d++){
+    const isToday=d===now.getDate();
+    html+='<div class="cal-cell'+(isToday?" today":"")+'">'+d+'</div>';
+  }
+  // Next month fill
+  const filled=first+daysInMonth;
+  const rem=filled%7===0?0:7-(filled%7);
+  for(let d=1;d<=rem;d++) html+='<div class="cal-cell other-month">'+d+'</div>';
+  html+='</div>';
+  wrap.innerHTML=html;
+})();
+
+/* ── Weather (Open-Meteo — no API key) ── */
+(function(){
+  const WMO={
+    0:"☀️",1:"🌤",2:"⛅",3:"☁️",
+    45:"🌫",48:"🌫",
+    51:"🌦",53:"🌦",55:"🌧",
+    56:"🌨",57:"🌨",
+    61:"🌧",63:"🌧",65:"🌧",
+    66:"🌨",67:"🌨",
+    71:"🌨",73:"❄️",75:"❄️",77:"🌨",
+    80:"🌦",81:"🌦",82:"⛈",
+    85:"🌨",86:"❄️",
+    95:"⛈",96:"⛈",99:"⛈"
+  };
+  const DESC={
+    0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",
+    45:"Fog",48:"Icy fog",
+    51:"Light drizzle",53:"Drizzle",55:"Heavy drizzle",
+    56:"Freezing drizzle",57:"Heavy freezing drizzle",
+    61:"Light rain",63:"Rain",65:"Heavy rain",
+    66:"Freezing rain",67:"Heavy freezing rain",
+    71:"Light snow",73:"Snow",75:"Heavy snow",77:"Snow grains",
+    80:"Light showers",81:"Showers",82:"Violent showers",
+    85:"Snow showers",86:"Heavy snow showers",
+    95:"Thunderstorm",96:"Thunderstorm w/ hail",99:"Heavy thunderstorm w/ hail"
+  };
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    try{
+      const {latitude:lat,longitude:lon}=pos.coords;
+      const url="https://api.open-meteo.com/v1/forecast?latitude="+lat+"&longitude="+lon+
+        "&current=temperature_2m,weathercode,windspeed_10m,relative_humidity_2m&temperature_unit=celsius&windspeed_unit=kmh&timezone=auto";
+      const r=await fetch(url);
+      const d=await r.json();
+      const c=d.current;
+      const code=c.weathercode;
+      const icon=WMO[code]||"🌡";
+      const desc=DESC[code]||"Unknown";
+      const temp=Math.round(c.temperature_2m);
+      const wind=Math.round(c.windspeed_10m);
+      const hum=Math.round(c.relative_humidity_2m);
+      document.getElementById("weatherBlock").innerHTML=
+        '<div class="weather-icon">'+icon+'</div>'+
+        '<div class="weather-main">'+
+          '<div><span class="weather-temp">'+temp+'</span><span class="weather-unit">°C</span></div>'+
+          '<div class="weather-desc">'+desc+'</div>'+
+          '<div class="weather-meta">'+
+            '<div class="weather-meta-item">💨 <span>'+wind+' km/h</span></div>'+
+            '<div class="weather-meta-item">💧 <span>'+hum+'%</span></div>'+
+          '</div>'+
+        '</div>';
+    }catch{
+      document.getElementById("weatherBlock").innerHTML='<div class="weather-loading">Weather unavailable</div>';
+    }
+  }, ()=>{
+    document.getElementById("weatherBlock").innerHTML='<div class="weather-loading">Enable location for weather</div>';
+  },{timeout:8000});
+})();
+
+/* ── Login ── */
+const ROLE_HOME={dispatcher:"/",admin:"/",dock:"/dock",management:"/management"};
+const btn=document.getElementById("go");
+const err=document.getElementById("errMsg");
+async function doLogin(){
+  const role=document.getElementById("role").value;
+  const pin=document.getElementById("pin").value;
+  if(!pin){err.textContent="Enter your PIN.";err.classList.add("show");return;}
+  btn.disabled=true;
+  btn.innerHTML='<span>SIGNING IN…</span>';
   err.classList.remove("show");
-  try {
-    const res = await fetch("/api/login", {
+  try{
+    const res=await fetch("/api/login",{
       method:"POST",
       headers:{"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},
       body:JSON.stringify({role,pin})
     });
-    if (!res.ok) { err.textContent = await res.text(); err.classList.add("show"); return; }
-    location.href = ROLE_HOME[role] || "/";
-  } catch(e) {
-    err.textContent = "Connection error. Try again."; err.classList.add("show");
-  } finally {
-    btn.disabled = false; btn.textContent = "Sign In →";
+    if(!res.ok){err.textContent=await res.text();err.classList.add("show");return;}
+    location.href=ROLE_HOME[role]||"/";
+  }catch(e){
+    err.textContent="Connection error. Try again.";err.classList.add("show");
+  }finally{
+    btn.disabled=false;
+    btn.innerHTML='<span>SIGN IN</span><span class="arrow">→</span>';
   }
 }
-btn.addEventListener("click", doLogin);
-document.getElementById("pin").addEventListener("keydown", e => { if(e.key==="Enter") doLogin(); });
+btn.addEventListener("click",doLogin);
+document.getElementById("pin").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin();});
 document.getElementById("pin").focus();
-</script></body></html>`);
+</script>
+</body>
+</html>`);
 });
 
 app.get("/",           guardPage(["dispatcher","management","admin"]),              sendIndex);

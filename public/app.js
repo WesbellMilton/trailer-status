@@ -1377,6 +1377,104 @@
       }
     };
   }
+  /* ── STAFF SIGN-IN MODAL (dock / driver pages) ── */
+  function initStaffLogin() {
+    const ov      = el("staffLoginOv");
+    const roleEl  = el("staffLoginRole");
+    const pinEl   = el("staffLoginPin");
+    const errEl   = el("staffLoginErr");
+    const goBtn   = el("staffLoginGo");
+    const cancel  = el("staffLoginCancel");
+    const logoutRow = el("staffLogoutRow");
+    const curRole   = el("staffCurrentRole");
+    const logoutBtn = el("staffLogoutBtn");
+    if (!ov) return;
+
+    function openModal() {
+      errEl.style.display = "none";
+      pinEl.value = "";
+      if (ROLE && ["admin","management","dispatcher","dock"].includes(ROLE)) {
+        // Already signed in — show sign-out view
+        if(curRole) curRole.textContent = ROLE.charAt(0).toUpperCase() + ROLE.slice(1);
+        if(logoutRow) logoutRow.style.display = "";
+        if(roleEl?.closest(".field")) roleEl.closest(".field").style.display = "none";
+        if(pinEl?.closest(".field")) pinEl.closest(".field").style.display = "none";
+        if(goBtn) goBtn.style.display = "none";
+      } else {
+        if(logoutRow) logoutRow.style.display = "none";
+        if(roleEl?.closest(".field")) roleEl.closest(".field").style.display = "";
+        if(pinEl?.closest(".field")) pinEl.closest(".field").style.display = "";
+        if(goBtn) goBtn.style.display = "";
+      }
+      ov.classList.remove("hidden");
+      setTimeout(() => (ROLE ? null : pinEl?.focus()), 100);
+    }
+
+    function closeModal() { ov.classList.add("hidden"); }
+
+    // Open triggers
+    el("btnDockStaffLogin")?.addEventListener("click", openModal);
+    el("btnDriverStaffLogin")?.addEventListener("click", openModal);
+    cancel?.addEventListener("click", closeModal);
+    ov.addEventListener("click", e => { if (e.target === ov) closeModal(); });
+
+    // Sign in
+    async function doStaffLogin() {
+      const role = roleEl?.value;
+      const pin  = pinEl?.value || "";
+      if (!pin) { errEl.textContent = "Enter your PIN."; errEl.style.display = ""; return; }
+      goBtn.disabled = true; goBtn.textContent = "Signing in…";
+      errEl.style.display = "none";
+      try {
+        const r = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+          body: JSON.stringify({ role, pin })
+        });
+        if (!r.ok) { errEl.textContent = await r.text(); errEl.style.display = ""; return; }
+        haptic("success");
+        closeModal();
+        // Reload current page so the new session takes effect cleanly
+        location.reload();
+      } catch(e) {
+        errEl.textContent = "Connection error."; errEl.style.display = "";
+      } finally {
+        goBtn.disabled = false; goBtn.textContent = "Sign In →";
+      }
+    }
+
+    goBtn?.addEventListener("click", doStaffLogin);
+    pinEl?.addEventListener("keydown", e => { if (e.key === "Enter") doStaffLogin(); });
+
+    // Sign out
+    logoutBtn?.addEventListener("click", async () => {
+      try { await apiJson("/api/logout", { method: "POST", headers: CSRF }); } catch {}
+      haptic("light");
+      closeModal();
+      location.reload();
+    });
+
+    // Update staff button appearance based on auth state
+    function syncStaffButtons() {
+      const signedIn = ROLE && ROLE !== "driver";
+      ["btnDockStaffLogin","btnDriverStaffLogin"].forEach(id => {
+        const b = el(id); if (!b) return;
+        if (signedIn) {
+          b.textContent = `👤 ${ROLE.charAt(0).toUpperCase() + ROLE.slice(1)}`;
+          b.style.borderColor = "var(--amber-bd)";
+          b.style.color = "var(--amber)";
+        } else {
+          b.textContent = "🔑 Staff";
+          b.style.borderColor = "";
+          b.style.color = "";
+        }
+      });
+    }
+    syncStaffButtons();
+    // Expose so it can be called after load
+    initStaffLogin._sync = syncStaffButtons;
+  }
+
   loadInitial().then(() => {
     syncBottomNav();
     initToastSwipe();
@@ -1384,6 +1482,8 @@
     initKeyboardAvoidance();
     initSwipeViews();
     initPwaInstall();
+    initStaffLogin();
+    initStaffLogin._sync?.();
     connectWs();
   });
 })();

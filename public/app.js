@@ -79,8 +79,8 @@
     b.style.maxHeight = open ? (b.scrollHeight+40)+"px" : "0px";
   }
 
-  const STATUS_ROW = {Loading:"r-loading",Ready:"r-ready","Dock Ready":"r-dockready",Dropped:"r-dropped",Incoming:"r-incoming",Departed:"r-departed"};
-  const STATUS_TAG = {Loading:"stag-loading",Ready:"stag-ready","Dock Ready":"stag-dockready",Dropped:"stag-dropped",Incoming:"stag-incoming",Departed:"stag-departed"};
+  const STATUS_ROW = {Loading:"r-loading",Staged:"r-staged",Ready:"r-ready","Dock Ready":"r-dockready",Dropped:"r-dropped",Incoming:"r-incoming",Departed:"r-departed"};
+  const STATUS_TAG = {Loading:"stag-loading",Staged:"stag-staged",Ready:"stag-ready","Dock Ready":"stag-dockready",Dropped:"stag-dropped",Incoming:"stag-incoming",Departed:"stag-departed"};
 
   function statusTag(s) {
     return `<span class="stag ${STATUS_TAG[s]||"stag-unknown"}"><span class="sp"></span>${esc(s||"—")}</span>`;
@@ -177,7 +177,8 @@
         const nextStatuses = {
           "Incoming":  ["Dropped","Departed"],
           "Dropped":   ["Loading","Departed"],
-          "Loading":   ["Dock Ready","Departed"],
+          "Loading":   ["Staged","Dock Ready","Departed"],
+          "Staged":    ["Dock Ready","Departed"],
           "Dock Ready":["Ready","Departed"],
           "Ready":     ["Departed"],
           "Departed":  ["Incoming"],
@@ -201,9 +202,9 @@
         if(r.status==="Dropped"||r.status==="Incoming")
           acts=`<div class="t-acts"><button class="btn btn-default btn-sm" data-act="dockSet" data-to="Loading" data-trailer-id="${esc(r.trailer)}">Loading</button></div>`;
         else if(r.status==="Loading")
-          acts=`<div class="t-acts"><button class="btn btn-cyan btn-sm" data-act="dockSet" data-to="Dock Ready" data-trailer-id="${esc(r.trailer)}">Dock Ready</button></div>`;
+          acts=`<div class="t-acts"><button class="btn btn-cyan btn-sm" data-act="dockSet" data-to="Staged" data-trailer-id="${esc(r.trailer)}">Mark Staged</button></div>`;
         else
-          acts=`<span style="color:var(--t3);font-size:10px;font-family:var(--mono);">${esc(r.status==="Dock Ready"?"Awaiting dispatch":r.status==="Ready"?"Ready":"—")}</span>`;
+          acts=`<span style="color:var(--t3);font-size:10px;font-family:var(--mono);">${esc(r.status==="Staged"?"Awaiting shift":r.status==="Dock Ready"?"Awaiting dispatch":r.status==="Ready"?"Ready":"—")}</span>`;
       }
 
       const shuntPickerHtml = (shuntOpen[r.trailer] && canEdit) ? `
@@ -253,6 +254,7 @@
     const kpis=[
       {val:v.length,lbl:"Total Trailers",cls:"kpi-total"},
       {val:v.filter(r=>r.status==="Loading").length,lbl:"Loading",cls:"kpi-loading"},
+      {val:v.filter(r=>r.status==="Staged").length,lbl:"Staged",cls:"kpi-staged"},
       {val:v.filter(r=>["Ready","Dock Ready"].includes(r.status)).length,lbl:"Ready",cls:"kpi-ready"},
       {val:v.filter(r=>r.status==="Departed").length,lbl:"Departed",cls:"kpi-departed"},
       {val:confirmations.length,lbl:"Safety Confirms",cls:"kpi-conf"},
@@ -337,7 +339,7 @@
     <div class="field"><label class="fl" for="d_trailer">Trailer Number</label><input id="d_trailer" placeholder="e.g. 5312" autocomplete="off" inputmode="numeric" autocorrect="off" autocapitalize="none" spellcheck="false" style="font-family:var(--mono);font-weight:500;"/></div>
     <div class="field-row">
       <div class="field"><label class="fl" for="d_direction">Direction</label><select id="d_direction"><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select></div>
-      <div class="field"><label class="fl" for="d_status">Status</label><select id="d_status"><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select></div>
+      <div class="field"><label class="fl" for="d_status">Status</label><select id="d_status"><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Staged</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select></div>
     </div>
     <div class="field-row">
       <div class="field"><label class="fl" for="d_door">Door (28–42)</label><input id="d_door" placeholder="e.g. 32" inputmode="numeric" autocomplete="off" style="font-family:var(--mono);"/></div>
@@ -357,14 +359,15 @@
   const DOCK_STATUS_NEXT = {
     "Incoming":  { label:"Mark Loading",    to:"Loading",    cls:"dc-btn-default" },
     "Dropped":   { label:"Mark Loading",    to:"Loading",    cls:"dc-btn-default" },
-    "Loading":   { label:"Mark Dock Ready", to:"Dock Ready", cls:"dc-btn-cyan"    },
+    "Loading":   { label:"Mark Staged",     to:"Staged",     cls:"dc-btn-staged"  },
+    "Staged":    { label:"Awaiting shift",     to:null,         cls:""               },
     "Dock Ready":{ label:"Awaiting dispatcher", to:null,     cls:"" },
     "Ready":     { label:"Ready for pickup",    to:null,     cls:"" },
     "Departed":  { label:"Departed",            to:null,     cls:"" },
   };
 
   const DOCK_STATUS_COLOR = {
-    "Incoming":"dc-incoming","Dropped":"dc-dropped","Loading":"dc-loading",
+    "Incoming":"dc-incoming","Dropped":"dc-dropped","Loading":"dc-loading","Staged":"dc-staged",
     "Dock Ready":"dc-dockready","Ready":"dc-ready","Departed":"dc-departed",
   };
 
@@ -381,7 +384,7 @@
         return true;
       })
       .sort((a,b) => {
-        const order = {"Loading":0,"Dropped":1,"Incoming":2,"Dock Ready":3,"Ready":4,"Departed":5};
+        const order = {"Loading":0,"Staged":1,"Dropped":2,"Incoming":3,"Dock Ready":4,"Ready":5,"Departed":6};
         return (order[a.status]??9)-(order[b.status]??9)||(b.updatedAt||0)-(a.updatedAt||0);
       });
     if (countEl) countEl.textContent = rows.length;
@@ -396,7 +399,7 @@
       const colorCls = DOCK_STATUS_COLOR[r.status]||"";
       const next = DOCK_STATUS_NEXT[r.status];
       const hasAction = next?.to && canAct;
-      const statusDot = {"Loading":"var(--amber)","Dock Ready":"var(--cyan)","Ready":"var(--green)","Dropped":"var(--violet)","Incoming":"var(--t2)","Departed":"var(--t3)"}[r.status]||"var(--t3)";
+      const statusDot = {"Loading":"var(--amber)","Staged":"var(--violet)","Dock Ready":"var(--cyan)","Ready":"var(--green)","Dropped":"var(--violet)","Incoming":"var(--t2)","Departed":"var(--t3)"}[r.status]||"var(--t3)";
       return `<div class="dock-card ${colorCls}">
         <div class="dc-top">
           <div class="dc-trailer-block">

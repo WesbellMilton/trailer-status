@@ -61,11 +61,11 @@
       el("modalConfirm").focus();
     });
   }
-  el("modalCancel").addEventListener("click",  ()=>{ el("modalOv").classList.add("hidden"); if(_mr){_mr(false);_mr=null;} });
-  el("modalConfirm").addEventListener("click", ()=>{ el("modalOv").classList.add("hidden"); if(_mr){_mr(true);_mr=null;} });
-  el("modalOv").addEventListener("click", e=>{ if(e.target===el("modalOv")){ el("modalOv").classList.add("hidden"); if(_mr){_mr(false);_mr=null;} } });
-  el("dmModalCancel").addEventListener("click", () => el("dmModalOv").classList.add("hidden"));
-  el("dmModalOv").addEventListener("click", e => { if(e.target===el("dmModalOv")) el("dmModalOv").classList.add("hidden"); });
+  el("modalCancel")?.addEventListener("click",  ()=>{ el("modalOv").classList.add("hidden"); if(_mr){_mr(false);_mr=null;} });
+  el("modalConfirm")?.addEventListener("click", ()=>{ el("modalOv").classList.add("hidden"); if(_mr){_mr(true);_mr=null;} });
+  el("modalOv")?.addEventListener("click", e=>{ if(e.target===el("modalOv")){ el("modalOv").classList.add("hidden"); if(_mr){_mr(false);_mr=null;} } });
+  el("dmModalCancel")?.addEventListener("click", () => el("dmModalOv")?.classList.add("hidden"));
+  el("dmModalOv")?.addEventListener("click", e => { if(e.target===el("dmModalOv")) el("dmModalOv").classList.add("hidden"); });
 
   function setPlatesOpen(open) {
     const t=el("dockPlatesToggle"), b=el("dockPlatesBody"); if(!t||!b) return;

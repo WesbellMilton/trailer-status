@@ -1,1263 +1,1995 @@
-:root {
-  --bg:#0a0d12; --s0:#0e1218; --s1:#121820; --s2:#161d27; --s3:#1b2330;
-  --b0:#1a2232; --b1:#213040; --b2:#2a3d55;
-  --t0:#f0f4fc; --t1:#b0c0d8; --t2:#6e839e; --t3:#475a72;
-  --amber:#f0a030; --amber-bg:rgba(240,160,48,.09); --amber-bd:rgba(240,160,48,.20);
-  --cyan:#20c0d0;  --cyan-bg:rgba(32,192,208,.07); --cyan-bd:rgba(32,192,208,.18);
-  --green:#20d090; --green-bg:rgba(32,208,144,.07); --green-bd:rgba(32,208,144,.20);
-  --red:#e84848;   --red-bg:rgba(232,72,72,.08);   --red-bd:rgba(232,72,72,.20);
-  --violet:#9878f0;--violet-bg:rgba(152,120,240,.08); --violet-bd:rgba(152,120,240,.18);
-  --mono:'DM Mono', monospace; --sans:'DM Sans', system-ui, sans-serif;
-  --r:5px; --r2:9px; --sh:0 2px 16px rgba(0,0,0,.5); --sh-lg:0 12px 48px rgba(0,0,0,.7);
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-::-webkit-scrollbar{width:6px;height:6px}
-::-webkit-scrollbar-track{background:var(--bg)}
-::-webkit-scrollbar-thumb{background:var(--b2);border-radius:3px}
-::-webkit-scrollbar-thumb:hover{background:var(--t3)}
-html{font-size:14px;-webkit-font-smoothing:antialiased}
-.view-fade{animation:viewFadeIn .18s ease}
-@keyframes viewFadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-body{background:var(--bg);color:var(--t0);font-family:var(--sans);line-height:1.5;min-height:100vh}
-a{color:var(--cyan);text-decoration:none}
-
-/* ═══════════════════════════════════════════
-   TOPBAR
-═══════════════════════════════════════════ */
-.topbar{position:sticky;top:0;z-index:100;background:rgba(10,13,18,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--b0)}
-.topbar-inner{max-width:1600px;margin:0 auto;padding:0 20px;height:54px;display:flex;align-items:center}
-.brand-block{display:flex;align-items:center;gap:10px;padding-right:20px;border-right:1px solid var(--b0);margin-right:16px;flex-shrink:0}
-.brand-mark{width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,var(--amber) 0%,#c04800 100%);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;font-weight:700;color:#000;letter-spacing:-.5px;box-shadow:0 2px 8px rgba(240,120,0,.35)}
-.brand-name{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--t0);letter-spacing:.06em}
-.brand-sub{font-size:9px;color:var(--t2);letter-spacing:.06em;margin-top:1px}
-
-.nav{display:flex;align-items:center;gap:1px;flex:1}
-.nav-item{display:flex;align-items:center;gap:6px;padding:0 13px;height:54px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--t2);border-bottom:2px solid transparent;background:transparent;border:none;cursor:pointer;transition:color .15s,border-color .15s,background .15s;text-decoration:none}
-.nav-item:hover{color:var(--t1);background:rgba(255,255,255,.025)}
-.nav-item.active{color:var(--amber);border-bottom-color:var(--amber);background:linear-gradient(to bottom,transparent,var(--amber-bg))}
-
-.topbar-right{display:flex;align-items:center;gap:6px;padding-left:16px;border-left:1px solid var(--b0);margin-left:auto;flex-shrink:0}
-.chip{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;border:1px solid var(--b0);background:var(--s1);font-family:var(--mono);font-size:10px;color:var(--t2);white-space:nowrap;letter-spacing:.04em}
-.live-dot{width:6px;height:6px;border-radius:50%;background:var(--t3);transition:all .3s}
-.live-dot.ok{background:var(--green);box-shadow:0 0 7px var(--green)}
-.live-dot.bad{background:var(--red);box-shadow:0 0 7px var(--red)}
-.live-dot.warn{background:var(--amber);box-shadow:0 0 7px var(--amber)}
-.tb-btn{display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:var(--r);border:1px solid var(--b1);background:var(--s2);color:var(--t1);font-size:11px;font-weight:600;letter-spacing:.04em;cursor:pointer;transition:all .15s}
-.tb-btn:hover{color:var(--t0);border-color:var(--b2)}
-.tb-btn.danger{color:var(--red);border-color:var(--red-bd)}
-.tb-btn.danger:hover{background:var(--red-bg)}
-
-/* ═══════════════════════════════════════════
-   LAYOUT
-═══════════════════════════════════════════ */
-.page{max-width:1600px;margin:0 auto;padding:16px 18px}
-.grid-main{display:grid;grid-template-columns:1fr 280px;gap:14px;align-items:start}
-@media(max-width:1100px){.grid-main{grid-template-columns:1fr}}
-.col-stack{display:flex;flex-direction:column;gap:14px}
-
-/* ═══════════════════════════════════════════
-   PANELS
-═══════════════════════════════════════════ */
-.panel{background:var(--s1);border:1px solid var(--b0);border-radius:var(--r2);overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.2)}
-.panel-hd{padding:10px 14px;border-bottom:1px solid var(--b0);display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--s0)}
-.panel-title{font-family:var(--mono);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);display:flex;align-items:center;gap:7px}
-.ptdot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
-.panel-body{padding:14px}
-.panel-body-flush{padding:0}
-
-/* ═══════════════════════════════════════════
-   BADGES
-═══════════════════════════════════════════ */
-.badge{display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.04em;white-space:nowrap;border:1px solid var(--b0);background:var(--s2);color:var(--t2)}
-.badge-num{border-color:var(--b1);background:var(--s3);color:var(--t1)}
-
-/* ═══════════════════════════════════════════
-   STATUS TAGS
-═══════════════════════════════════════════ */
-.stag{display:inline-flex;align-items:center;gap:4px;padding:2px 6px;border-radius:3px;font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.04em;white-space:nowrap;border:1px solid}
-.sp{width:4px;height:4px;border-radius:50%;flex-shrink:0}
-.stag-loading{background:var(--amber-bg);color:var(--amber);border-color:var(--amber-bd)} .stag-loading .sp{background:var(--amber)}
-.stag-service{background:rgba(240,160,48,.12);color:var(--amber);border-color:rgba(240,160,48,.3)} .stag-service .sp{background:var(--amber)}
-.stag-error{background:rgba(232,72,72,.12);color:var(--red);border-color:rgba(232,72,72,.3)} .stag-error .sp{background:var(--red)}
-.stag-ready{background:var(--green-bg);color:var(--green);border-color:var(--green-bd)} .stag-ready .sp{background:var(--green)}
-.stag-dockready{background:var(--cyan-bg);color:var(--cyan);border-color:var(--cyan-bd)} .stag-dockready .sp{background:var(--cyan)}
-.stag-dropped{background:var(--violet-bg);color:var(--violet);border-color:var(--violet-bd)} .stag-dropped .sp{background:var(--violet)}
-.stag-incoming{background:var(--s2);color:var(--t1);border-color:var(--b1)} .stag-incoming .sp{background:var(--t2)}
-.stag-departed{background:var(--s1);color:var(--t2);border-color:var(--b0)} .stag-departed .sp{background:var(--t3)}
-.stag-unknown{background:var(--s2);color:var(--t2);border-color:var(--b0)}
-
-/* ═══════════════════════════════════════════
-   TRAILER TABLE
-═══════════════════════════════════════════ */
-.tbl-hd,.tbl-row{display:grid;grid-template-columns:86px 68px 108px 48px 68px 1fr 86px minmax(220px,auto);align-items:center}
-.tbl-hd>span,.tbl-row>span,.tbl-row>div{padding:7px 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.tbl-hd{background:var(--s0);border-bottom:1px solid var(--b0)}
-.tbl-hd>span{font-family:var(--mono);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t3)}
-.tbl-row{border-bottom:1px solid var(--b0);border-left:3px solid transparent;transition:background .15s}
-.tbl-row:last-child{border-bottom:none}
-.tbl-row:hover{background:rgba(255,255,255,.018)}
-.tbl-row.r-loading{border-left-color:var(--amber)}
-.tbl-row.r-ready{border-left-color:var(--green)}
-.tbl-row.r-dockready{border-left-color:var(--cyan)}
-.tbl-row.r-dropped{border-left-color:var(--violet)}
-.tbl-row.r-incoming{border-left-color:var(--b1)}
-.tbl-row.r-departed{border-left-color:var(--b0);opacity:.45}
-.tbl-row.carrier-outside{background:rgba(152,120,240,.035)}
-.tbl-row.carrier-outside:hover{background:rgba(152,120,240,.065)}
-
-@keyframes rowPulse{0%{background:rgba(240,160,48,.10)}100%{background:transparent}}
-.tbl-row.flashing{animation:rowPulse .9s ease-out}
-
-@keyframes readyGlow{0%,100%{background:rgba(32,208,144,.06)}50%{background:rgba(32,208,144,.14)}}
-@keyframes tagPulse{0%,100%{box-shadow:0 0 0 0 rgba(32,208,144,.5)}50%{box-shadow:0 0 0 4px rgba(32,208,144,.15)}}
-.tbl-row.ready-flash{animation:readyGlow 1.2s ease-in-out infinite}
-.tbl-row.ready-flash .stag-ready{animation:tagPulse 1.2s ease-in-out infinite}
-
-.t-num{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--t0);letter-spacing:.02em}
-.t-dir{font-size:11px;color:var(--t2)}
-.t-door{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--cyan)}
-.t-note{font-size:11px;color:var(--t1)}
-.t-time{font-family:var(--mono);font-size:10px;color:var(--t2)}
-.t-acts{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
-.tbl-empty{padding:40px 16px;text-align:center;color:var(--t2);font-size:11px;font-family:var(--mono);letter-spacing:.06em;display:flex;flex-direction:column;align-items:center;gap:8px}
-.tbl-empty::before{content:"📋";font-size:28px;opacity:.4}
-
-/* ═══════════════════════════════════════════
-   FILTER BAR
-═══════════════════════════════════════════ */
-.filter-bar{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;padding:10px 14px;background:var(--s0);border-bottom:1px solid var(--b0)}
-.filter-bar .field{flex:1 1 110px;margin:0}
-.filter-bar .tight{flex:0 0 auto}
-
-/* ═══════════════════════════════════════════
-   FORM
-═══════════════════════════════════════════ */
-.fl{display:block;font-family:var(--mono);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);margin-bottom:4px}
-.field{margin-bottom:10px}
-.field-row{display:flex;gap:8px}
-.field-row>.field{flex:1}
-input,select,textarea{width:100%;padding:7px 10px;border-radius:var(--r);border:1px solid var(--b1);background:var(--s0);color:var(--t0);font-family:var(--sans);font-size:13px;outline:none;transition:border-color .15s,box-shadow .15s;-webkit-appearance:none}
-input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
-input:focus,select:focus,textarea:focus{border-color:var(--amber);box-shadow:0 0 0 3px var(--amber-bg)}
-select option{background:var(--s1)}
-textarea{min-height:60px;resize:vertical}
-
-/* ═══════════════════════════════════════════
-   BUTTONS
-═══════════════════════════════════════════ */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:7px 12px;border-radius:var(--r);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap;border:1px solid}
-.btn-primary{background:var(--amber-bg);border-color:var(--amber-bd);color:var(--amber)}
-.btn-primary:hover{background:rgba(240,160,48,.16)}
-.btn-default{background:var(--s2);border-color:var(--b1);color:var(--t1)}
-.btn-default:hover{border-color:var(--b2);color:var(--t0)}
-.btn-danger{background:var(--red-bg);border-color:var(--red-bd);color:var(--red)}
-.btn-danger:hover{background:rgba(232,72,72,.14)}
-.btn-success{background:var(--green-bg);border-color:var(--green-bd);color:var(--green)}
-.btn-success:hover{background:rgba(32,208,144,.14)}
-.btn-cyan{background:var(--cyan-bg);border-color:var(--cyan-bd);color:var(--cyan)}
-.btn-cyan:hover{background:rgba(32,192,208,.14)}
-.btn-sm{padding:4px 9px;font-size:11px;border-radius:4px}
-.btn-full{width:100%}
-
-/* ═══════════════════════════════════════════
-   INFOBOX
-═══════════════════════════════════════════ */
-.infobox{padding:9px 11px;border-radius:var(--r);border-left:2px solid;margin-bottom:11px;font-size:12px;line-height:1.55;color:var(--t1)}
-.infobox-amber{background:var(--amber-bg);border-color:var(--amber)}
-.infobox-cyan{background:var(--cyan-bg);border-color:var(--cyan)}
-.infobox-green{background:var(--green-bg);border-color:var(--green)}
-.infobox .ib-title{font-weight:700;color:var(--t0);margin-bottom:3px;font-size:11px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em}
-
-/* ═══════════════════════════════════════════
-   ACCORDION
-═══════════════════════════════════════════ */
-.acc-head{width:100%;display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--s0);border:none;border-bottom:1px solid var(--b0);font-family:var(--mono);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);cursor:pointer;transition:color .15s,background .15s}
-.acc-head:hover{color:var(--t1);background:rgba(255,255,255,.02)}
-.acc-head .chev{font-size:9px;transition:transform .25s cubic-bezier(.4,0,.2,1);pointer-events:none;opacity:.6}
-.acc-head[aria-expanded="true"] .chev{transform:rotate(180deg);opacity:1}
-.acc-body{overflow:hidden;max-height:0;transition:max-height .3s cubic-bezier(.4,0,.2,1)}
-
-/* ═══════════════════════════════════════════
-   DOCK PLATES
-═══════════════════════════════════════════ */
-.plate-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;padding:10px}
-@media(max-width:900px){.plate-grid{grid-template-columns:repeat(6,1fr)}}
-@media(max-width:640px){.plate-grid{grid-template-columns:repeat(5,1fr);gap:3px;padding:8px}}
-.plate{border-radius:var(--r);border:1px solid var(--b0);background:var(--s0);padding:4px 5px;display:flex;flex-direction:column;gap:2px;min-height:0}
-.plate.p-ok{border-color:var(--green-bd);background:var(--green-bg)}
-.plate.p-service{border-color:rgba(240,160,48,.4);background:rgba(240,160,48,.08)}
-.plate.p-out-of-order{border-color:var(--red-bd);background:var(--red-bg)}
-.plate.p-out-of-order{border-color:var(--red-bd);background:var(--red-bg)}
-.plate .p-door{font-family:var(--mono);font-size:8px;color:var(--t3);letter-spacing:.04em}
-.plate .p-note{font-size:9px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.plate .p-btns{display:flex;gap:2px;margin-top:2px}
-.plate .p-btn{padding:1px 4px;font-size:8px;font-weight:600;border-radius:3px;border:1px solid var(--b1);background:var(--s1);color:var(--t2);font-family:var(--mono);cursor:pointer;letter-spacing:.03em}
-.plate .p-btn:hover{color:var(--t0);border-color:var(--b2)}
-.plate select,.plate input{padding:2px 4px;font-size:9px;border-radius:3px}
-
-/* ═══════════════════════════════════════════
-   DATA TABLE
-═══════════════════════════════════════════ */
-.data-tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-.data-tbl-wrap table{width:100%;border-collapse:collapse}
-.data-tbl-wrap th,.data-tbl-wrap td{padding:7px 12px;text-align:left;border-bottom:1px solid var(--b0);font-size:11px;white-space:nowrap}
-.data-tbl-wrap th{font-family:var(--mono);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t3);background:var(--s0)}
-.data-tbl-wrap tr:hover td{background:rgba(255,255,255,.015)}
-.data-tbl-wrap td.mono{font-family:var(--mono)}
-.data-tbl-wrap td.muted{color:var(--t2);font-family:var(--mono);font-size:10px}
-
-/* ═══════════════════════════════════════════
-   BOARD FOOTER
-═══════════════════════════════════════════ */
-.board-footer{padding:5px 14px;border-top:1px solid var(--b0);background:var(--s0);display:flex;align-items:center;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:.04em}
-.divider{height:1px;background:var(--b0);margin:11px 0}
-
-/* ═══════════════════════════════════════════
-   MODAL
-═══════════════════════════════════════════ */
-.modal-ov{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:16px}
-.modal-ov.hidden{display:none}
-.modal{background:var(--s2);border:1px solid var(--b2);border-radius:var(--r2);padding:22px;max-width:380px;width:100%;box-shadow:var(--sh-lg)}
-.modal h4{font-size:14px;font-weight:700;margin-bottom:6px;color:var(--t0);font-family:var(--mono);letter-spacing:.04em}
-.modal .m-sub{font-size:12px;color:var(--t1);margin-bottom:18px;line-height:1.55}
-.modal .m-btns{display:flex;gap:8px;justify-content:flex-end}
-
-/* ═══════════════════════════════════════════
-   TOAST
-═══════════════════════════════════════════ */
-.toast{position:fixed;right:16px;bottom:16px;z-index:600;width:min(360px,calc(100vw - 32px));background:var(--s2);border:1px solid var(--b2);border-left:3px solid var(--b2);border-radius:var(--r2);padding:14px 16px;box-shadow:var(--sh-lg);display:none;animation:toastIn .25s cubic-bezier(.16,1,.3,1)}
-@keyframes toastIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-.toast-bar{display:none}
-.toast.t-ok{border-left-color:var(--green)}
-.toast.t-warn{border-left-color:var(--amber)}
-.toast.t-err{border-left-color:var(--red)}
-.toast strong{display:block;font-size:12px;font-weight:700;margin:3px 0 2px;color:var(--t0);font-family:var(--mono)}
-.toast .t-body{font-size:11px;color:var(--t1)}
-
-/* ═══════════════════════════════════════════
-   DRIVER PORTAL
-═══════════════════════════════════════════ */
-.driver-shell{min-height:calc(100vh - 48px);background:var(--bg);background-image:radial-gradient(ellipse 900px 500px at 50% -60px,rgba(240,160,48,.08) 0%,transparent 65%),radial-gradient(ellipse 600px 400px at 90% 100%,rgba(32,192,208,.05) 0%,transparent 65%);display:flex;align-items:flex-start;justify-content:center;padding:28px 16px 48px}
-.driver-wrap{width:100%;max-width:440px;display:flex;flex-direction:column;gap:14px}
-
-/* New compact driver topbar replacing conn-bar + header */
-.driver-topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;background:var(--s1);border:1px solid var(--b0);border-radius:var(--r2)}
-.dtb-brand{display:flex;align-items:center;gap:9px}
-.dtb-mark{width:28px;height:28px;border-radius:6px;background:linear-gradient(135deg,var(--amber) 0%,#c04800 100%);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:700;color:#000;letter-spacing:-.5px;flex-shrink:0}
-.dtb-title{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--t0);letter-spacing:.04em}
-.dtb-right{display:flex;align-items:center;gap:7px}
-.dtb-status{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;color:var(--t2);letter-spacing:.03em}
-/* keep conn-bar styles in case any JS still references .driver-conn-bar */
-.driver-conn-bar{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:var(--s1);border:1px solid var(--b0);border-radius:var(--r2);font-family:var(--mono);font-size:10px;color:var(--t2);letter-spacing:.04em}
-.driver-conn-bar .dcb-left{display:flex;align-items:center;gap:7px}
-.driver-conn-bar .dcb-right{font-size:10px;color:var(--t3)}
-.driver-hdr{text-align:center;padding:4px 0 8px}
-.driver-hdr h1{font-size:22px;font-weight:700;letter-spacing:-.03em;color:var(--t0);margin-bottom:3px}
-.driver-hdr p{font-size:10px;color:var(--t2);font-family:var(--mono);letter-spacing:.1em}
-
-.driver-panel{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r2);overflow:hidden;transition:border-color .2s}
-.driver-panel.active-step{border-color:rgba(240,160,48,.25)}
-.driver-phd{padding:12px 16px;border-bottom:1px solid var(--b0);background:var(--s0);display:flex;align-items:center;justify-content:space-between}
-.driver-phd-title{font-family:var(--mono);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);display:flex;align-items:center;gap:8px}
-.driver-pbody{padding:18px 16px}
-
-.trailer-hero-input{width:100%;padding:14px 16px;border-radius:var(--r2);border:2px solid var(--b1);background:var(--s0);color:var(--t0);font-family:var(--mono);font-size:24px;font-weight:500;letter-spacing:.06em;outline:none;transition:border-color .2s,box-shadow .2s;text-align:center}
-.trailer-hero-input::placeholder{color:var(--t3);font-size:18px}
-.trailer-hero-input:focus{border-color:var(--amber);box-shadow:0 0 0 4px var(--amber-bg)}
-.trailer-hero-input:focus-visible{outline:3px solid var(--amber);outline-offset:1px}
-.trailer-hero-input.has-value{border-color:var(--b2);color:var(--t0)}
-
-.assignment-card{display:none;padding:12px 14px;border-radius:var(--r);border:1px solid var(--cyan-bd);background:var(--cyan-bg);margin-top:12px;gap:10px;align-items:flex-start}
-.assignment-card.visible{display:flex}
-.assignment-card .ac-icon{font-size:18px;flex-shrink:0;margin-top:1px}
-.assignment-card .ac-body{flex:1;min-width:0}
-.assignment-card .ac-label{font-family:var(--mono);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--cyan);margin-bottom:4px}
-.assignment-card .ac-door{font-family:var(--mono);font-size:28px;font-weight:500;color:var(--t0);line-height:1;margin-bottom:3px}
-.assignment-card .ac-meta{font-size:11px;color:var(--t1)}
-.assignment-card .ac-override{font-family:var(--mono);font-size:9px;color:var(--cyan);cursor:pointer;margin-top:5px;text-decoration:underline;opacity:.7}
-.assignment-card .ac-override:hover{opacity:1}
-
-.door-picker-wrap{display:none;margin-top:12px}
-.door-picker-wrap.visible{display:block}
-.door-picker-label{font-family:var(--mono);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);margin-bottom:8px}
-.door-picker-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
-.door-btn{padding:0;min-height:52px;border-radius:var(--r);border:1px solid var(--b1);background:var(--s0);color:var(--t1);font-family:var(--mono);font-size:13px;font-weight:500;cursor:pointer;transition:all .12s;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;position:relative;letter-spacing:.02em;-webkit-tap-highlight-color:transparent}
-.door-btn:hover{border-color:var(--b2);color:var(--t0);background:var(--s2)}
-.door-btn:active{transform:scale(.96)}
-.door-btn.selected{border-color:var(--amber-bd);background:var(--amber-bg);color:var(--amber)}
-.door-btn.occupied{border-color:var(--violet-bd);background:var(--violet-bg);color:var(--violet)}
-.door-btn.occupied::after{content:'●';font-size:6px;position:absolute;top:4px;right:5px;opacity:.7}
-.door-btn .door-btn-sub{font-size:8px;opacity:.6;font-family:var(--sans);letter-spacing:0}
-
-.drop-type-toggle{display:flex;gap:8px;margin-top:12px}
-.drop-type-btn{flex:1;min-height:64px;border-radius:var(--r);border:1px solid var(--b1);background:var(--s0);color:var(--t1);font-family:var(--mono);font-size:12px;font-weight:500;cursor:pointer;transition:all .12s;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;-webkit-tap-highlight-color:transparent}
-.drop-type-btn .dtb-icon{font-size:20px}
-.drop-type-btn:hover{border-color:var(--b2);color:var(--t0)}
-.drop-type-btn:active{transform:scale(.97)}
-.drop-type-btn.selected{border-color:var(--amber-bd);background:var(--amber-bg);color:var(--amber)}
-
-.driver-submit{width:100%;min-height:60px;border-radius:var(--r2);border:1px solid var(--amber-bd);background:var(--amber-bg);color:var(--amber);font-family:var(--mono);font-size:14px;font-weight:500;letter-spacing:.06em;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:10px;margin-top:16px;-webkit-tap-highlight-color:transparent}
-.driver-submit:hover{background:rgba(240,160,48,.16)}
-.driver-submit:active{transform:scale(.98)}
-.driver-submit:disabled{opacity:.4;cursor:not-allowed;transform:none}
-.driver-submit.green{border-color:var(--green-bd);background:var(--green-bg);color:var(--green)}
-.driver-submit.green:hover{background:rgba(32,208,144,.14)}
-
-.checkline{display:flex;align-items:center;gap:14px;padding:16px;border:1px solid var(--b1);border-radius:var(--r);background:var(--s0);cursor:pointer;transition:border-color .15s,background .15s;margin-bottom:8px;min-height:72px;-webkit-tap-highlight-color:transparent}
-.checkline:has(input:checked){border-color:var(--green-bd);background:var(--green-bg)}
-.checkline input[type="checkbox"]{width:26px;height:26px;accent-color:var(--green);cursor:pointer;flex-shrink:0}
-.checkline .cl-main{font-weight:600;font-size:15px;color:var(--t0)}
-.checkline .cl-sub{font-size:11px;color:var(--t2);margin-top:2px}
-
-.context-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;border:1px solid var(--b1);background:var(--s0);font-family:var(--mono);font-size:11px;color:var(--t1);margin-bottom:14px}
-.context-chip strong{color:var(--t0)}
-
-.driver-done{display:flex;flex-direction:column;align-items:center;padding:28px 20px 24px;text-align:center;gap:10px}
-.done-ring{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;background:var(--green-bg);border:1px solid var(--green-bd);margin-bottom:4px}
-.done-title{font-size:18px;font-weight:700;color:var(--t0)}
-.done-detail{font-size:12px;color:var(--t1);font-family:var(--mono);line-height:1.7}
-.done-restart-btn{margin-top:8px !important;border-color:var(--b2) !important;background:var(--s2) !important;color:var(--t0) !important}
-.done-restart-btn:hover{background:var(--s3) !important}
-
-.session-history{background:var(--s1);border:1px solid var(--b0);border-radius:var(--r2);overflow:hidden}
-.sh-hd{padding:10px 14px;background:var(--s0);border-bottom:1px solid var(--b0);font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);display:flex;align-items:center;justify-content:space-between}
-.sh-body{padding:4px 0}
-.sh-row{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-bottom:1px solid var(--b0);font-size:11px}
-.sh-row:last-child{border-bottom:none}
-.sh-row .sh-trailer{font-family:var(--mono);font-weight:500;color:var(--t0)}
-.sh-row .sh-meta{font-family:var(--mono);font-size:10px;color:var(--t2)}
-.sh-empty{padding:16px 14px;font-size:11px;color:var(--t3);font-family:var(--mono)}
-.sh-status-ok{color:var(--green)}
-.sh-status-err{color:var(--red)}
-
-/* ═══════════════════════════════════════════
-   SUPERVISOR
-═══════════════════════════════════════════ */
-.sup-shell{max-width:1600px;margin:0 auto;padding:16px 18px}
-.sup-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-@media(max-width:900px){.sup-grid{grid-template-columns:1fr}}
-.kpi-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
-.kpi{flex:1 1 110px;padding:16px 18px;border-radius:var(--r2);border:1px solid var(--b0);background:var(--s1);position:relative;overflow:hidden;transition:transform .15s,box-shadow .15s}
-.kpi:hover{transform:translateY(-1px)}
-.kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px}
-.kpi-total::before{background:var(--amber)}
-.kpi-total{box-shadow:inset 0 0 30px rgba(240,160,48,.03)}
-.kpi-loading::before{background:var(--amber)}
-.kpi-loading{box-shadow:inset 0 0 30px rgba(240,160,48,.04)}
-.kpi-ready::before{background:var(--green)}
-.kpi-ready{box-shadow:inset 0 0 30px rgba(32,208,144,.04)}
-.kpi-departed::before{background:var(--t3)}
-.kpi-conf::before{background:var(--cyan)}
-.kpi-conf{box-shadow:inset 0 0 30px rgba(32,192,208,.04)}
-.kpi .k-val{font-family:var(--mono);font-size:28px;font-weight:500;line-height:1;color:var(--t0);margin-bottom:5px}
-.kpi .k-lbl{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--t3)}
-.kpi-loading .k-val{color:var(--amber)}
-.kpi-ready .k-val{color:var(--green)}
-.kpi-conf .k-val{color:var(--cyan)}
-
-.feed-item{display:flex;align-items:flex-start;gap:9px;padding:7px 0;border-bottom:1px solid var(--b0)}
-.feed-item:last-child{border-bottom:none}
-.feed-pip{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:5px}
-.feed-content{flex:1;min-width:0}
-.feed-action{font-size:11px;color:var(--t1);line-height:1.4}
-.feed-action strong{color:var(--t0);font-weight:600}
-.feed-time{font-family:var(--mono);font-size:10px;color:var(--t3);margin-top:1px}
-
-.pin-row{display:grid;grid-template-columns:1fr 1fr auto;gap:9px;align-items:end;padding:11px;border:1px solid var(--b0);border-radius:var(--r);background:var(--s0);margin-bottom:8px}
-.side-sticky{position:sticky;top:60px}
-
-/* ═══════════════════════════════════════════
-   LOOKUP SPINNER
-═══════════════════════════════════════════ */
-@keyframes spin{to{transform:rotate(360deg)}}
-.lookup-spinner{display:none;width:14px;height:14px;border:2px solid var(--b1);border-top-color:var(--amber);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
-.lookup-spinner.visible{display:block}
-
-/* ═══════════════════════════════════════════
-   WHO / FLOW SCREENS
-═══════════════════════════════════════════ */
-.who-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.who-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:96px;border-radius:var(--r2);border:1px solid var(--b1);background:var(--s0);color:var(--t1);cursor:pointer;transition:all .15s;padding:16px;-webkit-tap-highlight-color:transparent}
-.who-btn:hover{border-color:var(--amber-bd);background:var(--amber-bg)}
-.who-btn:hover .who-icon{transform:scale(1.1)}
-.who-btn:active{transform:scale(.96)}
-.who-btn .who-icon{font-size:30px;transition:transform .15s}
-.who-btn .who-label{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--t0);letter-spacing:.03em}
-.who-btn .who-sub{font-size:10px;color:var(--t2)}
-
-.flow-sub{font-size:11px;color:var(--t2);font-family:var(--mono);letter-spacing:.04em;margin-bottom:12px}
-.flow-grid{display:flex;flex-direction:column;gap:10px}
-.flow-btn{display:flex;align-items:center;gap:14px;min-height:64px;border-radius:var(--r);border:1px solid var(--b1);background:var(--s0);color:var(--t1);cursor:pointer;transition:all .15s;padding:14px 16px;text-align:left;-webkit-tap-highlight-color:transparent}
-.flow-btn:hover{border-color:var(--amber-bd);background:var(--amber-bg)}
-.flow-btn:active{transform:scale(.99)}
-.flow-btn .flow-icon{font-size:22px;flex-shrink:0}
-.flow-btn .flow-label{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--t0);display:block}
-.flow-btn .flow-desc{font-size:11px;color:var(--t2);display:block;margin-top:2px}
-
-.no-assignment-msg{display:none;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:var(--r);border:1px solid var(--amber-bd);background:var(--amber-bg);margin-top:12px;font-size:14px}
-.no-assignment-msg.visible{display:flex}
-
-.no-safety-note{text-align:center;font-family:var(--mono);font-size:10px;color:var(--green);margin-top:8px;letter-spacing:.04em}
-.safety-required-note{text-align:center;font-family:var(--mono);font-size:10px;color:var(--amber);margin-top:8px;letter-spacing:.04em}
-
-/* ═══════════════════════════════════════════
-   DOCK MAP
-═══════════════════════════════════════════ */
-.dock-map-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px}
-.dm-cell{border-radius:var(--r);border:1px solid var(--b1);padding:6px 8px;min-height:56px;display:flex;flex-direction:column;gap:2px;transition:border-color .15s;-webkit-tap-highlight-color:transparent}
-.dm-free{border-color:rgba(32,208,144,.2);background:rgba(32,208,144,.04)}
-.dm-occupied{border-color:rgba(240,160,48,.3);background:rgba(240,160,48,.06)}
-.dm-blocked{border-color:rgba(232,72,72,.35) !important;background:rgba(232,72,72,.08) !important}
-.dm-blocked .dm-door{color:var(--red)}
-.dm-occupied.dm-ready{border-color:rgba(32,208,144,.4);background:rgba(32,208,144,.07)}
-.dm-occupied.dm-departed{border-color:var(--b1);opacity:.5}
-.dm-door{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--t1)}
-.dm-trailer{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--t0)}
-.dm-status{font-size:9px;color:var(--t2);letter-spacing:.03em;margin-top:1px}
-.dm-free-label{font-size:9px;color:var(--green);letter-spacing:.04em;margin-top:auto}
-.dm-clickable{cursor:pointer;transition:filter .15s,transform .12s}
-.dm-clickable:hover{filter:brightness(1.25);transform:scale(1.04)}
-.dm-clickable:active{transform:scale(.97)}
-.dm-clickable:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
-
-/* Status modal buttons — big enough for thumbs */
-#dmStatusBtns .btn{min-height:48px;font-size:14px;font-family:var(--mono);letter-spacing:.03em}
-
-/* ═══════════════════════════════════════════
-   QUICK STATUS BUTTONS
-═══════════════════════════════════════════ */
-.qs-btn{font-size:10px !important;padding:3px 7px !important;border-radius:4px !important;font-family:var(--mono) !important;letter-spacing:.02em}
-.qs-secondary{opacity:.55;font-size:10px !important;padding:3px 7px !important}
-.qs-secondary:hover{opacity:1}
-
-/* ═══════════════════════════════════════════
-   OFFLINE BANNER
-═══════════════════════════════════════════ */
-.offline-banner{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;background:rgba(232,72,72,.12);border:1px solid rgba(232,72,72,.3);border-radius:var(--r);margin-bottom:10px;font-size:12px;font-family:var(--mono);color:#e84848;letter-spacing:.03em}
-.offline-dots{display:flex;gap:4px}
-.offline-dots span{width:6px;height:6px;border-radius:50%;background:#e84848;opacity:.4;animation:offpulse 1.2s ease-in-out infinite}
-.offline-dots span:nth-child(2){animation-delay:.2s}
-.offline-dots span:nth-child(3){animation-delay:.4s}
-@keyframes offpulse{0%,100%{opacity:.4}50%{opacity:1}}
-
-/* ═══════════════════════════════════════════
-   READY NOTIFICATION BANNER
-═══════════════════════════════════════════ */
-.ready-notif-banner{display:flex;align-items:center;gap:10px;padding:12px 16px;background:rgba(32,208,144,.12);border:1px solid rgba(32,208,144,.35);border-radius:var(--r);margin-bottom:10px;animation:rnbslide .3s ease}
-@keyframes rnbslide{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
-.rnb-icon{font-size:18px;flex-shrink:0}
-.ready-notif-banner span:nth-child(2){font-family:var(--mono);font-size:13px;font-weight:500;color:var(--green);flex:1}
-.rnb-close{background:none;border:none;color:var(--t2);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:4px;flex-shrink:0;min-width:32px;min-height:32px}
-.rnb-close:hover{color:var(--t0);background:var(--s1)}
-
-/* ═══════════════════════════════════════════
-   DOCK VIEW
-═══════════════════════════════════════════ */
-.dock-shell{min-height:calc(100vh - 52px);background:var(--bg);display:flex;flex-direction:column;max-width:680px;margin:0 auto;padding:0 0 80px}
-
-.dock-toolbar{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--b1);position:sticky;top:52px;background:var(--bg);z-index:10}
-.dock-toolbar-left{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--t2);flex-shrink:0}
-.dock-toolbar-right{display:flex;align-items:center;gap:5px;margin-left:auto;flex-shrink:0}
-.dock-filter-wrap{display:flex;gap:4px;margin:0 auto}
-.dock-filter-btn{padding:5px 14px;border-radius:20px;border:1px solid var(--b1);background:transparent;color:var(--t2);font-size:12px;font-family:var(--mono);cursor:pointer;transition:all .15s;min-height:36px;-webkit-tap-highlight-color:transparent}
-.dock-filter-btn.active{background:var(--amber-bg);border-color:var(--amber-bd);color:var(--amber)}
-
-.dock-search-bar{padding:10px 16px 4px}
-.dock-search-bar input{width:100%;padding:10px 14px;border-radius:var(--r);border:1px solid var(--b1);background:var(--s0);color:var(--t0);font-size:15px}
-
-.dock-cards{display:flex;flex-direction:column;gap:10px;padding:10px 16px}
-.dock-empty{text-align:center;padding:48px 20px;color:var(--t3);font-family:var(--mono);font-size:13px}
-
-.dock-card{border-radius:var(--r2);border:1px solid var(--b1);background:var(--s0);padding:14px 16px;display:flex;flex-direction:column;gap:10px;transition:border-color .15s,box-shadow .15s}
-.dock-card:active{transform:scale(.995)}
-.dock-card.dc-loading{border-color:rgba(240,160,48,.45);background:rgba(240,160,48,.035);border-left-width:3px;border-left-color:var(--amber)}
-.dock-card.dc-dockready{border-color:rgba(32,192,208,.35);background:rgba(32,192,208,.035);border-left-width:3px;border-left-color:var(--cyan)}
-.dock-card.dc-ready{border-color:rgba(32,208,144,.5);background:rgba(32,208,144,.05);border-left-width:3px;border-left-color:var(--green)}
-.dock-card.dc-dropped{border-left-width:3px;border-left-color:var(--violet)}
-.dock-card.dc-incoming{border-left-width:3px;border-left-color:var(--t3)}
-.dock-card.dc-departed{opacity:.38;pointer-events:none}
-
-/* Card top row: trailer+note on left, door badge+status on right */
-.dc-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-.dc-trailer-block{flex:1;min-width:0}
-.dc-trailer{font-family:var(--mono);font-size:28px;font-weight:600;color:var(--t0);letter-spacing:-.01em;line-height:1.05}
-.dc-note{font-size:11px;color:var(--t2);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dc-right-block{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0}
-/* Door badge: big, bold, instantly readable */
-.dc-door-badge{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--amber);line-height:1;background:var(--amber-bg);border:1px solid var(--amber-bd);border-radius:var(--r);padding:4px 10px;letter-spacing:.04em}
-.dc-door-empty{font-family:var(--mono);font-size:11px;color:var(--t3);padding:4px 6px}
-/* Status pill: dot + label, replacing tiny badge */
-.dc-status-pill{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--t2)}
-.dc-status-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--dot,var(--t3));flex-shrink:0}
-
-.dc-meta-row{display:flex;align-items:center;gap:8px;min-height:14px}
-.dc-ago{font-family:var(--mono);font-size:10px;color:var(--t3)}
-
-.dc-action-btn{width:100%;padding:18px 16px;border-radius:var(--r);border:1px solid var(--b1);background:var(--s1);color:var(--t1);font-size:16px;font-weight:700;font-family:var(--sans);cursor:pointer;transition:all .15s;text-align:center;letter-spacing:.01em;min-height:58px;-webkit-tap-highlight-color:transparent}
-.dc-action-btn:active{transform:scale(.97)}
-.dc-btn-default{border-color:var(--amber-bd);background:var(--amber-bg);color:var(--amber)}
-.dc-btn-default:hover{background:rgba(240,160,48,.16)}
-.dc-btn-cyan{border-color:rgba(32,192,208,.3);background:rgba(32,192,208,.08);color:var(--cyan)}
-.dc-btn-cyan:hover{background:rgba(32,192,208,.15)}
-.dc-btn-signin{border-color:var(--b1);background:var(--s2);color:var(--t2);font-size:13px;font-weight:500;min-height:46px;padding:12px}
-.dc-btn-signin:hover{color:var(--amber);border-color:var(--amber-bd)}
-.dc-no-action{text-align:center;font-family:var(--mono);font-size:11px;color:var(--t3);padding:8px 0 2px;letter-spacing:.04em}
-.dc-issue-btn{width:100%;padding:10px 16px;border-radius:var(--r);border:1px solid var(--red-bd);background:var(--red-bg);color:var(--red);font-size:13px;font-weight:600;font-family:var(--mono);cursor:pointer;transition:all .15s;text-align:center;letter-spacing:.04em;margin-top:6px;min-height:40px;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
-.dc-issue-btn:hover{background:rgba(232,72,72,.14);border-color:rgba(232,72,72,.4)}
-.dc-issue-btn:active{transform:scale(.98)}
-
-.dock-plates-inline{margin:0 16px 80px;border-radius:var(--r2);border:1px solid var(--b1);background:var(--s0);overflow:hidden}
-.dock-plates-inline .plate-grid{grid-template-columns:repeat(5,1fr);gap:3px;padding:8px}
-@media(max-width:480px){.dock-plates-inline .plate-grid{grid-template-columns:repeat(4,1fr);gap:3px;padding:6px}}
-
-/* ═══════════════════════════════════════════
-   PUSH TOGGLE
-═══════════════════════════════════════════ */
-.push-toggle-btn{margin-top:10px;padding:8px 16px;border-radius:20px;border:1px solid var(--b1);background:var(--s1);color:var(--t2);font-size:12px;font-family:var(--mono);cursor:pointer;transition:all .15s;letter-spacing:.03em;min-height:36px}
-.push-toggle-btn:hover{border-color:var(--amber-bd);color:var(--amber)}
-.push-toggle-btn.push-on{border-color:rgba(32,208,144,.3);background:rgba(32,208,144,.08);color:var(--green)}
-
-/* ═══════════════════════════════════════════
-   SHUNT INLINE PICKER
-═══════════════════════════════════════════ */
-.shunt-picker{grid-column:1 / -1;padding:10px 12px 12px;background:var(--s0);border-top:1px solid var(--b0);border-left:3px solid var(--amber);display:flex;flex-wrap:wrap;align-items:center;gap:8px}
-.shunt-label{font-family:var(--mono);font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}
-.shunt-doors{display:flex;flex-wrap:wrap;gap:4px;flex:1}
-.shunt-door-btn{padding:8px 10px;border-radius:var(--r);border:1px solid var(--b1);background:var(--s2);color:var(--t1);font-family:var(--mono);font-size:12px;font-weight:500;cursor:pointer;transition:all .12s;position:relative;min-height:40px;-webkit-tap-highlight-color:transparent}
-.shunt-door-btn:hover:not(:disabled){border-color:var(--amber-bd);background:var(--amber-bg);color:var(--amber)}
-.shunt-door-btn.current{border-color:var(--b0);color:var(--t3);cursor:not-allowed;opacity:.4}
-.shunt-door-btn.occ{border-color:var(--violet-bd);color:var(--violet);background:var(--violet-bg)}
-.shunt-occ-dot{display:inline-block;width:4px;height:4px;border-radius:50%;background:var(--violet);margin-left:3px;vertical-align:middle}
-
-/* ═══════════════════════════════════════════
-   ADMIN ROLE BADGE
-═══════════════════════════════════════════ */
-#roleBadge[style*="amber"]{font-weight:700;letter-spacing:.04em}
-
-/* ═══════════════════════════════════════════
-   ACCESSIBILITY — SKIP LINK + FOCUS
-═══════════════════════════════════════════ */
-.skip-link{position:absolute;top:-100px;left:16px;z-index:9999;background:var(--amber);color:var(--bg);padding:8px 16px;border-radius:var(--r);font-family:var(--mono);font-size:13px;font-weight:600;text-decoration:none;transition:top .15s}
-.skip-link:focus{top:16px}
-button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
-.nav-item:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:var(--r)}
-.p-btn:focus-visible,.acc-head:focus-visible,.dock-filter-btn:focus-visible,.who-btn:focus-visible,.flow-btn:focus-visible,.door-btn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
-.dc-action-btn:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
-
-/* ═══════════════════════════════════════════
-   RESPONSIVE — 1100px (tablet landscape)
-═══════════════════════════════════════════ */
-@media(max-width:1100px){
-  .grid-main{grid-template-columns:1fr}
-  .side-sticky{position:static}
-}
-
-/* ═══════════════════════════════════════════
-   RESPONSIVE — 768px (tablet portrait)
-═══════════════════════════════════════════ */
-@media(max-width:768px){
-  .topbar-inner{padding:0 10px}
-  .brand-sub{display:none}
-  .nav-item{padding:0 8px;font-size:10px}
-  .topbar-right .chip:not(:first-child){display:none}
-
-  /* Trailer table — horizontal scroll on tablet */
-  #tbody,.tbl-hd{min-width:620px}
-  .panel:has(.tbl-hd){overflow-x:auto;-webkit-overflow-scrolling:touch}
-
-  /* Dock map — tighter grid */
-  .dock-map-grid{grid-template-columns:repeat(auto-fill,minmax(60px,1fr))}
-
-  /* Supervisor */
-  .sup-grid{grid-template-columns:1fr}
-  .kpi-row{gap:8px}
-}
-
-/* ═══════════════════════════════════════════
-   RESPONSIVE — 480px (mobile)
-═══════════════════════════════════════════ */
-@media(max-width:480px){
-  /* Topbar */
-  .topbar-inner{padding:0 10px;height:48px}
-  .brand-name{font-size:12px}
-  .brand-mark{width:24px;height:24px;font-size:10px}
-  .brand-block{gap:7px;padding-right:12px;margin-right:10px}
-  .topbar-right .chip{display:none}
-  .topbar-right{gap:4px;padding-left:8px}
-  .tb-btn{padding:5px 9px;font-size:10px;min-height:36px}
-  .nav-item{padding:0 7px;font-size:9px;gap:3px;height:48px}
-  .nav-item svg{width:14px;height:14px}
-
-  /* Page */
-  .page{padding:10px}
-
-  /* Trailer board — card layout on mobile */
-  .tbl-hd{display:none !important}
-  .tbl-row{
-    display:flex !important;
-    flex-direction:column;
-    gap:6px;
-    padding:12px 14px !important;
-    border-left-width:4px;
-    position:relative;
+(() => {
+  const CSRF = {"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"};
+  let ROLE = null, VERSION = "", trailers = {}, dockPlates = {}, doorBlocks = {}, confirmations = [];
+  const plateEditOpen = {};
+  let shuntOpen = {};
+  const el = id => document.getElementById(id);
+  const path = () => location.pathname.toLowerCase();
+  const isDriver = () => path().startsWith("/driver");
+  const isSuper  = () => path().startsWith("/management");
+  const isDock   = () => path().startsWith("/dock");
+  const isAdmin  = () => ROLE === "admin";
+
+  const fmtTime = ms => {
+    if (!ms) return "";
+    try { return new Date(ms).toLocaleString(undefined,{month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"}); }
+    catch { return String(ms); }
+  };
+  const timeAgo = ms => {
+    if (!ms) return "";
+    const s = Math.floor((Date.now()-ms)/1000);
+    if (s<60) return `${s}s ago`;
+    if (s<3600) return `${Math.floor(s/60)}m ago`;
+    if (s<86400) return `${Math.floor(s/3600)}h ago`;
+    return `${Math.floor(s/86400)}d ago`;
+  };
+  const esc = s => String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
+
+  async function apiJson(url, opts) {
+    const res = await fetch(url, opts);
+    if (res.status===401) { location.href="/login?expired=1&from="+encodeURIComponent(location.pathname); throw new Error("401"); }
+    if (res.status===403) { console.warn("Forbidden:", url); throw new Error("403"); }
+    // 409 Conflict = structured duplicate warning — return the JSON body, don't throw
+    if (res.status===409) { const ct=res.headers.get("content-type")||""; return ct.includes("application/json") ? res.json() : {}; }
+    if (!res.ok) { const t=await res.text().catch(()=>""); throw new Error(t||"HTTP "+res.status); }
+    const ct = res.headers.get("content-type")||"";
+    return ct.includes("application/json") ? res.json() : {};
   }
-  .tbl-row>span,.tbl-row>div{padding:0 !important;white-space:normal !important;overflow:visible !important}
 
-  /* Row header line: trailer number + status tag side by side */
-  .tbl-row .t-num{font-size:19px !important;font-weight:700;font-family:var(--mono);color:var(--t0);line-height:1.1}
-  .tbl-row .stag{font-size:11px !important;padding:3px 8px !important}
-
-  /* Secondary info row */
-  .t-dir{font-size:11px;color:var(--t2)}
-  .t-door{font-size:14px;font-family:var(--mono);font-weight:600;color:var(--cyan)}
-  .t-time{font-size:10px;color:var(--t3);font-family:var(--mono)}
-  .t-note{font-size:11px;color:var(--t2);white-space:normal !important}
-
-  /* Action buttons — full width tap targets */
-  .t-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
-  .t-acts .btn{min-height:40px;padding:8px 12px;font-size:12px;flex:1 1 auto}
-  .qs-btn{flex:1;min-width:72px;text-align:center;min-height:40px !important;padding:8px 10px !important}
-  .qs-secondary{opacity:.7}
-
-  /* Filters */
-  .filter-bar{flex-direction:column !important;gap:8px;padding:10px}
-  .filter-bar .field{min-width:0 !important;flex:1 1 100%}
-  .filter-bar .tight{margin-top:0 !important}
-  .filter-bar input,.filter-bar select{padding:10px 12px;font-size:14px}
-
-  /* Board footer */
-  .board-footer{flex-direction:column;gap:2px;font-size:10px;padding:8px 12px;align-items:flex-start}
-
-  /* Dock map */
-  .dock-map-grid{grid-template-columns:repeat(5,1fr) !important;gap:4px}
-  .dm-cell{padding:6px 4px;min-height:50px}
-  .dm-door{font-size:9px}
-  .dm-trailer{font-size:10px}
-  .dm-status{font-size:8px}
-
-  /* Dock map modal — sheet-style on mobile */
-  .modal-ov{align-items:flex-end;padding:0}
-  .modal{max-width:100%;width:100%;border-radius:var(--r2) var(--r2) 0 0;padding:20px 16px 32px;max-height:85vh;overflow-y:auto}
-  #dmStatusBtns .btn{min-height:52px;font-size:15px}
-  .modal .m-btns{justify-content:stretch}
-  .modal .m-btns .btn{flex:1;min-height:44px}
-
-  /* Controls panel */
-  .side-sticky{position:static !important}
-  .field-row{flex-direction:column !important;gap:8px}
-  .panel-body{padding:12px !important}
-  .panel-hd{padding:10px 12px}
-  input,select,textarea{padding:10px 12px;font-size:16px}
-
-  /* Dock plates */
-  .plate-grid{grid-template-columns:repeat(3,1fr) !important;gap:4px;padding:8px}
-  .plate{min-height:52px;padding:5px}
-  .plate .p-btn{padding:4px 6px;font-size:9px;min-height:28px}
-
-  /* Supervisor */
-  .sup-shell{padding:10px}
-  .sup-grid{grid-template-columns:1fr !important}
-  .kpi-row{gap:6px}
-  .kpi{flex:1 1 80px;padding:12px}
-  .kpi .k-val{font-size:24px !important}
-  .data-tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-
-  /* Dock view */
-  .dock-toolbar{padding:8px 12px;gap:8px;top:48px}
-  .dock-filter-btn{padding:6px 12px;font-size:11px;min-height:38px}
-  .dock-search-bar{padding:8px 12px 4px}
-  .dock-search-bar input{font-size:15px;padding:10px 14px}
-  .dock-cards{padding:8px 12px;gap:8px}
-  .dock-card{padding:12px 14px}
-  .dc-trailer{font-size:26px !important}
-  .dc-door-badge{font-size:20px !important;padding:3px 8px !important}
-  .dc-action-btn{padding:18px !important;font-size:16px !important;min-height:60px}
-  .dock-plates-inline{margin:0 12px 60px}
-
-  /* Driver portal */
-  .driver-shell{padding:8px 10px 40px}
-  .driver-wrap{max-width:100%;gap:8px}
-  .driver-topbar{padding:8px 12px}
-  .dtb-mark{width:24px;height:24px;font-size:10px}
-  .dtb-title{font-size:11px}
-  .driver-panel{border-radius:var(--r2)}
-  .driver-pbody{padding:12px 14px}
-  .trailer-hero-input{font-size:28px !important;padding:14px !important;letter-spacing:.04em}
-  .who-grid{grid-template-columns:1fr 1fr;gap:8px}
-  .who-btn{min-height:80px;padding:10px 8px;gap:6px}
-  .who-btn .who-icon{font-size:24px}
-  .who-btn .who-label{font-size:13px}
-  .flow-grid{gap:8px}
-  .flow-btn{min-height:60px;padding:12px 14px}
-  .door-picker-grid{grid-template-columns:repeat(4,1fr) !important;gap:5px}
-  .door-btn{min-height:52px;font-size:14px}
-  .drop-type-btn{min-height:60px}
-  .checkline{min-height:64px;padding:14px}
-  .checkline input[type="checkbox"]{width:28px;height:28px}
-  .checkline .cl-main{font-size:14px}
-  .driver-submit{min-height:60px;font-size:15px}
-
-  /* Shunt picker */
-  .shunt-picker{padding:10px}
-  .shunt-doors{gap:5px}
-  .shunt-door-btn{padding:10px 12px;font-size:13px;min-height:44px}
-
-  /* Toast — full width at bottom */
-  .toast{right:8px;left:8px;width:auto;bottom:12px}
-
-  /* Dock toolbar — prevent staff button from getting squashed */
-  .dock-toolbar{flex-wrap:wrap;gap:6px}
-  .dock-toolbar-left{flex:0 0 auto}
-  .dock-toolbar-right{flex:0 0 auto;margin-left:auto}
-  .dock-filter-wrap{order:3;flex:0 0 100%;justify-content:center;margin:0}
-
-  /* Staff login modal — sheet from bottom */
-  #staffLoginOv{align-items:flex-end;padding:0}
-  #staffLoginOv .modal{max-width:100%;width:100%;border-radius:var(--r2) var(--r2) 0 0;padding:20px 16px 36px;max-height:90vh;overflow-y:auto}
-
-  /* PIN rows — stack vertically on mobile */
-  .pin-row{grid-template-columns:1fr;gap:6px}
-  .pin-row .btn{width:100%;min-height:44px}
-}
-
-/* ═══════════════════════════════════════════
-   RESPONSIVE — 360px (small phones)
-═══════════════════════════════════════════ */
-@media(max-width:360px){
-  /* Nav — icons only */
-  .nav-item span{display:none}
-  .nav-item svg{display:block !important;width:16px;height:16px}
-  .nav-item{padding:0 9px}
-
-  .dock-map-grid{grid-template-columns:repeat(4,1fr) !important}
-  .dm-trailer{font-size:9px}
-
-  .plate-grid{grid-template-columns:repeat(2,1fr) !important}
-  .who-grid{grid-template-columns:1fr}
-  .door-picker-grid{grid-template-columns:repeat(3,1fr) !important}
-  .door-btn{min-height:48px}
-
-  .kpi{flex:1 1 70px;padding:10px}
-  .kpi .k-val{font-size:20px !important}
-
-  .dc-trailer{font-size:20px !important}
-}
-
-/* ═══════════════════════════════════════════
-   TOUCH ACTION — prevent double-tap zoom
-═══════════════════════════════════════════ */
-button,.btn,.nav-item,.who-btn,.flow-btn,.door-btn,.drop-type-btn,
-.dc-action-btn,.dock-filter-btn,.driver-submit,.checkline,
-.shunt-door-btn,.dm-cell,.p-btn,.tb-btn,.acc-head,.bn-item,
-.issue-toggle-label,.issue-photo-zone,.ipz-remove{
-  touch-action:manipulation;
-}
-
-/* ═══════════════════════════════════════════
-   PULL TO REFRESH
-═══════════════════════════════════════════ */
-.ptr-indicator{
-  display:flex;align-items:center;justify-content:center;gap:8px;
-  height:0;overflow:hidden;transition:height .2s ease;
-  font-family:var(--mono);font-size:11px;color:var(--t2);letter-spacing:.04em;
-  background:var(--bg);
-}
-.ptr-indicator.ptr-visible{height:48px}
-.ptr-indicator.ptr-loading{height:48px}
-.ptr-spinner{
-  width:16px;height:16px;border:2px solid var(--b1);
-  border-top-color:var(--amber);border-radius:50%;
-  animation:spin .7s linear infinite;flex-shrink:0;
-}
-
-/* ═══════════════════════════════════════════
-   BOTTOM NAV (mobile only)
-═══════════════════════════════════════════ */
-.bottom-nav{
-  display:none;
-  position:fixed;bottom:0;left:0;right:0;z-index:200;
-  background:rgba(10,13,18,.95);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-  border-top:1px solid var(--b0);
-  padding:6px 0 8px;
-}
-.bottom-nav-inner{
-  display:flex;align-items:stretch;justify-content:space-around;
-  max-width:480px;margin:0 auto;
-}
-.bn-item{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:3px;flex:1;padding:4px 8px;
-  font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:.06em;
-  text-transform:uppercase;color:var(--t2);text-decoration:none;
-  border:none;background:transparent;cursor:pointer;
-  transition:color .15s;touch-action:manipulation;min-height:48px;
-}
-.bn-item svg{width:18px;height:18px;opacity:.6;transition:opacity .15s}
-.bn-item.active{color:var(--amber)}
-.bn-item.active svg{opacity:1}
-.bn-item:active{opacity:.7}
-
-@media(max-width:768px){
-  .bottom-nav{display:block}
-  .topbar .nav{display:none}
-  main{padding-bottom:64px}
-  .dock-shell{padding-bottom:calc(80px + 64px)}
-  .driver-shell{padding-bottom:calc(48px + 64px)}
-  /* Management view needs bottom padding for bottom nav */
-  .sup-shell{padding-bottom:80px}
-  /* Staff login button — shrink label on tight toolbars */
-  #btnDockStaffLogin,#btnDriverStaffLogin{font-size:10px;padding:4px 8px}
-  /* Staff modal sheets up from bottom on mobile */
-  #staffLoginOv{align-items:flex-end;padding:0}
-  #staffLoginOv .modal{max-width:100%;width:100%;border-radius:var(--r2) var(--r2) 0 0;padding:20px 16px 32px;max-height:90vh;overflow-y:auto}
-  /* Management table needs horizontal scroll on tablet */
-  #managementView .panel:has(.tbl-hd){overflow-x:auto;-webkit-overflow-scrolling:touch}
-  #managementView #supTbody,#managementView .tbl-hd{min-width:560px}
-}
-
-/* ═══════════════════════════════════════════
-   SWIPE TOAST DISMISS
-═══════════════════════════════════════════ */
-.toast{transition:transform .2s ease,opacity .2s ease,display 0s}
-.toast.swiping{transition:none}
-.toast.swipe-out{transform:translateX(120%);opacity:0}
-
-/* ═══════════════════════════════════════════
-   LANDSCAPE MODE
-═══════════════════════════════════════════ */
-@media(max-width:900px) and (orientation:landscape){
-  .driver-shell{padding:8px 16px 16px}
-  .driver-wrap{max-width:100%;flex-direction:row;flex-wrap:wrap;align-items:flex-start;gap:10px}
-  .driver-conn-bar{flex:0 0 100%}
-  .driver-hdr{flex:0 0 100%;padding:2px 0 4px}
-  .driver-panel{flex:1 1 calc(50% - 5px);min-width:0}
-  .session-history{flex:1 1 calc(50% - 5px);min-width:0}
-  .who-grid{grid-template-columns:repeat(2,1fr)}
-  .flow-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  .door-picker-grid{grid-template-columns:repeat(6,1fr) !important}
-  .dock-shell{flex-direction:row;flex-wrap:wrap;max-width:100%}
-  .dock-toolbar{flex:0 0 100%}
-  .dock-search-bar{flex:0 0 100%}
-  .dock-cards{flex:1;overflow-y:auto;max-height:calc(100vh - 160px)}
-  .dock-plates-inline{flex:0 0 280px;margin:0 0 0 8px;align-self:flex-start;position:sticky;top:110px}
-  .trailer-hero-input{font-size:22px !important}
-  .checkline{min-height:56px}
-  .driver-submit{min-height:52px}
-}
-
-/* ═══════════════════════════════════════════
-   SCROLL SNAP — dock cards feel native
-═══════════════════════════════════════════ */
-@media(max-width:480px){
-  .dock-cards{scroll-snap-type:y proximity;-webkit-overflow-scrolling:touch}
-  .dock-card{scroll-snap-align:start}
-}
-
-/* ═══════════════════════════════════════════
-   SAFE AREA (iPhone notch / home indicator)
-═══════════════════════════════════════════ */
-@supports(padding-bottom:env(safe-area-inset-bottom)){
-  .driver-shell{padding-bottom:calc(48px + env(safe-area-inset-bottom))}
-  .dock-shell{padding-bottom:calc(144px + env(safe-area-inset-bottom))}
-  .sup-shell{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
-  .toast{bottom:calc(72px + env(safe-area-inset-bottom))}
-  .modal-ov:not(#staffLoginOv){padding-bottom:env(safe-area-inset-bottom)}
-  #staffLoginOv .modal{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
-  .topbar{padding-top:env(safe-area-inset-top)}
-  .bottom-nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))}
-  /* Compensate for taller topbar */
-  .dock-toolbar{top:calc(52px + env(safe-area-inset-top))}
-  /* Lightbox close button stays below status bar on notch phones */
-  .issue-lightbox{padding-top:max(16px, env(safe-area-inset-top))}
-  .issue-lightbox-close{top:calc(16px + env(safe-area-inset-top))}
-}
-
-/* ═══════════════════════════════════════════
-   SWIPE VIEW TRANSITION HINT
-═══════════════════════════════════════════ */
-@media(max-width:768px){
-  /* Subtle edge indicator when on non-first/last view */
-  .view-fade{animation:viewSlideIn .22s cubic-bezier(.22,1,.36,1)}
-  @keyframes viewSlideIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
-}
-
-/* ═══════════════════════════════════════════
-   PWA INSTALL BUTTON
-═══════════════════════════════════════════ */
-#btnInstallPwa{
-  border-color:var(--amber-bd);
-  color:var(--amber);
-  background:var(--amber-bg);
-  animation:installPulse 2.5s ease-in-out infinite;
-}
-@keyframes installPulse{
-  0%,100%{box-shadow:0 0 0 0 rgba(240,160,48,0)}
-  50%{box-shadow:0 0 0 4px rgba(240,160,48,.15)}
-}
-@media(max-width:480px){
-  #btnInstallPwa span{display:none}
-}
-
-/* ═══════════════════════════════════════════
-   DRIVER FULL RESET BUTTON
-═══════════════════════════════════════════ */
-#btnDriverFullReset:hover,
-#btnDriverFullReset:active{
-  color:var(--t1);
-  border-color:var(--b2);
-}
-
-/* ═══════════════════════════════════════════
-   ANIMATIONS — COMPREHENSIVE UPGRADE
-═══════════════════════════════════════════ */
-
-/* ── Core easing variables ── */
-:root {
-  --ease-spring: cubic-bezier(.34,1.56,.64,1);
-  --ease-out-quart: cubic-bezier(.25,.46,.45,.94);
-  --ease-in-out-quint: cubic-bezier(.83,0,.17,1);
-}
-
-/* ── Driver screen transitions ── */
-/* Screens slide in from right, out to left */
-@keyframes screenIn  { from { opacity:0; transform:translateX(22px) } to { opacity:1; transform:none } }
-@keyframes screenOut { from { opacity:1; transform:none } to { opacity:0; transform:translateX(-16px) } }
-@keyframes screenInBack { from { opacity:0; transform:translateX(-22px) } to { opacity:1; transform:none } }
-
-.screen-enter { animation: screenIn  .26s var(--ease-out-quart) both }
-.screen-enter-back { animation: screenInBack .26s var(--ease-out-quart) both }
-.screen-exit  { animation: screenOut .18s ease-in both; pointer-events:none }
-
-/* ── Assignment card pop-in ── */
-@keyframes cardReveal {
-  from { opacity:0; transform:translateY(-8px) scale(.97) }
-  to   { opacity:1; transform:none }
-}
-.assignment-card.visible  { animation: cardReveal .22s var(--ease-spring) both }
-.door-picker-wrap.visible { animation: cardReveal .2s  var(--ease-out-quart) both }
-.no-assignment-msg.visible { animation: cardReveal .2s var(--ease-out-quart) both }
-
-/* ── Door button spring on select ── */
-.door-btn { transform-origin: center }
-.door-btn.selected { animation: doorPop .2s var(--ease-spring) }
-@keyframes doorPop {
-  0%   { transform: scale(1) }
-  50%  { transform: scale(1.12) }
-  100% { transform: scale(1) }
-}
-
-/* ── Drop-type toggle spring ── */
-.drop-type-btn.selected { animation: dtbPop .22s var(--ease-spring) }
-@keyframes dtbPop {
-  0%   { transform: scale(1) }
-  55%  { transform: scale(1.06) }
-  100% { transform: scale(1) }
-}
-
-/* ── Done screen — staggered celebration ── */
-@keyframes doneRingPop {
-  0%   { opacity:0; transform: scale(0.3) rotate(-15deg) }
-  60%  { transform: scale(1.18) rotate(6deg) }
-  80%  { transform: scale(0.94) rotate(-2deg) }
-  100% { opacity:1; transform: scale(1) rotate(0deg) }
-}
-@keyframes doneTextSlide {
-  from { opacity:0; transform:translateY(10px) }
-  to   { opacity:1; transform:none }
-}
-@keyframes doneDetailSlide {
-  from { opacity:0; transform:translateY(8px) }
-  to   { opacity:1; transform:none }
-}
-@keyframes doneBtnSlide {
-  from { opacity:0; transform:translateY(6px) }
-  to   { opacity:1; transform:none }
-}
-.done-screen-active .done-ring   { animation: doneRingPop   .5s  var(--ease-spring)     both }
-.done-screen-active .done-title  { animation: doneTextSlide .32s var(--ease-out-quart)  .18s both }
-.done-screen-active .done-detail { animation: doneDetailSlide .3s var(--ease-out-quart) .26s both }
-.done-screen-active .done-btn    { animation: doneBtnSlide   .28s var(--ease-out-quart) .34s both }
-
-/* ── Checkline check spring ── */
-@keyframes checkBounce {
-  0%   { transform: scale(1) }
-  40%  { transform: scale(1.04) }
-  70%  { transform: scale(.98) }
-  100% { transform: scale(1) }
-}
-.checkline:has(input:checked) { animation: checkBounce .25s var(--ease-spring) }
-
-/* ── Submit button pulse when enabled ── */
-@keyframes submitGlow {
-  0%,100% { box-shadow: 0 0 0 0 rgba(240,160,48,0) }
-  50%      { box-shadow: 0 0 0 6px rgba(240,160,48,.12) }
-}
-.driver-submit:not(:disabled) { animation: submitGlow 2.8s ease-in-out infinite }
-.driver-submit.green:not(:disabled) { animation: submitGlowGreen 2.8s ease-in-out infinite }
-@keyframes submitGlowGreen {
-  0%,100% { box-shadow: 0 0 0 0 rgba(32,208,144,0) }
-  50%      { box-shadow: 0 0 0 6px rgba(32,208,144,.12) }
-}
-
-/* ── Board row stagger on initial load ── */
-@keyframes rowIn {
-  from { opacity:0; transform:translateX(-6px) }
-  to   { opacity:1; transform:none }
-}
-.tbl-row { animation: rowIn .18s var(--ease-out-quart) both }
-.tbl-row:nth-child(1)  { animation-delay:.02s }
-.tbl-row:nth-child(2)  { animation-delay:.04s }
-.tbl-row:nth-child(3)  { animation-delay:.06s }
-.tbl-row:nth-child(4)  { animation-delay:.08s }
-.tbl-row:nth-child(5)  { animation-delay:.10s }
-.tbl-row:nth-child(6)  { animation-delay:.12s }
-.tbl-row:nth-child(7)  { animation-delay:.14s }
-.tbl-row:nth-child(8)  { animation-delay:.15s }
-.tbl-row:nth-child(9)  { animation-delay:.16s }
-.tbl-row:nth-child(n+10) { animation-delay:.17s }
-
-/* ── Dock card stagger ── */
-@keyframes dockCardIn {
-  from { opacity:0; transform:translateY(10px) }
-  to   { opacity:1; transform:none }
-}
-.dock-card { animation: dockCardIn .22s var(--ease-out-quart) both }
-.dock-card:nth-child(1) { animation-delay:.03s }
-.dock-card:nth-child(2) { animation-delay:.07s }
-.dock-card:nth-child(3) { animation-delay:.11s }
-.dock-card:nth-child(4) { animation-delay:.14s }
-.dock-card:nth-child(5) { animation-delay:.17s }
-.dock-card:nth-child(n+6) { animation-delay:.19s }
-
-/* ── Dock card action button press ── */
-.dc-action-btn:active { transform:scale(.97); transition:transform .08s }
-
-/* ── KPI number count-up shimmer ── */
-@keyframes kpiIn {
-  from { opacity:0; transform:translateY(6px) }
-  to   { opacity:1; transform:none }
-}
-.kpi { animation: kpiIn .28s var(--ease-out-quart) both }
-.kpi:nth-child(1) { animation-delay:.05s }
-.kpi:nth-child(2) { animation-delay:.10s }
-.kpi:nth-child(3) { animation-delay:.15s }
-.kpi:nth-child(4) { animation-delay:.20s }
-.kpi:nth-child(5) { animation-delay:.25s }
-
-/* ── Feed item stagger ── */
-@keyframes feedIn {
-  from { opacity:0; transform:translateX(8px) }
-  to   { opacity:1; transform:none }
-}
-.feed-item { animation: feedIn .2s var(--ease-out-quart) both }
-.feed-item:nth-child(1) { animation-delay:.03s }
-.feed-item:nth-child(2) { animation-delay:.07s }
-.feed-item:nth-child(3) { animation-delay:.10s }
-.feed-item:nth-child(4) { animation-delay:.13s }
-.feed-item:nth-child(5) { animation-delay:.15s }
-.feed-item:nth-child(n+6) { animation-delay:.17s }
-
-/* ── Modal entrance ── */
-@keyframes modalIn {
-  from { opacity:0; transform:scale(.94) translateY(8px) }
-  to   { opacity:1; transform:none }
-}
-@keyframes overlayIn { from { opacity:0 } to { opacity:1 } }
-.modal-ov:not(.hidden) { animation: overlayIn .18s ease both }
-.modal-ov:not(.hidden) .modal { animation: modalIn .24s var(--ease-spring) both }
-
-/* On mobile the modal sheets up from bottom */
-@media(max-width:480px) {
-  @keyframes modalSheetIn {
-    from { opacity:0; transform:translateY(40px) }
-    to   { opacity:1; transform:none }
+  function toast(title, body, type, duration) {
+    el("toastTitle").textContent = title;
+    el("toastBody").textContent = body||"";
+    const t=el("toast");
+    t.className = "toast "+(type==="ok"?"t-ok":type==="warn"?"t-warn":"t-err");
+    t.style.display="block";
+    t.style.transform="";
+    t.classList.remove("swipe-out");
+    if (type==="ok") haptic("success");
+    else if (type==="err") haptic("error");
+    else haptic("light");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(()=>t.style.display="none", duration||4500);
   }
-  .modal-ov:not(.hidden) .modal { animation: modalSheetIn .28s var(--ease-out-quart) both }
-}
 
-/* ── Toast — more spring ── */
-@keyframes toastIn { from { opacity:0; transform:translateY(10px) scale(.96) } to { opacity:1; transform:none } }
-.toast { animation: toastIn .3s var(--ease-spring) }
-
-/* ── Bottom nav active indicator slide ── */
-.bn-item { position:relative; overflow:visible }
-.bn-item.active::after {
-  content:"";
-  position:absolute;
-  bottom:-6px; left:50%;
-  transform:translateX(-50%);
-  width:18px; height:2px;
-  border-radius:1px;
-  background:var(--amber);
-  animation: navIndicator .22s var(--ease-spring) both;
-}
-@keyframes navIndicator {
-  from { width:0; opacity:0 }
-  to   { width:18px; opacity:1 }
-}
-.bn-item.active svg { animation: navIconPop .22s var(--ease-spring) }
-@keyframes navIconPop {
-  0%   { transform:translateY(0) }
-  45%  { transform:translateY(-3px) }
-  100% { transform:translateY(0) }
-}
-
-/* ── Live dot pulse when connected ── */
-@keyframes liveBeat {
-  0%,100% { box-shadow: 0 0 0 0 rgba(32,208,144,.6) }
-  50%      { box-shadow: 0 0 0 5px rgba(32,208,144,0) }
-}
-.live-dot.ok { animation: liveBeat 2.4s ease-in-out infinite }
-
-/* ── Panel entrance ── */
-@keyframes panelIn {
-  from { opacity:0; transform:translateY(8px) }
-  to   { opacity:1; transform:none }
-}
-.panel { animation: panelIn .24s var(--ease-out-quart) both }
-.col-stack .panel:nth-child(1) { animation-delay:.04s }
-.col-stack .panel:nth-child(2) { animation-delay:.09s }
-.col-stack .panel:nth-child(3) { animation-delay:.13s }
-.col-stack .panel:nth-child(4) { animation-delay:.16s }
-
-/* ── Who / Flow button hover lift ── */
-.who-btn:hover  { transform:translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,.3) }
-.who-btn:active { transform:scale(.96) }
-.flow-btn:hover { transform:translateX(3px) }
-.flow-btn:active{ transform:scale(.99) translateX(1px) }
-
-/* ── Shunt door button pop on select ── */
-.shunt-door-btn:hover:not(:disabled) { transform:scale(1.08) }
-.shunt-door-btn:active:not(:disabled){ transform:scale(.95) }
-
-/* ── Dock map cell hover ── */
-.dm-clickable:hover { transform:scale(1.06); filter:brightness(1.2) }
-.dm-clickable:active{ transform:scale(.96) }
-
-/* ── Accordion chevron transition (already exists — make smoother) ── */
-.acc-head .chev { transition:transform .3s var(--ease-in-out-quint), opacity .2s }
-
-/* ── Status tag colour transitions ── */
-.stag { transition: background .25s, color .25s, border-color .25s }
-
-/* ── Lookup spinner entrance ── */
-.lookup-spinner.visible { animation: spin .7s linear infinite, fadeIn .15s ease both }
-@keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
-
-/* ── Ready notification banner — bounces in ── */
-@keyframes rnbBounce {
-  0%   { opacity:0; transform:translateY(-10px) scale(.96) }
-  60%  { transform:translateY(2px) scale(1.01) }
-  100% { opacity:1; transform:none }
-}
-.ready-notif-banner { animation: rnbBounce .35s var(--ease-spring) both }
-
-/* ── Offline banner shake in ── */
-@keyframes offlineShake {
-  0%,100% { transform:translateX(0) }
-  20%     { transform:translateX(-5px) }
-  40%     { transform:translateX(4px) }
-  60%     { transform:translateX(-3px) }
-  80%     { transform:translateX(2px) }
-}
-.offline-banner { animation: offlineShake .4s ease both }
-
-/* ── Session history row fade-in ── */
-@keyframes shRowIn {
-  from { opacity:0; transform:translateY(-4px) }
-  to   { opacity:1; transform:none }
-}
-.sh-row:first-child { animation: shRowIn .2s var(--ease-out-quart) both }
-
-/* ── Dock plates grid stagger ── */
-@keyframes plateIn {
-  from { opacity:0; transform:scale(.9) }
-  to   { opacity:1; transform:none }
-}
-.plate { animation: plateIn .18s var(--ease-spring) both }
-.plate:nth-child(1)  { animation-delay:.01s }
-.plate:nth-child(2)  { animation-delay:.03s }
-.plate:nth-child(3)  { animation-delay:.05s }
-.plate:nth-child(4)  { animation-delay:.07s }
-.plate:nth-child(5)  { animation-delay:.09s }
-.plate:nth-child(6)  { animation-delay:.11s }
-.plate:nth-child(n+7){ animation-delay:.13s }
-
-/* ═══════════════════════════════════════════
-   ISSUE REPORT — safety screen
-═══════════════════════════════════════════ */
-
-/* Toggle row */
-.issue-toggle-wrap{margin-top:10px;border-radius:var(--r);border:1px solid var(--b1);overflow:hidden;transition:border-color .2s}
-.issue-toggle-wrap:has(input:checked){border-color:rgba(232,72,72,.4);background:rgba(232,72,72,.04)}
-.issue-toggle-label{display:flex;align-items:center;gap:14px;padding:14px 16px;cursor:pointer;min-height:60px;-webkit-tap-highlight-color:transparent}
-.issue-toggle-label input[type="checkbox"]{width:22px;height:22px;accent-color:var(--red);cursor:pointer;flex-shrink:0}
-.itl-body{flex:1}
-.itl-main{font-weight:600;font-size:14px;color:var(--t1)}
-.itl-sub{font-size:11px;color:var(--t2);margin-top:2px}
-.issue-toggle-wrap:has(input:checked) .itl-main{color:var(--red)}
-
-/* Expandable body */
-.issue-report-body{padding:0 14px 14px;border-top:1px solid var(--b0);background:rgba(232,72,72,.03);animation:issueBodyIn .2s ease both}
-@keyframes issueBodyIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
-
-/* Photo zone */
-.issue-photo-zone{position:relative;border-radius:var(--r);border:2px dashed var(--b2);background:var(--s0);min-height:130px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;transition:border-color .2s;margin-top:12px;-webkit-tap-highlight-color:transparent}
-.issue-photo-zone:hover{border-color:var(--red)}
-.issue-photo-zone:active{opacity:.85}
-.ipz-empty{display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;padding:20px}
-.ipz-icon{font-size:28px;opacity:.6}
-.ipz-label{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--t1);letter-spacing:.04em}
-.ipz-sub{font-size:10px;color:var(--t3);letter-spacing:.03em}
-.ipz-preview{width:100%;height:100%;object-fit:cover;position:absolute;inset:0;border-radius:calc(var(--r) - 2px)}
-.ipz-remove{position:absolute;top:8px;right:8px;z-index:2;width:28px;height:28px;border-radius:50%;border:none;background:rgba(10,13,18,.75);color:var(--t0);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);-webkit-tap-highlight-color:transparent}
-.ipz-remove:hover{background:var(--red-bg);color:var(--red)}
-.issue-photo-zone.has-photo{border-style:solid;border-color:rgba(232,72,72,.4);min-height:200px}
-
-/* Issue textarea */
-.issue-report-body textarea{margin-top:0;border-radius:var(--r);min-height:80px}
-
-/* ═══════════════════════════════════════════
-   ISSUE REPORTS — management panel
-═══════════════════════════════════════════ */
-.issue-card{display:flex;gap:14px;padding:14px 16px;border-bottom:1px solid var(--b0);align-items:flex-start;transition:background .15s}
-.issue-card:last-child{border-bottom:none}
-.issue-card:hover{background:rgba(232,72,72,.03)}
-.issue-thumb-wrap{flex-shrink:0;width:72px;height:72px;border-radius:var(--r);overflow:hidden;border:1px solid var(--b1);background:var(--s2);cursor:pointer;position:relative}
-.issue-thumb-wrap img{width:100%;height:100%;object-fit:cover;transition:transform .2s}
-.issue-thumb-wrap:hover img{transform:scale(1.06)}
-.issue-thumb-empty{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--t3)}
-.issue-body{flex:1;min-width:0}
-.issue-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px}
-.issue-trailer{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--t0)}
-.issue-door{font-family:var(--mono);font-size:12px;color:var(--amber)}
-.issue-time{font-family:var(--mono);font-size:10px;color:var(--t3)}
-.issue-note{font-size:12px;color:var(--t1);line-height:1.55}
-.issue-no-note{font-size:11px;color:var(--t3);font-style:italic}
-.issue-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.05em;background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd);text-transform:uppercase}
-
-/* Lightbox */
-.issue-lightbox{position:fixed;inset:0;z-index:800;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;padding:16px;cursor:pointer}
-.issue-lightbox.open{display:flex;animation:overlayIn .18s ease both}
-.issue-lightbox img{max-width:100%;max-height:90vh;border-radius:var(--r2);box-shadow:var(--sh-lg);cursor:default;animation:modalIn .22s var(--ease-spring) both}
-.issue-lightbox-close{position:absolute;top:16px;right:16px;width:36px;height:36px;border-radius:50%;border:none;background:rgba(255,255,255,.1);color:var(--t0);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px)}
-.issue-lightbox-close:hover{background:rgba(255,255,255,.2)}
-
-/* ── Issue report — mobile ── */
-@media(max-width:480px){
-  .issue-toggle-label{min-height:64px;padding:14px}
-  .issue-toggle-label input[type="checkbox"]{width:26px;height:26px}
-  .itl-main{font-size:14px}
-  .issue-photo-zone{min-height:160px}
-  .issue-photo-zone.has-photo{min-height:220px}
-  .issue-lightbox-close{width:44px;height:44px;font-size:20px}
-}
-
-/* ── Reduced motion ── */
-@media(prefers-reduced-motion:reduce) {
-  *,*::before,*::after {
-    animation-duration:.01ms !important;
-    animation-delay:.01ms !important;
-    transition-duration:.01ms !important;
+  let _mr=null;
+  function showModal(title,body) {
+    return new Promise(r=>{
+      _mr=r;
+      el("modalTitle").textContent=title;
+      el("modalBody").textContent=body;
+      el("modalOv").classList.remove("hidden");
+      el("modalConfirm").focus();
+    });
   }
-}
+  el("modalCancel")?.addEventListener("click",  ()=>{ el("modalOv").classList.add("hidden"); if(_mr){_mr(false);_mr=null;} });
+  el("modalConfirm")?.addEventListener("click", ()=>{ el("modalOv").classList.add("hidden"); if(_mr){_mr(true);_mr=null;} });
+  el("modalOv")?.addEventListener("click", e=>{ if(e.target===el("modalOv")){ el("modalOv").classList.add("hidden"); if(_mr){_mr(false);_mr=null;} } });
+  el("dmModalCancel")?.addEventListener("click", () => el("dmModalOv")?.classList.add("hidden"));
+  el("dmModalOv")?.addEventListener("click", e => { if(e.target===el("dmModalOv")) el("dmModalOv").classList.add("hidden"); });
+
+  function setPlatesOpen(open) {
+    const t=el("dockPlatesToggle"), b=el("dockPlatesBody"); if(!t||!b) return;
+    t.setAttribute("aria-expanded", open?"true":"false");
+    b.style.maxHeight = open ? (b.scrollHeight+40)+"px" : "0px";
+    try{localStorage.setItem("platesOpen",open?"1":"0");}catch{}
+  }
+  function setPlatesOpen2(open) {
+    const t=el("dockPlatesToggle2"), b=el("dockPlatesBody2"); if(!t||!b) return;
+    t.setAttribute("aria-expanded", open?"true":"false");
+    b.style.maxHeight = open ? (b.scrollHeight+40)+"px" : "0px";
+  }
+
+  const STATUS_ROW = {Loading:"r-loading",Ready:"r-ready","Dock Ready":"r-dockready",Dropped:"r-dropped",Incoming:"r-incoming",Departed:"r-departed"};
+  const STATUS_TAG = {Loading:"stag-loading",Ready:"stag-ready","Dock Ready":"stag-dockready",Dropped:"stag-dropped",Incoming:"stag-incoming",Departed:"stag-departed"};
+
+  function statusTag(s) {
+    return `<span class="stag ${STATUS_TAG[s]||"stag-unknown"}"><span class="sp"></span>${esc(s||"—")}</span>`;
+  }
+  function carrierTag(c) {
+    if(!c) return "";
+    const isWesbell = c==="Wesbell";
+    const cls = isWesbell ? "stag-ready" : "stag-dropped";
+    const icon = isWesbell ? "🚛" : "🏢";
+    return `<span class="stag ${cls}" style="font-size:9px;padding:1px 5px;" title="Carrier: ${esc(c)}">${icon} ${esc(c)}</span>`;
+  }
+  function plateStatusTag(s) {
+    const cls = s==="OK"?"stag-ready":s==="Service"?"stag-service":s==="Out of Order"?"stag-error":"stag-unknown";
+    return `<span class="stag ${cls}" style="font-size:9px;padding:1px 5px;"><span class="sp"></span>${esc(s||"Unknown")}</span>`;
+  }
+
+  function highlightNav() {
+    ["navDispatch","navDock","navDriver","navManagement"].forEach(id=>el(id)?.classList.remove("active"));
+    const p=path();
+    if(p.startsWith("/management")) el("navManagement")?.classList.add("active");
+    else if(p.startsWith("/driver")) el("navDriver")?.classList.add("active");
+    else if(p.startsWith("/dock")) el("navDock")?.classList.add("active");
+    else el("navDispatch")?.classList.add("active");
+    const rb=el("roleBadge");
+    if(ROLE){ rb.style.display=""; rb.textContent=ROLE==="admin"?"⚡ ADMIN":ROLE.toUpperCase(); rb.style.color=ROLE==="admin"?"var(--amber)":""; }
+    else { rb.style.display="none"; }
+  }
+
+  /* ── DOOR OCCUPANCY ── */
+  function getOccupiedDoors() {
+    const map = {};
+    Object.entries(trailers).forEach(([t,r]) => {
+      if (r.door && !["Departed",""].includes(r.status)) {
+        map[r.door] = { trailer: t, status: r.status };
+      }
+    });
+    Object.entries(doorBlocks).forEach(([door, b]) => {
+      if (!map[door]) map[door] = { trailer: null, status: "Blocked", note: b.note };
+    });
+    return map;
+  }
+
+  function renderDockMap() {
+    const mapEl = el("dockMapGrid"); if (!mapEl) return;
+    const occupied = getOccupiedDoors();
+    const canEdit = ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin"||ROLE==="dock";
+    let html = "";
+    for (let d=28; d<=42; d++) {
+      const ds = String(d);
+      const occ = occupied[ds];
+      const isBlock = occ && occ.status === "Blocked";
+      const cls = occ
+        ? (isBlock ? "dm-occupied dm-blocked" : `dm-occupied dm-${(STATUS_ROW[occ.status]||"r-incoming").replace("r-","")}`)
+        : "dm-free";
+      const clickable = canEdit ? " dm-clickable" : "";
+      const attrs = canEdit ? `tabindex="0" role="button"` : "";
+      html += `<div class="dm-cell ${cls}${clickable}" data-dm-door="${ds}" ${attrs}>
+        <span class="dm-door" data-dm-door="${ds}">D${ds}</span>
+        ${occ
+          ? (isBlock
+              ? `<span class="dm-trailer" data-dm-door="${ds}" style="font-size:9px;opacity:.75">Blocked</span><span class="dm-status" data-dm-door="${ds}" style="font-size:8px">${esc(occ.note||"")}</span>`
+              : `<span class="dm-trailer" data-dm-door="${ds}">${esc(occ.trailer)}</span><span class="dm-status" data-dm-door="${ds}">${esc(occ.status)}</span>`)
+          : `<span class="dm-free-label" data-dm-door="${ds}">Free</span>`
+        }
+      </div>`;
+    }
+    mapEl.innerHTML = html;
+  }
+
+  /* ── BOARD ── */
+  const prevStatuses={};
+  function renderBoardInto(tbodyEl,countEl,countStrEl,sq,dq,stq,readOnly) {
+    if(!tbodyEl)return;
+    const q=(sq?.value||"").trim().toLowerCase(), df=(dq?.value||"").trim(), sf=(stq?.value||"").trim();
+    const rows=Object.entries(trailers).map(([t,r])=>({trailer:t,...r})).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+    const filt=rows.filter(r=>{
+      if(df&&r.direction!==df)return false;
+      if(sf&&r.status!==sf)return false;
+      if(q&&!`${r.trailer} ${r.door||""} ${r.note||""} ${r.direction||""} ${r.status||""} ${r.dropType||""}`.toLowerCase().includes(q))return false;
+      return true;
+    });
+    if(countEl) countEl.textContent=filt.length;
+    if(countStrEl) countStrEl.textContent=`${filt.length} trailer${filt.length===1?"":"s"} shown`;
+    if(!filt.length){ tbodyEl.innerHTML=`<div class="tbl-empty">No trailers match filters</div>`; return; }
+    const canEdit=!readOnly&&(ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin");
+    const canDock=!readOnly&&(ROLE==="dock"||ROLE==="admin");
+    const occupied = getOccupiedDoors();
+
+    tbodyEl.innerHTML=filt.map(r=>{
+      const rowCls=STATUS_ROW[r.status]||"";
+      const flash=(r.trailer in prevStatuses && prevStatuses[r.trailer]!==r.status)?" flashing":"";
+      prevStatuses[r.trailer]=r.status;
+      const readyFlash=((ROLE==="dispatcher"||ROLE==="management")&&!readOnly&&r.status==="Ready")?" ready-flash":"";
+      const door = r.door ? `<span class="t-door">${esc(r.door)}</span>` : `<span style="color:var(--t3)">—</span>`;
+      const note=r.note?`<span class="t-note" title="${esc(r.note)}">${esc(r.note)}</span>`:`<span style="color:var(--t3)">—</span>`;
+      const dtype=r.dropType?`<span style="font-size:10px;color:var(--t2);font-family:var(--mono);">${esc(r.dropType)}</span>`:`<span style="color:var(--t3)">—</span>`;
+      const ctag=carrierTag(r.carrierType);
+      const ago=r.updatedAt?timeAgo(r.updatedAt):"";
+
+      let acts=`<span style="color:var(--t3)">—</span>`;
+      if(canEdit){
+        const nextStatuses = {
+          "Incoming":  ["Dropped","Departed"],
+          "Dropped":   ["Loading","Departed"],
+          "Loading":   ["Dock Ready","Departed"],
+          "Dock Ready":["Ready","Departed"],
+          "Ready":     ["Departed"],
+          "Departed":  ["Incoming"],
+        };
+        const nexts = nextStatuses[r.status] || [];
+        const quickBtns = nexts.map((s,i) => {
+          if(i===0){
+            const btnCls = s==="Ready"?"btn-success":"btn-primary";
+            return `<button class="btn ${btnCls} btn-sm qs-btn" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}" aria-label="${esc(s)} trailer ${esc(r.trailer)}">${esc(s)}</button>`;
+          }
+          return `<button class="btn btn-default btn-sm qs-btn qs-secondary" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}" aria-label="${esc(s)} trailer ${esc(r.trailer)}">${esc(s)}</button>`;
+        }).join("");
+        acts = `<div class="t-acts">
+          ${quickBtns}
+          ${r.status==="Dock Ready"?`<button class="btn btn-success btn-sm" data-act="markReady" data-trailer-id="${esc(r.trailer)}" style="font-weight:800;" aria-label="Mark trailer ${esc(r.trailer)} ready">✓ Ready</button>`:""}
+          <button class="btn btn-default btn-sm" data-act="shuntToggle" data-trailer-id="${esc(r.trailer)}" aria-label="Move trailer ${esc(r.trailer)} to new door">Move</button>
+          <button class="btn btn-default btn-sm" data-act="edit" data-trailer-id="${esc(r.trailer)}" aria-label="Edit trailer ${esc(r.trailer)}">Edit</button>
+          <button class="btn btn-danger btn-sm" data-act="delete" data-trailer-id="${esc(r.trailer)}" aria-label="Delete trailer ${esc(r.trailer)}">Del</button>
+        </div>`;
+      } else if(canDock){
+        if(r.status==="Dropped"||r.status==="Incoming")
+          acts=`<div class="t-acts"><button class="btn btn-default btn-sm" data-act="dockSet" data-to="Loading" data-trailer-id="${esc(r.trailer)}">Loading</button></div>`;
+        else if(r.status==="Loading")
+          acts=`<div class="t-acts"><button class="btn btn-cyan btn-sm" data-act="dockSet" data-to="Dock Ready" data-trailer-id="${esc(r.trailer)}">Dock Ready</button></div>`;
+        else
+          acts=`<span style="color:var(--t3);font-size:10px;font-family:var(--mono);">${esc(r.status==="Dock Ready"?"Awaiting dispatch":r.status==="Ready"?"Ready":"—")}</span>`;
+      }
+
+      const shuntPickerHtml = (shuntOpen[r.trailer] && canEdit) ? `
+        <div class="shunt-picker" data-shunt-trailer="${esc(r.trailer)}">
+          <span class="shunt-label">Move to door:</span>
+          <div class="shunt-doors">${Array.from({length:15},(_,i)=>i+28).map(d=>{
+            const ds=String(d);
+            const isCurrent=ds===(r.door||"");
+            const isOcc=!!occupied[ds]&&!isCurrent;
+            return `<button class="shunt-door-btn${isCurrent?" current":""}${isOcc?" occ":""}" data-act="shuntDoor" data-door="${ds}" data-trailer-id="${esc(r.trailer)}" ${isCurrent?"disabled":""} aria-label="Move to door ${ds}${isOcc?" (occupied)":""}">${ds}${isOcc?`<span class="shunt-occ-dot"></span>`:""}</button>`;
+          }).join("")}</div>
+          <button class="btn btn-default btn-sm" data-act="shuntToggle" data-trailer-id="${esc(r.trailer)}" style="margin-top:4px;">Cancel</button>
+        </div>` : "";
+
+      const carrierCls=r.carrierType==="Outside"?" carrier-outside":"";
+      return `<div class="tbl-row ${rowCls}${flash}${readyFlash}${carrierCls}" data-trailer="${esc(r.trailer)}">
+        <span class="t-num">${esc(r.trailer)}</span>
+        <span class="t-dir">${esc(r.direction||"—")}</span>
+        <span>${statusTag(r.status)}</span>
+        <span>${door}</span>
+        <span>${ctag||dtype}</span>
+        <span>${note}</span>
+        <span class="t-time" title="${esc(fmtTime(r.updatedAt))}">${esc(ago)}</span>
+        <span>${acts}</span>
+      </div>${shuntPickerHtml}`;
+    }).join("");
+  }
+
+  function renderBoard() {
+    renderBoardInto(el("tbody"),el("countsPill"),el("boardCountStr"),el("search"),el("filterDir"),el("filterStatus"),false);
+    const lu=el("lastUpdated"); if(lu) lu.textContent="Updated "+fmtTime(Date.now());
+    renderDockMap();
+    const occupied = getOccupiedDoors();
+    const occupiedInRange = Object.keys(occupied).filter(d=>{ const n=parseInt(d); return n>=28&&n<=42; }).length;
+    const freeCount = 15 - occupiedInRange;
+    const badge = el("dockMapFreeCount");
+    if (badge) badge.textContent = `${freeCount} free`;
+  }
+  function renderSupBoard() {
+    renderBoardInto(el("supTbody"),el("supCountsPill"),el("supCountStr"),el("supSearch"),el("supFilterDir"),el("supFilterStatus"),true);
+    const slu=el("supLastUpdated"); if(slu) slu.textContent="Updated "+fmtTime(Date.now());
+    renderKpis();
+  }
+
+  function renderKpis() {
+    const v=Object.values(trailers);
+    const kpis=[
+      {val:v.length,lbl:"Total Trailers",cls:"kpi-total"},
+      {val:v.filter(r=>r.status==="Loading").length,lbl:"Loading",cls:"kpi-loading"},
+      {val:v.filter(r=>["Ready","Dock Ready"].includes(r.status)).length,lbl:"Ready",cls:"kpi-ready"},
+      {val:v.filter(r=>r.status==="Departed").length,lbl:"Departed",cls:"kpi-departed"},
+      {val:confirmations.length,lbl:"Safety Confirms",cls:"kpi-conf"},
+    ];
+    el("supKpis").innerHTML=kpis.map(k=>`<div class="kpi ${k.cls}"><div class="k-val" data-target="${k.val}">0</div><div class="k-lbl">${k.lbl}</div></div>`).join("");
+    // Count-up animation
+    el("supKpis").querySelectorAll(".k-val[data-target]").forEach(kpiEl=>{
+      const target=parseInt(kpiEl.dataset.target)||0;
+      if(target===0){ kpiEl.textContent="0"; return; }
+      const dur=Math.min(600, target*80);
+      const start=performance.now();
+      const tick=now=>{
+        const t=Math.min(1,(now-start)/dur);
+        const eased=1-Math.pow(1-t,3);
+        kpiEl.textContent=Math.round(eased*target);
+        if(t<1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+  }
+
+  function renderPlates() {
+    if(isDriver())return;
+    const canEdit=ROLE==="dispatcher"||ROLE==="dock"||ROLE==="management"||ROLE==="admin";
+    const doors=[]; for(let d=28;d<=42;d++) doors.push(String(d));
+    const v=Object.values(dockPlates||{});
+    const summary=`${v.filter(p=>p?.status==="OK").length} OK · ${v.filter(p=>p?.status==="Service").length} Svc · ${v.filter(p=>p?.status==="Out of Order").length} OOO`;
+    ["platesMini","platesMini2"].forEach(id=>{ const e=el(id); if(e)e.textContent=summary; });
+    const plateHtml=doors.map(door=>{
+      const p=dockPlates[door]||{status:"Unknown",note:""};
+      const open=!!plateEditOpen[door]&&canEdit;
+      const cls=p.status==="OK"?"p-ok":p.status==="Service"?"p-service":p.status==="Out of Order"?"p-out-of-order":"";
+      return `<div class="plate ${cls}">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:3px;"><span class="p-door">D${esc(door)}</span>${plateStatusTag(p.status)}</div>
+        <div class="p-note">${p.note?esc(p.note):`<span style="color:var(--t3)">—</span>`}</div>
+        ${open?`<select data-plate-status="${esc(door)}" style="margin-top:3px;"><option ${p.status==="OK"?"selected":""}>OK</option><option ${p.status==="Service"?"selected":""}>Service</option><option ${p.status==="Out of Order"?"selected":""}>Out of Order</option></select><input data-plate-note="${esc(door)}" placeholder="Note" value="${esc(p.note||"")}" style="margin-top:3px;"/>`:""}
+        <div class="p-btns" style="margin-top:3px;">${canEdit?`<button class="p-btn" data-plate-toggle="${esc(door)}">${open?"Close":"Edit"}</button>${open?`<button class="p-btn" data-plate-save="${esc(door)}">Save</button>`:""}`:" "}</div>
+      </div>`;
+    }).join("");
+    ["platesGrid","platesGrid2"].forEach(id=>{ const e=el(id); if(e)e.innerHTML=plateHtml; });
+    if(el("dockPlatesToggle")?.getAttribute("aria-expanded")==="true") setPlatesOpen(true);
+    if(el("dockPlatesToggle2")?.getAttribute("aria-expanded")==="true") setPlatesOpen2(true);
+  }
+
+  function renderSupConf() {
+    const sb=el("supConfBody"),sc=el("supConfCount"); if(!sb)return;
+    sc.textContent=confirmations.length;
+    sb.innerHTML=!confirmations.length
+      ?`<tr><td colspan="5" style="padding:16px;color:var(--t2);">No confirmations yet.</td></tr>`
+      :confirmations.map(c=>`<tr><td class="muted">${esc(fmtTime(c.at))}</td><td class="mono" style="font-weight:500;color:var(--t0);">${esc(c.trailer||"—")}</td><td class="mono">${esc(c.door||"—")}</td><td style="color:var(--t1);font-size:11px;">${esc(c.action||"—")}</td><td class="muted">${esc((c.ip||"—").split(",")[0])}</td></tr>`).join("");
+  }
+
+  const FEED_COLORS={trailer_create:"var(--green)",trailer_update:"var(--cyan)",trailer_delete:"var(--red)",trailer_status_set:"var(--amber)",driver_drop:"var(--violet)",crossdock_pickup:"var(--cyan)",crossdock_offload:"var(--amber)",safety_confirmed:"var(--green)",plate_set:"var(--t2)",pin_changed:"var(--amber)",trailer_clear_all:"var(--red)"};
+  function renderFeed(rows) {
+    const feed=el("supFeed"); if(!feed)return;
+    el("supAuditCount").textContent=rows.length;
+    if(!rows.length){ feed.innerHTML=`<div style="color:var(--t2);font-size:11px;font-family:var(--mono);">No activity yet.</div>`; return; }
+    feed.innerHTML=rows.slice(0,15).map(r=>{
+      const color=FEED_COLORS[r.action]||"var(--t2)";
+      let txt=`<strong>${esc(r.actorRole||"—")}</strong> — ${esc(r.action||"—")}`;
+      if(r.entityId&&r.entityId!=="*") txt+=` · <strong>${esc(r.entityId)}</strong>`;
+      return `<div class="feed-item"><div class="feed-pip" style="background:${color};"></div><div class="feed-content"><div class="feed-action">${txt}</div><div class="feed-time">${esc(timeAgo(r.at))}</div></div></div>`;
+    }).join("");
+  }
+
+  async function loadAuditInto(bodyEl,countEl,cols) {
+    try {
+      const rows=await apiJson("/api/audit?limit=200"); if(!rows)return;
+      if(countEl) countEl.textContent=rows.length;
+      if(cols===0){ renderFeed(rows); return; }
+      if(!bodyEl)return;
+      if(!rows.length){ bodyEl.innerHTML=`<tr><td colspan="${cols}" style="padding:16px;color:var(--t2);">No entries.</td></tr>`; return; }
+      bodyEl.innerHTML=rows.map(r=>{
+        let d=""; try{ d=JSON.stringify(r.details||{}); }catch{}
+        return `<tr><td class="muted">${esc(fmtTime(r.at))}</td><td style="color:var(--t1);">${esc(r.actorRole||"—")}</td><td style="color:var(--t1);">${esc(r.action||"—")}</td><td class="muted">${esc(r.entityType||"—")}</td><td class="mono">${esc(r.entityId||"—")}</td><td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;color:var(--t2);" title="${esc(d)}">${esc(d)}</td><td class="muted">${esc(r.ip||"—")}</td></tr>`;
+      }).join("");
+    } catch(e){ toast("Audit error",e.message,"err"); }
+  }
+
+  function dispPanelHtml(){ return `
+    <div class="infobox infobox-amber"><div class="ib-title">Dispatcher Controls</div>Add and manage trailers. Use inline buttons on each row for quick status changes.</div>
+    <div class="field"><label class="fl" for="d_trailer">Trailer Number</label><input id="d_trailer" placeholder="e.g. 5312" autocomplete="off" inputmode="numeric" autocorrect="off" autocapitalize="none" spellcheck="false" style="font-family:var(--mono);font-weight:500;"/></div>
+    <div class="field-row">
+      <div class="field"><label class="fl" for="d_direction">Direction</label><select id="d_direction"><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select></div>
+      <div class="field"><label class="fl" for="d_status">Status</label><select id="d_status"><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label class="fl" for="d_door">Door (28–42)</label><input id="d_door" placeholder="e.g. 32" inputmode="numeric" autocomplete="off" style="font-family:var(--mono);"/></div>
+      <div class="field"><label class="fl" for="d_dropType">Drop Type</label><select id="d_dropType"><option value="">—</option><option>Empty</option><option>Loaded</option></select></div>
+    </div>
+    <div class="field"><label class="fl" for="d_carrierType">Carrier</label><select id="d_carrierType"><option value="">—</option><option>Wesbell</option><option>Outside</option></select></div>
+    <div class="field"><label class="fl" for="d_note">Note</label><textarea id="d_note" placeholder="Optional note…"></textarea></div>
+    <button class="btn btn-primary btn-full" id="btnSaveTrailer" style="min-height:48px;">Save Trailer Record</button>`; }
+
+  function dockPanelHtml(){ return `
+    <div class="infobox infobox-cyan"><div class="ib-title">Dock Workflow</div>1. Trailer arrives → tap <strong>Loading</strong><br/>2. Loading done → tap <strong>Dock Ready</strong><br/>3. Dispatcher confirms → driver notified.</div>
+    <div style="font-size:11px;color:var(--t2);">No dispatch controls on Dock role.</div>`; }
+
+  /* ── DOCK VIEW ── */
+  let dockFilter = "active";
+
+  const DOCK_STATUS_NEXT = {
+    "Incoming":  { label:"Mark Loading",    to:"Loading",    cls:"dc-btn-default" },
+    "Dropped":   { label:"Mark Loading",    to:"Loading",    cls:"dc-btn-default" },
+    "Loading":   { label:"Mark Dock Ready", to:"Dock Ready", cls:"dc-btn-cyan"    },
+    "Dock Ready":{ label:"Awaiting dispatcher", to:null,     cls:"" },
+    "Ready":     { label:"Ready for pickup",    to:null,     cls:"" },
+    "Departed":  { label:"Departed",            to:null,     cls:"" },
+  };
+
+  const DOCK_STATUS_COLOR = {
+    "Incoming":"dc-incoming","Dropped":"dc-dropped","Loading":"dc-loading",
+    "Dock Ready":"dc-dockready","Ready":"dc-ready","Departed":"dc-departed",
+  };
+
+  function renderDockView() {
+    const cards = el("dockCards");
+    const countEl = el("dockCount");
+    if (!cards) return;
+    const q = (el("dockSearch")?.value || "").trim().toLowerCase();
+    const rows = Object.entries(trailers)
+      .map(([t,r]) => ({trailer:t,...r}))
+      .filter(r => {
+        if (dockFilter==="active" && r.status==="Departed") return false;
+        if (q && !`${r.trailer} ${r.door||""} ${r.note||""} ${r.status||""}`.toLowerCase().includes(q)) return false;
+        return true;
+      })
+      .sort((a,b) => {
+        const order = {"Loading":0,"Dropped":1,"Incoming":2,"Dock Ready":3,"Ready":4,"Departed":5};
+        return (order[a.status]??9)-(order[b.status]??9)||(b.updatedAt||0)-(a.updatedAt||0);
+      });
+    if (countEl) countEl.textContent = rows.length;
+    const canAct = ROLE==="dock"||ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin";
+    const loginNudge = el("dockLoginNudge");
+    if (loginNudge) loginNudge.style.display = canAct ? "none" : "";
+    if (!rows.length) {
+      cards.innerHTML = `<div class="dock-empty">${q?"No trailers match search.":dockFilter==="active"?"No active trailers.":"No trailers on board."}</div>`;
+      return;
+    }
+    cards.innerHTML = rows.map(r => {
+      const colorCls = DOCK_STATUS_COLOR[r.status]||"";
+      const next = DOCK_STATUS_NEXT[r.status];
+      const hasAction = next?.to && canAct;
+      const statusDot = {"Loading":"var(--amber)","Dock Ready":"var(--cyan)","Ready":"var(--green)","Dropped":"var(--violet)","Incoming":"var(--t2)","Departed":"var(--t3)"}[r.status]||"var(--t3)";
+      return `<div class="dock-card ${colorCls}">
+        <div class="dc-top">
+          <div class="dc-trailer-block">
+            <div class="dc-trailer">${esc(r.trailer)}</div>
+            ${r.note?`<div class="dc-note">${esc(r.note)}</div>`:""}
+          </div>
+          <div class="dc-right-block">
+            ${r.door?`<div class="dc-door-badge">D${esc(r.door)}</div>`:`<div class="dc-door-empty">No door</div>`}
+            <div class="dc-status-pill" style="--dot:${statusDot}">${esc(r.status)}</div>
+          </div>
+        </div>
+        <div class="dc-meta-row">
+          ${r.carrierType?carrierTag(r.carrierType):""}
+          ${r.updatedAt?`<span class="dc-ago">${esc(timeAgo(r.updatedAt))}</span>`:""}
+        </div>
+        ${hasAction
+          ?`<button class="dc-action-btn ${next.cls}" data-act="dockSet" data-to="${esc(next.to)}" data-trailer-id="${esc(r.trailer)}">${esc(next.label)}</button>`
+          :next?.to
+            ?`<button class="dc-action-btn dc-btn-signin" data-act="openStaffLogin">🔑 Sign in to update</button>`
+            :`<div class="dc-no-action">${esc(next?.label||"—")}</div>`
+        }
+        ${canAct?`<button class="dc-issue-btn" data-act="dockReportIssue" data-trailer-id="${esc(r.trailer)}" data-door="${esc(r.door||"")}">⚠ Report Issue</button>`:""}
+      </div>`;
+    }).join("");
+  }
+
+  function syncDockWsDot(state) {
+    const dot=el("dockWsDot"),txt=el("dockWsText"); if(!dot||!txt)return;
+    dot.className="live-dot "+state;
+    txt.textContent=state==="ok"?"Live":state==="bad"?"Offline":"Connecting…";
+  }
+
+  function renderRolePanel() {
+    if(ROLE==="admin"){ el("panelTitle").textContent="Admin"; el("panelSub").textContent="Master access"; el("panelBody").innerHTML=dispPanelHtml(); el("btnLogout").style.display=""; el("btnAudit").style.display=""; renderPlates(); return; }
+    if(ROLE==="dispatcher"||ROLE==="management"){ el("panelTitle").textContent=ROLE==="management"?"Management":"Dispatcher"; el("panelSub").textContent="Full control"; el("panelBody").innerHTML=dispPanelHtml(); el("btnLogout").style.display=""; el("btnAudit").style.display=""; renderPlates(); return; }
+    if(ROLE==="dock"){ el("panelTitle").textContent="Dock"; el("panelSub").textContent="Loading / Dock Ready"; el("panelBody").innerHTML=dockPanelHtml(); el("btnLogout").style.display=""; el("btnAudit").style.display="none"; renderPlates(); return; }
+    el("panelTitle").textContent="Not Authenticated"; el("panelSub").textContent="—";
+    el("panelBody").innerHTML=`<div style="color:var(--t2);font-size:12px;line-height:1.6;">Please <a href="/login">sign in</a> to access controls.</div>`;
+    el("btnLogout").style.display="none"; el("btnAudit").style.display="none";
+  }
+
+  async function doLogout(){
+    if (isDriver()) {
+      // Drivers have no session — just clear their local state and restart
+      try { sessionStorage.removeItem("wb_driver_session"); sessionStorage.removeItem("wb_whoType"); } catch {}
+      driverRestart();
+      return;
+    }
+    try{ await apiJson("/api/logout",{method:"POST",headers:CSRF}); }catch{}
+    location.href="/login";
+  }
+  async function dispSave(){
+    const trailer=(el("d_trailer")?.value||"").trim();
+    if(!trailer) return toast("Validation error","Trailer number is required.","err");
+    try{
+      await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({
+        trailer,
+        direction:(el("d_direction")?.value||"").trim(),
+        status:(el("d_status")?.value||"").trim(),
+        door:(el("d_door")?.value||"").trim(),
+        note:(el("d_note")?.value||"").trim(),
+        dropType:(el("d_dropType")?.value||"").trim(),
+        carrierType:(el("d_carrierType")?.value||"").trim(),
+      })});
+      toast("Saved",`Trailer ${trailer} updated.`,"ok");
+      ["d_trailer","d_door","d_note"].forEach(id=>{if(el(id))el(id).value="";});
+      el("d_direction").value="Inbound"; el("d_status").value="Incoming"; el("d_dropType").value=""; if(el("d_carrierType"))el("d_carrierType").value="";
+      setTimeout(()=>el("d_trailer")?.focus(),50);
+    }
+    catch(e){ toast("Save failed",e.message,"err"); }
+  }
+  async function dispDelete(trailer){
+    if(!await showModal("Delete Trailer",`Permanently delete trailer ${trailer}? Cannot be undone.`))return;
+    try{ await apiJson("/api/delete",{method:"POST",headers:CSRF,body:JSON.stringify({trailer})}); toast("Deleted",`Trailer ${trailer} removed.`,"warn"); }
+    catch(e){ toast("Delete failed",e.message,"err"); }
+  }
+  async function dispClear(){
+    if(!await showModal("Clear All Records","Permanently remove ALL trailer records? Cannot be undone."))return;
+    try{ await apiJson("/api/clear",{method:"POST",headers:CSRF}); toast("Board cleared","All records removed.","warn"); }
+    catch(e){ toast("Clear failed",e.message,"err"); }
+  }
+  async function shuntTrailer(trailer, door){
+    try{
+      await apiJson("/api/shunt",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door})});
+      shuntOpen[trailer]=false;
+      toast("Moved",`Trailer ${trailer} → Door ${door} (Dropped)`,"ok");
+    }catch(e){ toast("Shunt failed",e.message,"err"); }
+  }
+  async function quickStatus(trailer, status){
+    haptic("medium");
+    try{ await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})}); toast("Updated",`${trailer} → ${status}`,"ok"); }
+    catch(e){ toast("Update failed",e.message,"err"); }
+  }
+  async function dockSet(trailer,status){
+    haptic("medium");
+    try{ await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})}); toast("Updated",`${trailer} → ${status}`,"ok"); }
+    catch(e){ toast("Update failed",e.message,"err"); }
+  }
+  async function markReady(trailer){
+    haptic("success");
+    try{ await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status:"Ready"})}); toast("Trailer Ready",`${trailer} marked Ready.`,"ok"); }
+    catch(e){ toast("Update failed",e.message,"err"); }
+  }
+  async function plateSave(door){
+    const status=(document.querySelector(`[data-plate-status="${CSS.escape(door)}"]`)?.value||"").trim();
+    const note=(document.querySelector(`[data-plate-note="${CSS.escape(door)}"]`)?.value||"").trim();
+    try{ await apiJson("/api/dockplates/set",{method:"POST",headers:CSRF,body:JSON.stringify({door,status,note})}); toast("Plate updated",`Door ${door} → ${status}`,"ok"); plateEditOpen[door]=false; renderPlates(); }
+    catch(e){ toast("Update failed",e.message,"err"); }
+  }
+  async function setPin(role,inputId,confirmId){
+    const pin=(el(inputId)?.value||"").trim(), conf=(el(confirmId)?.value||"").trim();
+    if(pin.length<4) return toast("PIN too short","Minimum 4 characters.","err");
+    if(pin!==conf) return toast("PINs do not match","Enter matching PINs.","err");
+    if(!await showModal("Update PIN",`Change the ${role} PIN? Active sessions will be invalidated.`))return;
+    try{ await apiJson("/api/management/set-pin",{method:"POST",headers:CSRF,body:JSON.stringify({role,pin})}); toast("PIN updated",`${role} PIN changed.`,"ok"); el(inputId).value=""; el(confirmId).value=""; }
+    catch(e){ toast("Update failed",e.message,"err"); }
+  }
+
+  /* ── DRIVER PORTAL ── */
+  let _wsOnline = false;
+
+  function setDriverOnline(online) {
+    _wsOnline = online;
+    const banner = el("offlineBanner");
+    if (!banner) return;
+    banner.style.display = online ? "none" : "flex";
+    ["btnDriverDrop","btnXdockPickup","btnXdockOffload","btnConfirmSafety"].forEach(id => {
+      const btn = el(id); if (!btn) return;
+      if (!online) { btn.dataset.offlineDisabled="1"; btn.disabled=true; }
+      else {
+        if (btn.dataset.offlineDisabled) {
+          delete btn.dataset.offlineDisabled;
+          updateDropSubmitState(); updateOffloadSubmitState(); updateSafetySubmitState();
+        }
+      }
+    });
+  }
+
+  /* ── PUSH ── */
+  let _pushSub = null;
+
+  async function initPush() {
+    if (!("serviceWorker" in navigator)) return;
+    try {
+      const reg = await navigator.serviceWorker.register("/sw.js",{scope:"/"});
+      // Detect SW update and notify user
+      reg.addEventListener("updatefound", () => {
+        const nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener("statechange", () => {
+          if (nw.state === "installed" && navigator.serviceWorker.controller) {
+            toast("Update available", "Reload to get the latest version.", "warn", 10000);
+          }
+        });
+      });
+      await navigator.serviceWorker.ready;
+      if (!("PushManager" in window)) return;
+      _pushSub = await reg.pushManager.getSubscription();
+      updatePushBtn();
+      // Driver mode — auto-request notifications if not already subscribed
+      if (isDriver() && !_pushSub) {
+        await subscribePush();
+      }
+    } catch(e){ console.warn("SW registration failed:",e); }
+  }
+
+  async function subscribePush() {
+    if (!("serviceWorker" in navigator)) return toast("Not supported","Push not supported in this browser.","err");
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const {publicKey} = await apiJson("/api/push/vapid-public-key");
+      _pushSub = await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(publicKey)});
+      await apiJson("/api/push/subscribe",{method:"POST",headers:CSRF,body:JSON.stringify(_pushSub)});
+      updatePushBtn();
+      toast("Notifications on","You'll be notified when your trailer is ready.","ok");
+    } catch(e){ toast("Notifications blocked","Enable notifications in browser settings.","err"); }
+  }
+
+  async function unsubscribePush() {
+    if (!_pushSub) return;
+    try {
+      await apiJson("/api/push/unsubscribe",{method:"POST",headers:CSRF,body:JSON.stringify({endpoint:_pushSub.endpoint})});
+      await _pushSub.unsubscribe();
+      _pushSub = null;
+      updatePushBtn();
+      toast("Notifications off","Push notifications disabled.","warn");
+    } catch(e){ toast("Error",e.message,"err"); }
+  }
+
+  function updatePushBtn() {
+    const btn=el("btnPushToggle"); if(!btn)return;
+    if(isDriver()){ btn.style.display="none"; return; }
+    if(!("PushManager" in window)){ btn.style.display="none"; return; }
+    btn.style.display="";
+    if(_pushSub){ btn.textContent="🔔 Notifications On"; btn.classList.add("push-on"); }
+    else { btn.textContent="🔕 Enable Notifications"; btn.classList.remove("push-on"); }
+  }
+
+  function urlBase64ToUint8Array(base64String) {
+    const padding="=".repeat((4-base64String.length%4)%4);
+    const base64=(base64String+padding).replace(/-/g,"+").replace(/_/g,"/");
+    const raw=atob(base64);
+    return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
+  }
+
+  /* ── DRIVER STATE ── */
+  const driverState = {
+    whoType:null, flowType:null, trailer:"", assignedDoor:"",
+    selectedDoor:"", dropType:"Empty", overrideMode:false,
+    sessionDrops:[], shuntDoor:"",
+  };
+  try { const s=sessionStorage.getItem("wb_driver_session"); if(s) driverState.sessionDrops=JSON.parse(s); } catch {}
+  function saveSessionHistory(){ try{ sessionStorage.setItem("wb_driver_session",JSON.stringify(driverState.sessionDrops)); }catch{} }
+
+  function renderSessionHistory(){
+    const count=el("shCount"),body=el("shBody"); if(!count||!body)return;
+    const drops=driverState.sessionDrops;
+    count.textContent=`${drops.length} submission${drops.length===1?"":"s"}`;
+    if(!drops.length){ body.innerHTML=`<div class="sh-empty">No submissions yet this session.</div>`; return; }
+    const typeLabel={drop:"Drop",xdock_pickup:"XD Pickup",xdock_offload:"XD Offload",shunt:"Shunt"};
+    body.innerHTML=drops.slice().reverse().map(d=>`
+      <div class="sh-row">
+        <div><span class="sh-trailer">${esc(d.trailer)}</span><span class="sh-meta"> · D${esc(d.door)} · ${esc(typeLabel[d.flowType]||d.flowType)}</span></div>
+        <div>${d.flowType==="drop"?"":(d.safetyDone?`<span class="sh-status-ok">✓ Safety</span>`:`<span class="sh-status-err">⚠ Safety</span>`)}<span class="sh-meta" style="margin-left:6px;">${esc(timeAgo(d.at))}</span></div>
+      </div>`).join("");
+  }
+
+  const ALL_SCREENS=["who-screen","flow-screen","omw-screen","omw-confirm-screen","shunt-screen","drop-screen","xdock-pickup-screen","xdock-offload-screen","safety-screen","done-screen"];
+  let _currentScreen="who-screen";
+  const _screenExitTimers={};
+
+  function showScreen(id, forceBack=false){
+    const prev=_currentScreen;
+    const prevEl=el(prev);
+    const nextEl=el(id);
+    if(!nextEl) return;
+
+    // Cancel any in-flight exit timer for the previous screen
+    if(_screenExitTimers[prev]){ clearTimeout(_screenExitTimers[prev]); delete _screenExitTimers[prev]; }
+
+    // Determine slide direction based on screen order
+    const prevIdx=ALL_SCREENS.indexOf(prev);
+    const nextIdx=ALL_SCREENS.indexOf(id);
+    const goingBack=forceBack||nextIdx<prevIdx;
+
+    // Animate out current
+    if(prevEl&&prev!==id){
+      prevEl.classList.remove("screen-enter","screen-enter-back","screen-exit");
+      void prevEl.offsetWidth;
+      prevEl.classList.add("screen-exit");
+      _screenExitTimers[prev]=setTimeout(()=>{ prevEl.style.display="none"; prevEl.classList.remove("screen-exit"); delete _screenExitTimers[prev]; },180);
+    }
+
+    // Hide all others immediately
+    ALL_SCREENS.forEach(s=>{ if(s!==prev&&s!==id){ const e=el(s); if(e)e.style.display="none"; } });
+
+    // Show and animate in
+    nextEl.style.display="";
+    nextEl.classList.remove("screen-enter","screen-enter-back","screen-exit","done-screen-active");
+    void nextEl.offsetWidth;
+    nextEl.classList.add(goingBack?"screen-enter-back":"screen-enter");
+
+    // Done screen stagger celebration
+    if(id==="done-screen") setTimeout(()=>nextEl.classList.add("done-screen-active"),20);
+
+    _currentScreen=id;
+    if(id==="who-screen"||id==="flow-screen") setTimeout(()=>nextEl.querySelector("button")?.focus(),80);
+  }
+
+  function selectWho(whoType){
+    driverState.whoType=whoType;
+    try{ sessionStorage.setItem("wb_whoType",whoType); }catch{}
+    const dropBtn=el("flowBtnDrop");
+    const shuntBtn=document.querySelector("[data-flow='shunt']");
+    const omwBtn=el("flowBtnOmw");
+    const isOutside=whoType==="outside";
+    if(dropBtn) dropBtn.style.display=isOutside?"none":"";
+    if(shuntBtn) shuntBtn.style.display=isOutside?"none":"";
+    if(omwBtn) omwBtn.style.display=isOutside?"none":"";  // Only Wesbell drivers can mark OMW
+    const sub=el("flowScreenSub");
+    if(sub) sub.textContent=isOutside?"Select your cross dock activity:":"What are you here to do?";
+    showScreen("flow-screen");
+  }
+
+  async function driverShunt(){
+    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
+    const trailer=(el("sh_trailer")?.value||"").trim();
+    const door=driverState.shuntDoor||"";
+    if(!trailer) return toast("Required","Enter your trailer number.","err");
+    if(!door) return toast("Required","Select the new door.","err");
+    try{
+      await apiJson("/api/shunt",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door})});
+      driverState.sessionDrops.push({trailer,door,flowType:"shunt",at:Date.now(),safetyDone:false});
+      saveSessionHistory(); renderSessionHistory();
+      showDoneScreen("shunt");
+    }catch(e){ toast("Submission failed",e.message,"err"); }
+  }
+
+  function selectFlow(flowType){
+    driverState.flowType=flowType;
+    driverState.trailer=""; driverState.assignedDoor=""; driverState.selectedDoor="";
+    driverState.dropType="Empty"; driverState.overrideMode=false;
+    if(flowType==="shunt"){ resetShuntScreen(); showScreen("shunt-screen"); setTimeout(()=>el("sh_trailer")?.focus(),100); }
+    else if(flowType==="drop"){ resetDropScreen(); showScreen("drop-screen"); setTimeout(()=>el("v_trailer")?.focus(),100); }
+    else if(flowType==="xdock_pickup"){ resetPickupScreen(); showScreen("xdock-pickup-screen"); setTimeout(()=>el("xp_trailer")?.focus(),100); }
+    else if(flowType==="xdock_offload"){ resetOffloadScreen(); showScreen("xdock-offload-screen"); setTimeout(()=>el("xo_trailer")?.focus(),100); }
+    else if(flowType==="omw"){ resetOmwScreen(); showScreen("omw-screen"); setTimeout(()=>el("omw_trailer")?.focus(),100); }
+  }
+
+  /* ── ON MY WAY ── */
+  function resetOmwScreen(){
+    if(el("omw_trailer")) el("omw_trailer").value="";
+    if(el("omw_eta")) el("omw_eta").value="";
+    if(el("omw_err")) el("omw_err").style.display="none";
+    updateOmwSubmitState();
+  }
+  function updateOmwSubmitState(){
+    const btn=el("btnOmwSubmit");
+    if(!btn)return;
+    const trailer=(el("omw_trailer")?.value||"").trim();
+    btn.disabled=!trailer;
+  }
+  async function submitOmw(){
+    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
+    const trailer=(el("omw_trailer")?.value||"").trim().toUpperCase();
+    const eta=parseInt(el("omw_eta")?.value)||null;
+    const errEl=el("omw_err");
+    if(!trailer){ if(errEl){errEl.textContent="Enter your trailer number.";errEl.style.display="";} return; }
+    if(errEl) errEl.style.display="none";
+    const btn=el("btnOmwSubmit");
+    btn.disabled=true; btn.textContent="Notifying…";
+    try{
+      const res=await apiJson("/api/driver/omw",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,eta})});
+      const door=res?.door||"";
+      el("omwDoorNum").textContent=door||"TBD";
+      el("omwConfirmTitle").textContent=res?.alreadyActive?`Already on board — Door ${door}`:`Door ${door} assigned!`;
+      el("omwConfirmSub").textContent=res?.alreadyActive
+        ?`Trailer ${trailer} is already ${res.status}. Your door is ${door}.`
+        :`Dispatch has been notified. Head to door ${door}.`;
+      el("omwEtaDisplay").textContent=eta?`ETA ~${eta} minutes`:"";
+      showScreen("omw-confirm-screen");
+    }catch(e){
+      if(errEl){errEl.textContent=e.message||"Submission failed.";errEl.style.display="";}
+      btn.disabled=false; btn.textContent="📍 Notify Dispatch";
+    }
+  }
+
+  /* ── SHUNT ── */
+  function resetShuntScreen(){
+    if(el("sh_trailer")) el("sh_trailer").value="";
+    driverState.shuntDoor="";
+    if(el("sh_door_display")) el("sh_door_display").textContent="Select a door below";
+    buildShuntDoorPicker();
+    updateShuntSubmitState();
+  }
+  function buildShuntDoorPicker(){
+    const grid=el("shuntDoorGrid"); if(!grid)return;
+    const occupied=getOccupiedDoors();
+    const shTrailer=(el("sh_trailer")?.value||"").trim();
+    let html="";
+    for(let d=28;d<=42;d++){
+      const ds=String(d);
+      const occ=occupied[ds]&&occupied[ds].trailer!==shTrailer;
+      const sel=driverState.shuntDoor===ds;
+      html+=`<button class="door-btn${occ?" occupied":""}${sel?" selected":""}" data-act="shuntPickDoor" data-door="${ds}">${ds}${occ?`<span class="door-btn-sub">In use</span>`:""}</button>`;
+    }
+    grid.innerHTML=html;
+  }
+  function updateShuntSubmitState(){
+    const btn=el("btnDriverShunt"); if(!btn)return;
+    btn.disabled=!((el("sh_trailer")?.value||"").trim()&&driverState.shuntDoor)||!_wsOnline;
+  }
+
+  /* ── DRIVER DROP ── */
+  function resetDropScreen(){
+    if(el("v_trailer")){ el("v_trailer").value=""; el("v_trailer").classList.remove("has-value"); }
+    el("assignmentCard")?.classList.remove("visible");
+    hideDoorPicker("doorPickerWrap");
+    el("dtbEmpty")?.classList.add("selected"); el("dtbLoaded")?.classList.remove("selected");
+    driverState.dropType="Empty"; updateDropSubmitState();
+  }
+  function updateDropSubmitState(){
+    const btn=el("btnDriverDrop"); if(!btn)return;
+    btn.disabled=!driverState.trailer.trim()||!_wsOnline;
+  }
+
+  async function driverDrop(force=false){
+    if(!_wsOnline) return toast("Offline","Cannot submit while offline. Please wait for reconnection.","err");
+    const {trailer,selectedDoor:door,dropType}=driverState;
+    if(!trailer) return toast("Required","Enter your trailer number.","err");
+    try{
+      const carrierType=driverState.whoType==="outside"?"Outside":"Wesbell";
+      const res=await apiJson("/api/driver/drop",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door,dropType,carrierType,force})});
+      // Handle duplicate trailer warning (409)
+      if(res?.duplicate){
+        const confirmed=await showModal("Trailer Already on Board",res.message+" Overwrite the existing record?");
+        if(!confirmed) return;
+        return driverDrop(true); // retry with force=true
+      }
+      const assignedDoor=res?.door||door;
+      driverState.selectedDoor=assignedDoor;
+      driverState.sessionDrops.push({trailer,door:assignedDoor,dropType,flowType:"drop",at:Date.now(),safetyDone:false});
+      saveSessionHistory(); renderSessionHistory();
+      showDoneScreen("drop");
+    }catch(e){ if(e.message!=="409") toast("Submission failed",e.message,"err"); }
+  }
+
+  /* ── XDOCK PICKUP ── */
+  function resetPickupScreen(){
+    if(el("xp_trailer")){ el("xp_trailer").value=""; el("xp_trailer").classList.remove("has-value"); }
+    el("pickupAssignmentCard")?.classList.remove("visible");
+    el("pickupNoAssignment")?.classList.remove("visible");
+    const btn=el("btnXdockPickup"); if(btn)btn.disabled=true;
+  }
+  async function onPickupTrailerInput(){
+    const val=(el("xp_trailer")?.value||"").trim();
+    driverState.trailer=val;
+    el("xp_trailer")?.classList.toggle("has-value",val.length>0);
+    el("pickupAssignmentCard")?.classList.remove("visible");
+    el("pickupNoAssignment")?.classList.remove("visible");
+    const btn=el("btnXdockPickup"); if(btn)btn.disabled=true;
+    if(!val)return;
+    clearTimeout(onPickupTrailerInput._t);
+    onPickupTrailerInput._t=setTimeout(()=>lookupAssignment(val,"pickup"),500);
+  }
+  async function xdockPickup(){
+    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
+    const {trailer,selectedDoor:door}=driverState;
+    if(!trailer) return toast("Required","Enter trailer number.","err");
+    if(!door) return toast("No assignment","This trailer has no door assignment. Contact your dispatcher.","warn");
+    try{
+      await apiJson("/api/crossdock/pickup",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door})});
+      driverState.sessionDrops.push({trailer,door,flowType:"xdock_pickup",at:Date.now(),safetyDone:false});
+      saveSessionHistory(); renderSessionHistory();
+      showSafetyScreen();
+    }catch(e){ toast("Submission failed",e.message,"err"); }
+  }
+
+  /* ── XDOCK OFFLOAD ── */
+  function resetOffloadScreen(){
+    if(el("xo_trailer")){ el("xo_trailer").value=""; el("xo_trailer").classList.remove("has-value"); }
+    el("offloadAssignmentCard")?.classList.remove("visible");
+    hideDoorPicker("offloadDoorPickerWrap");
+    driverState.selectedDoor=""; updateOffloadSubmitState();
+  }
+  function updateOffloadSubmitState(){
+    const btn=el("btnXdockOffload"); if(!btn)return;
+    btn.disabled=!(driverState.trailer.trim()&&driverState.selectedDoor)||!_wsOnline;
+  }
+  async function onOffloadTrailerInput(){
+    const val=(el("xo_trailer")?.value||"").trim();
+    driverState.trailer=val;
+    el("xo_trailer")?.classList.toggle("has-value",val.length>0);
+    driverState.selectedDoor=""; driverState.overrideMode=false;
+    el("offloadAssignmentCard")?.classList.remove("visible");
+    hideDoorPicker("offloadDoorPickerWrap");
+    updateOffloadSubmitState();
+    if(!val)return;
+    clearTimeout(onOffloadTrailerInput._t);
+    onOffloadTrailerInput._t=setTimeout(()=>lookupAssignment(val,"offload"),500);
+  }
+  async function xdockOffload(force=false){
+    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
+    const {trailer,selectedDoor:door}=driverState;
+    if(!trailer) return toast("Required","Enter trailer number.","err");
+    if(!door) return toast("Required","Select a door.","err");
+    try{
+      const res=await apiJson("/api/crossdock/offload",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door,force})});
+      if(res?.duplicate){
+        const confirmed=await showModal("Trailer Already Active",res.message+" Overwrite the existing record?");
+        if(!confirmed) return;
+        return xdockOffload(true);
+      }
+      driverState.sessionDrops.push({trailer,door,flowType:"xdock_offload",at:Date.now(),safetyDone:false});
+      saveSessionHistory(); renderSessionHistory();
+      showSafetyScreen();
+    }catch(e){ if(e.message!=="409") toast("Submission failed",e.message,"err"); }
+  }
+
+  /* ── LOOKUP ── */
+  async function lookupAssignment(trailer,context){
+    const spinner=el("lookupSpinner"); if(spinner)spinner.classList.add("visible");
+    try{
+      const res=await fetch(`/api/driver/assignment?trailer=${encodeURIComponent(trailer)}`,{headers:{"X-Requested-With":"XMLHttpRequest"}});
+      if(!res.ok)throw new Error();
+      const data=await res.json();
+      const meta=[data.direction,data.status].filter(Boolean).join(" · ")||"Assigned by dispatcher";
+      if(context==="pickup"){
+        if(data.found&&data.door){
+          driverState.selectedDoor=data.door;
+          el("pac_door").textContent="Door "+data.door;
+          el("pac_meta").textContent=meta;
+          el("pickupAssignmentCard")?.classList.add("visible");
+          el("pickupNoAssignment")?.classList.remove("visible");
+          const btn=el("btnXdockPickup"); if(btn)btn.disabled=!_wsOnline;
+        } else {
+          driverState.selectedDoor="";
+          el("pickupNoAssignment")?.classList.add("visible");
+          const btn=el("btnXdockPickup"); if(btn)btn.disabled=true;
+        }
+      } else if(context==="offload"){
+        if(data.found&&data.door){
+          driverState.assignedDoor=data.door; driverState.selectedDoor=data.door; driverState.overrideMode=false;
+          el("oac_door").textContent="Door "+data.door;
+          el("oac_meta").textContent=meta;
+          el("offloadAssignmentCard")?.classList.add("visible");
+          hideDoorPicker("offloadDoorPickerWrap");
+        } else {
+          driverState.assignedDoor="";
+          if(!driverState.overrideMode){ driverState.selectedDoor=""; showDoorPicker("offloadDoorPickerWrap","offloadDoorPickerGrid"); }
+        }
+        updateOffloadSubmitState();
+      }
+    }catch{
+      if(context==="offload"&&!driverState.overrideMode) showDoorPicker("offloadDoorPickerWrap","offloadDoorPickerGrid");
+    }finally{
+      if(spinner)spinner.classList.remove("visible");
+    }
+  }
+
+  let _lookupTimer=null;
+  function onTrailerInput(){
+    const val=(el("v_trailer")?.value||"").trim();
+    driverState.trailer=val;
+    el("v_trailer")?.classList.toggle("has-value",val.length>0);
+    if(!driverState.overrideMode){ driverState.assignedDoor=""; driverState.selectedDoor=""; el("assignmentCard")?.classList.remove("visible"); hideDoorPicker("doorPickerWrap"); }
+    updateDropSubmitState();
+    if(!val){ driverState.overrideMode=false; return; }
+    clearTimeout(_lookupTimer);
+    _lookupTimer=setTimeout(()=>lookupDropAssignment(val),500);
+  }
+  async function lookupDropAssignment(trailer){
+    const spinner=el("lookupSpinner"); if(spinner)spinner.classList.add("visible");
+    try{
+      const res=await fetch(`/api/driver/assignment?trailer=${encodeURIComponent(trailer)}`,{headers:{"X-Requested-With":"XMLHttpRequest"}});
+      if(!res.ok)throw new Error();
+      const data=await res.json();
+      if(data.found&&data.door){
+        driverState.assignedDoor=data.door; driverState.selectedDoor=data.door; driverState.overrideMode=false;
+        el("ac_door").textContent="Door "+data.door;
+        el("ac_meta").textContent=[data.direction,data.status].filter(Boolean).join(" · ")||"Assigned by dispatcher";
+        el("assignmentCard")?.classList.add("visible");
+        hideDoorPicker("doorPickerWrap");
+      } else {
+        driverState.assignedDoor="";
+        if(!driverState.overrideMode){ driverState.selectedDoor=""; showDoorPicker("doorPickerWrap","doorPickerGrid"); }
+      }
+    }catch{ if(!driverState.overrideMode) showDoorPicker("doorPickerWrap","doorPickerGrid"); }
+    finally{ if(spinner)spinner.classList.remove("visible"); }
+    updateDropSubmitState();
+  }
+
+  function buildDoorPicker(gridId){
+    const grid=el(gridId||"doorPickerGrid"); if(!grid)return;
+    const occupied=getOccupiedDoors();
+    let html="";
+    for(let d=28;d<=42;d++){
+      const ds=String(d), occ=!!occupied[ds], sel=driverState.selectedDoor===ds;
+      html+=`<button class="door-btn${occ?" occupied":""}${sel?" selected":""}" data-door="${ds}" data-picker="${gridId||"doorPickerGrid"}">${ds}${occ?`<span class="door-btn-sub">In use</span>`:""}</button>`;
+    }
+    grid.innerHTML=html;
+  }
+  function showDoorPicker(wrapId,gridId){ buildDoorPicker(gridId); el(wrapId||"doorPickerWrap")?.classList.add("visible"); el("assignmentCard")?.classList.remove("visible"); }
+  function hideDoorPicker(wrapId){ el(wrapId||"doorPickerWrap")?.classList.remove("visible"); }
+
+  /* ── ISSUE REPORT STATE & CAMERA ── */
+  const issueState = { photoData: null, photoMime: null };
+
+  function resetIssueReport() {
+    issueState.photoData = null;
+    issueState.photoMime = null;
+    const chk = el("c_hasIssue");
+    if (chk) chk.checked = false;
+    const irb = el("issueReportBody"); if(irb) irb.style.display = "none";
+    el("issueNote") && (el("issueNote").value = "");
+    if (el("issuePhotoInput")) el("issuePhotoInput").value = "";
+    setIssuePhotoPreview(null);
+  }
+
+  function setIssuePhotoPreview(dataUrl) {
+    const zone   = el("issuePhotoZone");
+    const empty  = el("ipzEmpty");
+    const prev   = el("ipzPreview");
+    const remove = el("btnRemovePhoto");
+    if (!zone || !empty || !prev || !remove) return;
+    if (dataUrl) {
+      prev.src = dataUrl;
+      prev.style.display = "";
+      empty.style.display = "none";
+      remove.style.display = "";
+      zone.classList.add("has-photo");
+    } else {
+      prev.src = "";
+      prev.style.display = "none";
+      empty.style.display = "";
+      remove.style.display = "none";
+      zone.classList.remove("has-photo");
+    }
+  }
+
+  /* ── DOCK ISSUE REPORT MODAL ── */
+  const dockIssueState = { trailer: "", door: "" };
+
+  function openDockIssueModal(trailer, door) {
+    dockIssueState.trailer = trailer;
+    dockIssueState.door    = door;
+    issueState.photoData = null;
+    issueState.photoMime = null;
+    const ni    = el("dockIssueNote");
+    const pi    = el("dockIssuePhotoInput");
+    const prev  = el("dockIssuePrev");
+    const rem   = el("dockIssueRemovePhoto");
+    const empty = el("dockIssueEmpty");
+    const pz    = el("dockIssuePhotoZone");
+    const ctx   = el("dockIssueCtx");
+    const errEl = el("dockIssueErr");
+    if (ni)    ni.value = "";
+    if (pi)    pi.value = "";
+    if (prev)  { prev.style.display = "none"; prev.src = ""; }
+    if (rem)   rem.style.display = "none";
+    if (empty) empty.style.display = "";
+    if (pz)    pz.classList.remove("has-photo");
+    if (ctx)   ctx.textContent = `Trailer ${trailer}${door ? " · Door " + door : ""}`;
+    if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
+    el("dockIssueOv")?.classList.remove("hidden");
+    document.body.style.overflow = "hidden";
+    setTimeout(() => ni?.focus(), 120);
+  }
+
+  function closeDockIssueModal() {
+    el("dockIssueOv")?.classList.add("hidden");
+    document.body.style.overflow = "";
+  }
+
+  function initDockIssueModal() {
+    const input = el("dockIssuePhotoInput");
+    const zone  = el("dockIssuePhotoZone");
+    const prev  = el("dockIssuePrev");
+    const rem   = el("dockIssueRemovePhoto");
+    const empty = el("dockIssueEmpty");
+    if (!input || !zone) return;
+
+    zone.addEventListener("click", () => { if (!issueState.photoData) input.click(); });
+
+    rem?.addEventListener("click", e => {
+      e.stopPropagation();
+      issueState.photoData = null; issueState.photoMime = null; input.value = "";
+      if (prev)  { prev.style.display = "none"; prev.src = ""; }
+      if (rem)   rem.style.display = "none";
+      if (empty) empty.style.display = "";
+      zone.classList.remove("has-photo");
+    });
+
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith("image/")) return toast("Invalid file", "Please select an image.", "err");
+      if (file.size > 8 * 1024 * 1024) return toast("Too large", "Photo must be under 8 MB.", "err");
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const result = ev.target.result;
+        issueState.photoMime = file.type;
+        issueState.photoData = result.slice(result.indexOf(",") + 1);
+        if (prev)  { prev.src = result; prev.style.display = ""; }
+        if (empty) empty.style.display = "none";
+        if (rem)   rem.style.display = "";
+        zone.classList.add("has-photo");
+        haptic("light");
+      };
+      reader.onerror = () => toast("Photo error", "Could not read the photo. Try again.", "err");
+      reader.readAsDataURL(file);
+    });
+
+    el("dockIssueCancelBtn")?.addEventListener("click", closeDockIssueModal);
+    el("dockIssueOv")?.addEventListener("click", e => { if (e.target === el("dockIssueOv")) closeDockIssueModal(); });
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape" && !el("dockIssueOv")?.classList.contains("hidden")) closeDockIssueModal();
+    });
+
+    el("dockIssueSubmitBtn")?.addEventListener("click", async () => {
+      const note  = (el("dockIssueNote")?.value || "").trim();
+      const errEl = el("dockIssueErr");
+      if (!note && !issueState.photoData) {
+        if (errEl) { errEl.textContent = "Add a note or photo before submitting."; errEl.style.display = ""; }
+        return;
+      }
+      const btn = el("dockIssueSubmitBtn");
+      if (btn) { btn.disabled = true; btn.textContent = "Submitting…"; }
+      if (errEl) errEl.style.display = "none";
+      try {
+        await apiJson("/api/report-issue", {
+          method: "POST", headers: CSRF,
+          body: JSON.stringify({
+            trailer:    dockIssueState.trailer,
+            door:       dockIssueState.door,
+            note,
+            photo_data: issueState.photoData || null,
+            photo_mime: issueState.photoMime || null,
+          })
+        });
+        closeDockIssueModal();
+        toast("Issue reported", `Report filed for trailer ${dockIssueState.trailer}.`, "ok");
+        haptic("success");
+      } catch(e) {
+        if (errEl) { errEl.textContent = e.message || "Submit failed."; errEl.style.display = ""; }
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "Submit Report"; }
+      }
+    });
+  }
+
+  function initIssueCamera() {
+    const zone  = el("issuePhotoZone");
+    const input = el("issuePhotoInput");
+    const chk   = el("c_hasIssue");
+    const body  = el("issueReportBody");
+    if (!zone || !input || !chk || !body) return;
+
+    // Toggle issue panel open/close
+    chk.addEventListener("change", () => {
+      body.style.display = chk.checked ? "" : "none";
+      if (!chk.checked) resetIssueReport();
+    });
+
+    // Tap photo zone → open camera
+    zone.addEventListener("click", () => {
+      if (issueState.photoData) return; // already has photo — let remove button handle it
+      input.click();
+    });
+
+    // Remove photo button
+    el("btnRemovePhoto")?.addEventListener("click", e => {
+      e.stopPropagation();
+      issueState.photoData = null;
+      issueState.photoMime = null;
+      if (input) input.value = "";
+      setIssuePhotoPreview(null);
+    });
+
+    // Process selected/captured photo
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith("image/")) return toast("Invalid file", "Please select an image.", "err");
+      if (file.size > 8 * 1024 * 1024) return toast("Too large", "Photo must be under 8 MB.", "err");
+
+      const reader = new FileReader();
+      reader.onload = e => {
+        const result = e.target.result; // data:image/jpeg;base64,...
+        const commaIdx = result.indexOf(",");
+        issueState.photoMime = file.type;
+        issueState.photoData = result.slice(commaIdx + 1); // strip data URL prefix
+        setIssuePhotoPreview(result);
+        haptic("light");
+      };
+      reader.onerror = () => toast("Photo error", "Could not read the photo. Try again.", "err");
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /* ── ISSUE REPORTS MANAGEMENT PANEL ── */
+  async function loadIssueReports() {
+    const body     = el("supIssueBody");
+    const countEl  = el("supIssueCount");
+    if (!body) return;
+    try {
+      const rows = await apiJson("/api/issue-reports?limit=50");
+      if (countEl) countEl.textContent = rows.length;
+      if (!rows.length) {
+        body.innerHTML = `<div style="padding:24px;text-align:center;color:var(--t3);font-family:var(--mono);font-size:11px;">No issue reports yet.</div>`;
+        return;
+      }
+      body.innerHTML = rows.map(r => {
+        const hasPhoto = !!r.photo_data;
+        const thumb = hasPhoto
+          ? `<div class="issue-thumb-wrap" data-issue-id="${r.id}" data-issue-mime="${esc(r.photo_mime||'image/jpeg')}">
+               <img src="/api/issue-reports/${r.id}/photo" alt="Issue photo" loading="lazy"/>
+             </div>`
+          : `<div class="issue-thumb-wrap"><div class="issue-thumb-empty">📷</div></div>`;
+        const noteHtml = r.note
+          ? `<div class="issue-note">${esc(r.note)}</div>`
+          : `<div class="issue-no-note">No description provided</div>`;
+        return `<div class="issue-card">
+          ${thumb}
+          <div class="issue-body">
+            <div class="issue-meta">
+              <span class="issue-trailer">${esc(r.trailer||"—")}</span>
+              ${r.door?`<span class="issue-door">D${esc(r.door)}</span>`:""}
+              <span class="issue-badge">⚠ Issue</span>
+              <span class="issue-time">${esc(timeAgo(r.at))}</span>
+            </div>
+            ${noteHtml}
+          </div>
+        </div>`;
+      }).join("");
+    } catch(e) { body.innerHTML = `<div style="padding:16px;color:var(--red);font-size:12px;">${esc(e.message)}</div>`; }
+  }
+
+  /* ── LIGHTBOX ── */
+  function initIssueLightbox() {
+    const lb    = el("issueLightbox");
+    const img   = el("issueLightboxImg");
+    const close = el("issueLightboxClose");
+    if (!lb || !img || !close) return;
+    function openLb(src) { img.src = src; lb.classList.add("open"); document.body.style.overflow = "hidden"; }
+    function closeLb()   { lb.classList.remove("open"); img.src = ""; document.body.style.overflow = ""; }
+    close.addEventListener("click", e => { e.stopPropagation(); closeLb(); });
+    lb.addEventListener("click", closeLb);
+    img.addEventListener("click", e => e.stopPropagation());
+    document.addEventListener("keydown", e => { if(e.key==="Escape" && lb.classList.contains("open")) closeLb(); });
+    // Delegate thumb clicks from management panel
+    document.addEventListener("click", ev => {
+      const thumb = ev.target.closest?.("[data-issue-id]");
+      if (thumb) { openLb(`/api/issue-reports/${thumb.dataset.issueId}/photo`); }
+    });
+  }
+
+  function showSafetyScreen(){
+    const ctx=el("safetyContext");
+    if(ctx){
+      const icon=driverState.flowType==="xdock_pickup"?"🔄 Pickup":"📥 Offload";
+      ctx.innerHTML=[
+        driverState.trailer?`<span class="context-chip">🚛 <strong>${esc(driverState.trailer)}</strong></span>`:"",
+        driverState.selectedDoor?`<span class="context-chip">🚪 Door <strong>${esc(driverState.selectedDoor)}</strong></span>`:"",
+        `<span class="context-chip">${icon}</span>`,
+      ].join("");
+    }
+    if(el("c_loadSecured"))el("c_loadSecured").checked=false;
+    if(el("c_dockPlateUp"))el("c_dockPlateUp").checked=false;
+    resetIssueReport();
+    updateSafetySubmitState();
+    showScreen("safety-screen");
+  }
+  function updateSafetySubmitState(){ const btn=el("btnConfirmSafety"); if(btn) btn.disabled=!(el("c_loadSecured")?.checked&&el("c_dockPlateUp")?.checked)||!_wsOnline; }
+  async function confSafety(){
+    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
+    if(!el("c_loadSecured")?.checked||!el("c_dockPlateUp")?.checked) return toast("Incomplete","Both safety items must be confirmed.","err");
+    const hasIssue = el("c_hasIssue")?.checked;
+    const issueNote = (el("issueNote")?.value||"").trim();
+    // Require at least a note or photo if issue is checked
+    if(hasIssue && !issueNote && !issueState.photoData) return toast("Describe the issue","Add a note or photo before submitting.","warn");
+    const btn = el("btnConfirmSafety");
+    const btnSpan = btn?.querySelector("span");
+    if(btn){ btn.disabled=true; if(btnSpan) btnSpan.textContent="Submitting…"; }
+    try{
+      await apiJson("/api/confirm-safety",{method:"POST",headers:CSRF,body:JSON.stringify({trailer:driverState.trailer,door:driverState.selectedDoor,loadSecured:true,dockPlateUp:true,action:driverState.flowType})});
+      // Submit issue report if flagged (fire-and-forget after safety succeeds)
+      if(hasIssue){
+        try{
+          await apiJson("/api/report-issue",{method:"POST",headers:CSRF,body:JSON.stringify({
+            trailer: driverState.trailer,
+            door: driverState.selectedDoor||driverState.shuntDoor||"",
+            note: issueNote,
+            photo_data: issueState.photoData||null,
+            photo_mime: issueState.photoMime||null,
+          })});
+          toast("Issue reported","Your report has been sent to management.","ok");
+        }catch(ie){ toast("Issue report failed",ie.message,"warn"); }
+      }
+      const last=driverState.sessionDrops[driverState.sessionDrops.length-1];
+      if(last&&last.trailer===driverState.trailer) last.safetyDone=true;
+      saveSessionHistory(); renderSessionHistory();
+      showDoneScreen(driverState.flowType);
+    }catch(e){
+      toast("Submission failed",e.message,"err");
+      if(btn){ btn.disabled=false; if(btnSpan) btnSpan.textContent="Confirm & Complete"; }
+    }
+  }
+
+  function showDoneScreen(flowType){
+    const labels={drop:"Drop recorded — no safety check required.",xdock_pickup:"Pickup recorded + safety confirmed.",xdock_offload:"Offload recorded + safety confirmed.",shunt:"Shunt recorded — trailer moved to new door."};
+    const detail=el("driverDoneDetail");
+    const _displayDoor = driverState.shuntDoor || driverState.selectedDoor || "—";
+    if(detail) detail.innerHTML=`Trailer <strong>${esc(driverState.trailer)}</strong> · Door <strong>${esc(_displayDoor)}</strong><br><span style="color:var(--t1);">${labels[flowType]||"Submitted."}</span>`;
+    showScreen("done-screen");
+  }
+
+  function driverRestart(){
+    driverState.whoType=null; driverState.flowType=null;
+    driverState.trailer=""; driverState.assignedDoor=""; driverState.selectedDoor="";
+    driverState.dropType="Empty"; driverState.overrideMode=false; driverState.shuntDoor="";
+    try{ sessionStorage.removeItem("wb_whoType"); }catch{}
+    showScreen("who-screen",true);
+  }
+
+  function syncDriverWsDot(state){
+    const dot=el("driverWsDot"),txt=el("driverWsText"); if(!dot||!txt)return;
+    dot.className="live-dot "+state;
+    txt.textContent=state==="ok"?"Live":state==="bad"?"Offline":"Connecting…";
+    setDriverOnline(state==="ok");
+  }
+
+  /* ── HAPTIC FEEDBACK ── */
+  function haptic(type) {
+    if (!navigator.vibrate) return;
+    if (type === "light") navigator.vibrate(8);
+    else if (type === "medium") navigator.vibrate(18);
+    else if (type === "success") navigator.vibrate([8,50,8]);
+    else if (type === "error") navigator.vibrate([30,60,30]);
+  }
+
+  /* ── SWIPE TO DISMISS TOAST ── */
+  function initToastSwipe() {
+    const t = el("toast");
+    if (!t) return;
+    let startX = 0, startY = 0, dx = 0;
+    t.addEventListener("touchstart", e => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      dx = 0;
+      t.classList.add("swiping");
+    }, {passive:true});
+    t.addEventListener("touchmove", e => {
+      dx = e.touches[0].clientX - startX;
+      const dy = Math.abs(e.touches[0].clientY - startY);
+      if (Math.abs(dx) < dy) return; // vertical swipe — ignore
+      if (dx > 0) t.style.transform = `translateX(${dx}px)`;
+    }, {passive:true});
+    t.addEventListener("touchend", () => {
+      t.classList.remove("swiping");
+      if (dx > 80) {
+        t.classList.add("swipe-out");
+        setTimeout(() => { t.style.display="none"; t.classList.remove("swipe-out"); t.style.transform=""; }, 200);
+      } else {
+        t.style.transform = "";
+      }
+      dx = 0;
+    }, {passive:true});
+  }
+
+  /* ── PULL TO REFRESH ── */
+  function initPullToRefresh() {
+    let startY = 0, pulling = false, triggered = false;
+    const ind = el("ptrIndicator");
+    const txt = el("ptrText");
+    const spin = el("ptrSpinner");
+    if (!ind) return;
+
+    document.addEventListener("touchstart", e => {
+      if (window.scrollY === 0) { startY = e.touches[0].clientY; pulling = true; triggered = false; }
+    }, {passive:true});
+
+    document.addEventListener("touchmove", e => {
+      if (!pulling) return;
+      const dy = e.touches[0].clientY - startY;
+      if (dy > 10 && window.scrollY === 0) {
+        ind.classList.add("ptr-visible");
+        if (dy > 70 && !triggered) {
+          txt.textContent = "↑ Release to refresh";
+        } else if (dy <= 70) {
+          txt.textContent = "↓ Pull to refresh";
+        }
+      }
+    }, {passive:true});
+
+    document.addEventListener("touchend", async e => {
+      if (!pulling) return;
+      pulling = false;
+      const dy = e.changedTouches[0].clientY - startY;
+      if (dy > 70 && window.scrollY === 0 && !triggered) {
+        triggered = true;
+        ind.classList.add("ptr-loading");
+        spin.style.display = "block";
+        txt.textContent = "Refreshing…";
+        haptic("light");
+        try {
+          const [t, p] = await Promise.all([
+            apiJson("/api/state").catch(()=>null),
+            apiJson("/api/dockplates").catch(()=>null),
+          ]);
+          if(t) trailers = t;
+          if(p) dockPlates = p;
+          renderBoard(); renderDockView(); renderPlates(); renderSupBoard();
+          haptic("success");
+        } catch {}
+        await new Promise(r => setTimeout(r, 600));
+      }
+      ind.classList.remove("ptr-visible","ptr-loading");
+      spin.style.display = "none";
+      txt.textContent = "↓ Pull to refresh";
+    }, {passive:true});
+  }
+
+  /* ── BOTTOM NAV SYNC ── */
+  function syncBottomNav() {
+    const p = path();
+    ["bnDispatch","bnDock","bnDriver","bnManagement"].forEach(id => el(id)?.classList.remove("active"));
+
+    if (p.startsWith("/management")) {
+      el("bnManagement")?.classList.add("active");
+      // Management — hide driver tab
+      if(el("bnDriver")) el("bnDriver").style.display="none";
+    } else if (p.startsWith("/driver")) {
+      el("bnDriver")?.classList.add("active");
+      // Driver page — hide all other tabs, driver has no access elsewhere
+      ["bnDispatch","bnDock","bnManagement"].forEach(id=>{ if(el(id)) el(id).style.display="none"; });
+    } else if (p.startsWith("/dock")) {
+      el("bnDock")?.classList.add("active");
+      // Dock page — hide driver and management tabs
+      ["bnDriver","bnManagement"].forEach(id=>{ if(el(id)) el(id).style.display="none"; });
+    } else {
+      el("bnDispatch")?.classList.add("active");
+      // Dispatch — hide driver tab
+      if(el("bnDriver")) el("bnDriver").style.display="none";
+    }
+  }
+
+  /* ── SWIPE BETWEEN VIEWS ── */
+  function initSwipeViews() {
+    const p = path();
+    // Driver and dock are locked — no swipe navigation allowed
+    if (p.startsWith("/driver") || p.startsWith("/dock")) return;
+
+    const VIEWS = ["/", "/management"];
+    // Dispatchers/admin can swipe between / and /management
+    const currentIdx = () => p.startsWith("/management") ? 1 : 0;
+
+    let touchStartX = 0, touchStartY = 0, touchStartTime = 0;
+    const MIN_SWIPE_DISTANCE = 60;
+    const MAX_VERTICAL_RATIO = 0.6; // ignore if mostly vertical
+    const MAX_SWIPE_TIME = 350;     // ms
+
+    // Don't swipe when interacting with scrollable content or inputs
+    const isSwipable = (target) => {
+      const blocked = ["INPUT","TEXTAREA","SELECT"];
+      if (blocked.includes(target.tagName)) return false;
+      // Don't swipe on horizontally scrollable containers
+      let el = target;
+      while (el && el !== document.body) {
+        const style = getComputedStyle(el);
+        const overflowX = style.overflowX;
+        if ((overflowX === "auto" || overflowX === "scroll") && el.scrollWidth > el.clientWidth) return false;
+        el = el.parentElement;
+      }
+      return true;
+    };
+
+    document.addEventListener("touchstart", e => {
+      if (!isSwipable(e.target)) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchStartTime = Date.now();
+    }, {passive:true});
+
+    document.addEventListener("touchend", e => {
+      if (!touchStartX) return;
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      const dt = Date.now() - touchStartTime;
+      touchStartX = 0;
+
+      if (Math.abs(dx) < MIN_SWIPE_DISTANCE) return;
+      if (Math.abs(dy) / Math.abs(dx) > MAX_VERTICAL_RATIO) return;
+      if (dt > MAX_SWIPE_TIME) return;
+      if (!isSwipable(e.target)) return;
+
+      const idx = currentIdx();
+      if (dx < 0 && idx < VIEWS.length - 1) {
+        // swipe left → next view
+        haptic("light");
+        location.href = VIEWS[idx + 1];
+      } else if (dx > 0 && idx > 0) {
+        // swipe right → previous view
+        haptic("light");
+        location.href = VIEWS[idx - 1];
+      }
+    }, {passive:true});
+  }
+
+  /* ── PWA INSTALL PROMPT ── */
+  let _deferredInstallPrompt = null;
+  function initPwaInstall() {
+    window.addEventListener("beforeinstallprompt", e => {
+      e.preventDefault();
+      _deferredInstallPrompt = e;
+      // Show install button if we have one in the topbar
+      const btn = el("btnInstallPwa");
+      if (btn) btn.style.display = "";
+    });
+    window.addEventListener("appinstalled", () => {
+      _deferredInstallPrompt = null;
+      const btn = el("btnInstallPwa");
+      if (btn) btn.style.display = "none";
+      toast("App installed", "Wesbell Dispatch added to home screen.", "ok");
+    });
+    const btn = el("btnInstallPwa");
+    if (btn) {
+      btn.addEventListener("click", async () => {
+        if (!_deferredInstallPrompt) return;
+        _deferredInstallPrompt.prompt();
+        const { outcome } = await _deferredInstallPrompt.userChoice;
+        if (outcome === "accepted") haptic("success");
+        _deferredInstallPrompt = null;
+        btn.style.display = "none";
+      });
+    }
+  }
+
+  /* ── KEYBOARD AVOIDANCE ── */
+  function initKeyboardAvoidance() {
+    const inputs = ["v_trailer","xp_trailer","xo_trailer","sh_trailer","d_trailer","d_door"];
+    inputs.forEach(id => {
+      el(id)?.addEventListener("focus", () => {
+        setTimeout(() => el(id)?.scrollIntoView({behavior:"smooth",block:"center"}), 300);
+      }, {passive:true});
+    });
+    // Visual Viewport API — push bottom nav up when keyboard opens
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", () => {
+        const offset = window.innerHeight - window.visualViewport.height;
+        const bn = document.querySelector(".bottom-nav");
+        if (bn) bn.style.transform = offset > 100 ? `translateY(-${offset}px)` : "";
+      });
+    }
+  }
+
+  async function loadInitial(){
+    try{ const w=await apiJson("/api/whoami"); ROLE=w?.role; VERSION=w?.version||"";
+      // Only enforce redirect for logged-in users on the wrong page.
+      // Unauthenticated users (drivers) can navigate freely — the server
+      // already guards pages; we just let the server handle it via guardPage.
+      if (w?.redirectTo && ROLE && w.redirectTo !== location.pathname) {
+        location.replace(w.redirectTo);
+        return;
+      }
+    }
+    catch{ ROLE=null; VERSION=""; }
+    el("verText").textContent=VERSION||"—";
+
+    el("driverView").style.display="none";
+    el("managementView").style.display="none";
+    el("dockView").style.display="none";
+    el("dispatchView").style.display="none";
+
+    const p=path();
+    if(p.startsWith("/driver")){
+      el("driverView").style.display="";
+      // Driver has no login session — show a "Start Over" button that resets
+      // local state only, never calls /api/logout
+      const logoutBtn = el("btnLogout");
+      if(logoutBtn){
+        logoutBtn.style.display="";
+        logoutBtn.textContent="↩ Start Over";
+        // Replace click handler so it resets driver state instead of logging out
+        logoutBtn.onclick = (e) => {
+          e.stopImmediatePropagation();
+          try{ sessionStorage.removeItem("wb_whoType"); }catch{}
+          driverRestart();
+        };
+      }
+      el("btnAudit").style.display="none";
+      try{
+        const savedWho=sessionStorage.getItem("wb_whoType");
+        if(savedWho){
+          driverState.whoType=savedWho;
+          const isOutside=savedWho==="outside";
+          const dropBtn=el("flowBtnDrop"); if(dropBtn)dropBtn.style.display=isOutside?"none":"";
+          const shuntBtn=document.querySelector("[data-flow='shunt']"); if(shuntBtn)shuntBtn.style.display=isOutside?"none":"";
+          showScreen("flow-screen");
+        } else showScreen("who-screen");
+      }catch{ showScreen("who-screen"); }
+      renderSessionHistory();
+      initPush();
+    } else if(p.startsWith("/management")){
+      el("managementView").style.display=""; el("managementView").classList.add("view-fade");
+      el("btnLogout").style.display=""; 
+      el("btnAudit").style.display=(ROLE==="management"||ROLE==="admin")?"":"none";
+    } else if(p.startsWith("/dock")){
+      el("dockView").style.display=""; el("dockView").classList.add("view-fade");
+      el("btnLogout").style.display=ROLE?"":"none"; el("btnAudit").style.display="none";
+    } else {
+      el("dispatchView").style.display=""; el("dispatchView").classList.add("view-fade");
+      el("btnLogout").style.display=ROLE?"":"none";
+      el("btnAudit").style.display=(ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin")?"":"none";
+      const adminPanel=el("adminPanel");
+      if(adminPanel) adminPanel.style.display=ROLE==="admin"?"":"none";
+    }
+    highlightNav();
+    try{ const t=await apiJson("/api/state"); trailers=t||{}; }catch{ trailers={}; }
+    if(!isDriver()){
+      try{ const p=await apiJson("/api/dockplates"); dockPlates=p||{}; }catch{ dockPlates={}; }
+      try{ const b=await apiJson("/api/doorblocks"); doorBlocks=b||{}; }catch{ doorBlocks={}; }
+    }
+    if(isSuper()){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0); loadIssueReports(); renderPlates();
+      // Admin PIN row — only visible to admin
+      const adminPinRow = el("adminPinRow");
+      if(adminPinRow) adminPinRow.style.display = ROLE==="admin" ? "" : "none";
+    }
+    if(ROLE==="admin" && !isSuper()){ renderBoard(); renderRolePanel(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
+    else if(ROLE==="management" && !isSuper()){ renderRolePanel(); renderBoard(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
+    else if(isDock()){ renderDockView(); renderPlates(); }
+    else if(!isDriver()&&!isSuper()){ renderRolePanel(); renderBoard(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
+  }
+
+  /* ── GLOBAL CLICK HANDLER ── */
+  document.addEventListener("click", async ev => {
+    const direct = ev.target;
+    const id = direct?.id;
+    const act = direct?.dataset?.act || direct?.closest?.("[data-act]")?.dataset?.act;
+    const trId = direct?.dataset?.trailerId || direct?.closest?.("[data-trailer-id]")?.dataset?.trailerId;
+
+    if(direct?.closest?.("#dockPlatesToggle")){ setPlatesOpen(el("dockPlatesToggle").getAttribute("aria-expanded")!=="true"); return; }
+    if(direct?.closest?.("#dockPlatesToggle2")){ setPlatesOpen2(el("dockPlatesToggle2").getAttribute("aria-expanded")!=="true"); return; }
+    // PIN management accordions
+    if(direct?.closest?.("#pinMgmtToggle")){
+      const tog=el("pinMgmtToggle"), body=el("pinMgmtBody"); if(!tog||!body)return;
+      const open=tog.getAttribute("aria-expanded")==="true";
+      tog.setAttribute("aria-expanded",open?"false":"true");
+      body.style.maxHeight=open?"0px":(body.scrollHeight+40)+"px";
+      return;
+    }
+    if(direct?.closest?.("#adminPinToggle")){
+      const tog=el("adminPinToggle"), body=el("adminPinBody"); if(!tog||!body)return;
+      const open=tog.getAttribute("aria-expanded")==="true";
+      tog.setAttribute("aria-expanded",open?"false":"true");
+      body.style.maxHeight=open?"0px":(body.scrollHeight+40)+"px";
+      return;
+    }
+    // Dock card "sign in to update" quick button
+    if(act==="openStaffLogin"){ el("btnDockStaffLogin")?.click(); return; }
+    if(id==="btnLogout") return doLogout();
+    if(id==="btnAudit"){ const s=el("auditCard").style.display!=="none"; el("auditCard").style.display=s?"none":""; if(!s)loadAuditInto(el("auditBody"),el("auditCount"),7); return; }
+    if(id==="btnClearFilters"||id==="btnSupClearFilters"){ ["search","filterDir","filterStatus","supSearch","supFilterDir","supFilterStatus"].forEach(i=>{if(el(i))el(i).value="";}); renderBoard(); renderSupBoard(); return; }
+    if(id==="btnSaveTrailer") return dispSave();
+    if(id==="btnClearAll") return dispClear();
+    if(id==="btnSetDispatcherPin") return setPin("dispatcher","pin_dispatcher","pin_dispatcher_confirm");
+    if(id==="btnSetDockPin")       return setPin("dock","pin_dock","pin_dock_confirm");
+    if(id==="btnSetManagementPin") return setPin("management","pin_management","pin_management_confirm");
+    if(id==="btnSetAdminPinSup")   return setPin("admin","pin_admin_sup","pin_admin_sup_confirm");
+    // Admin panel PIN buttons (dispatch view)
+    if(id==="btnSetDispatcherPinA") return setPin("dispatcher","pin_dispatcher_a","pin_dispatcher_a_confirm");
+    if(id==="btnSetDockPinA")       return setPin("dock","pin_dock_a","pin_dock_a_confirm");
+    if(id==="btnSetManagementPinA") return setPin("management","pin_management_a","pin_management_a_confirm");
+    if(id==="btnSetAdminPinA")      return setPin("admin","pin_admin_a","pin_admin_a_confirm");
+
+    const dockFilterBtn=direct?.closest?.("[data-dock-filter]");
+    if(dockFilterBtn){
+      dockFilter=dockFilterBtn.dataset.dockFilter;
+      document.querySelectorAll(".dock-filter-btn").forEach(b=>{
+        const active=b.dataset.dockFilter===dockFilter;
+        b.classList.toggle("active",active);
+        b.setAttribute("aria-pressed",active?"true":"false");
+      });
+      renderDockView(); return;
+    }
+
+    // Generic dismiss handler (replaces inline onclick)
+    const dismissId=direct?.dataset?.dismiss||direct?.closest?.("[data-dismiss]")?.dataset?.dismiss;
+    if(dismissId){ const d=el(dismissId); if(d)d.style.display="none"; return; }
+
+    const whoBtn=direct?.closest?.("[data-who]"); if(whoBtn){ selectWho(whoBtn.dataset.who); return; }
+    const flowBtn=direct?.closest?.("[data-flow]"); if(flowBtn){ selectFlow(flowBtn.dataset.flow); return; }
+    if(id==="btnBackToWho"){
+      try{ sessionStorage.removeItem("wb_whoType"); }catch{}
+      driverState.whoType=null;
+      showScreen("who-screen",true);
+      return;
+    }
+    if(id==="btnBackToFlow2"||direct?.dataset?.flowBack){ showScreen("flow-screen",true); return; }
+    if(id==="btnBackToFlow5"){ showScreen("flow-screen",true); return; }
+    if(id==="btnOmwSubmit")   return submitOmw();
+    if(id==="btnOmwDone")     return driverRestart();
+    if(id==="btnBackToFlow"){
+      const isOutside=driverState.whoType==="outside";
+      const dropBtn=el("flowBtnDrop"); if(dropBtn)dropBtn.style.display=isOutside?"none":"";
+      const shuntBtn=document.querySelector("[data-flow='shunt']"); if(shuntBtn)shuntBtn.style.display=isOutside?"none":"";
+      const omwBtn=el("flowBtnOmw"); if(omwBtn)omwBtn.style.display=isOutside?"none":"";
+      showScreen("flow-screen",true); return;
+    }
+    if(id==="btnDriverDrop")    return driverDrop();
+    if(id==="btnXdockPickup")   return xdockPickup();
+    if(id==="btnXdockOffload")  return xdockOffload();
+    if(id==="btnConfirmSafety") return confSafety();
+    if(id==="btnDriverShunt")   return driverShunt();
+    if(id==="btnDriverRestart"||id==="btnDriverFullReset") return driverRestart();
+    if(id==="btnPushToggle")    return _pushSub ? unsubscribePush() : subscribePush();
+
+    if(act==="shuntPickDoor"){
+      const d=direct?.dataset?.door||direct?.closest?.("[data-door]")?.dataset?.door;
+      if(d){ driverState.shuntDoor=d; buildShuntDoorPicker(); if(el("sh_door_display"))el("sh_door_display").textContent="Door "+d; updateShuntSubmitState(); }
+      return;
+    }
+
+    if(id==="ac_override"){ driverState.overrideMode=true; driverState.assignedDoor=""; driverState.selectedDoor=""; showDoorPicker("doorPickerWrap","doorPickerGrid"); updateDropSubmitState(); return; }
+    if(id==="oac_override"){ driverState.overrideMode=true; driverState.assignedDoor=""; driverState.selectedDoor=""; showDoorPicker("offloadDoorPickerWrap","offloadDoorPickerGrid"); updateOffloadSubmitState(); return; }
+
+    const doorBtn=direct?.closest?.("[data-door]");
+    if(doorBtn&&doorBtn.dataset.door&&!doorBtn.dataset.dmDoor){
+      driverState.selectedDoor=doorBtn.dataset.door; driverState.overrideMode=true;
+      buildDoorPicker(doorBtn.dataset.picker||"doorPickerGrid");
+      updateDropSubmitState(); updateOffloadSubmitState(); return;
+    }
+
+    const dtBtn=direct?.closest?.("[data-type]");
+    if(dtBtn&&dtBtn.dataset.type){ driverState.dropType=dtBtn.dataset.type; el("dtbEmpty")?.classList.toggle("selected",driverState.dropType==="Empty"); el("dtbLoaded")?.classList.toggle("selected",driverState.dropType==="Loaded"); return; }
+
+    if(act==="shuntToggle"&&trId){ shuntOpen[trId]=!shuntOpen[trId]; renderBoard(); return; }
+    if(act==="shuntDoor"&&trId){ const door=direct?.dataset?.door||direct?.closest?.("[data-door]")?.dataset?.door; if(door)return shuntTrailer(trId,door); }
+    if(act==="delete"&&trId) return dispDelete(trId);
+    if(act==="quickStatus"){ const to=direct?.dataset?.to||direct?.closest?.("[data-to]")?.dataset?.to; if(trId&&to)return quickStatus(trId,to); }
+    if(act==="edit"&&trId){
+      const r=trailers[trId]; if(!r)return;
+      el("d_trailer").value=trId; el("d_direction").value=r.direction||"Inbound"; el("d_status").value=r.status||"Incoming";
+      el("d_door").value=r.door||""; el("d_note").value=r.note||""; el("d_dropType").value=r.dropType||"";
+      if(el("d_carrierType"))el("d_carrierType").value=r.carrierType||"";
+      toast("Record loaded",`Editing trailer ${trId}`,"ok"); return;
+    }
+    if(act==="dockSet"){ const to=direct?.dataset?.to; if(trId&&to)return dockSet(trId,to); }
+    if(act==="dockReportIssue"){ const door=direct?.dataset?.door||""; if(trId) return openDockIssueModal(trId,door); }
+    if(act==="markReady"&&trId) return markReady(trId);
+
+    // Dock map cell click — open status modal for any door (occupied or empty)
+    const dmCell = direct?.closest?.("[data-dm-door]");
+    if (dmCell && (ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin")) {
+      const door = dmCell.dataset.dmDoor;
+      const occupied = getOccupiedDoors();
+      const occ = occupied[door];
+      const nextStatuses = {
+        "Incoming":   ["Dropped","Loading","Dock Ready","Ready","Departed"],
+        "Dropped":    ["Loading","Dock Ready","Ready","Departed"],
+        "Loading":    ["Dock Ready","Ready","Departed"],
+        "Dock Ready": ["Ready","Departed"],
+        "Ready":      ["Departed"],
+        "Departed":   ["Incoming","Dropped"],
+      };
+      const isBlock = occ?.status === "Blocked";
+      el("dmModalTitle").textContent = isBlock ? `Door ${door} — Blocked` : occ ? `Trailer ${occ.trailer} — D${door}` : `Door ${door} — Free`;
+      el("dmModalSub").textContent = isBlock ? (occ.note ? `Note: ${occ.note}` : "Manually marked occupied") : occ ? `Status: ${occ.status}` : "No trailer assigned";
+      const btns = el("dmStatusBtns");
+      btns.innerHTML = "";
+      if (isBlock) {
+        const clrBtn = document.createElement("button");
+        clrBtn.className = "btn btn-success btn-full";
+        clrBtn.dataset.dmAction = "clearBlock";
+        clrBtn.dataset.dmDoor = door;
+        clrBtn.textContent = "✓ Mark Free";
+        btns.appendChild(clrBtn);
+      } else if (occ) {
+        (nextStatuses[occ.status] || []).forEach(s => {
+          const cls = s==="Ready"?"btn-success":s==="Departed"?"btn-default":s==="Loading"?"btn-primary":"btn-cyan";
+          const b = document.createElement("button");
+          b.className = `btn ${cls} btn-full`;
+          b.dataset.dmStatus = s;
+          b.dataset.dmTrailer = occ.trailer;
+          b.textContent = s;
+          btns.appendChild(b);
+        });
+      } else {
+        const blockBtn = document.createElement("button");
+        blockBtn.className = "btn btn-default btn-full";
+        blockBtn.dataset.dmAction = "setBlock";
+        blockBtn.dataset.dmDoor = door;
+        blockBtn.textContent = "🚫 Mark Occupied";
+        btns.appendChild(blockBtn);
+      }
+      el("dmModalOv").classList.remove("hidden"); lockScroll();
+      return;
+    }
+
+    // Dock map block/clear
+    const dmActionBtn = direct?.closest?.("[data-dm-action]");
+    if (dmActionBtn) {
+      const action = dmActionBtn.dataset.dmAction;
+      const door2  = dmActionBtn.dataset.dmDoor;
+      el("dmModalOv").classList.add("hidden"); unlockScroll();
+      if (action === "setBlock") {
+        try { await apiJson("/api/doorblock/set", { method:"POST", headers:CSRF, body:JSON.stringify({ door:door2, note:"" }) }); doorBlocks[door2]={note:"",setAt:Date.now()}; renderDockMap(); toast("Door blocked",`D${door2} marked occupied`,"ok"); }
+        catch(e) { toast("Error",e.message,"err"); }
+      } else if (action === "clearBlock") {
+        try { await apiJson("/api/doorblock/clear", { method:"POST", headers:CSRF, body:JSON.stringify({ door:door2 }) }); delete doorBlocks[door2]; renderDockMap(); toast("Door freed",`D${door2} marked free`,"ok"); }
+        catch(e) { toast("Error",e.message,"err"); }
+      }
+      return;
+    }
+
+    // Dock map status button
+    const dmStatusBtn = direct?.closest?.("[data-dm-status]");
+    if (dmStatusBtn) {
+      const status  = dmStatusBtn.dataset.dmStatus;
+      const trailer = dmStatusBtn.dataset.dmTrailer;
+      el("dmModalOv").classList.add("hidden"); unlockScroll();
+      if (!trailer) { toast("No trailer","Add a trailer from the dispatch panel first.","warn"); return; }
+      try {
+        await apiJson("/api/upsert", { method:"POST", headers:CSRF, body:JSON.stringify({ trailer, status }) });
+        toast("Updated", `${trailer} → ${status}`, "ok");
+      } catch(e) { toast("Update failed", e.message, "err"); }
+      return;
+    }
+
+        const tog=direct?.dataset?.plateToggle; if(tog){ plateEditOpen[tog]=!plateEditOpen[tog]; renderPlates(); return; }
+    const psv=direct?.dataset?.plateSave; if(psv)return plateSave(psv);
+  });
+
+  document.addEventListener("change",ev=>{
+    const t=ev.target;
+    if(t?.dataset?.act==="rowStatus"){ const trailer=t.dataset.trailerId,status=t.value; apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})}).catch(e=>toast("Update failed",e.message,"err")); }
+    if(t?.id==="c_loadSecured"||t?.id==="c_dockPlateUp") updateSafetySubmitState();
+  });
+
+  el("v_trailer")?.addEventListener("input",onTrailerInput);
+  el("v_trailer")?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!el("btnDriverDrop")?.disabled)driverDrop(); });
+  el("omw_trailer")?.addEventListener("input", updateOmwSubmitState);
+  el("omw_trailer")?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!el("btnOmwSubmit")?.disabled)submitOmw(); });
+  // Set inputmode on trailer inputs for numeric keypad on mobile
+  ["v_trailer","xp_trailer","xo_trailer","sh_trailer"].forEach(id=>{
+    const inp=el(id); if(!inp)return;
+    inp.setAttribute("inputmode","numeric");
+    inp.setAttribute("autocomplete","off");
+    inp.setAttribute("autocorrect","off");
+    inp.setAttribute("autocapitalize","none");
+    inp.setAttribute("spellcheck","false");
+  });
+  el("xp_trailer")?.addEventListener("input",onPickupTrailerInput);
+  el("xo_trailer")?.addEventListener("input",onOffloadTrailerInput);
+  el("xo_trailer")?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!el("btnXdockOffload")?.disabled)xdockOffload(); });
+  el("sh_trailer")?.addEventListener("input",()=>{ buildShuntDoorPicker(); updateShuntSubmitState(); });
+  el("dockSearch")?.addEventListener("input",renderDockView);
+  ["d_trailer","d_door","d_note","d_direction","d_status","d_dropType","d_carrierType"].forEach(id=>{
+    el(id)?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); dispSave(); } });
+  });
+  ["search","filterDir","filterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderBoard)));
+  ["supSearch","supFilterDir","supFilterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderSupBoard)));
+
+  /* ── WEBSOCKET ── */
+  let wsRetry=0;
+  function wsStatus(s){
+    el("wsDot").className="live-dot "+(s==="ok"?"ok":s==="bad"?"bad":"warn");
+    el("wsText").textContent=s==="ok"?"Live":s==="bad"?"Offline":"Connecting";
+    syncDriverWsDot(s);
+    syncDockWsDot(s);
+  }
+  function connectWs(){
+    wsStatus("warn");
+    const ws=new WebSocket(`${location.protocol==="https:"?"wss":"ws"}://${location.host}`);
+    let lastMsg=Date.now();
+    const watchdog=setInterval(()=>{ if(Date.now()-lastMsg>35000){ try{ws.close();}catch{} } },5000);
+    ws.onopen=()=>{ wsRetry=0; wsStatus("ok"); };
+    ws.onclose=()=>{
+      clearInterval(watchdog); wsStatus("bad");
+      // Exponential backoff with ±30% jitter to spread reconnect storms
+      const base = Math.min(8000, 500 + wsRetry++ * 650);
+      const jitter = base * 0.3 * (Math.random() * 2 - 1); // ±30%
+      setTimeout(connectWs, Math.round(base + jitter));
+    };
+    ws.onmessage=evt=>{
+      lastMsg=Date.now();
+      let msg; try{msg=JSON.parse(evt.data);}catch{return;}
+      const {type,payload}=msg||{};
+      if(type==="state"){ trailers=payload||{}; renderBoard(); if(isSuper())renderSupBoard(); if(isDock())renderDockView(); if(isAdmin()&&!isSuper())renderBoard(); }
+      else if(type==="dockplates"){ dockPlates=payload||{}; if(!isDriver()) renderPlates(); }
+      else if(type==="doorblocks"){ doorBlocks=payload||{}; renderDockMap(); renderBoard(); }
+      else if(type==="confirmations"){ confirmations=Array.isArray(payload)?payload:[]; if(isSuper())renderSupConf(); }
+      else if(type==="ping"){/* keepalive — lastMsg already updated above */}
+      else if(type==="version"){ VERSION=payload?.version||VERSION; el("verText").textContent=VERSION||"—"; }
+      else if(type==="notify"&&payload?.kind==="ready"){
+        toast("🟢 Trailer Ready",`${payload.trailer} is READY${payload.door?" at door "+payload.door:""}.`,"ok",8000);
+        if(isDriver()){
+          const banner=el("readyNotifBanner");
+          if(banner){
+            el("readyNotifText").textContent=`Trailer ${payload.trailer} is READY${payload.door?" at door "+payload.door:""}`;
+            banner.style.display="flex";
+            clearTimeout(banner._t);
+            banner._t=setTimeout(()=>banner.style.display="none",12000);
+          }
+        }
+      }
+    };
+  }
+  /* ── STAFF SIGN-IN MODAL (dock / driver pages) ── */
+  function initStaffLogin() {
+    const ov      = el("staffLoginOv");
+    const roleEl  = el("staffLoginRole");
+    const pinEl   = el("staffLoginPin");
+    const errEl   = el("staffLoginErr");
+    const goBtn   = el("staffLoginGo");
+    const cancel  = el("staffLoginCancel");
+    const logoutRow = el("staffLogoutRow");
+    const curRole   = el("staffCurrentRole");
+    const logoutBtn = el("staffLogoutBtn");
+    if (!ov) return;
+
+    function openModal() {
+      errEl.style.display = "none";
+      pinEl.value = "";
+      if (ROLE && ["admin","management","dispatcher","dock"].includes(ROLE)) {
+        // Already signed in — show sign-out view
+        if(curRole) curRole.textContent = ROLE.charAt(0).toUpperCase() + ROLE.slice(1);
+        if(logoutRow) logoutRow.style.display = "";
+        if(roleEl?.closest(".field")) roleEl.closest(".field").style.display = "none";
+        if(pinEl?.closest(".field")) pinEl.closest(".field").style.display = "none";
+        if(goBtn) goBtn.style.display = "none";
+      } else {
+        if(logoutRow) logoutRow.style.display = "none";
+        if(roleEl?.closest(".field")) roleEl.closest(".field").style.display = "";
+        if(pinEl?.closest(".field")) pinEl.closest(".field").style.display = "";
+        if(goBtn) goBtn.style.display = "";
+      }
+      ov.classList.remove("hidden");
+      setTimeout(() => (ROLE ? null : pinEl?.focus()), 100);
+    }
+
+    function closeModal() { ov.classList.add("hidden"); }
+
+    // Open triggers
+    el("btnDockStaffLogin")?.addEventListener("click", openModal);
+    el("btnDriverStaffLogin")?.addEventListener("click", openModal);
+    cancel?.addEventListener("click", closeModal);
+    ov.addEventListener("click", e => { if (e.target === ov) closeModal(); });
+
+    // Sign in
+    async function doStaffLogin() {
+      const role = roleEl?.value;
+      const pin  = pinEl?.value || "";
+      if (!pin) { errEl.textContent = "Enter your PIN."; errEl.style.display = ""; return; }
+      goBtn.disabled = true; goBtn.textContent = "Signing in…";
+      errEl.style.display = "none";
+      try {
+        const r = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+          body: JSON.stringify({ role, pin })
+        });
+        const errText = await r.text();
+        if (!r.ok) {
+          errEl.textContent = r.status === 429
+            ? `🔒 ${errText}` // rate limit message already includes retry info
+            : errText;
+          errEl.style.display = "";
+          return;
+        }
+        haptic("success");
+        closeModal();
+        // Reload current page so the new session takes effect cleanly
+        location.reload();
+      } catch(e) {
+        errEl.textContent = "Connection error."; errEl.style.display = "";
+      } finally {
+        goBtn.disabled = false; goBtn.textContent = "Sign In →";
+      }
+    }
+
+    goBtn?.addEventListener("click", doStaffLogin);
+    pinEl?.addEventListener("keydown", e => { if (e.key === "Enter") doStaffLogin(); });
+
+    // Sign out
+    logoutBtn?.addEventListener("click", async () => {
+      try { await apiJson("/api/logout", { method: "POST", headers: CSRF }); } catch {}
+      haptic("light");
+      closeModal();
+      location.href = "/login";
+    });
+
+    // Update staff button appearance based on auth state
+    function syncStaffButtons() {
+      const signedIn = ROLE && ROLE !== "driver";
+      ["btnDockStaffLogin","btnDriverStaffLogin"].forEach(id => {
+        const b = el(id); if (!b) return;
+        if (signedIn) {
+          b.textContent = `👤 ${ROLE.charAt(0).toUpperCase() + ROLE.slice(1)}`;
+          b.style.borderColor = "var(--amber-bd)";
+          b.style.color = "var(--amber)";
+        } else {
+          b.textContent = "🔑 Staff";
+          b.style.borderColor = "";
+          b.style.color = "";
+        }
+      });
+    }
+    syncStaffButtons();
+    // Expose so it can be called after load
+    initStaffLogin._sync = syncStaffButtons;
+  }
+
+  loadInitial().then(() => {
+    syncBottomNav();
+    initToastSwipe();
+    initPullToRefresh();
+    initKeyboardAvoidance();
+    initSwipeViews();
+    initPwaInstall();
+    initStaffLogin();
+    initStaffLogin._sync?.();
+    initIssueCamera();
+    initIssueLightbox();
+    initDockIssueModal();
+    connectWs();
+  });
+})();

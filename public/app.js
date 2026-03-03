@@ -355,12 +355,12 @@
   let dockFilter = "active";
 
   const DOCK_STATUS_NEXT = {
-    "Incoming":  { label:"→ Loading",          to:"Loading",    cls:"dc-btn-default" },
-    "Dropped":   { label:"→ Loading",          to:"Loading",    cls:"dc-btn-default" },
-    "Loading":   { label:"→ Dock Ready",       to:"Dock Ready", cls:"dc-btn-cyan"    },
-    "Dock Ready":{ label:"Awaiting dispatcher", to:null,         cls:"" },
-    "Ready":     { label:"Ready for pickup",   to:null,         cls:"" },
-    "Departed":  { label:"Departed",           to:null,         cls:"" },
+    "Incoming":  { label:"Mark Loading",    to:"Loading",    cls:"dc-btn-default" },
+    "Dropped":   { label:"Mark Loading",    to:"Loading",    cls:"dc-btn-default" },
+    "Loading":   { label:"Mark Dock Ready", to:"Dock Ready", cls:"dc-btn-cyan"    },
+    "Dock Ready":{ label:"Awaiting dispatcher", to:null,     cls:"" },
+    "Ready":     { label:"Ready for pickup",    to:null,     cls:"" },
+    "Departed":  { label:"Departed",            to:null,     cls:"" },
   };
 
   const DOCK_STATUS_COLOR = {
@@ -377,7 +377,7 @@
       .map(([t,r]) => ({trailer:t,...r}))
       .filter(r => {
         if (dockFilter==="active" && ["Departed","Ready"].includes(r.status)) return false;
-        if (q && !`${r.trailer} ${r.door||""}`.toLowerCase().includes(q)) return false;
+        if (q && !`${r.trailer} ${r.door||""} ${r.note||""} ${r.status||""}`.toLowerCase().includes(q)) return false;
         return true;
       })
       .sort((a,b) => {
@@ -385,13 +385,13 @@
         return (order[a.status]??9)-(order[b.status]??9)||(b.updatedAt||0)-(a.updatedAt||0);
       });
     if (countEl) countEl.textContent = rows.length;
+    const canAct = ROLE==="dock"||ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin";
+    const loginNudge = el("dockLoginNudge");
+    if (loginNudge) loginNudge.style.display = canAct ? "none" : "";
     if (!rows.length) {
       cards.innerHTML = `<div class="dock-empty">${q?"No trailers match search.":dockFilter==="active"?"No active trailers.":"No trailers on board."}</div>`;
       return;
     }
-    const canAct = ROLE==="dock"||ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin";
-    const loginNudge = el("dockLoginNudge");
-    if (loginNudge) loginNudge.style.display = canAct ? "none" : "";
     cards.innerHTML = rows.map(r => {
       const colorCls = DOCK_STATUS_COLOR[r.status]||"";
       const next = DOCK_STATUS_NEXT[r.status];
@@ -751,7 +751,7 @@
       }
       const assignedDoor=res?.door||door;
       driverState.selectedDoor=assignedDoor;
-      driverState.sessionDrops.push({trailer,door:assignedDoor,dropType,flowType:"drop",at:Date.now(),safetyDone:true});
+      driverState.sessionDrops.push({trailer,door:assignedDoor,dropType,flowType:"drop",at:Date.now(),safetyDone:false});
       saveSessionHistory(); renderSessionHistory();
       showDoneScreen("drop");
     }catch(e){ if(e.message!=="409") toast("Submission failed",e.message,"err"); }
@@ -946,14 +946,15 @@
   function showDoneScreen(flowType){
     const labels={drop:"Drop recorded — no safety check required.",xdock_pickup:"Pickup recorded + safety confirmed.",xdock_offload:"Offload recorded + safety confirmed.",shunt:"Shunt recorded — trailer moved to new door."};
     const detail=el("driverDoneDetail");
-    if(detail) detail.innerHTML=`Trailer <strong>${esc(driverState.trailer)}</strong> · Door <strong>${esc(driverState.selectedDoor)}</strong><br><span style="color:var(--t1);">${labels[flowType]||"Submitted."}</span>`;
+    const _displayDoor = driverState.shuntDoor || driverState.selectedDoor || "—";
+    if(detail) detail.innerHTML=`Trailer <strong>${esc(driverState.trailer)}</strong> · Door <strong>${esc(_displayDoor)}</strong><br><span style="color:var(--t1);">${labels[flowType]||"Submitted."}</span>`;
     showScreen("done-screen");
   }
 
   function driverRestart(){
     driverState.whoType=null; driverState.flowType=null;
     driverState.trailer=""; driverState.assignedDoor=""; driverState.selectedDoor="";
-    driverState.dropType="Empty"; driverState.overrideMode=false;
+    driverState.dropType="Empty"; driverState.overrideMode=false; driverState.shuntDoor="";
     try{ sessionStorage.removeItem("wb_whoType"); }catch{}
     showScreen("who-screen",true);
   }
@@ -1201,7 +1202,6 @@
     }
     catch{ ROLE=null; VERSION=""; }
     el("verText").textContent=VERSION||"—";
-    if(el("driverVerText"))el("driverVerText").textContent=VERSION||"—";
 
     el("driverView").style.display="none";
     el("managementView").style.display="none";
@@ -1483,7 +1483,7 @@
       if(type==="state"){ trailers=payload||{}; renderBoard(); if(isSuper())renderSupBoard(); if(isDock())renderDockView(); if(isAdmin()&&!isSuper())renderBoard(); }
       else if(type==="dockplates"){ dockPlates=payload||{}; if(!isDriver()&&!isSuper()) renderPlates(); }
       else if(type==="confirmations"){ confirmations=Array.isArray(payload)?payload:[]; if(isSuper())renderSupConf(); }
-      else if(type==="version"){ VERSION=payload?.version||VERSION; el("verText").textContent=VERSION||"—"; if(el("driverVerText"))el("driverVerText").textContent=VERSION||"—"; }
+      else if(type==="version"){ VERSION=payload?.version||VERSION; el("verText").textContent=VERSION||"—"; }
       else if(type==="notify"&&payload?.kind==="ready"){
         toast("🟢 Trailer Ready",`${payload.trailer} is READY${payload.door?" at door "+payload.door:""}.`,"ok",8000);
         if(isDriver()){

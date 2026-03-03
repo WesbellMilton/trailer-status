@@ -418,6 +418,7 @@
             ?`<button class="dc-action-btn dc-btn-signin" data-act="openStaffLogin">🔑 Sign in to update</button>`
             :`<div class="dc-no-action">${esc(next?.label||"—")}</div>`
         }
+        ${canAct?`<button class="dc-issue-btn" data-act="dockReportIssue" data-trailer-id="${esc(r.trailer)}" data-door="${esc(r.door||"")}">⚠ Report Issue</button>`:""}
       </div>`;
     }).join("");
   }
@@ -948,6 +949,117 @@
       remove.style.display = "none";
       zone.classList.remove("has-photo");
     }
+  }
+
+  /* ── DOCK ISSUE REPORT MODAL ── */
+  const dockIssueState = { trailer: "", door: "" };
+
+  function openDockIssueModal(trailer, door) {
+    dockIssueState.trailer = trailer;
+    dockIssueState.door    = door;
+    issueState.photoData = null;
+    issueState.photoMime = null;
+    const ni    = el("dockIssueNote");
+    const pi    = el("dockIssuePhotoInput");
+    const prev  = el("dockIssuePrev");
+    const rem   = el("dockIssueRemovePhoto");
+    const empty = el("dockIssueEmpty");
+    const pz    = el("dockIssuePhotoZone");
+    const ctx   = el("dockIssueCtx");
+    const errEl = el("dockIssueErr");
+    if (ni)    ni.value = "";
+    if (pi)    pi.value = "";
+    if (prev)  { prev.style.display = "none"; prev.src = ""; }
+    if (rem)   rem.style.display = "none";
+    if (empty) empty.style.display = "";
+    if (pz)    pz.classList.remove("has-photo");
+    if (ctx)   ctx.textContent = `Trailer ${trailer}${door ? " · Door " + door : ""}`;
+    if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
+    el("dockIssueOv")?.classList.remove("hidden");
+    document.body.style.overflow = "hidden";
+    setTimeout(() => ni?.focus(), 120);
+  }
+
+  function closeDockIssueModal() {
+    el("dockIssueOv")?.classList.add("hidden");
+    document.body.style.overflow = "";
+  }
+
+  function initDockIssueModal() {
+    const input = el("dockIssuePhotoInput");
+    const zone  = el("dockIssuePhotoZone");
+    const prev  = el("dockIssuePrev");
+    const rem   = el("dockIssueRemovePhoto");
+    const empty = el("dockIssueEmpty");
+    if (!input || !zone) return;
+
+    zone.addEventListener("click", () => { if (!issueState.photoData) input.click(); });
+
+    rem?.addEventListener("click", e => {
+      e.stopPropagation();
+      issueState.photoData = null; issueState.photoMime = null; input.value = "";
+      if (prev)  { prev.style.display = "none"; prev.src = ""; }
+      if (rem)   rem.style.display = "none";
+      if (empty) empty.style.display = "";
+      zone.classList.remove("has-photo");
+    });
+
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith("image/")) return toast("Invalid file", "Please select an image.", "err");
+      if (file.size > 8 * 1024 * 1024) return toast("Too large", "Photo must be under 8 MB.", "err");
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const result = ev.target.result;
+        issueState.photoMime = file.type;
+        issueState.photoData = result.slice(result.indexOf(",") + 1);
+        if (prev)  { prev.src = result; prev.style.display = ""; }
+        if (empty) empty.style.display = "none";
+        if (rem)   rem.style.display = "";
+        zone.classList.add("has-photo");
+        haptic("light");
+      };
+      reader.onerror = () => toast("Photo error", "Could not read the photo. Try again.", "err");
+      reader.readAsDataURL(file);
+    });
+
+    el("dockIssueCancelBtn")?.addEventListener("click", closeDockIssueModal);
+    el("dockIssueOv")?.addEventListener("click", e => { if (e.target === el("dockIssueOv")) closeDockIssueModal(); });
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape" && !el("dockIssueOv")?.classList.contains("hidden")) closeDockIssueModal();
+    });
+
+    el("dockIssueSubmitBtn")?.addEventListener("click", async () => {
+      const note  = (el("dockIssueNote")?.value || "").trim();
+      const errEl = el("dockIssueErr");
+      if (!note && !issueState.photoData) {
+        if (errEl) { errEl.textContent = "Add a note or photo before submitting."; errEl.style.display = ""; }
+        return;
+      }
+      const btn = el("dockIssueSubmitBtn");
+      if (btn) { btn.disabled = true; btn.textContent = "Submitting…"; }
+      if (errEl) errEl.style.display = "none";
+      try {
+        await apiJson("/api/report-issue", {
+          method: "POST", headers: CSRF,
+          body: JSON.stringify({
+            trailer:    dockIssueState.trailer,
+            door:       dockIssueState.door,
+            note,
+            photo_data: issueState.photoData || null,
+            photo_mime: issueState.photoMime || null,
+          })
+        });
+        closeDockIssueModal();
+        toast("Issue reported", `Report filed for trailer ${dockIssueState.trailer}.`, "ok");
+        haptic("success");
+      } catch(e) {
+        if (errEl) { errEl.textContent = e.message || "Submit failed."; errEl.style.display = ""; }
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "Submit Report"; }
+      }
+    });
   }
 
   function initIssueCamera() {
@@ -1540,6 +1652,7 @@
       toast("Record loaded",`Editing trailer ${trId}`,"ok"); return;
     }
     if(act==="dockSet"){ const to=direct?.dataset?.to; if(trId&&to)return dockSet(trId,to); }
+    if(act==="dockReportIssue"){ const door=direct?.dataset?.door||""; if(trId) return openDockIssueModal(trId,door); }
     if(act==="markReady"&&trId) return markReady(trId);
 
     // Dock map cell click — open status modal for any door (occupied or empty)
@@ -1779,6 +1892,7 @@
     initStaffLogin._sync?.();
     initIssueCamera();
     initIssueLightbox();
+    initDockIssueModal();
     connectWs();
   });
 })();

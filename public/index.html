@@ -177,23 +177,21 @@
         <button data-dismiss="readyNotifBanner" class="rnb-close" aria-label="Dismiss notification">✕</button>
       </div>
 
-      <!-- Connection bar -->
-      <div class="driver-conn-bar">
-        <div class="dcb-left">
-          <div class="live-dot" id="driverWsDot"></div>
-          <span id="driverWsText">Connecting…</span>
-          <div class="lookup-spinner" id="lookupSpinner"></div>
+      <!-- Compact topbar: brand + status + actions in one row -->
+      <div class="driver-topbar">
+        <div class="dtb-brand">
+          <div class="dtb-mark">W</div>
+          <div class="dtb-title">Driver Portal</div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span class="dcb-right">v<span id="driverVerText">—</span></span>
-          <button class="tb-btn" id="btnDriverStaffLogin" style="font-size:10px;padding:4px 9px;" title="Staff sign in">🔑 Staff</button>
+        <div class="dtb-right">
+          <div class="dtb-status">
+            <div class="live-dot" id="driverWsDot"></div>
+            <span id="driverWsText">Connecting…</span>
+            <div class="lookup-spinner" id="lookupSpinner"></div>
+          </div>
+          <button class="push-toggle-btn" id="btnPushToggle" style="display:none;" title="Push notifications">🔔</button>
+          <button class="tb-btn" id="btnDriverStaffLogin" style="font-size:10px;padding:4px 8px;" title="Staff sign in">🔑 Staff</button>
         </div>
-      </div>
-
-      <div class="driver-hdr">
-        <h1>Driver Portal</h1>
-        <p>WESBELL DISPATCH MANAGEMENT</p>
-        <button class="push-toggle-btn" id="btnPushToggle" style="display:none;">🔕 Enable Notifications</button>
       </div>
 
       <!-- ── SCREEN: WHO ARE YOU ── -->
@@ -207,12 +205,10 @@
               <button class="who-btn" data-who="wesbell">
                 <span class="who-icon">🚛</span>
                 <span class="who-label">Wesbell</span>
-                <span class="who-sub">Drop, shunt or cross dock</span>
               </button>
               <button class="who-btn" data-who="outside">
                 <span class="who-icon">🏢</span>
-                <span class="who-label">Outside Carrier</span>
-                <span class="who-sub">Cross dock only</span>
+                <span class="who-label">Outside</span>
               </button>
             </div>
           </div>
@@ -262,8 +258,7 @@
             <button class="btn btn-default btn-sm" id="btnBackToFlow2">← Back</button>
           </div>
           <div class="driver-pbody">
-            <label class="fl" for="sh_trailer">Trailer Number</label>
-            <input id="sh_trailer" class="trailer-hero-input" placeholder="e.g. 5312"
+            <input id="sh_trailer" class="trailer-hero-input" placeholder="Trailer #"
               autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false" aria-label="Trailer number to shunt"/>
 
             <div style="margin:14px 0 6px;font-family:var(--mono);font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;">New Door</div>
@@ -292,8 +287,7 @@
             <button class="btn btn-default btn-sm" id="btnBackToFlow">← Back</button>
           </div>
           <div class="driver-pbody">
-            <label class="fl" style="margin-bottom:6px;">Your Trailer Number</label>
-            <input id="v_trailer" class="trailer-hero-input" placeholder="e.g. 5312" aria-label="Your trailer number"
+            <input id="v_trailer" class="trailer-hero-input" placeholder="Trailer #" aria-label="Your trailer number"
               autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false"/>
 
             <div class="assignment-card" id="assignmentCard">
@@ -311,7 +305,7 @@
               <div class="door-picker-grid" id="doorPickerGrid"></div>
             </div>
 
-            <label class="fl" style="margin-top:16px;margin-bottom:6px;">What Are You Dropping?</label>
+            <label class="fl" style="margin-top:12px;margin-bottom:6px;">Drop Type</label>
             <div class="drop-type-toggle">
               <button class="drop-type-btn selected" id="dtbEmpty" data-type="Empty">
                 <span class="dtb-icon">📦</span>Empty
@@ -376,8 +370,7 @@
             <button class="btn btn-default btn-sm" data-flow-back="1">← Back</button>
           </div>
           <div class="driver-pbody">
-            <label class="fl" style="margin-bottom:6px;">Trailer Number You're Offloading</label>
-            <input id="xo_trailer" aria-label="Trailer number for cross dock offload" class="trailer-hero-input" placeholder="e.g. 5312"
+            <input id="xo_trailer" aria-label="Trailer number for cross dock offload" class="trailer-hero-input" placeholder="Trailer #"
               autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false"/>
 
             <div class="assignment-card" id="offloadAssignmentCard">
@@ -441,8 +434,9 @@
             <div class="done-ring">✅</div>
             <div class="done-title">All Done!</div>
             <div class="done-detail" id="driverDoneDetail"></div>
-            <button class="btn btn-default done-btn" style="margin-top:12px;padding:10px 22px;" id="btnDriverRestart">
-              Start Over
+            <button class="driver-submit done-restart-btn" id="btnDriverRestart">
+              <span>New Submission</span>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
           </div>
         </div>
@@ -587,7 +581,7 @@
     </div>
 
     <div class="dock-search-bar">
-      <input id="dockSearch" placeholder="Search trailer or door…" autocomplete="off" aria-label="Search dock trailers"/>
+      <input id="dockSearch" placeholder="Search trailer or door…" autocomplete="off" aria-label="Search dock trailers" inputmode="search"/>
     </div>
 
     <div id="dockLoginNudge" class="infobox infobox-amber" style="margin:10px 14px 0;display:none;"><div class="ib-title">Not signed in</div>Sign in as <a href="/login">Dock</a> to update trailer statuses.</div>

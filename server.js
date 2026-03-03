@@ -227,13 +227,19 @@ async function initDb() {
       await run(`INSERT INTO dockplates(door,status,note,updatedAt) VALUES(?,?,?,?)`, [door, "Unknown", "", Date.now()]);
   }
 
-  // Seed PINs
+  // Seed PINs — env vars always win so Render config takes effect on every deploy
   for (const role of ["dispatcher", "dock", "management", "admin"]) {
     const row = await get(`SELECT role FROM pins WHERE role=?`, [role]);
+    const envPin = ENV_PINS[role] && ENV_PINS[role].length >= PIN_MIN_LEN ? ENV_PINS[role] : null;
     if (!row) {
-      const pin = ENV_PINS[role] && ENV_PINS[role].length >= PIN_MIN_LEN ? ENV_PINS[role] : genTempPin();
+      // First boot: use env var or generate a random PIN
+      const pin = envPin || genTempPin();
       await setPin(role, pin);
-      console.log(`[SECURITY] Initial ${role} PIN: ${pin}  ← change immediately`);
+      console.log(`[SECURITY] ${role} PIN initialised`);
+    } else if (envPin) {
+      // Env var is set — always sync to DB so redeploys apply it immediately
+      await setPin(role, envPin);
+      console.log(`[SECURITY] ${role} PIN synced from environment`);
     }
   }
 }

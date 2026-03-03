@@ -7,7 +7,7 @@ const sqlite3 = require("sqlite3").verbose();
 const crypto = require("crypto");
 
 const app = express();
-app.use(express.json({ limit: "200kb" }));
+app.use(express.json({ limit: "6mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 const PORT = process.env.PORT || 3000;
@@ -206,8 +206,9 @@ async function initDb() {
   await run(`CREATE TABLE IF NOT EXISTS push_subscriptions (
     endpoint TEXT PRIMARY KEY, subscription TEXT, createdAt INTEGER
   )`);
-  await run(`CREATE TABLE IF NOT EXISTS pins (
-    role TEXT PRIMARY KEY, salt BLOB, hash BLOB, iter INTEGER
+  await run(`CREATE TABLE IF NOT EXISTS issue_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, trailer TEXT,
+    door TEXT, note TEXT, photo_data TEXT, photo_mime TEXT, ip TEXT, userAgent TEXT
   )`);
 
   // Migrations (safe to re-run)
@@ -1024,8 +1025,66 @@ app.post("/api/confirm-safety", requireXHR, requireDriverAccess, async (req, res
 });
 
 /* ══════════════════════════════════════════
-   WEBSOCKET — ON CONNECT
+   API — ISSUE REPORTS
 ══════════════════════════════════════════ */
+
+// Max ~4 MB base64 image
+const MAX_PHOTO_BYTES = 4 * 1024 * 1024;
+
+app.post("/api/report-issue", requireXHR, requireDriverAccess, async (req, res) => {
+  try {
+    const trailer  = String(req.body.trailer  || "").trim();
+    const door     = String(req.body.door     || "").trim();
+    const note     = String(req.body.note     || "").trim().slice(0, 1000);
+    const photoData = req.body.photo_data ? String(req.body.photo_data) : null;
+    const photoMime = req.body.photo_mime ? String(req.body.photo_mime).slice(0, 32) : null;
+
+    if (!trailer) return res.status(400).send("Missing trailer");
+
+    // Validate image data if provided
+    if (photoData) {
+      if (!photoMime || !photoMime.startsWith("image/"))
+        return res.status(400).send("Invalid photo MIME type");
+      // Check base64 size (each char ≈ 0.75 bytes)
+      if (photoData.length * 0.75 > MAX_PHOTO_BYTES)
+        return res.status(413).send("Photo too large (max 4 MB)");
+    }
+
+    const at = Date.now();
+    const result = await run(
+      `INSERT INTO issue_reports(at,trailer,door,note,photo_data,photo_mime,ip,userAgent)
+       VALUES(?,?,?,?,?,?,?,?)`,
+      [at, trailer, door, note, photoData || null, photoMime || null,
+       ipOf(req), req.headers["user-agent"] || ""]
+    );
+    await audit(req, "driver", "issue_reported", "trailer", trailer, { door, hasPhoto: !!photoData, note: note.slice(0, 80) });
+    res.json({ ok: true, id: result.lastID });
+  } catch (e) { res.status(500).send("Report failed"); }
+});
+
+app.get("/api/issue-reports", requireRole(["dispatcher","management","admin"]), async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(200, Number(req.query.limit || 50)));
+    const rows = await all(
+      `SELECT id,at,trailer,door,note,photo_data,photo_mime,ip FROM issue_reports ORDER BY at DESC LIMIT ?`,
+      [limit]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).send("Fetch failed"); }
+});
+
+app.get("/api/issue-reports/:id/photo", requireRole(["dispatcher","management","admin"]), async (req, res) => {
+  try {
+    const row = await get(`SELECT photo_data,photo_mime FROM issue_reports WHERE id=?`, [req.params.id]);
+    if (!row || !row.photo_data) return res.status(404).send("No photo");
+    const buf = Buffer.from(row.photo_data, "base64");
+    res.setHeader("Content-Type", row.photo_mime || "image/jpeg");
+    res.setHeader("Cache-Control", "private, max-age=86400");
+    res.send(buf);
+  } catch (e) { res.status(500).send("Fetch failed"); }
+});
+
+
 wss.on("connection", async ws => {
   try {
     ws.send(JSON.stringify({ type: "version",       payload: { version: APP_VERSION } }));

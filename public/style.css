@@ -78,6 +78,8 @@ a{color:var(--cyan);text-decoration:none}
 .sp{width:4px;height:4px;border-radius:50%;flex-shrink:0}
 .stag-loading{background:var(--amber-bg);color:var(--amber);border-color:var(--amber-bd)} .stag-loading .sp{background:var(--amber)}
 .stag-staged{background:rgba(139,92,246,.12);color:#a78bfa;border-color:rgba(139,92,246,.3)} .stag-staged .sp{background:#a78bfa}
+.stag-service{background:rgba(240,160,48,.12);color:var(--amber);border-color:rgba(240,160,48,.3)} .stag-service .sp{background:var(--amber)}
+.stag-error{background:rgba(232,72,72,.12);color:var(--red);border-color:rgba(232,72,72,.3)} .stag-error .sp{background:var(--red)}
 .stag-ready{background:var(--green-bg);color:var(--green);border-color:var(--green-bd)} .stag-ready .sp{background:var(--green)}
 .stag-dockready{background:var(--cyan-bg);color:var(--cyan);border-color:var(--cyan-bd)} .stag-dockready .sp{background:var(--cyan)}
 .stag-dropped{background:var(--violet-bg);color:var(--violet);border-color:var(--violet-bd)} .stag-dropped .sp{background:var(--violet)}
@@ -185,7 +187,8 @@ textarea{min-height:60px;resize:vertical}
 @media(max-width:640px){.plate-grid{grid-template-columns:repeat(5,1fr);gap:3px;padding:8px}}
 .plate{border-radius:var(--r);border:1px solid var(--b0);background:var(--s0);padding:4px 5px;display:flex;flex-direction:column;gap:2px;min-height:0}
 .plate.p-ok{border-color:var(--green-bd);background:var(--green-bg)}
-.plate.p-service{border-color:var(--red-bd);background:var(--red-bg)}
+.plate.p-service{border-color:rgba(240,160,48,.4);background:rgba(240,160,48,.07)}
+.plate.p-out-of-order{border-color:var(--red-bd);background:var(--red-bg)}
 .plate .p-door{font-family:var(--mono);font-size:8px;color:var(--t3);letter-spacing:.04em}
 .plate .p-note{font-size:9px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .plate .p-btns{display:flex;gap:2px;margin-top:2px}

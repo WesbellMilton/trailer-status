@@ -173,7 +173,7 @@
         <div class="driver-panel active-step">
           <div class="driver-phd">
             <span class="driver-phd-title">What are you here to do?</span>
-            <button class="btn btn-default btn-sm" id="btnBackToWho">← Back</button>
+            <button class="btn btn-default btn-sm" id="btnBackToWho" style="min-height:36px;">← Not me</button>
           </div>
           <div class="driver-pbody">
             <p class="flow-sub" id="flowScreenSub">Select an activity:</p>
@@ -407,6 +407,15 @@
           <div class="sh-empty">No submissions yet this session.</div>
         </div>
       </div>
+
+      <!-- Always-visible reset — lets any driver start completely over -->
+      <button id="btnDriverFullReset" style="
+        width:100%;padding:12px;border-radius:9px;
+        border:1px solid var(--b1);background:transparent;
+        color:var(--t3);font-size:12px;font-family:var(--mono);
+        letter-spacing:.04em;cursor:pointer;touch-action:manipulation;
+        transition:color .15s,border-color .15s;
+      ">↺ Start over / wrong driver</button>
 
     </div>
   </div>

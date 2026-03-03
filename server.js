@@ -488,6 +488,16 @@ function guardPage(allowedRoles) {
 app.get("/login", (req, res) => {
   const expired  = req.query.expired === "1";
   const fromPath = req.query.from || req.get("Referer") || "";
+
+  // Already authenticated — bounce straight to their home page
+  // This prevents the browser back button from stranding them on the login form
+  if (!expired) {
+    const s = getSession(req);
+    if (s?.role) {
+      const home = ROLE_HOME[s.role] || "/";
+      return res.redirect(302, home);
+    }
+  }
   
   // Detect context from where they're trying to go
   // /dock?expired=1 → pre-select dock, hide other roles

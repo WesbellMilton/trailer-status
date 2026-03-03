@@ -639,7 +639,29 @@
               Full control over all roles and settings.
             </div>
             <div class="divider"></div>
-            <button class="btn btn-danger btn-sm" id="btnClearAll" style="width:100%;">⚠ Clear All Trailers</button>
+            <button class="btn btn-danger btn-sm" id="btnClearAll" style="width:100%;margin-bottom:16px;">⚠ Clear All Trailers</button>
+            <div class="divider" style="margin-bottom:12px;"></div>
+            <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--t2);margin-bottom:10px;">PIN Management</div>
+            <div class="pin-row">
+              <div><label class="fl">Dispatcher PIN</label><input type="password" id="pin_dispatcher_a" placeholder="New PIN" aria-label="Dispatcher PIN" autocomplete="new-password"/></div>
+              <div><label class="fl">Confirm</label><input type="password" id="pin_dispatcher_a_confirm" placeholder="Repeat" aria-label="Confirm" autocomplete="new-password"/></div>
+              <button class="btn btn-success btn-sm" id="btnSetDispatcherPinA" style="padding:7px 13px;">Set</button>
+            </div>
+            <div class="pin-row">
+              <div><label class="fl">Dock PIN</label><input type="password" id="pin_dock_a" placeholder="New PIN" aria-label="Dock PIN" autocomplete="new-password"/></div>
+              <div><label class="fl">Confirm</label><input type="password" id="pin_dock_a_confirm" placeholder="Repeat" aria-label="Confirm" autocomplete="new-password"/></div>
+              <button class="btn btn-success btn-sm" id="btnSetDockPinA" style="padding:7px 13px;">Set</button>
+            </div>
+            <div class="pin-row">
+              <div><label class="fl">Management PIN</label><input type="password" id="pin_management_a" placeholder="New PIN" aria-label="Management PIN" autocomplete="new-password"/></div>
+              <div><label class="fl">Confirm</label><input type="password" id="pin_management_a_confirm" placeholder="Repeat" aria-label="Confirm" autocomplete="new-password"/></div>
+              <button class="btn btn-success btn-sm" id="btnSetManagementPinA" style="padding:7px 13px;">Set</button>
+            </div>
+            <div class="pin-row">
+              <div><label class="fl">Admin PIN</label><input type="password" id="pin_admin_a" placeholder="New PIN" aria-label="Admin PIN" autocomplete="new-password"/></div>
+              <div><label class="fl">Confirm</label><input type="password" id="pin_admin_a_confirm" placeholder="Repeat" aria-label="Confirm" autocomplete="new-password"/></div>
+              <button class="btn btn-success btn-sm" id="btnSetAdminPinA" style="padding:7px 13px;">Set</button>
+            </div>
           </div>
         </div>
 
@@ -692,7 +714,7 @@
       <button class="btn btn-primary" id="staffLoginGo">Sign In →</button>
     </div>
     <!-- Show when already signed in -->
-    <div id="staffLogoutRow" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--b0);display:none;">
+    <div id="staffLogoutRow" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--b0);">
       <div style="font-family:var(--mono);font-size:11px;color:var(--t1);margin-bottom:8px;">Signed in as <strong id="staffCurrentRole" style="color:var(--amber);"></strong></div>
       <button class="btn btn-danger btn-sm btn-full" id="staffLogoutBtn">Sign Out</button>
     </div>

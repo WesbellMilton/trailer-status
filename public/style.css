@@ -496,6 +496,9 @@ textarea{min-height:60px;resize:vertical}
 .dc-btn-signin{border-color:var(--b1);background:var(--s2);color:var(--t2);font-size:13px;font-weight:500;min-height:46px;padding:12px}
 .dc-btn-signin:hover{color:var(--amber);border-color:var(--amber-bd)}
 .dc-no-action{text-align:center;font-family:var(--mono);font-size:11px;color:var(--t3);padding:8px 0 2px;letter-spacing:.04em}
+.dc-issue-btn{width:100%;padding:10px 16px;border-radius:var(--r);border:1px solid var(--red-bd);background:var(--red-bg);color:var(--red);font-size:13px;font-weight:600;font-family:var(--mono);cursor:pointer;transition:all .15s;text-align:center;letter-spacing:.04em;margin-top:6px;min-height:40px;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.dc-issue-btn:hover{background:rgba(232,72,72,.14);border-color:rgba(232,72,72,.4)}
+.dc-issue-btn:active{transform:scale(.98)}
 
 .dock-plates-inline{margin:0 16px 80px;border-radius:var(--r2);border:1px solid var(--b1);background:var(--s0);overflow:hidden}
 

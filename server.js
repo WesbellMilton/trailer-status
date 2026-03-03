@@ -357,7 +357,7 @@ function requireDockStatusAllowed(req, res, next) {
   if (["admin","dispatcher","management"].includes(s.role)) return next();
   if (s.role === "dock") {
     const status = req.body?.status;
-    const DOCK_ALLOWED = ["Loading", "Staged", "Dock Ready"]; // dock workers may only set these
+    const DOCK_ALLOWED = ["Loading", "Dock Ready"]; // dock workers may only set these
     if (status && !DOCK_ALLOWED.includes(status)) {
       return res.status(403).send(`Dock role cannot set status: ${status}`);
     }
@@ -441,28 +441,21 @@ async function broadcastConfirmations() {
 /* ══════════════════════════════════════════
    STATIC / VIEWS
 ══════════════════════════════════════════ */
-// Static asset allowlist — only serve known safe files, never expose server.js / sqlite / vapid
-const SAFE_STATIC = /^\/(app\.js|style\.css|manifest\.json|sw\.js|favicon\.ico|favicon-\d+\.png|icon-[\w-]+\.png|apple-touch-icon\.png|splash\/splash-[\w-]+\.png)$/;
+// Safe static file serving — allowlist regex, never exposes server.js/sqlite/vapid
+const SAFE_FILES = /^\/(app\.js|style\.css|manifest\.json|favicon\.ico|favicon-\d+\.png|icon-\d+\.png|icon-[\w-]+\.png|apple-touch-icon\.png|splash\/splash-[\w-]+\.png)$/;
 app.use((req, res, next) => {
-  if (!SAFE_STATIC.test(req.path)) return next();
-  // sw.js needs special headers
   if (req.path === "/sw.js") {
     res.setHeader("Service-Worker-Allowed", "/");
     res.setHeader("Content-Type", "application/javascript");
-  } else if (/\.png$|\.ico$/.test(req.path)) {
-    res.setHeader("Cache-Control", "public, max-age=604800, immutable");
+    return res.sendFile(path.join(__dirname, "sw.js"), err => { if (err && !res.headersSent) res.status(404).end(); });
   }
+  if (!SAFE_FILES.test(req.path)) return next();
+  if (/\.(png|ico)$/.test(req.path)) res.setHeader("Cache-Control", "public, max-age=604800, immutable");
   const safePath = path.join(__dirname, req.path.replace(/\/\.\./g, ""));
   res.sendFile(safePath, err => { if (err && !res.headersSent) res.status(404).end(); });
 });
-
 const INDEX_FILE = path.join(__dirname, "index.html");
-const sendIndex  = (_, res) => res.sendFile(INDEX_FILE, err => {
-  if (err && !res.headersSent) {
-    console.error("[sendIndex] failed:", err.message, "INDEX_FILE:", INDEX_FILE);
-    res.status(500).send("Page load error — contact support");
-  }
-});
+const sendIndex  = (_, res) => res.sendFile(INDEX_FILE);
 
 /* ── ROLE → ALLOWED PATHS ── */
 const ROLE_HOME = {
@@ -839,7 +832,7 @@ app.post("/api/logout", requireXHR, (req, res) => {
 /* ══════════════════════════════════════════
    API — TRAILERS
 ══════════════════════════════════════════ */
-app.get("/api/state", requireXHR, async (req, res) => { try { res.json(await loadTrailersObject()); } catch(e) { res.status(500).send("State error"); } });
+app.get("/api/state", async (req, res) => { try { res.json(await loadTrailersObject()); } catch(e) { res.status(500).send("State error"); } });
 
 app.post("/api/upsert", requireXHR, requireDockStatusAllowed, async (req, res) => {
   const actor = req.user.role;
@@ -865,14 +858,14 @@ app.post("/api/upsert", requireXHR, requireDockStatusAllowed, async (req, res) =
         req.body.note      === undefined &&
         req.body.dropType  === undefined;
       if (!onlyStatus) return res.status(403).send("Dock can only update trailer status");
-      if (!["Loading","Staged","Dock Ready"].includes(status)) return res.status(403).send("Dock can only set Loading, Staged or Dock Ready");
+      if (!["Loading","Dock Ready"].includes(status)) return res.status(403).send("Dock can only set Loading or Dock Ready");
     }
 
     // Auto-set Incoming for Wesbell drops from driver portal
     const isDriverDrop = req.body.flow === "drop" && carrierType.toLowerCase() === "wesbell";
     const finalStatus  = isDriverDrop ? "Incoming" : status;
 
-    const allowed = ["Incoming","Dropped","Loading","Staged","Dock Ready","Ready","Departed",""];
+    const allowed = ["Incoming","Dropped","Loading","Dock Ready","Ready","Departed",""];
     if (!allowed.includes(finalStatus)) return res.status(400).send("Invalid status");
 
     await run(
@@ -923,7 +916,7 @@ app.post("/api/clear", requireXHR, requireRole(["dispatcher","management","admin
 /* ══════════════════════════════════════════
    API — DOCK PLATES
 ══════════════════════════════════════════ */
-app.get("/api/dockplates", requireXHR, async (req, res) => { try { res.json(await loadDockPlatesObject()); } catch(e) { res.status(500).send("Plates error"); } });
+app.get("/api/dockplates", async (req, res) => { try { res.json(await loadDockPlatesObject()); } catch(e) { res.status(500).send("Plates error"); } });
 
 app.post("/api/dockplates/set", requireXHR, requireRole(["dock","dispatcher","management","admin"]), async (req, res) => {
   const actor = req.user.role;
@@ -933,7 +926,7 @@ app.post("/api/dockplates/set", requireXHR, requireRole(["dock","dispatcher","ma
     const note   = String(req.body.note   || "").trim();
     const dNum = Number(door);
     if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send("Invalid door");
-    if (!["OK","Service","Out of Order","Unknown"].includes(status)) return res.status(400).send("Invalid plate status");
+    if (!["OK","Service","Unknown"].includes(status)) return res.status(400).send("Invalid plate status");
     await run(
       `INSERT INTO dockplates(door,status,note,updatedAt) VALUES(?,?,?,?)
        ON CONFLICT(door) DO UPDATE SET status=excluded.status,note=excluded.note,updatedAt=excluded.updatedAt`,
@@ -1271,13 +1264,6 @@ wss.on("connection", async ws => {
 /* ══════════════════════════════════════════
    START
 ══════════════════════════════════════════ */
-// Catch-all: unknown routes
-app.use((req, res) => {
-  if (req.path.startsWith("/api/")) return res.status(404).json({ error: "Not found" });
-  // Non-API 404 — redirect to login rather than showing a blank error
-  res.redirect(302, "/login");
-});
-
 initDb()
   .then(async () => {
     loadOrGenVapid();

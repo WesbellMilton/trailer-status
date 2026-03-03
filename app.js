@@ -1698,7 +1698,7 @@
     wsStatus("warn");
     const ws=new WebSocket(`${location.protocol==="https:"?"wss":"ws"}://${location.host}`);
     let lastMsg=Date.now();
-    const watchdog=setInterval(()=>{ if(Date.now()-lastMsg>15000){ try{ws.close();}catch{} } },5000);
+    const watchdog=setInterval(()=>{ if(Date.now()-lastMsg>35000){ try{ws.close();}catch{} } },5000);
     ws.onopen=()=>{ wsRetry=0; wsStatus("ok"); };
     ws.onclose=()=>{
       clearInterval(watchdog); wsStatus("bad");
@@ -1715,6 +1715,7 @@
       else if(type==="dockplates"){ dockPlates=payload||{}; if(!isDriver()) renderPlates(); }
       else if(type==="doorblocks"){ doorBlocks=payload||{}; renderDockMap(); renderBoard(); }
       else if(type==="confirmations"){ confirmations=Array.isArray(payload)?payload:[]; if(isSuper())renderSupConf(); }
+      else if(type==="ping"){/* keepalive — lastMsg already updated above */}
       else if(type==="version"){ VERSION=payload?.version||VERSION; el("verText").textContent=VERSION||"—"; }
       else if(type==="notify"&&payload?.kind==="ready"){
         toast("🟢 Trailer Ready",`${payload.trailer} is READY${payload.door?" at door "+payload.door:""}.`,"ok",8000);

@@ -933,7 +933,7 @@ app.post("/api/dockplates/set", requireXHR, requireRole(["dock","dispatcher","ma
     const note   = String(req.body.note   || "").trim();
     const dNum = Number(door);
     if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send("Invalid door");
-    if (!["OK","Service","Unknown"].includes(status)) return res.status(400).send("Invalid plate status");
+    if (!["OK","Service","Out of Order","Unknown"].includes(status)) return res.status(400).send("Invalid plate status");
     await run(
       `INSERT INTO dockplates(door,status,note,updatedAt) VALUES(?,?,?,?)
        ON CONFLICT(door) DO UPDATE SET status=excluded.status,note=excluded.note,updatedAt=excluded.updatedAt`,

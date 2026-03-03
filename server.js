@@ -357,7 +357,7 @@ function requireDockStatusAllowed(req, res, next) {
   if (["admin","dispatcher","management"].includes(s.role)) return next();
   if (s.role === "dock") {
     const status = req.body?.status;
-    const DOCK_ALLOWED = ["Loading", "Dock Ready"]; // dock workers may only set these
+    const DOCK_ALLOWED = ["Loading", "Staged", "Dock Ready"]; // dock workers may only set these
     if (status && !DOCK_ALLOWED.includes(status)) {
       return res.status(403).send(`Dock role cannot set status: ${status}`);
     }
@@ -866,14 +866,14 @@ app.post("/api/upsert", requireXHR, requireDockStatusAllowed, async (req, res) =
         req.body.note      === undefined &&
         req.body.dropType  === undefined;
       if (!onlyStatus) return res.status(403).send("Dock can only update trailer status");
-      if (!["Loading","Dock Ready"].includes(status)) return res.status(403).send("Dock can only set Loading or Dock Ready");
+      if (!["Loading","Staged","Dock Ready"].includes(status)) return res.status(403).send("Dock can only set Loading, Staged or Dock Ready");
     }
 
     // Auto-set Incoming for Wesbell drops from driver portal
     const isDriverDrop = req.body.flow === "drop" && carrierType.toLowerCase() === "wesbell";
     const finalStatus  = isDriverDrop ? "Incoming" : status;
 
-    const allowed = ["Incoming","Dropped","Loading","Dock Ready","Ready","Departed",""];
+    const allowed = ["Incoming","Dropped","Loading","Staged","Dock Ready","Ready","Departed",""];
     if (!allowed.includes(finalStatus)) return res.status(400).send("Invalid status");
 
     await run(

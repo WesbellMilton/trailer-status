@@ -264,6 +264,11 @@ async function verifyPin(role, pin) {
    SESSIONS
 ══════════════════════════════════════════ */
 const sessions = new Map();
+// Prune expired sessions every 30 minutes to prevent memory leak
+setInterval(() => {
+  const now = Date.now();
+  for (const [sid, s] of sessions.entries()) if (s.exp < now) sessions.delete(sid);
+}, 30 * 60 * 1000).unref();
 
 function newSession(role) {
   const sid = crypto.randomBytes(24).toString("hex");
@@ -393,29 +398,38 @@ const wss    = new WebSocket.Server({ server });
 
 function wsBroadcast(type, payload) {
   const msg = JSON.stringify({ type, payload });
-  for (const client of wss.clients)
-    if (client.readyState === WebSocket.OPEN) client.send(msg);
+  for (const client of wss.clients) {
+    if (client.readyState === WebSocket.OPEN) {
+      try { client.send(msg); } catch { /* stale socket */ }
+    }
+  }
 }
 
-async function broadcastTrailers()      { invalidateTrailers(); wsBroadcast("state",         await getTrailersCache()); }
-async function broadcastPlates()        { invalidatePlates();   wsBroadcast("dockplates",    await getPlatesCache()); }
-async function broadcastConfirmations() {                       wsBroadcast("confirmations", await loadConfirmations(250)); }
+async function broadcastTrailers() {
+  try { invalidateTrailers(); wsBroadcast("state",         await getTrailersCache()); }
+  catch(e) { console.error("[WS] broadcastTrailers:", e.message); }
+}
+async function broadcastPlates() {
+  try { invalidatePlates();   wsBroadcast("dockplates",    await getPlatesCache()); }
+  catch(e) { console.error("[WS] broadcastPlates:", e.message); }
+}
+async function broadcastConfirmations() {
+  try {                       wsBroadcast("confirmations", await loadConfirmations(250)); }
+  catch(e) { console.error("[WS] broadcastConfirmations:", e.message); }
+}
 
 /* ══════════════════════════════════════════
    STATIC / VIEWS
 ══════════════════════════════════════════ */
 app.use(express.static(path.join(__dirname, "public")));
-// Serve icon files and splash screens from project root
-app.use(express.static(__dirname, {
-  index: false,
-  dotfiles: "ignore",
-  setHeaders(res, filePath) {
-    // Long cache for immutable assets
-    if (/\.(png|ico|jpg|webp)$/.test(filePath)) {
-      res.setHeader("Cache-Control", "public, max-age=604800, immutable");
-    }
-  }
-}));
+// Serve ONLY image assets from project root (icons + splash screens)
+// Uses an allowlist so server.js, .env, sqlite, etc. are never exposed
+const ASSET_ALLOWLIST = /^\/(icon-[\w-]+\.png|apple-touch-icon\.png|favicon\.ico|splash\/splash-[\w-]+\.png)$/;
+app.get(ASSET_ALLOWLIST, (req, res) => {
+  const safePath = path.join(__dirname, req.path.replace(/\/\.\./g, ""));
+  res.setHeader("Cache-Control", "public, max-age=604800, immutable");
+  res.sendFile(safePath, err => { if (err && !res.headersSent) res.status(404).end(); });
+});
 app.get("/sw.js", (req, res) => {
   res.setHeader("Service-Worker-Allowed", "/");
   res.setHeader("Content-Type", "application/javascript");

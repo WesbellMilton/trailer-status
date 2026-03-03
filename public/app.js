@@ -27,7 +27,8 @@
 
   async function apiJson(url, opts) {
     const res = await fetch(url, opts);
-    if (res.status===401) { location.href="/login?expired=1"; return; }
+    if (res.status===401) { location.href="/login?expired=1&from="+encodeURIComponent(location.pathname); return; }
+    if (res.status===403) { console.warn("Forbidden:", url); return; }
     if (!res.ok) { const t=await res.text().catch(()=>""); throw new Error(t||"HTTP "+res.status); }
     const ct = res.headers.get("content-type")||"";
     return ct.includes("application/json") ? res.json() : {};
@@ -1078,7 +1079,13 @@
   }
 
   async function loadInitial(){
-    try{ const w=await apiJson("/api/whoami"); ROLE=w?.role; VERSION=w?.version||""; }
+    try{ const w=await apiJson("/api/whoami"); ROLE=w?.role; VERSION=w?.version||"";
+      // Server says we should be elsewhere — enforce it
+      if (w?.redirectTo && w.redirectTo !== location.pathname) {
+        location.replace(w.redirectTo);
+        return;
+      }
+    }
     catch{ ROLE=null; VERSION=""; }
     el("verText").textContent=VERSION||"—";
     if(el("driverVerText"))el("driverVerText").textContent=VERSION||"—";

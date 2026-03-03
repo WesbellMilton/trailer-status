@@ -173,7 +173,7 @@
       <div class="ready-notif-banner" id="readyNotifBanner" style="display:none;">
         <span class="rnb-icon">🟢</span>
         <span id="readyNotifText">Trailer ready</span>
-        <button onclick="document.getElementById('readyNotifBanner').style.display='none'" class="rnb-close" aria-label="Dismiss notification">✕</button>
+        <button data-dismiss="readyNotifBanner" class="rnb-close" aria-label="Dismiss notification">✕</button>
       </div>
 
       <!-- Connection bar -->
@@ -266,7 +266,7 @@
               autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false" aria-label="Trailer number to shunt"/>
 
             <div style="margin:14px 0 6px;font-family:var(--mono);font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;">New Door</div>
-            <div class="assignment-card visible" style="margin-bottom:10px;">
+            <div class="assignment-card visible" style="margin-bottom:10px;animation:none;">
               <div class="ac-icon">🚪</div>
               <div class="ac-body">
                 <div class="ac-label">Selected Door</div>
@@ -753,7 +753,7 @@
 
 </main>
 <script src="/app.js"></script>
-<script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');</script>
+<!-- SW registered by app.js initPush() -->
 <!-- STAFF SIGN-IN MODAL (dock/driver pages) -->
 <div class="modal-ov hidden" id="staffLoginOv">
   <div class="modal" style="max-width:340px;">

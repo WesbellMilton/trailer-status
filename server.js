@@ -1300,6 +1300,19 @@ app.get("/api/issue-reports/:id/photo", requireRole(["dispatcher","management","
 wss.on("connection", async ws => {
   ws.on("error", () => {}); // absorb socket errors, prevent crash
   const safeSend = msg => { try { if (ws.readyState === WebSocket.OPEN) ws.send(msg); } catch {} };
+
+  // Heartbeat — ping every 20s to keep connection alive through Render / reverse-proxy idle timeouts
+  ws.isAlive = true;
+  ws.on("pong", () => { ws.isAlive = true; });
+  ws.on("message", () => { ws.isAlive = true; });
+  const heartbeat = setInterval(() => {
+    if (!ws.isAlive) { clearInterval(heartbeat); try { ws.terminate(); } catch {} return; }
+    ws.isAlive = false;
+    try { ws.ping(); } catch {}
+    safeSend(JSON.stringify({ type: "ping" })); // JSON keepalive so client watchdog resets
+  }, 20000);
+  ws.on("close", () => clearInterval(heartbeat));
+
   try { safeSend(JSON.stringify({ type: "version",       payload: { version: APP_VERSION } })); } catch {}
   try { safeSend(JSON.stringify({ type: "state",         payload: await loadTrailersObject() })); } catch {}
   try { safeSend(JSON.stringify({ type: "dockplates",    payload: await loadDockPlatesObject() })); } catch {}

@@ -484,6 +484,8 @@ function guardPage(allowedRoles) {
     // No session — allow if page accepts unauthenticated (__driver__), otherwise login
     if (!role) {
       if (allowedRoles.includes("__driver__")) return next();
+      // Drivers don't have sessions — send them to /driver directly, skip login home screen
+      if (req.path === "/driver") return next();
       return res.redirect(302, `/login?from=${encodeURIComponent(req.path)}`);
     }
 
@@ -511,6 +513,9 @@ function guardPage(allowedRoles) {
 app.get("/login", (req, res) => {
   const expired  = req.query.expired === "1";
   const fromPath = req.query.from || "";
+
+  // Drivers don't need a login — bounce straight to /driver
+  if (fromPath.includes("/driver")) return res.redirect(302, "/driver");
 
   // Already authenticated — bounce to their home page
   if (!expired) {
@@ -772,33 +777,92 @@ body::before{
    MOBILE — stacked layout
 ════════════════════════════ */
 @media(max-width:768px){
-  body{grid-template-columns:1fr;grid-template-rows:auto 1fr;overflow:auto}
-  .dashboard{
-    padding:28px 24px 24px;gap:0;
-    border-right:none;border-bottom:1px solid var(--b0);
+  /* Stack vertically; login panel scrolls into view naturally */
+  body{
+    grid-template-columns:1fr;
+    grid-template-rows:auto auto;
+    overflow-y:auto;
+    height:auto;
+    min-height:100vh;
   }
-  .clock-time{font-size:clamp(60px,16vw,90px)}
-  .db-brand{margin-bottom:28px}
-  .cal-wrap{display:none} /* hide calendar on small screens, keep clock + weather */
-  .db-divider{margin-bottom:20px}
-  .weather-block{margin-bottom:20px}
-  .db-footer{margin-top:0}
-  .login-panel{padding:32px 24px 40px}
-  .lp-brand{margin-bottom:28px}
-  .lp-heading{font-size:28px}
+
+  /* Dashboard: compact strip — clock + date only, no calendar */
+  .dashboard{
+    padding:24px 22px 20px;
+    border-right:none;
+    border-bottom:1px solid var(--b0);
+    /* Turn off flex column, use a tight horizontal-ish block */
+    gap:0;
+  }
+  .db-brand{margin-bottom:20px}
+  .clock-time{font-size:clamp(56px,14vw,80px)}
+  .clock-ampm{font-size:clamp(13px,2.5vw,18px)}
+  .date-row{margin-bottom:20px}
+  .date-day{font-size:clamp(22px,5vw,32px)}
+  .date-full{font-size:11px}
+  .db-divider{margin-bottom:16px}
+  .weather-block{margin-bottom:16px}
+  .weather-icon{font-size:38px}
+  .weather-temp{font-size:clamp(32px,7vw,44px)}
+  /* Calendar hidden on tablet — takes too much space */
+  .cal-wrap{display:none}
+  .db-footer{margin-top:4px}
+
+  /* Login panel: comfortable full-width card */
+  .login-panel{
+    padding:28px 22px 36px;
+    /* Ensure it doesn't get squashed */
+    min-height:auto;
+  }
+  .lp-brand{margin-bottom:24px}
+  .lp-heading{font-size:26px}
+  .lp-sub{margin-bottom:24px}
 }
+
+/* 480px — small phones */
 @media(max-width:480px){
-  .dashboard{padding:20px 18px 20px}
-  .clock-time{font-size:clamp(52px,18vw,80px)}
-  .weather-icon{font-size:36px}
-  .weather-temp{font-size:clamp(30px,8vw,46px)}
-  .login-panel{padding:24px 18px 32px}
+  .dashboard{padding:18px 16px 16px}
+  .db-brand{margin-bottom:16px}
+  .clock-time{font-size:clamp(48px,16vw,72px)}
+  .date-row{margin-bottom:16px;gap:8px}
+  .date-day{font-size:clamp(20px,6vw,28px)}
+  .weather-block{margin-bottom:12px}
+  .weather-icon{font-size:32px}
+  .weather-temp{font-size:clamp(28px,8vw,40px)}
+  .weather-meta{gap:10px}
+  /* Hide secondary weather detail to save space */
+  .weather-meta-item:last-child{display:none}
+  .db-divider{margin-bottom:12px}
+  .db-footer{display:none} /* redundant on mobile */
+
+  .login-panel{padding:22px 16px 32px}
+  .lp-brand{margin-bottom:18px}
+  .lp-heading{font-size:24px}
+  .lp-sub{font-size:10px;margin-bottom:20px}
+  /* Ensure inputs are 16px so iOS doesn't zoom */
+  .field-input{font-size:16px !important;padding:13px 14px}
+  .sign-btn{padding:15px;font-size:13px}
 }
+
+/* 360px — very small phones */
+@media(max-width:360px){
+  .dashboard{padding:14px 14px 12px}
+  .clock-time{font-size:clamp(42px,17vw,64px)}
+  .weather-block{margin-bottom:10px}
+  .db-divider{display:none}
+  .login-panel{padding:18px 14px 28px}
+}
+
+/* Safe area — notch / home indicator */
 @supports(padding:env(safe-area-inset-top)){
   .dashboard{padding-top:max(44px,calc(20px + env(safe-area-inset-top)))}
   @media(max-width:768px){
-    .dashboard{padding-top:max(28px,calc(16px + env(safe-area-inset-top)))}
-    .login-panel{padding-bottom:max(40px,calc(16px + env(safe-area-inset-bottom)))}
+    .dashboard{padding-top:max(24px,calc(14px + env(safe-area-inset-top)))}
+    .login-panel{padding-bottom:max(36px,calc(16px + env(safe-area-inset-bottom)))}
+  }
+  @media(max-width:480px){
+    .dashboard{padding-top:max(18px,calc(10px + env(safe-area-inset-top)))}
+    .login-panel{padding-bottom:max(32px,calc(12px + env(safe-area-inset-bottom)))}
   }
 }
 

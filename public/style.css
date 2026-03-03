@@ -236,10 +236,17 @@ textarea{min-height:60px;resize:vertical}
 .driver-shell{min-height:calc(100vh - 48px);background:var(--bg);background-image:radial-gradient(ellipse 900px 500px at 50% -60px,rgba(240,160,48,.08) 0%,transparent 65%),radial-gradient(ellipse 600px 400px at 90% 100%,rgba(32,192,208,.05) 0%,transparent 65%);display:flex;align-items:flex-start;justify-content:center;padding:28px 16px 48px}
 .driver-wrap{width:100%;max-width:440px;display:flex;flex-direction:column;gap:14px}
 
+/* New compact driver topbar replacing conn-bar + header */
+.driver-topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;background:var(--s1);border:1px solid var(--b0);border-radius:var(--r2)}
+.dtb-brand{display:flex;align-items:center;gap:9px}
+.dtb-mark{width:28px;height:28px;border-radius:6px;background:linear-gradient(135deg,var(--amber) 0%,#c04800 100%);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:700;color:#000;letter-spacing:-.5px;flex-shrink:0}
+.dtb-title{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--t0);letter-spacing:.04em}
+.dtb-right{display:flex;align-items:center;gap:7px}
+.dtb-status{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;color:var(--t2);letter-spacing:.03em}
+/* keep conn-bar styles in case any JS still references .driver-conn-bar */
 .driver-conn-bar{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:var(--s1);border:1px solid var(--b0);border-radius:var(--r2);font-family:var(--mono);font-size:10px;color:var(--t2);letter-spacing:.04em}
 .driver-conn-bar .dcb-left{display:flex;align-items:center;gap:7px}
 .driver-conn-bar .dcb-right{font-size:10px;color:var(--t3)}
-
 .driver-hdr{text-align:center;padding:4px 0 8px}
 .driver-hdr h1{font-size:22px;font-weight:700;letter-spacing:-.03em;color:var(--t0);margin-bottom:3px}
 .driver-hdr p{font-size:10px;color:var(--t2);font-family:var(--mono);letter-spacing:.1em}
@@ -301,10 +308,12 @@ textarea{min-height:60px;resize:vertical}
 .context-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;border:1px solid var(--b1);background:var(--s0);font-family:var(--mono);font-size:11px;color:var(--t1);margin-bottom:14px}
 .context-chip strong{color:var(--t0)}
 
-.driver-done{display:flex;flex-direction:column;align-items:center;padding:36px 20px;text-align:center;gap:10px}
+.driver-done{display:flex;flex-direction:column;align-items:center;padding:28px 20px 24px;text-align:center;gap:10px}
 .done-ring{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;background:var(--green-bg);border:1px solid var(--green-bd);margin-bottom:4px}
 .done-title{font-size:18px;font-weight:700;color:var(--t0)}
 .done-detail{font-size:12px;color:var(--t1);font-family:var(--mono);line-height:1.7}
+.done-restart-btn{margin-top:8px !important;border-color:var(--b2) !important;background:var(--s2) !important;color:var(--t0) !important}
+.done-restart-btn:hover{background:var(--s3) !important}
 
 .session-history{background:var(--s1);border:1px solid var(--b0);border-radius:var(--r2);overflow:hidden}
 .sh-hd{padding:10px 14px;background:var(--s0);border-bottom:1px solid var(--b0);font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);display:flex;align-items:center;justify-content:space-between}
@@ -364,11 +373,12 @@ textarea{min-height:60px;resize:vertical}
    WHO / FLOW SCREENS
 ═══════════════════════════════════════════ */
 .who-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.who-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:110px;border-radius:var(--r2);border:1px solid var(--b1);background:var(--s0);color:var(--t1);cursor:pointer;transition:all .15s;padding:16px;-webkit-tap-highlight-color:transparent}
-.who-btn:hover{border-color:var(--amber-bd);background:var(--amber-bg);color:var(--amber)}
-.who-btn:active{transform:scale(.97)}
-.who-btn .who-icon{font-size:28px}
-.who-btn .who-label{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--t0)}
+.who-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:96px;border-radius:var(--r2);border:1px solid var(--b1);background:var(--s0);color:var(--t1);cursor:pointer;transition:all .15s;padding:16px;-webkit-tap-highlight-color:transparent}
+.who-btn:hover{border-color:var(--amber-bd);background:var(--amber-bg)}
+.who-btn:hover .who-icon{transform:scale(1.1)}
+.who-btn:active{transform:scale(.96)}
+.who-btn .who-icon{font-size:30px;transition:transform .15s}
+.who-btn .who-label{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--t0);letter-spacing:.03em}
 .who-btn .who-sub{font-size:10px;color:var(--t2)}
 
 .flow-sub{font-size:11px;color:var(--t2);font-family:var(--mono);letter-spacing:.04em;margin-bottom:12px}
@@ -452,31 +462,39 @@ textarea{min-height:60px;resize:vertical}
 .dock-cards{display:flex;flex-direction:column;gap:10px;padding:10px 16px}
 .dock-empty{text-align:center;padding:48px 20px;color:var(--t3);font-family:var(--mono);font-size:13px}
 
-.dock-card{border-radius:var(--r2);border:1px solid var(--b1);background:var(--s0);padding:16px;display:flex;flex-direction:column;gap:10px;transition:border-color .15s,box-shadow .15s}
-.dock-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.3)}
-.dock-card.dc-loading{border-color:rgba(240,160,48,.4);background:rgba(240,160,48,.04)}
-.dock-card.dc-dockready{border-color:rgba(32,208,144,.3);background:rgba(32,208,144,.04)}
-.dock-card.dc-ready{border-color:rgba(32,208,144,.5);background:rgba(32,208,144,.06)}
-.dock-card.dc-departed{opacity:.45}
+.dock-card{border-radius:var(--r2);border:1px solid var(--b1);background:var(--s0);padding:14px 16px;display:flex;flex-direction:column;gap:10px;transition:border-color .15s,box-shadow .15s}
+.dock-card:active{transform:scale(.995)}
+.dock-card.dc-loading{border-color:rgba(240,160,48,.45);background:rgba(240,160,48,.035);border-left-width:3px;border-left-color:var(--amber)}
+.dock-card.dc-dockready{border-color:rgba(32,192,208,.35);background:rgba(32,192,208,.035);border-left-width:3px;border-left-color:var(--cyan)}
+.dock-card.dc-ready{border-color:rgba(32,208,144,.5);background:rgba(32,208,144,.05);border-left-width:3px;border-left-color:var(--green)}
+.dock-card.dc-dropped{border-left-width:3px;border-left-color:var(--violet)}
+.dock-card.dc-incoming{border-left-width:3px;border-left-color:var(--t3)}
+.dock-card.dc-departed{opacity:.38;pointer-events:none}
 
-.dc-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
-.dc-trailer{font-family:var(--mono);font-size:26px;font-weight:600;color:var(--t0);letter-spacing:-.01em;line-height:1}
-.dc-door{font-family:var(--mono);font-size:20px;font-weight:500;color:var(--amber)}
-.dc-status-row{display:flex;align-items:center;gap:10px}
-.dc-status-badge{font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.05em;padding:3px 9px;border-radius:20px;border:1px solid var(--b1);color:var(--t1)}
-.dc-status-badge.dc-loading{color:var(--amber);border-color:rgba(240,160,48,.3);background:rgba(240,160,48,.08)}
-.dc-status-badge.dc-dockready{color:var(--cyan);border-color:rgba(32,160,220,.3);background:rgba(32,160,220,.08)}
-.dc-status-badge.dc-ready{color:var(--green);border-color:rgba(32,208,144,.3);background:rgba(32,208,144,.08)}
-.dc-status-badge.dc-dropped{color:var(--t1)}
-.dc-status-badge.dc-incoming{color:var(--t2)}
+/* Card top row: trailer+note on left, door badge+status on right */
+.dc-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.dc-trailer-block{flex:1;min-width:0}
+.dc-trailer{font-family:var(--mono);font-size:28px;font-weight:600;color:var(--t0);letter-spacing:-.01em;line-height:1.05}
+.dc-note{font-size:11px;color:var(--t2);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dc-right-block{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0}
+/* Door badge: big, bold, instantly readable */
+.dc-door-badge{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--amber);line-height:1;background:var(--amber-bg);border:1px solid var(--amber-bd);border-radius:var(--r);padding:4px 10px;letter-spacing:.04em}
+.dc-door-empty{font-family:var(--mono);font-size:11px;color:var(--t3);padding:4px 6px}
+/* Status pill: dot + label, replacing tiny badge */
+.dc-status-pill{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--t2)}
+.dc-status-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--dot,var(--t3));flex-shrink:0}
+
+.dc-meta-row{display:flex;align-items:center;gap:8px;min-height:14px}
 .dc-ago{font-family:var(--mono);font-size:10px;color:var(--t3)}
 
-.dc-action-btn{width:100%;padding:16px;border-radius:var(--r);border:1px solid var(--b1);background:var(--s1);color:var(--t1);font-size:16px;font-weight:600;font-family:var(--sans);cursor:pointer;transition:all .15s;text-align:center;letter-spacing:.01em;min-height:54px;-webkit-tap-highlight-color:transparent}
-.dc-action-btn:active{transform:scale(.98)}
+.dc-action-btn{width:100%;padding:18px 16px;border-radius:var(--r);border:1px solid var(--b1);background:var(--s1);color:var(--t1);font-size:16px;font-weight:700;font-family:var(--sans);cursor:pointer;transition:all .15s;text-align:center;letter-spacing:.01em;min-height:58px;-webkit-tap-highlight-color:transparent}
+.dc-action-btn:active{transform:scale(.97)}
 .dc-btn-default{border-color:var(--amber-bd);background:var(--amber-bg);color:var(--amber)}
-.dc-btn-default:hover{background:rgba(240,160,48,.15)}
-.dc-btn-cyan{border-color:rgba(32,160,220,.3);background:rgba(32,160,220,.08);color:var(--cyan)}
-.dc-btn-cyan:hover{background:rgba(32,160,220,.15)}
+.dc-btn-default:hover{background:rgba(240,160,48,.16)}
+.dc-btn-cyan{border-color:rgba(32,192,208,.3);background:rgba(32,192,208,.08);color:var(--cyan)}
+.dc-btn-cyan:hover{background:rgba(32,192,208,.15)}
+.dc-btn-signin{border-color:var(--b1);background:var(--s2);color:var(--t2);font-size:13px;font-weight:500;min-height:46px;padding:12px}
+.dc-btn-signin:hover{color:var(--amber);border-color:var(--amber-bd)}
 .dc-no-action{text-align:center;font-family:var(--mono);font-size:11px;color:var(--t3);padding:8px 0 2px;letter-spacing:.04em}
 
 .dock-plates-inline{margin:0 16px 80px;border-radius:var(--r2);border:1px solid var(--b1);background:var(--s0);overflow:hidden}
@@ -638,24 +656,26 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
   .dock-filter-btn{padding:6px 12px;font-size:11px;min-height:38px}
   .dock-search-bar{padding:8px 12px 4px}
   .dock-search-bar input{font-size:15px;padding:10px 14px}
-  .dock-cards{padding:10px 12px;gap:8px}
-  .dock-card{padding:14px}
-  .dc-trailer{font-size:24px !important}
-  .dc-door{font-size:18px}
-  .dc-action-btn{padding:16px !important;font-size:15px !important;min-height:56px}
+  .dock-cards{padding:8px 12px;gap:8px}
+  .dock-card{padding:12px 14px}
+  .dc-trailer{font-size:26px !important}
+  .dc-door-badge{font-size:20px !important;padding:3px 8px !important}
+  .dc-action-btn{padding:18px !important;font-size:16px !important;min-height:60px}
   .dock-plates-inline{margin:0 12px 60px}
 
   /* Driver portal */
-  .driver-shell{padding:10px 10px 40px}
-  .driver-wrap{max-width:100%;gap:10px}
-  .driver-hdr h1{font-size:20px}
+  .driver-shell{padding:8px 10px 40px}
+  .driver-wrap{max-width:100%;gap:8px}
+  .driver-topbar{padding:8px 12px}
+  .dtb-mark{width:24px;height:24px;font-size:10px}
+  .dtb-title{font-size:11px}
   .driver-panel{border-radius:var(--r2)}
-  .driver-pbody{padding:14px}
-  .trailer-hero-input{font-size:26px !important;padding:14px !important;letter-spacing:.04em}
+  .driver-pbody{padding:12px 14px}
+  .trailer-hero-input{font-size:28px !important;padding:14px !important;letter-spacing:.04em}
   .who-grid{grid-template-columns:1fr 1fr;gap:8px}
-  .who-btn{min-height:90px;padding:12px 8px}
-  .who-btn .who-icon{font-size:22px}
-  .who-btn .who-label{font-size:12px}
+  .who-btn{min-height:80px;padding:10px 8px;gap:6px}
+  .who-btn .who-icon{font-size:24px}
+  .who-btn .who-label{font-size:13px}
   .flow-grid{gap:8px}
   .flow-btn{min-height:60px;padding:12px 14px}
   .door-picker-grid{grid-template-columns:repeat(4,1fr) !important;gap:5px}

@@ -871,3 +871,288 @@ button,.btn,.nav-item,.who-btn,.flow-btn,.door-btn,.drop-type-btn,
   color:var(--t1);
   border-color:var(--b2);
 }
+
+/* ═══════════════════════════════════════════
+   ANIMATIONS — COMPREHENSIVE UPGRADE
+═══════════════════════════════════════════ */
+
+/* ── Core easing variables ── */
+:root {
+  --ease-spring: cubic-bezier(.34,1.56,.64,1);
+  --ease-out-quart: cubic-bezier(.25,.46,.45,.94);
+  --ease-in-out-quint: cubic-bezier(.83,0,.17,1);
+}
+
+/* ── Driver screen transitions ── */
+/* Screens slide in from right, out to left */
+@keyframes screenIn  { from { opacity:0; transform:translateX(22px) } to { opacity:1; transform:none } }
+@keyframes screenOut { from { opacity:1; transform:none } to { opacity:0; transform:translateX(-16px) } }
+@keyframes screenInBack { from { opacity:0; transform:translateX(-22px) } to { opacity:1; transform:none } }
+
+.screen-enter { animation: screenIn  .26s var(--ease-out-quart) both }
+.screen-enter-back { animation: screenInBack .26s var(--ease-out-quart) both }
+.screen-exit  { animation: screenOut .18s ease-in both; pointer-events:none }
+
+/* ── Assignment card pop-in ── */
+@keyframes cardReveal {
+  from { opacity:0; transform:translateY(-8px) scale(.97) }
+  to   { opacity:1; transform:none }
+}
+.assignment-card.visible  { animation: cardReveal .22s var(--ease-spring) both }
+.door-picker-wrap.visible { animation: cardReveal .2s  var(--ease-out-quart) both }
+.no-assignment-msg.visible { animation: cardReveal .2s var(--ease-out-quart) both }
+
+/* ── Door button spring on select ── */
+.door-btn { transform-origin: center }
+.door-btn.selected { animation: doorPop .2s var(--ease-spring) }
+@keyframes doorPop {
+  0%   { transform: scale(1) }
+  50%  { transform: scale(1.12) }
+  100% { transform: scale(1) }
+}
+
+/* ── Drop-type toggle spring ── */
+.drop-type-btn.selected { animation: dtbPop .22s var(--ease-spring) }
+@keyframes dtbPop {
+  0%   { transform: scale(1) }
+  55%  { transform: scale(1.06) }
+  100% { transform: scale(1) }
+}
+
+/* ── Done screen — staggered celebration ── */
+@keyframes doneRingPop {
+  0%   { opacity:0; transform: scale(0.3) rotate(-15deg) }
+  60%  { transform: scale(1.18) rotate(6deg) }
+  80%  { transform: scale(0.94) rotate(-2deg) }
+  100% { opacity:1; transform: scale(1) rotate(0deg) }
+}
+@keyframes doneTextSlide {
+  from { opacity:0; transform:translateY(10px) }
+  to   { opacity:1; transform:none }
+}
+@keyframes doneDetailSlide {
+  from { opacity:0; transform:translateY(8px) }
+  to   { opacity:1; transform:none }
+}
+@keyframes doneBtnSlide {
+  from { opacity:0; transform:translateY(6px) }
+  to   { opacity:1; transform:none }
+}
+.done-screen-active .done-ring   { animation: doneRingPop   .5s  var(--ease-spring)     both }
+.done-screen-active .done-title  { animation: doneTextSlide .32s var(--ease-out-quart)  .18s both }
+.done-screen-active .done-detail { animation: doneDetailSlide .3s var(--ease-out-quart) .26s both }
+.done-screen-active .done-btn    { animation: doneBtnSlide   .28s var(--ease-out-quart) .34s both }
+
+/* ── Checkline check spring ── */
+@keyframes checkBounce {
+  0%   { transform: scale(1) }
+  40%  { transform: scale(1.04) }
+  70%  { transform: scale(.98) }
+  100% { transform: scale(1) }
+}
+.checkline:has(input:checked) { animation: checkBounce .25s var(--ease-spring) }
+
+/* ── Submit button pulse when enabled ── */
+@keyframes submitGlow {
+  0%,100% { box-shadow: 0 0 0 0 rgba(240,160,48,0) }
+  50%      { box-shadow: 0 0 0 6px rgba(240,160,48,.12) }
+}
+.driver-submit:not(:disabled) { animation: submitGlow 2.8s ease-in-out infinite }
+.driver-submit.green:not(:disabled) { animation: submitGlowGreen 2.8s ease-in-out infinite }
+@keyframes submitGlowGreen {
+  0%,100% { box-shadow: 0 0 0 0 rgba(32,208,144,0) }
+  50%      { box-shadow: 0 0 0 6px rgba(32,208,144,.12) }
+}
+
+/* ── Board row stagger on initial load ── */
+@keyframes rowIn {
+  from { opacity:0; transform:translateX(-6px) }
+  to   { opacity:1; transform:none }
+}
+.tbl-row { animation: rowIn .18s var(--ease-out-quart) both }
+.tbl-row:nth-child(1)  { animation-delay:.02s }
+.tbl-row:nth-child(2)  { animation-delay:.04s }
+.tbl-row:nth-child(3)  { animation-delay:.06s }
+.tbl-row:nth-child(4)  { animation-delay:.08s }
+.tbl-row:nth-child(5)  { animation-delay:.10s }
+.tbl-row:nth-child(6)  { animation-delay:.12s }
+.tbl-row:nth-child(7)  { animation-delay:.14s }
+.tbl-row:nth-child(8)  { animation-delay:.15s }
+.tbl-row:nth-child(9)  { animation-delay:.16s }
+.tbl-row:nth-child(n+10) { animation-delay:.17s }
+
+/* ── Dock card stagger ── */
+@keyframes dockCardIn {
+  from { opacity:0; transform:translateY(10px) }
+  to   { opacity:1; transform:none }
+}
+.dock-card { animation: dockCardIn .22s var(--ease-out-quart) both }
+.dock-card:nth-child(1) { animation-delay:.03s }
+.dock-card:nth-child(2) { animation-delay:.07s }
+.dock-card:nth-child(3) { animation-delay:.11s }
+.dock-card:nth-child(4) { animation-delay:.14s }
+.dock-card:nth-child(5) { animation-delay:.17s }
+.dock-card:nth-child(n+6) { animation-delay:.19s }
+
+/* ── Dock card action button press ── */
+.dc-action-btn:active { transform:scale(.97); transition:transform .08s }
+
+/* ── KPI number count-up shimmer ── */
+@keyframes kpiIn {
+  from { opacity:0; transform:translateY(6px) }
+  to   { opacity:1; transform:none }
+}
+.kpi { animation: kpiIn .28s var(--ease-out-quart) both }
+.kpi:nth-child(1) { animation-delay:.05s }
+.kpi:nth-child(2) { animation-delay:.10s }
+.kpi:nth-child(3) { animation-delay:.15s }
+.kpi:nth-child(4) { animation-delay:.20s }
+.kpi:nth-child(5) { animation-delay:.25s }
+
+/* ── Feed item stagger ── */
+@keyframes feedIn {
+  from { opacity:0; transform:translateX(8px) }
+  to   { opacity:1; transform:none }
+}
+.feed-item { animation: feedIn .2s var(--ease-out-quart) both }
+.feed-item:nth-child(1) { animation-delay:.03s }
+.feed-item:nth-child(2) { animation-delay:.07s }
+.feed-item:nth-child(3) { animation-delay:.10s }
+.feed-item:nth-child(4) { animation-delay:.13s }
+.feed-item:nth-child(5) { animation-delay:.15s }
+.feed-item:nth-child(n+6) { animation-delay:.17s }
+
+/* ── Modal entrance ── */
+@keyframes modalIn {
+  from { opacity:0; transform:scale(.94) translateY(8px) }
+  to   { opacity:1; transform:none }
+}
+@keyframes overlayIn { from { opacity:0 } to { opacity:1 } }
+.modal-ov:not(.hidden) { animation: overlayIn .18s ease both }
+.modal-ov:not(.hidden) .modal { animation: modalIn .24s var(--ease-spring) both }
+
+/* On mobile the modal sheets up from bottom */
+@media(max-width:480px) {
+  @keyframes modalSheetIn {
+    from { opacity:0; transform:translateY(40px) }
+    to   { opacity:1; transform:none }
+  }
+  .modal-ov:not(.hidden) .modal { animation: modalSheetIn .28s var(--ease-out-quart) both }
+}
+
+/* ── Toast — more spring ── */
+@keyframes toastIn { from { opacity:0; transform:translateY(10px) scale(.96) } to { opacity:1; transform:none } }
+.toast { animation: toastIn .3s var(--ease-spring) }
+
+/* ── Bottom nav active indicator slide ── */
+.bn-item { position:relative; overflow:visible }
+.bn-item.active::after {
+  content:"";
+  position:absolute;
+  bottom:-6px; left:50%;
+  transform:translateX(-50%);
+  width:18px; height:2px;
+  border-radius:1px;
+  background:var(--amber);
+  animation: navIndicator .22s var(--ease-spring) both;
+}
+@keyframes navIndicator {
+  from { width:0; opacity:0 }
+  to   { width:18px; opacity:1 }
+}
+.bn-item.active svg { animation: navIconPop .22s var(--ease-spring) }
+@keyframes navIconPop {
+  0%   { transform:translateY(0) }
+  45%  { transform:translateY(-3px) }
+  100% { transform:translateY(0) }
+}
+
+/* ── Live dot pulse when connected ── */
+@keyframes liveBeat {
+  0%,100% { box-shadow: 0 0 0 0 rgba(32,208,144,.6) }
+  50%      { box-shadow: 0 0 0 5px rgba(32,208,144,0) }
+}
+.live-dot.ok { animation: liveBeat 2.4s ease-in-out infinite }
+
+/* ── Panel entrance ── */
+@keyframes panelIn {
+  from { opacity:0; transform:translateY(8px) }
+  to   { opacity:1; transform:none }
+}
+.panel { animation: panelIn .24s var(--ease-out-quart) both }
+.col-stack .panel:nth-child(1) { animation-delay:.04s }
+.col-stack .panel:nth-child(2) { animation-delay:.09s }
+.col-stack .panel:nth-child(3) { animation-delay:.13s }
+.col-stack .panel:nth-child(4) { animation-delay:.16s }
+
+/* ── Who / Flow button hover lift ── */
+.who-btn:hover  { transform:translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,.3) }
+.who-btn:active { transform:scale(.96) }
+.flow-btn:hover { transform:translateX(3px) }
+.flow-btn:active{ transform:scale(.99) translateX(1px) }
+
+/* ── Shunt door button pop on select ── */
+.shunt-door-btn:hover:not(:disabled) { transform:scale(1.08) }
+.shunt-door-btn:active:not(:disabled){ transform:scale(.95) }
+
+/* ── Dock map cell hover ── */
+.dm-clickable:hover { transform:scale(1.06); filter:brightness(1.2) }
+.dm-clickable:active{ transform:scale(.96) }
+
+/* ── Accordion chevron transition (already exists — make smoother) ── */
+.acc-head .chev { transition:transform .3s var(--ease-in-out-quint), opacity .2s }
+
+/* ── Status tag colour transitions ── */
+.stag { transition: background .25s, color .25s, border-color .25s }
+
+/* ── Lookup spinner entrance ── */
+.lookup-spinner.visible { animation: spin .7s linear infinite, fadeIn .15s ease both }
+@keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
+
+/* ── Ready notification banner — bounces in ── */
+@keyframes rnbBounce {
+  0%   { opacity:0; transform:translateY(-10px) scale(.96) }
+  60%  { transform:translateY(2px) scale(1.01) }
+  100% { opacity:1; transform:none }
+}
+.ready-notif-banner { animation: rnbBounce .35s var(--ease-spring) both }
+
+/* ── Offline banner shake in ── */
+@keyframes offlineShake {
+  0%,100% { transform:translateX(0) }
+  20%     { transform:translateX(-5px) }
+  40%     { transform:translateX(4px) }
+  60%     { transform:translateX(-3px) }
+  80%     { transform:translateX(2px) }
+}
+.offline-banner { animation: offlineShake .4s ease both }
+
+/* ── Session history row fade-in ── */
+@keyframes shRowIn {
+  from { opacity:0; transform:translateY(-4px) }
+  to   { opacity:1; transform:none }
+}
+.sh-row:first-child { animation: shRowIn .2s var(--ease-out-quart) both }
+
+/* ── Dock plates grid stagger ── */
+@keyframes plateIn {
+  from { opacity:0; transform:scale(.9) }
+  to   { opacity:1; transform:none }
+}
+.plate { animation: plateIn .18s var(--ease-spring) both }
+.plate:nth-child(1)  { animation-delay:.01s }
+.plate:nth-child(2)  { animation-delay:.03s }
+.plate:nth-child(3)  { animation-delay:.05s }
+.plate:nth-child(4)  { animation-delay:.07s }
+.plate:nth-child(5)  { animation-delay:.09s }
+.plate:nth-child(6)  { animation-delay:.11s }
+.plate:nth-child(n+7){ animation-delay:.13s }
+
+/* ── Reduced motion ── */
+@media(prefers-reduced-motion:reduce) {
+  *,*::before,*::after {
+    animation-duration:.01ms !important;
+    animation-delay:.01ms !important;
+    transition-duration:.01ms !important;
+  }
+}

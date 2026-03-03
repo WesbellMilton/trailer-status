@@ -320,7 +320,7 @@ function requireRole(roles) {
 // be submitting driver actions)
 function requireDriverAccess(req, res, next) {
   const s = getSession(req);
-  if (s && ["dock","dispatcher","management"].includes(s.role)) {
+  if (s && ["dock","dispatcher","management","admin"].includes(s.role)) {
     return res.status(403).send("Driver endpoint — not accessible from this role");
   }
   next();
@@ -848,6 +848,10 @@ app.post("/api/crossdock/pickup",  requireXHR, requireDriverAccess, async (req, 
     const dNum = Number(door);
     if (!Number.isFinite(dNum) || dNum < 18 || dNum > 42) return res.status(400).send("Invalid door (18–42)");
     const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    // Status is intentionally preserved here — Departed is set by /api/confirm-safety
+    // after the driver completes the safety checklist. This two-step design means
+    // if the driver drops connection after pickup but before safety, the trailer
+    // stays visible on the board rather than disappearing silently.
     await run(
       `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
        VALUES(?,?,?,?,?,?,?)

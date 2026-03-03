@@ -5,13 +5,60 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
   <title>Wesbell Dispatch</title>
   <link rel="manifest" href="/manifest.json"/>
+
+  <!-- Favicons -->
+  <link rel="icon" type="image/x-icon" href="/favicon.ico"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png"/>
+  <link rel="icon" type="image/png" sizes="16x16" href="/icon-16.png"/>
+
+  <!-- Apple touch icon (home screen icon for iOS without PWA install) -->
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"/>
+
+  <!-- iOS PWA meta -->
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Dispatch"/>
+
+  <!-- iOS splash screens — portrait -->
+  <!-- iPhone 14 Pro Max (1290x2796) -->
+  <link rel="apple-touch-startup-image" media="screen and (device-width:430px) and (device-height:932px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)" href="/splash/splash-iphone-pro-max-14.png"/>
+  <!-- iPhone 14 Pro (1179x2556) -->
+  <link rel="apple-touch-startup-image" media="screen and (device-width:393px) and (device-height:852px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)" href="/splash/splash-iphone-pro-14.png"/>
+  <!-- iPhone 13 Pro Max / 12 Pro Max (1284x2778) -->
+  <link rel="apple-touch-startup-image" media="screen and (device-width:428px) and (device-height:926px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)" href="/splash/splash-iphone-pro-max-13.png"/>
+  <!-- iPhone 13 / 13 Pro / 12 / 12 Pro (1170x2532) -->
+  <link rel="apple-touch-startup-image" media="screen and (device-width:390px) and (device-height:844px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)" href="/splash/splash-iphone-13.png"/>
+  <!-- iPhone X / XS / 11 Pro (1125x2436) -->
+  <link rel="apple-touch-startup-image" media="screen and (device-width:375px) and (device-height:812px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)" href="/splash/splash-iphone-x-xs.png"/>
+  <!-- iPhone XS Max / 11 Pro Max (1242x2688) -->
+  <link rel="apple-touch-startup-image" media="screen and (device-width:414px) and (device-height:896px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)" href="/splash/splash-iphone-xs-max.png"/>
+  <!-- iPhone XR / 11 (828x1792) -->
+  <link rel="apple-touch-startup-image" media="screen and (device-width:414px) and (device-height:896px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait)" href="/splash/splash-iphone-xr-11.png"/>
+  <!-- iPhone 8 / 7 / 6s / 6 (750x1334) -->
+  <link rel="apple-touch-startup-image" media="screen and (device-width:375px) and (device-height:667px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait)" href="/splash/splash-iphone-8.png"/>
+  <!-- iPhone 8 Plus / 7 Plus / 6s Plus / 6 Plus (1242x2208) -->
+  <link rel="apple-touch-startup-image" media="screen and (device-width:414px) and (device-height:736px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)" href="/splash/splash-iphone-8-plus.png"/>
+  <!-- iPhone SE 1st gen (640x1136) -->
+  <link rel="apple-touch-startup-image" media="screen and (device-width:320px) and (device-height:568px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait)" href="/splash/splash-iphone-se.png"/>
+  <!-- iPad Pro 12.9" (2048x2732) -->
+  <link rel="apple-touch-startup-image" media="screen and (device-width:1024px) and (device-height:1366px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait)" href="/splash/splash-ipad-pro-12.png"/>
+  <!-- iPad Pro 11" (1668x2388) -->
+  <link rel="apple-touch-startup-image" media="screen and (device-width:834px) and (device-height:1194px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait)" href="/splash/splash-ipad-pro-11.png"/>
+  <!-- iPad Pro 10.5" (1668x2224) -->
+  <link rel="apple-touch-startup-image" media="screen and (device-width:834px) and (device-height:1112px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait)" href="/splash/splash-ipad-pro-10.png"/>
+  <!-- iPad 9th gen / Air (1536x2048) -->
+  <link rel="apple-touch-startup-image" media="screen and (device-width:768px) and (device-height:1024px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait)" href="/splash/splash-ipad-9.png"/>
+
+  <!-- Theme / tile colours -->
+  <meta name="theme-color" content="#0a0d12"/>
+  <meta name="msapplication-TileColor" content="#0a0d12"/>
+  <meta name="msapplication-TileImage" content="/icon-192.png"/>
+
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="/style.css"/>
-  <meta name="theme-color" content="#0a0a0c"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 </head>
 <body>
 <a class="skip-link" href="#main-content">Skip to main content</a>

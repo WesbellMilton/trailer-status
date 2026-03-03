@@ -986,6 +986,55 @@ app.post("/api/dockplates/set", requireXHR, requireRole(["dock","dispatcher","ma
 /* ══════════════════════════════════════════
    API — DRIVER
 ══════════════════════════════════════════ */
+// ── On My Way — Wesbell driver notifies they're inbound, get a door ──
+app.post("/api/driver/omw", requireXHR, async (req, res) => {
+  try {
+    const trailer = String(req.body.trailer || "").trim().toUpperCase();
+    const eta     = parseInt(req.body.eta) || null; // minutes, optional
+    if (!trailer) return res.status(400).send("Missing trailer number");
+    if (trailer.length > 20) return res.status(400).send("Trailer number too long");
+
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    const ACTIVE   = ["Incoming","Dropped","Loading","Dock Ready","Ready"];
+
+    // If already active, return current door so driver sees it
+    if (existing && ACTIVE.includes(existing.status)) {
+      return res.json({ ok: true, door: existing.door || "", alreadyActive: true, status: existing.status });
+    }
+
+    // Auto-assign first free door (28–42), accounting for doorblocks too
+    const occupiedTrailers = await all(
+      `SELECT door FROM trailers WHERE door IS NOT NULL AND door != '' AND status NOT IN ('Departed','') AND trailer != ?`,
+      [trailer]
+    );
+    const occupiedBlocks = await all(`SELECT door FROM doorblocks`);
+    const occupiedSet = new Set([
+      ...occupiedTrailers.map(r => String(r.door)),
+      ...occupiedBlocks.map(r => String(r.door)),
+    ]);
+    let assignedDoor = "";
+    for (let d = 28; d <= 42; d++) {
+      if (!occupiedSet.has(String(d))) { assignedDoor = String(d); break; }
+    }
+
+    const note = eta ? `ETA ~${eta} min` : "On my way";
+    const now  = Date.now();
+
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt)
+       VALUES(?,?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET
+         direction=excluded.direction, status=excluded.status, door=excluded.door,
+         note=excluded.note, dropType=excluded.dropType, carrierType=excluded.carrierType, updatedAt=excluded.updatedAt`,
+      [trailer, "Inbound", "Incoming", assignedDoor, note, "Loaded", "Wesbell", now]
+    );
+
+    await audit(req, "driver", "omw", "trailer", trailer, { door: assignedDoor, eta });
+    await broadcastTrailers();
+    res.json({ ok: true, door: assignedDoor, alreadyActive: false });
+  } catch (e) { console.error("[omw]", e); res.status(500).send("OMW failed"); }
+});
+
 app.get("/api/driver/assignment", async (req, res) => {
   try {
     const trailer = String(req.query.trailer || "").trim();

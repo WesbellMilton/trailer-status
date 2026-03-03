@@ -788,8 +788,7 @@ body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;bac
       if(!r.ok){r.text().then(function(t){em.textContent=t;em.classList.add("show");});return;}
       location.href=ROLE_HOME[role]||"/";
     }).catch(function(){em.textContent="Connection error. Try again.";em.classList.add("show");})
-    .finally(function(){btn.disabled=false;btn.innerHTML="<span>SIGN IN</span><span class=\"arrow\">&rarr;</span>";});
-  }
+    .finally(function(){btn.disabled=false;btn.innerHTML='<span>SIGN IN</span><span class="arrow">&rarr;</span>';});
   btn.addEventListener("click",doLogin);
   document.getElementById("pin").addEventListener("keydown",function(e){if(e.key==="Enter")doLogin();});
   document.getElementById("pin").focus();

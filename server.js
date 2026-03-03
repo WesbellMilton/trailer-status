@@ -17,6 +17,7 @@ app.use(express.urlencoded({ extended: true }));
 
 const PORT = process.env.PORT || 3000;
 const DB_FILE = process.env.DB_FILE || path.join(__dirname, "wesbell.sqlite");
+const PUBLIC_DIR = process.env.PUBLIC_DIR || path.join(__dirname, "public");
 const APP_VERSION = process.env.APP_VERSION || "3.2.0";
 const PIN_MIN_LEN = 4;
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
@@ -451,10 +452,10 @@ app.use((req, res, next) => {
   }
   if (!SAFE_FILES.test(req.path)) return next();
   if (/\.(png|ico)$/.test(req.path)) res.setHeader("Cache-Control", "public, max-age=604800, immutable");
-  const safePath = path.join(__dirname, req.path.replace(/\/\.\./g, ""));
+  const safePath = path.join(PUBLIC_DIR, req.path.replace(/\/\.\./g, ""));
   res.sendFile(safePath, err => { if (err && !res.headersSent) res.status(404).end(); });
 });
-const INDEX_FILE = path.join(__dirname, "index.html");
+const INDEX_FILE = path.join(PUBLIC_DIR, "index.html");
 const sendIndex  = (_, res) => res.sendFile(INDEX_FILE);
 
 /* ── ROLE → ALLOWED PATHS ── */

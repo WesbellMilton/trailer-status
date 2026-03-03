@@ -593,8 +593,47 @@ app.get("/api/whoami", (req, res) => {
   res.json({ role, version: APP_VERSION, redirectTo });
 });
 
+/* ══════════════════════════════════════════
+   RATE LIMITING — LOGIN
+══════════════════════════════════════════ */
+const loginAttempts = new Map(); // ip → { count, resetAt }
+const LOGIN_MAX     = 5;         // attempts before lockout
+const LOGIN_WINDOW  = 60_000;    // 1 minute window
+const LOGIN_LOCKOUT = 5 * 60_000;// 5 minute lockout after exceeding max
+
+// Prune stale entries every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, v] of loginAttempts.entries()) if (v.resetAt < now) loginAttempts.delete(ip);
+}, 10 * 60_000).unref();
+
+function checkLoginRate(ip) {
+  const now = Date.now();
+  let entry = loginAttempts.get(ip);
+  if (!entry || entry.resetAt < now) {
+    entry = { count: 0, resetAt: now + LOGIN_WINDOW };
+    loginAttempts.set(ip, entry);
+  }
+  entry.count++;
+  if (entry.count > LOGIN_MAX) {
+    // Extend lockout on each additional attempt
+    entry.resetAt = now + LOGIN_LOCKOUT;
+    return { blocked: true, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
+  }
+  return { blocked: false, remaining: LOGIN_MAX - entry.count };
+}
+
+function resetLoginRate(ip) {
+  loginAttempts.delete(ip);
+}
+
 app.post("/api/login", requireXHR, async (req, res) => {
   try {
+    const ip = ipOf(req);
+    const rate = checkLoginRate(ip);
+    if (rate.blocked) {
+      return res.status(429).send(`Too many attempts. Try again in ${rate.retryAfter}s.`);
+    }
     const role = String(req.body.role || "").toLowerCase();
     const pin  = String(req.body.pin  || "");
     if (!["dispatcher","dock","management","admin"].includes(role)) return res.status(400).send("Invalid role");
@@ -602,6 +641,7 @@ app.post("/api/login", requireXHR, async (req, res) => {
     const ok = await verifyPin(role, pin);
     await audit(req, role, ok ? "login_success" : "login_failed", "auth", role, {});
     if (!ok) return res.status(401).send("Invalid PIN");
+    resetLoginRate(ip); // Clear counter on successful login
     const existing = getSession(req);
     if (existing?.sid) sessions.delete(existing.sid);
     const sid = newSession(role);
@@ -758,6 +798,19 @@ app.post("/api/driver/drop",       requireXHR, requireDriverAccess, async (req, 
     const now       = Date.now();
     const direction = existing?.direction || "Inbound";
 
+    // Duplicate guard: warn if trailer is already active on the board
+    // Allow force=true to bypass (set by client after user confirms)
+    const ACTIVE_STATUSES = ["Incoming","Dropped","Loading","Dock Ready","Ready"];
+    if (existing && ACTIVE_STATUSES.includes(existing.status) && !req.body.force) {
+      return res.status(409).json({
+        duplicate: true,
+        trailer,
+        currentStatus: existing.status,
+        currentDoor:   existing.door || null,
+        message: `Trailer ${trailer} is already on the board (${existing.status}${existing.door ? " at door " + existing.door : ""}). Submit again to overwrite.`,
+      });
+    }
+
     // Auto-assign door if none provided
     let assignedDoor = door;
     if (!assignedDoor) {
@@ -815,6 +868,17 @@ app.post("/api/crossdock/offload", requireXHR, requireDriverAccess, async (req, 
     const dNum = Number(door);
     if (!Number.isFinite(dNum) || dNum < 18 || dNum > 42) return res.status(400).send("Invalid door (18–42)");
     const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    // Duplicate guard: warn if trailer is already active (not Departed) with a different door
+    const ACTIVE_STATUSES = ["Incoming","Dropped","Loading","Dock Ready","Ready"];
+    if (existing && ACTIVE_STATUSES.includes(existing.status) && existing.door && existing.door !== door && !req.body.force) {
+      return res.status(409).json({
+        duplicate: true,
+        trailer,
+        currentStatus: existing.status,
+        currentDoor:   existing.door,
+        message: `Trailer ${trailer} is already active at door ${existing.door} (${existing.status}). Submit again to overwrite.`,
+      });
+    }
     await run(
       `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
        VALUES(?,?,?,?,?,?,?)

@@ -1,11 +1,9 @@
 (() => {
   const CSRF = {"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"};
-  let ROLE = null, VERSION = "", trailers = {}, dockPlates = {}, confirmations = [];
+  let ROLE = null, VERSION = "", trailers = {}, dockPlates = {}, doorBlocks = {}, confirmations = [];
   const plateEditOpen = {};
   let shuntOpen = {};
   const el = id => document.getElementById(id);
-  const lockScroll   = () => { document.body.style.overflow = "hidden"; document.body.style.touchAction = "none"; };
-  const unlockScroll = () => { document.body.style.overflow = ""; document.body.style.touchAction = ""; };
   const path = () => location.pathname.toLowerCase();
   const isDriver = () => path().startsWith("/driver");
   const isSuper  = () => path().startsWith("/management");
@@ -59,15 +57,15 @@
       _mr=r;
       el("modalTitle").textContent=title;
       el("modalBody").textContent=body;
-      el("modalOv").classList.remove("hidden"); lockScroll();
+      el("modalOv").classList.remove("hidden");
       el("modalConfirm").focus();
     });
   }
   el("modalCancel")?.addEventListener("click",  ()=>{ el("modalOv").classList.add("hidden"); if(_mr){_mr(false);_mr=null;} });
-  el("modalConfirm")?.addEventListener("click", ()=>{ el("modalOv").classList.add("hidden"); unlockScroll(); if(_mr){_mr(true);_mr=null;} });
+  el("modalConfirm")?.addEventListener("click", ()=>{ el("modalOv").classList.add("hidden"); if(_mr){_mr(true);_mr=null;} });
   el("modalOv")?.addEventListener("click", e=>{ if(e.target===el("modalOv")){ el("modalOv").classList.add("hidden"); if(_mr){_mr(false);_mr=null;} } });
-  el("dmModalCancel")?.addEventListener("click", () => { el("dmModalOv")?.classList.add("hidden"); unlockScroll(); });
-  el("dmModalOv")?.addEventListener("click", e => { if(e.target===el("dmModalOv")) el("dmModalOv").classList.add("hidden"); unlockScroll(); });
+  el("dmModalCancel")?.addEventListener("click", () => el("dmModalOv")?.classList.add("hidden"));
+  el("dmModalOv")?.addEventListener("click", e => { if(e.target===el("dmModalOv")) el("dmModalOv").classList.add("hidden"); });
 
   function setPlatesOpen(open) {
     const t=el("dockPlatesToggle"), b=el("dockPlatesBody"); if(!t||!b) return;
@@ -119,119 +117,37 @@
         map[r.door] = { trailer: t, status: r.status };
       }
     });
+    Object.entries(doorBlocks).forEach(([door, b]) => {
+      if (!map[door]) map[door] = { trailer: null, status: "Blocked", note: b.note };
+    });
     return map;
   }
 
   function renderDockMap() {
     const mapEl = el("dockMapGrid"); if (!mapEl) return;
     const occupied = getOccupiedDoors();
-    const canEdit = ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin";
+    const canEdit = ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin"||ROLE==="dock";
     let html = "";
     for (let d=28; d<=42; d++) {
       const ds = String(d);
       const occ = occupied[ds];
-      const cls = occ ? `dm-occupied dm-${(STATUS_ROW[occ.status]||"r-incoming").replace("r-","")}` : "dm-free";
-      const clickable = canEdit ? ` dm-clickable` : "";
-      const attrs = canEdit ? `tabindex="0" role="button" aria-label="${occ?`Change status of trailer ${esc(occ.trailer)} at door ${ds}`:`Set status for door ${ds}`}"` : "";
+      const isBlock = occ && occ.status === "Blocked";
+      const cls = occ
+        ? (isBlock ? "dm-occupied dm-blocked" : `dm-occupied dm-${(STATUS_ROW[occ.status]||"r-incoming").replace("r-","")}`)
+        : "dm-free";
+      const clickable = canEdit ? " dm-clickable" : "";
+      const attrs = canEdit ? `tabindex="0" role="button"` : "";
       html += `<div class="dm-cell ${cls}${clickable}" data-dm-door="${ds}" ${attrs}>
         <span class="dm-door" data-dm-door="${ds}">D${ds}</span>
         ${occ
-          ? `<span class="dm-trailer" data-dm-door="${ds}">${esc(occ.trailer)}</span><span class="dm-status" data-dm-door="${ds}">${esc(occ.status)}</span>`
+          ? (isBlock
+              ? `<span class="dm-trailer" data-dm-door="${ds}" style="font-size:9px;opacity:.75">Blocked</span><span class="dm-status" data-dm-door="${ds}" style="font-size:8px">${esc(occ.note||"")}</span>`
+              : `<span class="dm-trailer" data-dm-door="${ds}">${esc(occ.trailer)}</span><span class="dm-status" data-dm-door="${ds}">${esc(occ.status)}</span>`)
           : `<span class="dm-free-label" data-dm-door="${ds}">Free</span>`
         }
       </div>`;
     }
     mapEl.innerHTML = html;
-  }
-
-  /* ── BOARD ── */
-  const prevStatuses={};
-  function renderBoardInto(tbodyEl,countEl,countStrEl,sq,dq,stq,readOnly) {
-    if(!tbodyEl)return;
-    const q=(sq?.value||"").trim().toLowerCase(), df=(dq?.value||"").trim(), sf=(stq?.value||"").trim();
-    const rows=Object.entries(trailers).map(([t,r])=>({trailer:t,...r})).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
-    const filt=rows.filter(r=>{
-      if(df&&r.direction!==df)return false;
-      if(sf&&r.status!==sf)return false;
-      if(q&&!`${r.trailer} ${r.door||""} ${r.note||""} ${r.direction||""} ${r.status||""} ${r.dropType||""}`.toLowerCase().includes(q))return false;
-      return true;
-    });
-    if(countEl) countEl.textContent=filt.length;
-    if(countStrEl) countStrEl.textContent=`${filt.length} trailer${filt.length===1?"":"s"} shown`;
-    if(!filt.length){ tbodyEl.innerHTML=`<div class="tbl-empty">No trailers match filters</div>`; return; }
-    const canEdit=!readOnly&&(ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin");
-    const canDock=!readOnly&&(ROLE==="dock"||ROLE==="admin");
-    const occupied = getOccupiedDoors();
-
-    tbodyEl.innerHTML=filt.map(r=>{
-      const rowCls=STATUS_ROW[r.status]||"";
-      const flash=(r.trailer in prevStatuses && prevStatuses[r.trailer]!==r.status)?" flashing":"";
-      prevStatuses[r.trailer]=r.status;
-      const readyFlash=((ROLE==="dispatcher"||ROLE==="management")&&!readOnly&&r.status==="Ready")?" ready-flash":"";
-      const door = r.door ? `<span class="t-door">${esc(r.door)}</span>` : `<span style="color:var(--t3)">—</span>`;
-      const note=r.note?`<span class="t-note" title="${esc(r.note)}">${esc(r.note)}</span>`:`<span style="color:var(--t3)">—</span>`;
-      const dtype=r.dropType?`<span style="font-size:10px;color:var(--t2);font-family:var(--mono);">${esc(r.dropType)}</span>`:`<span style="color:var(--t3)">—</span>`;
-      const ctag=carrierTag(r.carrierType);
-      const ago=r.updatedAt?timeAgo(r.updatedAt):"";
-
-      let acts=`<span style="color:var(--t3)">—</span>`;
-      if(canEdit){
-        const nextStatuses = {
-          "Incoming":  ["Dropped","Departed"],
-          "Dropped":   ["Loading","Departed"],
-          "Loading":   ["Dock Ready","Departed"],
-          "Dock Ready":["Ready","Departed"],
-          "Ready":     ["Departed"],
-          "Departed":  ["Incoming"],
-        };
-        const nexts = nextStatuses[r.status] || [];
-        const quickBtns = nexts.map((s,i) => {
-          if(i===0){
-            const btnCls = s==="Ready"?"btn-success":"btn-primary";
-            return `<button class="btn ${btnCls} btn-sm qs-btn" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}" aria-label="${esc(s)} trailer ${esc(r.trailer)}">${esc(s)}</button>`;
-          }
-          return `<button class="btn btn-default btn-sm qs-btn qs-secondary" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}" aria-label="${esc(s)} trailer ${esc(r.trailer)}">${esc(s)}</button>`;
-        }).join("");
-        acts = `<div class="t-acts">
-          ${quickBtns}
-          ${r.status==="Dock Ready"?`<button class="btn btn-success btn-sm" data-act="markReady" data-trailer-id="${esc(r.trailer)}" style="font-weight:800;" aria-label="Mark trailer ${esc(r.trailer)} ready">✓ Ready</button>`:""}
-          <button class="btn btn-default btn-sm" data-act="shuntToggle" data-trailer-id="${esc(r.trailer)}" aria-label="Move trailer ${esc(r.trailer)} to new door">Move</button>
-          <button class="btn btn-default btn-sm" data-act="edit" data-trailer-id="${esc(r.trailer)}" aria-label="Edit trailer ${esc(r.trailer)}">Edit</button>
-          <button class="btn btn-danger btn-sm" data-act="delete" data-trailer-id="${esc(r.trailer)}" aria-label="Delete trailer ${esc(r.trailer)}">Del</button>
-        </div>`;
-      } else if(canDock){
-        if(r.status==="Dropped"||r.status==="Incoming")
-          acts=`<div class="t-acts"><button class="btn btn-default btn-sm" data-act="dockSet" data-to="Loading" data-trailer-id="${esc(r.trailer)}">Loading</button></div>`;
-        else if(r.status==="Loading")
-          acts=`<div class="t-acts"><button class="btn btn-cyan btn-sm" data-act="dockSet" data-to="Dock Ready" data-trailer-id="${esc(r.trailer)}">Dock Ready</button></div>`;
-        else
-          acts=`<span style="color:var(--t3);font-size:10px;font-family:var(--mono);">${esc(r.status==="Dock Ready"?"Awaiting dispatch":r.status==="Ready"?"Ready":"—")}</span>`;
-      }
-
-      const shuntPickerHtml = (shuntOpen[r.trailer] && canEdit) ? `
-        <div class="shunt-picker" data-shunt-trailer="${esc(r.trailer)}">
-          <span class="shunt-label">Move to door:</span>
-          <div class="shunt-doors">${Array.from({length:15},(_,i)=>i+28).map(d=>{
-            const ds=String(d);
-            const isCurrent=ds===(r.door||"");
-            const isOcc=!!occupied[ds]&&!isCurrent;
-            return `<button class="shunt-door-btn${isCurrent?" current":""}${isOcc?" occ":""}" data-act="shuntDoor" data-door="${ds}" data-trailer-id="${esc(r.trailer)}" ${isCurrent?"disabled":""} aria-label="Move to door ${ds}${isOcc?" (occupied)":""}">${ds}${isOcc?`<span class="shunt-occ-dot"></span>`:""}</button>`;
-          }).join("")}</div>
-          <button class="btn btn-default btn-sm" data-act="shuntToggle" data-trailer-id="${esc(r.trailer)}" style="margin-top:4px;">Cancel</button>
-        </div>` : "";
-
-      const carrierCls=r.carrierType==="Outside"?" carrier-outside":"";
-      return `<div class="tbl-row ${rowCls}${flash}${readyFlash}${carrierCls}" data-trailer="${esc(r.trailer)}">
-        <span class="t-num">${esc(r.trailer)}</span>
-        <span class="t-dir">${esc(r.direction||"—")}</span>
-        <span>${statusTag(r.status)}</span>
-        <span>${door}</span>
-        <span>${ctag||dtype}</span>
-        <span>${note}</span>
-        <span class="t-time" title="${esc(fmtTime(r.updatedAt))}">${esc(ago)}</span>
-        <span>${acts}</span>
-      </div>${shuntPickerHtml}`;
-    }).join("");
   }
 
   function renderBoard() {
@@ -978,13 +894,13 @@
     if (pz)    pz.classList.remove("has-photo");
     if (ctx)   ctx.textContent = `Trailer ${trailer}${door ? " · Door " + door : ""}`;
     if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
-    el("dockIssueOv")?.classList.remove("hidden"); lockScroll();
+    el("dockIssueOv")?.classList.remove("hidden");
     document.body.style.overflow = "hidden";
     setTimeout(() => ni?.focus(), 120);
   }
 
   function closeDockIssueModal() {
-    el("dockIssueOv")?.classList.add("hidden"); unlockScroll();
+    el("dockIssueOv")?.classList.add("hidden");
     document.body.style.overflow = "";
   }
 
@@ -1533,7 +1449,10 @@
     }
     highlightNav();
     try{ const t=await apiJson("/api/state"); trailers=t||{}; }catch{ trailers={}; }
-    if(!isDriver()&&!isSuper()){ try{ const p=await apiJson("/api/dockplates"); dockPlates=p||{}; }catch{ dockPlates={}; } }
+    if(!isDriver()&&!isSuper()){
+      try{ const p=await apiJson("/api/dockplates"); dockPlates=p||{}; }catch{ dockPlates={}; }
+      try{ const b=await apiJson("/api/doorblocks"); doorBlocks=b||{}; }catch{ doorBlocks={}; }
+    }
     if(isSuper()){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0); loadIssueReports();
       // Admin PIN row — only visible to admin
       const adminPinRow = el("adminPinRow");
@@ -1672,31 +1591,63 @@
         "Ready":      ["Departed"],
         "Departed":   ["Incoming","Dropped"],
       };
-      const options = occ ? (nextStatuses[occ.status] || []) : ["Incoming","Dropped","Loading","Dock Ready","Ready","Departed"];
-      el("dmModalTitle").textContent = occ ? `Trailer ${occ.trailer} — D${door}` : `Door ${door} — Empty`;
-      el("dmModalSub").textContent = occ ? `Current status: ${occ.status}` : "No trailer assigned";
+      const isBlock = occ?.status === "Blocked";
+      el("dmModalTitle").textContent = isBlock ? `Door ${door} — Blocked` : occ ? `Trailer ${occ.trailer} — D${door}` : `Door ${door} — Free`;
+      el("dmModalSub").textContent = isBlock ? (occ.note ? `Note: ${occ.note}` : "Manually marked occupied") : occ ? `Status: ${occ.status}` : "No trailer assigned";
       const btns = el("dmStatusBtns");
       btns.innerHTML = "";
-      options.forEach(s => {
-        const cls = s==="Ready"?"btn-success":s==="Departed"?"btn-default":s==="Loading"?"btn-primary":"btn-cyan";
-        const b = document.createElement("button");
-        b.className = `btn ${cls} btn-full`;
-        b.dataset.dmStatus = s;
-        b.dataset.dmTrailer = occ ? occ.trailer : "";
-        b.textContent = s;
-        btns.appendChild(b);
-      });
+      if (isBlock) {
+        const clrBtn = document.createElement("button");
+        clrBtn.className = "btn btn-success btn-full";
+        clrBtn.dataset.dmAction = "clearBlock";
+        clrBtn.dataset.dmDoor = door;
+        clrBtn.textContent = "✓ Mark Free";
+        btns.appendChild(clrBtn);
+      } else if (occ) {
+        (nextStatuses[occ.status] || []).forEach(s => {
+          const cls = s==="Ready"?"btn-success":s==="Departed"?"btn-default":s==="Loading"?"btn-primary":"btn-cyan";
+          const b = document.createElement("button");
+          b.className = `btn ${cls} btn-full`;
+          b.dataset.dmStatus = s;
+          b.dataset.dmTrailer = occ.trailer;
+          b.textContent = s;
+          btns.appendChild(b);
+        });
+      } else {
+        const blockBtn = document.createElement("button");
+        blockBtn.className = "btn btn-default btn-full";
+        blockBtn.dataset.dmAction = "setBlock";
+        blockBtn.dataset.dmDoor = door;
+        blockBtn.textContent = "🚫 Mark Occupied";
+        btns.appendChild(blockBtn);
+      }
       el("dmModalOv").classList.remove("hidden"); lockScroll();
       return;
     }
 
-    // Dock map status button click
+    // Dock map block/clear
+    const dmActionBtn = direct?.closest?.("[data-dm-action]");
+    if (dmActionBtn) {
+      const action = dmActionBtn.dataset.dmAction;
+      const door2  = dmActionBtn.dataset.dmDoor;
+      el("dmModalOv").classList.add("hidden"); unlockScroll();
+      if (action === "setBlock") {
+        try { await apiJson("/api/doorblock/set", { method:"POST", headers:CSRF, body:JSON.stringify({ door:door2, note:"" }) }); doorBlocks[door2]={note:"",setAt:Date.now()}; renderDockMap(); toast("Door blocked",`D${door2} marked occupied`,"ok"); }
+        catch(e) { toast("Error",e.message,"err"); }
+      } else if (action === "clearBlock") {
+        try { await apiJson("/api/doorblock/clear", { method:"POST", headers:CSRF, body:JSON.stringify({ door:door2 }) }); delete doorBlocks[door2]; renderDockMap(); toast("Door freed",`D${door2} marked free`,"ok"); }
+        catch(e) { toast("Error",e.message,"err"); }
+      }
+      return;
+    }
+
+    // Dock map status button
     const dmStatusBtn = direct?.closest?.("[data-dm-status]");
     if (dmStatusBtn) {
       const status  = dmStatusBtn.dataset.dmStatus;
       const trailer = dmStatusBtn.dataset.dmTrailer;
       el("dmModalOv").classList.add("hidden"); unlockScroll();
-      if (!trailer) { toast("No trailer","This door has no trailer assigned.","warn"); return; }
+      if (!trailer) { toast("No trailer","Add a trailer from the dispatch panel first.","warn"); return; }
       try {
         await apiJson("/api/upsert", { method:"POST", headers:CSRF, body:JSON.stringify({ trailer, status }) });
         toast("Updated", `${trailer} → ${status}`, "ok");
@@ -1704,7 +1655,7 @@
       return;
     }
 
-    const tog=direct?.dataset?.plateToggle; if(tog){ plateEditOpen[tog]=!plateEditOpen[tog]; renderPlates(); return; }
+        const tog=direct?.dataset?.plateToggle; if(tog){ plateEditOpen[tog]=!plateEditOpen[tog]; renderPlates(); return; }
     const psv=direct?.dataset?.plateSave; if(psv)return plateSave(psv);
   });
 
@@ -1763,6 +1714,7 @@
       const {type,payload}=msg||{};
       if(type==="state"){ trailers=payload||{}; renderBoard(); if(isSuper())renderSupBoard(); if(isDock())renderDockView(); if(isAdmin()&&!isSuper())renderBoard(); }
       else if(type==="dockplates"){ dockPlates=payload||{}; if(!isDriver()&&!isSuper()) renderPlates(); }
+      else if(type==="doorblocks"){ doorBlocks=payload||{}; renderDockMap(); renderBoard(); }
       else if(type==="confirmations"){ confirmations=Array.isArray(payload)?payload:[]; if(isSuper())renderSupConf(); }
       else if(type==="version"){ VERSION=payload?.version||VERSION; el("verText").textContent=VERSION||"—"; }
       else if(type==="notify"&&payload?.kind==="ready"){
@@ -1809,11 +1761,10 @@
         if(goBtn) goBtn.style.display = "";
       }
       ov.classList.remove("hidden");
-      lockScroll();
       setTimeout(() => (ROLE ? null : pinEl?.focus()), 100);
     }
 
-    function closeModal() { ov.classList.add("hidden"); unlockScroll(); }
+    function closeModal() { ov.classList.add("hidden"); }
 
     // Open triggers
     el("btnDockStaffLogin")?.addEventListener("click", openModal);

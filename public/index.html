@@ -474,7 +474,15 @@
       </div>
 
       <div class="panel" style="grid-column:1/-1;">
-        <div class="panel-hd"><div class="panel-title"><div class="ptdot" style="background:var(--amber)"></div>PIN Management</div></div>
+        <button class="acc-head" id="pinMgmtToggle" aria-expanded="false">
+          <span style="display:flex;align-items:center;gap:9px;">
+            <span>🔒</span>
+            <span>PIN Management</span>
+            <span class="badge" style="color:var(--amber);border-color:var(--amber-bd);background:var(--amber-bg);font-size:9px;">Restricted</span>
+          </span>
+          <span class="chev">▾</span>
+        </button>
+        <div class="acc-body" id="pinMgmtBody" style="max-height:0px;overflow:hidden;transition:max-height .3s ease;">
         <div class="panel-body">
           <div class="infobox infobox-amber" style="margin-bottom:14px;">
             <div class="ib-title">Security Notice</div>
@@ -500,6 +508,7 @@
             <div><label class="fl">Confirm PIN</label><input type="password" id="pin_admin_sup_confirm" placeholder="Repeat" aria-label="Confirm admin PIN" autocomplete="new-password"/></div>
             <button class="btn btn-success btn-sm" id="btnSetAdminPinSup" style="padding:7px 13px;">Update</button>
           </div>
+        </div>
         </div>
       </div>
 
@@ -640,8 +649,13 @@
             </div>
             <div class="divider"></div>
             <button class="btn btn-danger btn-sm" id="btnClearAll" style="width:100%;margin-bottom:16px;">⚠ Clear All Trailers</button>
-            <div class="divider" style="margin-bottom:12px;"></div>
-            <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--t2);margin-bottom:10px;">PIN Management</div>
+            <div class="divider" style="margin-bottom:0;"></div>
+            <button class="acc-head" id="adminPinToggle" aria-expanded="false" style="border-radius:0;border:none;border-bottom:1px solid var(--b0);margin:0 -14px;padding:10px 14px;width:calc(100% + 28px);">
+              <span style="display:flex;align-items:center;gap:7px;font-size:10px;">🔒 PIN Management</span>
+              <span class="chev">▾</span>
+            </button>
+            <div id="adminPinBody" style="max-height:0px;overflow:hidden;transition:max-height .35s ease;">
+            <div style="padding-top:12px;">
             <div class="pin-row">
               <div><label class="fl">Dispatcher PIN</label><input type="password" id="pin_dispatcher_a" placeholder="New PIN" aria-label="Dispatcher PIN" autocomplete="new-password"/></div>
               <div><label class="fl">Confirm</label><input type="password" id="pin_dispatcher_a_confirm" placeholder="Repeat" aria-label="Confirm" autocomplete="new-password"/></div>
@@ -661,6 +675,8 @@
               <div><label class="fl">Admin PIN</label><input type="password" id="pin_admin_a" placeholder="New PIN" aria-label="Admin PIN" autocomplete="new-password"/></div>
               <div><label class="fl">Confirm</label><input type="password" id="pin_admin_a_confirm" placeholder="Repeat" aria-label="Confirm" autocomplete="new-password"/></div>
               <button class="btn btn-success btn-sm" id="btnSetAdminPinA" style="padding:7px 13px;">Set</button>
+            </div>
+            </div>
             </div>
           </div>
         </div>

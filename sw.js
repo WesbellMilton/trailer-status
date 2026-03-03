@@ -1,6 +1,6 @@
 // sw.js — Wesbell Dispatch Service Worker
 // Cache-first for app shell assets, network-first for API/WS
-const CACHE_NAME = "wb-dispatch-v1";
+const CACHE_NAME = "wb-dispatch-v2";
 const CACHE_VERSION_KEY = "wb-cache-ver";
 
 // Assets to cache immediately on install (app shell)
@@ -92,5 +92,7 @@ self.addEventListener("notificationclick", evt => {
       if (existing) return existing.focus();
       return clients.openWindow("/");
     })
+  );
+});
   );
 });

@@ -29,6 +29,8 @@
     const res = await fetch(url, opts);
     if (res.status===401) { location.href="/login?expired=1&from="+encodeURIComponent(location.pathname); throw new Error("401"); }
     if (res.status===403) { console.warn("Forbidden:", url); throw new Error("403"); }
+    // 409 Conflict = structured duplicate warning — return the JSON body, don't throw
+    if (res.status===409) { const ct=res.headers.get("content-type")||""; return ct.includes("application/json") ? res.json() : {}; }
     if (!res.ok) { const t=await res.text().catch(()=>""); throw new Error(t||"HTTP "+res.status); }
     const ct = res.headers.get("content-type")||"";
     return ct.includes("application/json") ? res.json() : {};
@@ -530,10 +532,21 @@
   let _pushSub = null;
 
   async function initPush() {
-    if (!("serviceWorker" in navigator)||!("PushManager" in window)) return;
+    if (!("serviceWorker" in navigator)) return;
     try {
       const reg = await navigator.serviceWorker.register("/sw.js",{scope:"/"});
+      // Detect SW update and notify user
+      reg.addEventListener("updatefound", () => {
+        const nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener("statechange", () => {
+          if (nw.state === "installed" && navigator.serviceWorker.controller) {
+            toast("Update available", "Reload to get the latest version.", "warn", 10000);
+          }
+        });
+      });
       await navigator.serviceWorker.ready;
+      if (!("PushManager" in window)) return;
       _pushSub = await reg.pushManager.getSubscription();
       updatePushBtn();
     } catch(e){ console.warn("SW registration failed:",e); }
@@ -717,19 +730,25 @@
     btn.disabled=!driverState.trailer.trim()||!_wsOnline;
   }
 
-  async function driverDrop(){
+  async function driverDrop(force=false){
     if(!_wsOnline) return toast("Offline","Cannot submit while offline. Please wait for reconnection.","err");
     const {trailer,selectedDoor:door,dropType}=driverState;
     if(!trailer) return toast("Required","Enter your trailer number.","err");
     try{
       const carrierType=driverState.whoType==="outside"?"Outside":"Wesbell";
-      const res=await apiJson("/api/driver/drop",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door,dropType,carrierType})});
+      const res=await apiJson("/api/driver/drop",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door,dropType,carrierType,force})});
+      // Handle duplicate trailer warning (409)
+      if(res?.duplicate){
+        const confirmed=await showModal("Trailer Already on Board",res.message+" Overwrite the existing record?");
+        if(!confirmed) return;
+        return driverDrop(true); // retry with force=true
+      }
       const assignedDoor=res?.door||door;
       driverState.selectedDoor=assignedDoor;
       driverState.sessionDrops.push({trailer,door:assignedDoor,dropType,flowType:"drop",at:Date.now(),safetyDone:true});
       saveSessionHistory(); renderSessionHistory();
       showDoneScreen("drop");
-    }catch(e){ toast("Submission failed",e.message,"err"); }
+    }catch(e){ if(e.message!=="409") toast("Submission failed",e.message,"err"); }
   }
 
   /* ── XDOCK PICKUP ── */
@@ -786,17 +805,22 @@
     clearTimeout(onOffloadTrailerInput._t);
     onOffloadTrailerInput._t=setTimeout(()=>lookupAssignment(val,"offload"),500);
   }
-  async function xdockOffload(){
+  async function xdockOffload(force=false){
     if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
     const {trailer,selectedDoor:door}=driverState;
     if(!trailer) return toast("Required","Enter trailer number.","err");
     if(!door) return toast("Required","Select a door.","err");
     try{
-      await apiJson("/api/crossdock/offload",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door})});
+      const res=await apiJson("/api/crossdock/offload",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door,force})});
+      if(res?.duplicate){
+        const confirmed=await showModal("Trailer Already Active",res.message+" Overwrite the existing record?");
+        if(!confirmed) return;
+        return xdockOffload(true);
+      }
       driverState.sessionDrops.push({trailer,door,flowType:"xdock_offload",at:Date.now(),safetyDone:false});
       saveSessionHistory(); renderSessionHistory();
       showSafetyScreen();
-    }catch(e){ toast("Submission failed",e.message,"err"); }
+    }catch(e){ if(e.message!=="409") toast("Submission failed",e.message,"err"); }
   }
 
   /* ── LOOKUP ── */
@@ -1437,7 +1461,13 @@
     let lastMsg=Date.now();
     const watchdog=setInterval(()=>{ if(Date.now()-lastMsg>15000){ try{ws.close();}catch{} } },5000);
     ws.onopen=()=>{ wsRetry=0; wsStatus("ok"); };
-    ws.onclose=()=>{ clearInterval(watchdog); wsStatus("bad"); setTimeout(connectWs,Math.min(8000,500+wsRetry++*650)); };
+    ws.onclose=()=>{
+      clearInterval(watchdog); wsStatus("bad");
+      // Exponential backoff with ±30% jitter to spread reconnect storms
+      const base = Math.min(8000, 500 + wsRetry++ * 650);
+      const jitter = base * 0.3 * (Math.random() * 2 - 1); // ±30%
+      setTimeout(connectWs, Math.round(base + jitter));
+    };
     ws.onmessage=evt=>{
       lastMsg=Date.now();
       let msg; try{msg=JSON.parse(evt.data);}catch{return;}
@@ -1514,7 +1544,14 @@
           headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
           body: JSON.stringify({ role, pin })
         });
-        if (!r.ok) { errEl.textContent = await r.text(); errEl.style.display = ""; return; }
+        const errText = await r.text();
+        if (!r.ok) {
+          errEl.textContent = r.status === 429
+            ? `🔒 ${errText}` // rate limit message already includes retry info
+            : errText;
+          errEl.style.display = "";
+          return;
+        }
         haptic("success");
         closeModal();
         // Reload current page so the new session takes effect cleanly

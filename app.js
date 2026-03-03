@@ -384,7 +384,7 @@
     const rows = Object.entries(trailers)
       .map(([t,r]) => ({trailer:t,...r}))
       .filter(r => {
-        if (dockFilter==="active" && ["Departed","Ready"].includes(r.status)) return false;
+        if (dockFilter==="active" && r.status==="Departed") return false;
         if (q && !`${r.trailer} ${r.door||""} ${r.note||""} ${r.status||""}`.toLowerCase().includes(q)) return false;
         return true;
       })

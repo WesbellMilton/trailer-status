@@ -821,44 +821,11 @@ app.get("/api/whoami", (req, res) => {
 /* ══════════════════════════════════════════
    RATE LIMITING — LOGIN
 ══════════════════════════════════════════ */
-const loginAttempts = new Map(); // ip → { count, resetAt }
-const LOGIN_MAX     = 5;         // attempts before lockout
-const LOGIN_WINDOW  = 60_000;    // 1 minute window
-const LOGIN_LOCKOUT = 5 * 60_000;// 5 minute lockout after exceeding max
-
-// Prune stale entries every 10 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, v] of loginAttempts.entries()) if (v.resetAt < now) loginAttempts.delete(ip);
-}, 10 * 60_000).unref();
-
-function checkLoginRate(ip) {
-  const now = Date.now();
-  let entry = loginAttempts.get(ip);
-  if (!entry || entry.resetAt < now) {
-    entry = { count: 0, resetAt: now + LOGIN_WINDOW };
-    loginAttempts.set(ip, entry);
-  }
-  entry.count++;
-  if (entry.count > LOGIN_MAX) {
-    // Extend lockout on each additional attempt
-    entry.resetAt = now + LOGIN_LOCKOUT;
-    return { blocked: true, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
-  }
-  return { blocked: false, remaining: LOGIN_MAX - entry.count };
-}
-
-function resetLoginRate(ip) {
-  loginAttempts.delete(ip);
-}
+// Rate limiting removed
 
 app.post("/api/login", requireXHR, async (req, res) => {
   try {
     const ip = ipOf(req);
-    const rate = checkLoginRate(ip);
-    if (rate.blocked) {
-      return res.status(429).send(`Too many attempts. Try again in ${rate.retryAfter}s.`);
-    }
     const role = String(req.body.role || "").toLowerCase();
     const pin  = String(req.body.pin  || "");
     if (!["dispatcher","dock","management","admin"].includes(role)) return res.status(400).send("Invalid role");
@@ -866,7 +833,7 @@ app.post("/api/login", requireXHR, async (req, res) => {
     const ok = await verifyPin(role, pin);
     await audit(req, role, ok ? "login_success" : "login_failed", "auth", role, {});
     if (!ok) return res.status(401).send("Invalid PIN");
-    resetLoginRate(ip); // Clear counter on successful login
+
     const existing = getSession(req);
     if (existing?.sid) sessions.delete(existing.sid);
     const sid = newSession(role);

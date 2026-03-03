@@ -48,10 +48,14 @@ const all = (sql, p = []) => new Promise((res, rej) => db.all(sql, p, (e, r) => 
 ══════════════════════════════════════════ */
 let _trailersCache = null;
 let _platesCache   = null;
+let _blocksCache   = null;
 function invalidateTrailers() { _trailersCache = null; }
 function invalidatePlates()   { _platesCache   = null; }
+function invalidateBlocks()   { _blocksCache   = null; }
 async function getTrailersCache() { if (!_trailersCache) _trailersCache = await loadTrailersObject(); return _trailersCache; }
 async function getPlatesCache()   { if (!_platesCache)   _platesCache   = await loadDockPlatesObject(); return _platesCache; }
+async function loadDoorBlocksObject() { const rows = await all(`SELECT * FROM doorblocks`); const o = {}; rows.forEach(r => o[r.door] = { note: r.note, setAt: r.setAt }); return o; }
+async function getBlocksCache()   { if (!_blocksCache)   _blocksCache   = await loadDoorBlocksObject(); return _blocksCache; }
 
 /* ══════════════════════════════════════════
    VAPID / PUSH
@@ -197,6 +201,12 @@ async function initDb() {
     trailer TEXT PRIMARY KEY, direction TEXT, status TEXT, door TEXT,
     note TEXT, dropType TEXT, carrierType TEXT DEFAULT '', updatedAt INTEGER
   )`);
+  await run(`CREATE TABLE IF NOT EXISTS doorblocks (
+    door      TEXT PRIMARY KEY,
+    note      TEXT NOT NULL DEFAULT '',
+    setAt     INTEGER NOT NULL DEFAULT 0
+  )`);
+
   await run(`CREATE TABLE IF NOT EXISTS dockplates (
     door TEXT PRIMARY KEY, status TEXT, note TEXT, updatedAt INTEGER
   )`);
@@ -432,6 +442,10 @@ async function broadcastTrailers() {
 async function broadcastPlates() {
   try { invalidatePlates();   wsBroadcast("dockplates",    await getPlatesCache()); }
   catch(e) { console.error("[WS] broadcastPlates:", e.message); }
+}
+async function broadcastBlocks() {
+  try { invalidateBlocks();   wsBroadcast("doorblocks",    await getBlocksCache()); }
+  catch(e) { console.error("[WS] broadcastBlocks:", e.message); }
 }
 async function broadcastConfirmations() {
   try {                       wsBroadcast("confirmations", await loadConfirmations(250)); }
@@ -918,6 +932,35 @@ app.post("/api/clear", requireXHR, requireRole(["dispatcher","management","admin
 /* ══════════════════════════════════════════
    API — DOCK PLATES
 ══════════════════════════════════════════ */
+// Door occupancy block — mark a door occupied without a trailer
+app.get("/api/doorblocks", async (req, res) => { try { res.json(await loadDoorBlocksObject()); } catch(e) { res.status(500).send("Doorblocks error"); } });
+
+app.post("/api/doorblock/set", requireXHR, requireRole(["dock","dispatcher","management","admin"]), async (req, res) => {
+  try {
+    const door = String(req.body.door || "");
+    const note = String(req.body.note || "").slice(0, 120);
+    if (!door || isNaN(parseInt(door)) || parseInt(door)<28 || parseInt(door)>42) return res.status(400).send("Invalid door");
+    await run(`INSERT INTO doorblocks(door,note,setAt) VALUES(?,?,?) ON CONFLICT(door) DO UPDATE SET note=excluded.note,setAt=excluded.setAt`,
+      [door, note, Date.now()]);
+    const actor = req.session?.role || "unknown";
+    await audit(req, actor, "doorblock_set", "doorblock", door, { note });
+    await broadcastBlocks();
+    res.json({ ok: true });
+  } catch(e) { res.status(500).send("Doorblock set failed"); }
+});
+
+app.post("/api/doorblock/clear", requireXHR, requireRole(["dock","dispatcher","management","admin"]), async (req, res) => {
+  try {
+    const door = String(req.body.door || "");
+    if (!door) return res.status(400).send("Missing door");
+    await run(`DELETE FROM doorblocks WHERE door=?`, [door]);
+    const actor = req.session?.role || "unknown";
+    await audit(req, actor, "doorblock_clear", "doorblock", door, {});
+    await broadcastBlocks();
+    res.json({ ok: true });
+  } catch(e) { res.status(500).send("Doorblock clear failed"); }
+});
+
 app.get("/api/dockplates", async (req, res) => { try { res.json(await loadDockPlatesObject()); } catch(e) { res.status(500).send("Plates error"); } });
 
 app.post("/api/dockplates/set", requireXHR, requireRole(["dock","dispatcher","management","admin"]), async (req, res) => {
@@ -1260,6 +1303,7 @@ wss.on("connection", async ws => {
   try { safeSend(JSON.stringify({ type: "version",       payload: { version: APP_VERSION } })); } catch {}
   try { safeSend(JSON.stringify({ type: "state",         payload: await loadTrailersObject() })); } catch {}
   try { safeSend(JSON.stringify({ type: "dockplates",    payload: await loadDockPlatesObject() })); } catch {}
+  try { safeSend(JSON.stringify({ type: "doorblocks",    payload: await loadDoorBlocksObject() })); } catch {}
   try { safeSend(JSON.stringify({ type: "confirmations", payload: await loadConfirmations(250) })); } catch {}
 });
 

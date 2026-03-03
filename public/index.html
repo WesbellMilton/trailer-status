@@ -136,7 +136,10 @@
           <span id="driverWsText">Connecting…</span>
           <div class="lookup-spinner" id="lookupSpinner"></div>
         </div>
-        <span class="dcb-right">v<span id="driverVerText">—</span></span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="dcb-right">v<span id="driverVerText">—</span></span>
+          <button class="tb-btn" id="btnDriverStaffLogin" style="font-size:10px;padding:4px 9px;" title="Staff sign in">🔑 Staff</button>
+        </div>
       </div>
 
       <div class="driver-hdr">
@@ -522,6 +525,7 @@
       <div class="dock-toolbar-right">
         <span class="badge badge-num" id="dockCount">0</span>
         <span style="font-family:var(--mono);font-size:10px;color:var(--t2);">trailers</span>
+        <button class="tb-btn" id="btnDockStaffLogin" style="font-size:10px;padding:4px 9px;" title="Staff sign in">🔑 Staff</button>
       </div>
     </div>
 
@@ -665,5 +669,35 @@
 </main>
 <script src="/app.js"></script>
 <script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');</script>
+<!-- STAFF SIGN-IN MODAL (dock/driver pages) -->
+<div class="modal-ov hidden" id="staffLoginOv">
+  <div class="modal" style="max-width:340px;">
+    <h4>Staff Sign In</h4>
+    <div class="m-sub">Sign in to access management or admin controls on this page.</div>
+    <div class="field">
+      <label class="fl" for="staffLoginRole">Role</label>
+      <select id="staffLoginRole">
+        <option value="management">Management</option>
+        <option value="admin">⚡ Admin</option>
+        <option value="dispatcher">Dispatcher</option>
+      </select>
+    </div>
+    <div class="field">
+      <label class="fl" for="staffLoginPin">PIN</label>
+      <input id="staffLoginPin" type="password" inputmode="numeric" placeholder="Enter PIN" autocomplete="current-password"/>
+    </div>
+    <div id="staffLoginErr" style="display:none;color:var(--red);font-size:12px;margin-bottom:8px;font-family:var(--mono);"></div>
+    <div class="m-btns">
+      <button class="btn btn-default" id="staffLoginCancel">Cancel</button>
+      <button class="btn btn-primary" id="staffLoginGo">Sign In →</button>
+    </div>
+    <!-- Show when already signed in -->
+    <div id="staffLogoutRow" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--b0);display:none;">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--t1);margin-bottom:8px;">Signed in as <strong id="staffCurrentRole" style="color:var(--amber);"></strong></div>
+      <button class="btn btn-danger btn-sm btn-full" id="staffLogoutBtn">Sign Out</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

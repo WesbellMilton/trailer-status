@@ -564,6 +564,10 @@
       if (!("PushManager" in window)) return;
       _pushSub = await reg.pushManager.getSubscription();
       updatePushBtn();
+      // Driver mode — auto-request notifications if not already subscribed
+      if (isDriver() && !_pushSub) {
+        await subscribePush();
+      }
     } catch(e){ console.warn("SW registration failed:",e); }
   }
 
@@ -592,6 +596,7 @@
 
   function updatePushBtn() {
     const btn=el("btnPushToggle"); if(!btn)return;
+    if(isDriver()){ btn.style.display="none"; return; }
     if(!("PushManager" in window)){ btn.style.display="none"; return; }
     btn.style.display="";
     if(_pushSub){ btn.textContent="🔔 Notifications On"; btn.classList.add("push-on"); }

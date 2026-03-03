@@ -414,7 +414,16 @@
     el("btnLogout").style.display="none"; el("btnAudit").style.display="none";
   }
 
-  async function doLogout(){ try{ await apiJson("/api/logout",{method:"POST",headers:CSRF}); }catch{} location.href="/login"; }
+  async function doLogout(){
+    if (isDriver()) {
+      // Drivers have no session — just clear their local state and restart
+      try { sessionStorage.removeItem("wb_driver_session"); sessionStorage.removeItem("wb_whoType"); } catch {}
+      driverRestart();
+      return;
+    }
+    try{ await apiJson("/api/logout",{method:"POST",headers:CSRF}); }catch{}
+    location.href="/login";
+  }
   async function dispSave(){
     const trailer=(el("d_trailer")?.value||"").trim();
     if(!trailer) return toast("Validation error","Trailer number is required.","err");
@@ -861,6 +870,7 @@
     driverState.whoType=null; driverState.flowType=null;
     driverState.trailer=""; driverState.assignedDoor=""; driverState.selectedDoor="";
     driverState.dropType="Empty"; driverState.overrideMode=false;
+    try{ sessionStorage.removeItem("wb_whoType"); }catch{}
     showScreen("who-screen");
   }
 
@@ -962,22 +972,35 @@
   function syncBottomNav() {
     const p = path();
     ["bnDispatch","bnDock","bnDriver","bnSupervisor"].forEach(id => el(id)?.classList.remove("active"));
-    if (p.startsWith("/supervisor")) el("bnSupervisor")?.classList.add("active");
-    else if (p.startsWith("/driver"))   el("bnDriver")?.classList.add("active");
-    else if (p.startsWith("/dock"))     el("bnDock")?.classList.add("active");
-    else                                el("bnDispatch")?.classList.add("active");
+
+    if (p.startsWith("/supervisor")) {
+      el("bnSupervisor")?.classList.add("active");
+      // Supervisor — hide driver tab
+      if(el("bnDriver")) el("bnDriver").style.display="none";
+    } else if (p.startsWith("/driver")) {
+      el("bnDriver")?.classList.add("active");
+      // Driver page — hide all other tabs, driver has no access elsewhere
+      ["bnDispatch","bnDock","bnSupervisor"].forEach(id=>{ if(el(id)) el(id).style.display="none"; });
+    } else if (p.startsWith("/dock")) {
+      el("bnDock")?.classList.add("active");
+      // Dock page — hide driver and supervisor tabs
+      ["bnDriver","bnSupervisor"].forEach(id=>{ if(el(id)) el(id).style.display="none"; });
+    } else {
+      el("bnDispatch")?.classList.add("active");
+      // Dispatch — hide driver tab
+      if(el("bnDriver")) el("bnDriver").style.display="none";
+    }
   }
 
   /* ── SWIPE BETWEEN VIEWS ── */
   function initSwipeViews() {
-    const VIEWS = ["/", "/dock", "/driver", "/supervisor"];
-    const currentIdx = () => {
-      const p = path();
-      if (p.startsWith("/supervisor")) return 3;
-      if (p.startsWith("/driver"))     return 2;
-      if (p.startsWith("/dock"))       return 1;
-      return 0;
-    };
+    const p = path();
+    // Driver and dock are locked — no swipe navigation allowed
+    if (p.startsWith("/driver") || p.startsWith("/dock")) return;
+
+    const VIEWS = ["/", "/supervisor"];
+    // Dispatchers/admin can swipe between / and /supervisor
+    const currentIdx = () => p.startsWith("/supervisor") ? 1 : 0;
 
     let touchStartX = 0, touchStartY = 0, touchStartTime = 0;
     const MIN_SWIPE_DISTANCE = 60;
@@ -1080,8 +1103,10 @@
 
   async function loadInitial(){
     try{ const w=await apiJson("/api/whoami"); ROLE=w?.role; VERSION=w?.version||"";
-      // Server says we should be elsewhere — enforce it
-      if (w?.redirectTo && w.redirectTo !== location.pathname) {
+      // Only enforce redirect for logged-in users on the wrong page.
+      // Unauthenticated users (drivers) can navigate freely — the server
+      // already guards pages; we just let the server handle it via guardPage.
+      if (w?.redirectTo && ROLE && w.redirectTo !== location.pathname) {
         location.replace(w.redirectTo);
         return;
       }
@@ -1098,7 +1123,20 @@
     const p=path();
     if(p.startsWith("/driver")){
       el("driverView").style.display="";
-      el("btnLogout").style.display="none"; el("btnAudit").style.display="none";
+      // Driver has no login session — show a "Start Over" button that resets
+      // local state only, never calls /api/logout
+      const logoutBtn = el("btnLogout");
+      if(logoutBtn){
+        logoutBtn.style.display="";
+        logoutBtn.textContent="↩ Start Over";
+        // Replace click handler so it resets driver state instead of logging out
+        logoutBtn.onclick = (e) => {
+          e.stopImmediatePropagation();
+          try{ sessionStorage.removeItem("wb_whoType"); }catch{}
+          driverRestart();
+        };
+      }
+      el("btnAudit").style.display="none";
       try{
         const savedWho=sessionStorage.getItem("wb_whoType");
         if(savedWho){
@@ -1166,7 +1204,12 @@
 
     const whoBtn=direct?.closest?.("[data-who]"); if(whoBtn){ selectWho(whoBtn.dataset.who); return; }
     const flowBtn=direct?.closest?.("[data-flow]"); if(flowBtn){ selectFlow(flowBtn.dataset.flow); return; }
-    if(id==="btnBackToWho"){ showScreen("who-screen"); return; }
+    if(id==="btnBackToWho"){
+      try{ sessionStorage.removeItem("wb_whoType"); }catch{}
+      driverState.whoType=null;
+      showScreen("who-screen");
+      return;
+    }
     if(id==="btnBackToFlow2"||direct?.dataset?.flowBack){ showScreen("flow-screen"); return; }
     if(id==="btnBackToFlow"){
       const isOutside=driverState.whoType==="outside";
@@ -1179,7 +1222,7 @@
     if(id==="btnXdockOffload")  return xdockOffload();
     if(id==="btnConfirmSafety") return confSafety();
     if(id==="btnDriverShunt")   return driverShunt();
-    if(id==="btnDriverRestart") return driverRestart();
+    if(id==="btnDriverRestart"||id==="btnDriverFullReset") return driverRestart();
     if(id==="btnPushToggle")    return _pushSub ? unsubscribePush() : subscribePush();
 
     if(act==="shuntPickDoor"){

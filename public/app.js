@@ -446,7 +446,8 @@
       return;
     }
     try{ await apiJson("/api/logout",{method:"POST",headers:CSRF}); }catch{}
-    location.href="/login";
+    // Pass current path so home screen pre-selects the right role
+    location.href="/login?from="+encodeURIComponent(location.pathname);
   }
   async function dispSave(){
     const trailer=(el("d_trailer")?.value||"").trim();
@@ -1857,7 +1858,7 @@
       try { await apiJson("/api/logout", { method: "POST", headers: CSRF }); } catch {}
       haptic("light");
       closeModal();
-      location.reload();
+      location.href = "/login?from=" + encodeURIComponent(location.pathname);
     });
 
     // Update staff button appearance based on auth state

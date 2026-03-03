@@ -327,6 +327,7 @@ function requireDriverAccess(req, res, next) {
 function requireDockStatusAllowed(req, res, next) {
   const s = getSession(req);
   if (!s) return res.status(401).send("Unauthorized");
+  req.user = { role: s.role }; // populate req.user so handlers can read actor role
   // Admin, dispatcher, and management have full status control
   if (["admin","dispatcher","management"].includes(s.role)) return next();
   if (s.role === "dock") {
@@ -560,10 +561,10 @@ app.get("/management", guardPage(["management","admin"]),                       
 app.get("/api/whoami", (req, res) => {
   const s = getSession(req);
   const role = s?.role || null;
-  // Admin can visit any page freely — no redirect hint
-  // Drivers have no session — no redirect hint (client handles /driver default)
+  // Admin and management can visit any page freely — no redirect hint
   // Other roles get redirected to their home if they land on the wrong page
-  const redirectTo = (role && role !== "admin") ? (ROLE_HOME[role] || "/") : null;
+  const freeRoam = !role || role === "admin" || role === "management";
+  const redirectTo = freeRoam ? null : (ROLE_HOME[role] || "/");
   res.json({ role, version: APP_VERSION, redirectTo });
 });
 
@@ -806,7 +807,7 @@ app.post("/api/shunt", requireXHR, async (req, res) => {
     const session = getSession(req);
     const actor   = session?.role || "driver";
 
-    if (session && !["dispatcher","dock","admin"].includes(session.role))
+    if (session && !["dispatcher","dock","management","admin"].includes(session.role))
       return res.status(403).send("Unauthorized");
 
     const trailer = String(req.body.trailer || "").trim();

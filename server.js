@@ -851,7 +851,7 @@ app.post("/api/logout", requireXHR, (req, res) => {
 app.get("/api/state", async (req, res) => { try { res.json(await loadTrailersObject()); } catch(e) { res.status(500).send("State error"); } });
 
 app.post("/api/upsert", requireXHR, requireDockStatusAllowed, async (req, res) => {
-  const actor = req.user.role;
+  const actor = req.user?.role || req.session?.role || "unknown";
   try {
     const trailer = String(req.body.trailer || "").trim();
     if (!trailer) return res.status(400).send("Missing trailer");
@@ -908,7 +908,7 @@ app.post("/api/upsert", requireXHR, requireDockStatusAllowed, async (req, res) =
 });
 
 app.post("/api/delete", requireXHR, requireRole(["dispatcher","management","admin"]), async (req, res) => {
-  const actor = req.user.role;
+  const actor = req.user?.role || req.session?.role || "unknown";
   try {
     const trailer = String(req.body.trailer || "").trim();
     if (!trailer) return res.status(400).send("Missing trailer");
@@ -920,7 +920,7 @@ app.post("/api/delete", requireXHR, requireRole(["dispatcher","management","admi
 });
 
 app.post("/api/clear", requireXHR, requireRole(["dispatcher","management","admin"]), async (req, res) => {
-  const actor = req.user.role;
+  const actor = req.user?.role || req.session?.role || "unknown";
   try {
     await run(`DELETE FROM trailers`);
     await audit(req, actor, "trailer_clear_all", "trailer", "*", {});
@@ -964,14 +964,14 @@ app.post("/api/doorblock/clear", requireXHR, requireRole(["dock","dispatcher","m
 app.get("/api/dockplates", async (req, res) => { try { res.json(await loadDockPlatesObject()); } catch(e) { res.status(500).send("Plates error"); } });
 
 app.post("/api/dockplates/set", requireXHR, requireRole(["dock","dispatcher","management","admin"]), async (req, res) => {
-  const actor = req.user.role;
   try {
+    const actor  = req.user?.role || req.session?.role || "unknown";
     const door   = String(req.body.door   || "").trim();
     const status = String(req.body.status || "Unknown").trim();
     const note   = String(req.body.note   || "").trim();
     const dNum = Number(door);
     if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send("Invalid door");
-    if (!["OK","Service","Unknown"].includes(status)) return res.status(400).send("Invalid plate status");
+    if (!["OK","Service","Out of Order","Unknown"].includes(status)) return res.status(400).send("Invalid plate status");
     await run(
       `INSERT INTO dockplates(door,status,note,updatedAt) VALUES(?,?,?,?)
        ON CONFLICT(door) DO UPDATE SET status=excluded.status,note=excluded.note,updatedAt=excluded.updatedAt`,
@@ -1241,7 +1241,7 @@ app.get("/api/audit", requireRole(["dispatcher","management","admin"]), async (r
    API — MANAGEMENT PIN MANAGEMENT
 ══════════════════════════════════════════ */
 app.post("/api/management/set-pin", requireXHR, requireRole(["management","admin"]), async (req, res) => {
-  const actor = req.user.role;
+  const actor = req.user?.role || req.session?.role || "unknown";
   try {
     const role = String(req.body.role || "").toLowerCase();
     const pin  = String(req.body.pin  || "");

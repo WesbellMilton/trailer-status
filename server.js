@@ -17,19 +17,6 @@ const PIN_MIN_LEN = 4;
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
 const COOKIE_NAME = "wb_session";
 
-/* ── Automation thresholds (override via env vars) ── */
-// How long a trailer can sit in a status before dispatcher is alerted (minutes)
-const STALE_INCOMING_MIN  = Number(process.env.STALE_INCOMING_MIN  || 90);   // 1.5 hrs
-const STALE_DROPPED_MIN   = Number(process.env.STALE_DROPPED_MIN   || 120);  // 2 hrs
-const STALE_LOADING_MIN   = Number(process.env.STALE_LOADING_MIN   || 180);  // 3 hrs
-const STALE_DOCKREADY_MIN = Number(process.env.STALE_DOCKREADY_MIN || 60);   // 1 hr
-// How long a Ready trailer can sit before being auto-departed (minutes, 0 = disabled)
-const AUTO_DEPART_READY_MIN = Number(process.env.AUTO_DEPART_READY_MIN || 240); // 4 hrs
-// Shift-end report — "HH:MM" 24h local time, empty string = disabled
-const SHIFT_REPORT_TIME = process.env.SHIFT_REPORT_TIME || "06:00";
-// How many hours to keep Departed trailers in DB before purging (0 = never)
-const DEPARTED_PURGE_HRS = Number(process.env.DEPARTED_PURGE_HRS || 24);
-
 const ENV_PINS = {
   dispatcher: process.env.DISPATCHER_PIN || "",
   dock:       process.env.DOCK_PIN       || "",
@@ -420,16 +407,7 @@ function wsBroadcast(type, payload) {
 }
 
 async function broadcastTrailers() {
-  try {
-    invalidateTrailers();
-    const state = await getTrailersCache();
-    // Clear stale-alert tracking for any trailer that has moved recently (< 2 min)
-    const recentCutoff = Date.now() - 2 * 60_000;
-    for (const [trailer, data] of Object.entries(state)) {
-      if ((data.updatedAt || 0) > recentCutoff) clearStaleAlert(trailer);
-    }
-    wsBroadcast("state", state);
-  }
+  try { invalidateTrailers(); wsBroadcast("state",         await getTrailersCache()); }
   catch(e) { console.error("[WS] broadcastTrailers:", e.message); }
 }
 async function broadcastPlates() {
@@ -484,8 +462,6 @@ function guardPage(allowedRoles) {
     // No session — allow if page accepts unauthenticated (__driver__), otherwise login
     if (!role) {
       if (allowedRoles.includes("__driver__")) return next();
-      // Drivers don't have sessions — send them to /driver directly, skip login home screen
-      if (req.path === "/driver") return next();
       return res.redirect(302, `/login?from=${encodeURIComponent(req.path)}`);
     }
 
@@ -514,7 +490,7 @@ app.get("/login", (req, res) => {
   const expired  = req.query.expired === "1";
   const fromPath = req.query.from || "";
 
-  // Drivers don't need a login — bounce straight to /driver
+  // Drivers never need login — send straight to /driver
   if (fromPath.includes("/driver")) return res.redirect(302, "/driver");
 
   // Already authenticated — bounce to their home page
@@ -529,17 +505,17 @@ app.get("/login", (req, res) => {
   const roleOptions = isDock
     ? `<option value="dock" selected>Dock</option>`
     : isSup
-    ? `<option value="management" selected>Management</option><option value="admin">⚡ Admin</option>`
-    : `<option value="dispatcher" selected>Dispatcher</option><option value="dock">Dock</option><option value="management">Management</option><option value="admin">⚡ Admin</option>`;
+    ? `<option value="management" selected>Management</option><option value="admin">&#9889; Admin</option>`
+    : `<option value="dispatcher" selected>Dispatcher</option><option value="dock">Dock</option><option value="management">Management</option><option value="admin">&#9889; Admin</option>`;
 
   const contextBadge = isDock
-    ? `<div class="ctx-badge ctx-dock">🏭 Dock sign-in</div>`
+    ? `<div class="ctx-badge ctx-dock">&#127981; Dock sign-in</div>`
     : isSup
-    ? `<div class="ctx-badge ctx-mgmt">📊 Management sign-in</div>`
+    ? `<div class="ctx-badge ctx-mgmt">&#128202; Management sign-in</div>`
     : "";
 
   const expiredBanner = expired
-    ? `<div class="ctx-badge ctx-err">⚠ Session expired — please sign in again.</div>`
+    ? `<div class="ctx-badge ctx-err">&#9888; Session expired &#8212; please sign in again.</div>`
     : "";
 
   res.setHeader("content-type", "text/html; charset=utf-8");
@@ -555,543 +531,255 @@ app.get("/login", (req, res) => {
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#070a0f;
-  --s0:#0c1018;--s1:#101620;--s2:#151e2a;
+  --bg:#070a0f;--s0:#0c1018;--s1:#101620;--s2:#151e2a;
   --b0:#1a2535;--b1:#1f2e42;--b2:#263650;
   --t0:#e8eef8;--t1:#8a9db8;--t2:#4a5e78;--t3:#293848;
   --amber:#f0a030;--amber-d:#c07020;
   --cyan:#20c0d0;--green:#20d090;--red:#e84848;
-  --mono:'DM Mono',monospace;
-  --sans:'DM Sans',system-ui,sans-serif;
-  --display:'Bebas Neue',sans-serif;
+  --mono:'DM Mono',monospace;--sans:'DM Sans',system-ui,sans-serif;--display:'Bebas Neue',sans-serif;
 }
 html{height:100%;-webkit-font-smoothing:antialiased}
-body{
-  min-height:100vh;background:var(--bg);color:var(--t0);
-  font-family:var(--sans);
-  display:grid;
-  grid-template-columns:1fr 380px;
-  grid-template-rows:1fr;
-  overflow:hidden;
-}
-
-/* ── Noise grain overlay ── */
-body::before{
-  content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
-  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
-  opacity:.5;
-}
-
-/* ════════════════════════════
-   LEFT — DASHBOARD PANEL
-════════════════════════════ */
-.dashboard{
-  position:relative;z-index:1;
-  display:flex;flex-direction:column;
-  padding:44px 52px 36px;
-  gap:0;
-  background:linear-gradient(135deg, #070c14 0%, #0a1020 60%, #08111c 100%);
-  border-right:1px solid var(--b0);
-  overflow:hidden;
-}
-
-/* ambient glow behind clock */
-.dashboard::after{
-  content:"";position:absolute;
-  top:-80px;left:-80px;
-  width:600px;height:600px;
-  background:radial-gradient(ellipse at center, rgba(240,160,48,.055) 0%, transparent 70%);
-  pointer-events:none;
-}
-
-/* ── Brand ── */
+body{min-height:100vh;background:var(--bg);color:var(--t0);font-family:var(--sans);display:grid;grid-template-columns:1fr 380px;overflow:hidden}
+body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");opacity:.5}
+/* ── Dashboard ── */
+.dashboard{position:relative;z-index:1;display:flex;flex-direction:column;padding:44px 52px 36px;background:linear-gradient(135deg,#070c14 0%,#0a1020 60%,#08111c 100%);border-right:1px solid var(--b0);overflow:hidden}
+.dashboard::after{content:"";position:absolute;top:-80px;left:-80px;width:600px;height:600px;background:radial-gradient(ellipse at center,rgba(240,160,48,.055) 0%,transparent 70%);pointer-events:none}
 .db-brand{display:flex;align-items:center;gap:12px;margin-bottom:44px;position:relative;z-index:1}
-.db-mark{
-  width:40px;height:40px;border-radius:10px;
-  background:linear-gradient(135deg,var(--amber) 0%,var(--amber-d) 100%);
-  display:flex;align-items:center;justify-content:center;
-  font-family:var(--mono);font-size:15px;font-weight:700;color:#000;
-  box-shadow:0 4px 16px rgba(240,120,0,.3);
-  flex-shrink:0;
-}
-.db-brand-text .db-name{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.1em;color:var(--t0)}
-.db-brand-text .db-sub{font-size:10px;color:var(--t2);letter-spacing:.08em;margin-top:1px}
-
-/* ── Clock ── */
+.db-mark{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--amber) 0%,var(--amber-d) 100%);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:15px;font-weight:700;color:#000;box-shadow:0 4px 16px rgba(240,120,0,.3);flex-shrink:0}
+.db-name{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.1em;color:var(--t0)}
+.db-sub{font-size:10px;color:var(--t2);letter-spacing:.08em;margin-top:1px}
 .clock-wrap{position:relative;z-index:1;margin-bottom:8px}
-.clock-time{
-  font-family:var(--display);
-  font-size:clamp(80px,10vw,136px);
-  line-height:.9;
-  color:var(--t0);
-  letter-spacing:.01em;
-  text-shadow:0 0 60px rgba(240,160,48,.12);
-}
-.clock-time .colon{
-  color:var(--amber);
-  animation:colonBlink 1s step-start infinite;
-}
-@keyframes colonBlink{0%,49%{opacity:1}50%,100%{opacity:.2}}
-.clock-ampm{
-  font-family:var(--mono);font-size:18px;font-weight:500;
-  color:var(--amber);letter-spacing:.1em;
-  margin-left:8px;vertical-align:super;font-size:clamp(14px,2vw,22px);
-}
-
-/* ── Date ── */
-.date-row{
-  display:flex;align-items:baseline;gap:12px;
-  margin-bottom:36px;position:relative;z-index:1;
-}
-.date-day{font-family:var(--display);font-size:clamp(28px,4vw,44px);color:var(--t1);letter-spacing:.04em}
-.date-full{font-family:var(--mono);font-size:clamp(11px,1.2vw,14px);color:var(--t2);letter-spacing:.06em;text-transform:uppercase}
-
-/* ── Divider ── */
-.db-divider{height:1px;background:linear-gradient(90deg,var(--b1) 0%,transparent 100%);margin-bottom:32px;position:relative;z-index:1}
-
-/* ── Weather ── */
-.weather-block{display:flex;align-items:flex-start;gap:20px;margin-bottom:36px;position:relative;z-index:1}
-.weather-icon{font-size:48px;line-height:1;flex-shrink:0;filter:drop-shadow(0 2px 8px rgba(0,0,0,.5))}
-.weather-main{}
-.weather-temp{font-family:var(--display);font-size:clamp(38px,5vw,58px);color:var(--t0);line-height:1;letter-spacing:.02em}
-.weather-unit{font-family:var(--mono);font-size:16px;color:var(--t2);vertical-align:super}
-.weather-desc{font-family:var(--mono);font-size:12px;color:var(--t1);letter-spacing:.06em;text-transform:uppercase;margin-top:4px}
-.weather-meta{display:flex;gap:16px;margin-top:8px}
-.weather-meta-item{font-family:var(--mono);font-size:11px;color:var(--t2);display:flex;align-items:center;gap:4px}
-.weather-meta-item span{color:var(--t1)}
-.weather-loading{font-family:var(--mono);font-size:12px;color:var(--t3);letter-spacing:.06em;padding:12px 0}
-
-/* ── Calendar ── */
-.cal-wrap{flex:1;position:relative;z-index:1;min-height:0}
-.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
-.cal-month{font-family:var(--display);font-size:clamp(22px,3vw,32px);color:var(--t1);letter-spacing:.06em}
-.cal-year{font-family:var(--mono);font-size:13px;color:var(--t2);letter-spacing:.08em}
+.clock-time{font-family:var(--display);font-size:clamp(80px,9vw,130px);line-height:.9;color:var(--t0);letter-spacing:.01em;text-shadow:0 0 60px rgba(240,160,48,.12)}
+.colon{color:var(--amber);animation:blink 1s step-start infinite}
+@keyframes blink{0%,49%{opacity:1}50%,100%{opacity:.2}}
+.clock-secs{font-size:.52em;color:var(--t2);margin-left:4px;vertical-align:baseline}
+.clock-ampm{font-family:var(--mono);font-size:clamp(13px,1.5vw,20px);color:var(--amber);letter-spacing:.1em;margin-left:6px;vertical-align:super}
+.date-row{display:flex;align-items:baseline;gap:12px;margin-bottom:36px;position:relative;z-index:1}
+.date-day{font-family:var(--display);font-size:clamp(26px,3.5vw,42px);color:var(--t1);letter-spacing:.04em}
+.date-full{font-family:var(--mono);font-size:clamp(11px,1vw,13px);color:var(--t2);letter-spacing:.06em;text-transform:uppercase}
+.divider{height:1px;background:linear-gradient(90deg,var(--b1) 0%,transparent 100%);margin-bottom:32px;position:relative;z-index:1}
+/* Weather */
+.weather-block{display:flex;align-items:flex-start;gap:20px;margin-bottom:36px;position:relative;z-index:1;min-height:60px}
+.weather-icon{font-size:48px;line-height:1;flex-shrink:0}
+.weather-temp{font-family:var(--display);font-size:clamp(36px,4.5vw,56px);color:var(--t0);line-height:1}
+.weather-unit{font-family:var(--mono);font-size:15px;color:var(--t2);vertical-align:super}
+.weather-desc{font-family:var(--mono);font-size:11px;color:var(--t1);letter-spacing:.06em;text-transform:uppercase;margin-top:4px}
+.weather-meta{display:flex;gap:14px;margin-top:7px}
+.wm{font-family:var(--mono);font-size:11px;color:var(--t2)}
+.wm span{color:var(--t1)}
+.weather-msg{font-family:var(--mono);font-size:12px;color:var(--t3);letter-spacing:.04em;padding:8px 0}
+/* Calendar */
+.cal-wrap{flex:1;position:relative;z-index:1}
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.cal-month{font-family:var(--display);font-size:clamp(20px,2.5vw,30px);color:var(--t1);letter-spacing:.06em}
+.cal-year{font-family:var(--mono);font-size:12px;color:var(--t2);letter-spacing:.08em}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
-.cal-dow{
-  font-family:var(--mono);font-size:10px;letter-spacing:.08em;
-  color:var(--t3);text-align:center;padding:4px 0 8px;text-transform:uppercase;
-}
-.cal-cell{
-  aspect-ratio:1;display:flex;align-items:center;justify-content:center;
-  font-family:var(--mono);font-size:clamp(11px,1.2vw,13px);
-  color:var(--t2);border-radius:6px;
-  transition:background .12s,color .12s;
-  cursor:default;position:relative;
-}
-.cal-cell.other-month{color:var(--t3)}
-.cal-cell.today{
-  background:var(--amber);color:#000;font-weight:700;
-  box-shadow:0 2px 12px rgba(240,160,48,.35);
-}
-.cal-cell.today::after{display:none}
-
-/* ── Footer status ── */
-.db-footer{
-  position:relative;z-index:1;
-  display:flex;align-items:center;gap:8px;
-  margin-top:20px;padding-top:16px;
-  border-top:1px solid var(--b0);
-}
-.db-footer-dot{width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:beat 2.4s ease-in-out infinite}
+.cal-dow{font-family:var(--mono);font-size:9px;letter-spacing:.08em;color:var(--t3);text-align:center;padding:3px 0 7px;text-transform:uppercase}
+.cal-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:clamp(10px,1.1vw,12px);color:var(--t2);border-radius:5px}
+.cal-cell.other{color:var(--t3)}
+.cal-cell.today{background:var(--amber);color:#000;font-weight:700;box-shadow:0 2px 10px rgba(240,160,48,.35)}
+/* Footer */
+.db-footer{position:relative;z-index:1;display:flex;align-items:center;gap:8px;margin-top:20px;padding-top:14px;border-top:1px solid var(--b0)}
+.live-dot{width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:beat 2.4s ease-in-out infinite}
 @keyframes beat{0%,100%{box-shadow:0 0 0 0 rgba(32,208,144,.6)}50%{box-shadow:0 0 0 5px rgba(32,208,144,0)}}
-.db-footer-text{font-family:var(--mono);font-size:10px;color:var(--t2);letter-spacing:.06em}
-
-/* ════════════════════════════
-   RIGHT — LOGIN PANEL
-════════════════════════════ */
-.login-panel{
-  position:relative;z-index:1;
-  display:flex;flex-direction:column;justify-content:center;
-  padding:48px 40px;
-  background:var(--s0);
-  overflow-y:auto;
-}
-
+.footer-txt{font-family:var(--mono);font-size:10px;color:var(--t2);letter-spacing:.06em}
+/* ── Login Panel ── */
+.login-panel{position:relative;z-index:1;display:flex;flex-direction:column;justify-content:center;padding:48px 40px;background:var(--s0);overflow-y:auto}
 .lp-brand{display:flex;align-items:center;gap:10px;margin-bottom:40px}
-.lp-mark{
-  width:36px;height:36px;border-radius:9px;
-  background:linear-gradient(135deg,var(--amber),var(--amber-d));
-  display:flex;align-items:center;justify-content:center;
-  font-family:var(--mono);font-size:13px;font-weight:700;color:#000;
-  box-shadow:0 3px 12px rgba(240,120,0,.25);flex-shrink:0;
-}
-.lp-brand-name{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.1em;color:var(--t1)}
-.lp-brand-sub{font-size:9px;color:var(--t2);letter-spacing:.08em;margin-top:1px}
-
+.lp-mark{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,var(--amber),var(--amber-d));display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px;font-weight:700;color:#000;box-shadow:0 3px 12px rgba(240,120,0,.25);flex-shrink:0}
+.lp-name{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.1em;color:var(--t1)}
+.lp-sub2{font-size:9px;color:var(--t2);letter-spacing:.08em;margin-top:1px}
 .lp-heading{font-family:var(--display);font-size:36px;color:var(--t0);letter-spacing:.04em;margin-bottom:4px}
-.lp-sub{font-family:var(--mono);font-size:11px;color:var(--t2);letter-spacing:.06em;margin-bottom:32px}
-
-.ctx-badge{
-  padding:8px 12px;border-radius:6px;font-family:var(--mono);
-  font-size:11px;letter-spacing:.04em;margin-bottom:14px;
-}
+.lp-tagline{font-family:var(--mono);font-size:11px;color:var(--t2);letter-spacing:.06em;margin-bottom:32px}
+.ctx-badge{padding:8px 12px;border-radius:6px;font-family:var(--mono);font-size:11px;letter-spacing:.04em;margin-bottom:14px}
 .ctx-dock{background:rgba(32,192,208,.08);border:1px solid rgba(32,192,208,.2);color:var(--cyan)}
 .ctx-mgmt{background:rgba(240,160,48,.08);border:1px solid rgba(240,160,48,.2);color:var(--amber)}
-.ctx-err {background:rgba(232,72,72,.08); border:1px solid rgba(232,72,72,.2); color:var(--red)}
-
-.field-label{
-  display:block;font-family:var(--mono);font-size:10px;font-weight:500;
-  text-transform:uppercase;letter-spacing:.1em;color:var(--t2);margin:0 0 7px;
-}
-.field-input{
-  width:100%;padding:14px 16px;border-radius:8px;
-  border:1px solid var(--b1);background:var(--s1);
-  color:var(--t0);font-family:var(--mono);font-size:16px;
-  outline:none;-webkit-appearance:none;
-  transition:border-color .15s,box-shadow .15s;
-  margin-bottom:16px;
-}
-.field-input:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(240,160,48,.1)}
-.field-input::placeholder{color:var(--t3)}
-
-.sign-btn{
-  width:100%;padding:16px;border-radius:10px;
-  border:1px solid rgba(240,160,48,.3);
-  background:rgba(240,160,48,.1);
-  color:var(--amber);font-family:var(--mono);font-size:14px;
-  font-weight:500;letter-spacing:.08em;
-  cursor:pointer;touch-action:manipulation;
-  transition:all .15s;margin-top:4px;
-  display:flex;align-items:center;justify-content:center;gap:10px;
-}
-.sign-btn:hover{background:rgba(240,160,48,.16);border-color:rgba(240,160,48,.5)}
-.sign-btn:active{background:rgba(240,160,48,.22);transform:scale(.99)}
+.ctx-err{background:rgba(232,72,72,.08);border:1px solid rgba(232,72,72,.2);color:var(--red)}
+.fl{display:block;font-family:var(--mono);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);margin:0 0 7px}
+.fi{width:100%;padding:14px 16px;border-radius:8px;border:1px solid var(--b1);background:var(--s1);color:var(--t0);font-family:var(--mono);font-size:16px;outline:none;-webkit-appearance:none;transition:border-color .15s,box-shadow .15s;margin-bottom:16px}
+.fi:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(240,160,48,.1)}
+.fi::placeholder{color:var(--t3)}
+.sign-btn{width:100%;padding:15px;border-radius:10px;border:1px solid rgba(240,160,48,.3);background:rgba(240,160,48,.1);color:var(--amber);font-family:var(--mono);font-size:14px;font-weight:500;letter-spacing:.08em;cursor:pointer;touch-action:manipulation;transition:all .15s;margin-top:4px;display:flex;align-items:center;justify-content:center;gap:10px}
+.sign-btn:hover{background:rgba(240,160,48,.18);border-color:rgba(240,160,48,.5)}
+.sign-btn:active{transform:scale(.99)}
 .sign-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
-.sign-btn .arrow{transition:transform .15s}
+.arrow{transition:transform .15s}
 .sign-btn:hover .arrow{transform:translateX(3px)}
-
-.err-msg{
-  display:none;padding:10px 12px;border-radius:6px;
-  background:rgba(232,72,72,.08);border:1px solid rgba(232,72,72,.2);
-  color:var(--red);font-family:var(--mono);font-size:12px;
-  letter-spacing:.03em;margin-top:12px;
-}
+.err-msg{display:none;padding:10px 12px;border-radius:6px;background:rgba(232,72,72,.08);border:1px solid rgba(232,72,72,.2);color:var(--red);font-family:var(--mono);font-size:12px;letter-spacing:.03em;margin-top:12px}
 .err-msg.show{display:block}
-
-.lp-hint{
-  font-family:var(--mono);font-size:10px;color:var(--t3);
-  letter-spacing:.04em;text-align:center;margin-top:20px;line-height:1.6;
-}
-
-/* ════════════════════════════
-   MOBILE — stacked layout
-════════════════════════════ */
+.lp-hint{font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:.04em;text-align:center;margin-top:20px;line-height:1.6}
+/* ── Mobile ── */
 @media(max-width:768px){
-  /* Stack vertically; login panel scrolls into view naturally */
-  body{
-    grid-template-columns:1fr;
-    grid-template-rows:auto auto;
-    overflow-y:auto;
-    height:auto;
-    min-height:100vh;
-  }
-
-  /* Dashboard: compact strip — clock + date only, no calendar */
-  .dashboard{
-    padding:24px 22px 20px;
-    border-right:none;
-    border-bottom:1px solid var(--b0);
-    /* Turn off flex column, use a tight horizontal-ish block */
-    gap:0;
-  }
+  body{grid-template-columns:1fr;grid-template-rows:auto auto;overflow-y:auto;height:auto;min-height:100vh}
+  .dashboard{padding:24px 20px 20px;border-right:none;border-bottom:1px solid var(--b0)}
   .db-brand{margin-bottom:20px}
-  .clock-time{font-size:clamp(56px,14vw,80px)}
-  .clock-ampm{font-size:clamp(13px,2.5vw,18px)}
-  .date-row{margin-bottom:20px}
-  .date-day{font-size:clamp(22px,5vw,32px)}
-  .date-full{font-size:11px}
-  .db-divider{margin-bottom:16px}
-  .weather-block{margin-bottom:16px}
-  .weather-icon{font-size:38px}
-  .weather-temp{font-size:clamp(32px,7vw,44px)}
-  /* Calendar hidden on tablet — takes too much space */
+  .clock-time{font-size:clamp(54px,15vw,80px)}
+  .date-row{margin-bottom:18px}
+  .divider{margin-bottom:16px}
+  .weather-block{margin-bottom:14px}
   .cal-wrap{display:none}
   .db-footer{margin-top:4px}
-
-  /* Login panel: comfortable full-width card */
-  .login-panel{
-    padding:28px 22px 36px;
-    /* Ensure it doesn't get squashed */
-    min-height:auto;
-  }
-  .lp-brand{margin-bottom:24px}
+  .login-panel{padding:28px 20px 36px;min-height:auto}
+  .lp-brand{margin-bottom:22px}
   .lp-heading{font-size:26px}
-  .lp-sub{margin-bottom:24px}
+  .lp-tagline{margin-bottom:22px}
 }
-
-/* 480px — small phones */
 @media(max-width:480px){
   .dashboard{padding:18px 16px 16px}
   .db-brand{margin-bottom:16px}
-  .clock-time{font-size:clamp(48px,16vw,72px)}
-  .date-row{margin-bottom:16px;gap:8px}
-  .date-day{font-size:clamp(20px,6vw,28px)}
+  .clock-time{font-size:clamp(46px,16vw,70px)}
+  .date-row{margin-bottom:14px;gap:8px}
   .weather-block{margin-bottom:12px}
-  .weather-icon{font-size:32px}
-  .weather-temp{font-size:clamp(28px,8vw,40px)}
-  .weather-meta{gap:10px}
-  /* Hide secondary weather detail to save space */
-  .weather-meta-item:last-child{display:none}
-  .db-divider{margin-bottom:12px}
-  .db-footer{display:none} /* redundant on mobile */
-
-  .login-panel{padding:22px 16px 32px}
-  .lp-brand{margin-bottom:18px}
-  .lp-heading{font-size:24px}
-  .lp-sub{font-size:10px;margin-bottom:20px}
-  /* Ensure inputs are 16px so iOS doesn't zoom */
-  .field-input{font-size:16px !important;padding:13px 14px}
-  .sign-btn{padding:15px;font-size:13px}
+  .weather-icon{font-size:34px}
+  .weather-temp{font-size:clamp(28px,8vw,42px)}
+  .divider{margin-bottom:12px}
+  .db-footer{display:none}
+  .login-panel{padding:20px 16px 30px}
+  .lp-brand{margin-bottom:16px}
+  .lp-heading{font-size:22px}
+  .lp-tagline{font-size:10px;margin-bottom:18px}
+  .fi{font-size:16px!important;padding:13px 14px}
+  .sign-btn{padding:14px;font-size:13px}
 }
-
-/* 360px — very small phones */
 @media(max-width:360px){
-  .dashboard{padding:14px 14px 12px}
-  .clock-time{font-size:clamp(42px,17vw,64px)}
-  .weather-block{margin-bottom:10px}
-  .db-divider{display:none}
-  .login-panel{padding:18px 14px 28px}
+  .dashboard{padding:14px}
+  .clock-time{font-size:clamp(40px,17vw,60px)}
+  .divider{display:none}
+  .login-panel{padding:16px 14px 26px}
 }
-
-/* Safe area — notch / home indicator */
 @supports(padding:env(safe-area-inset-top)){
-  .dashboard{padding-top:max(44px,calc(20px + env(safe-area-inset-top)))}
+  .dashboard{padding-top:max(44px,calc(18px + env(safe-area-inset-top)))}
   @media(max-width:768px){
-    .dashboard{padding-top:max(24px,calc(14px + env(safe-area-inset-top)))}
-    .login-panel{padding-bottom:max(36px,calc(16px + env(safe-area-inset-bottom)))}
-  }
-  @media(max-width:480px){
-    .dashboard{padding-top:max(18px,calc(10px + env(safe-area-inset-top)))}
-    .login-panel{padding-bottom:max(32px,calc(12px + env(safe-area-inset-bottom)))}
+    .dashboard{padding-top:max(24px,calc(12px + env(safe-area-inset-top)))}
+    .login-panel{padding-bottom:max(36px,calc(14px + env(safe-area-inset-bottom)))}
   }
 }
-
-/* ── Entrance animations ── */
-@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
-.db-brand{animation:fadeUp .4s ease both}
-.clock-wrap{animation:fadeUp .4s .08s ease both}
-.date-row{animation:fadeUp .4s .14s ease both}
-.db-divider{animation:fadeUp .3s .18s ease both}
-.weather-block{animation:fadeUp .4s .22s ease both}
-.cal-wrap{animation:fadeUp .4s .28s ease both}
-.db-footer{animation:fadeUp .3s .34s ease both}
-.login-panel{animation:fadeUp .4s .1s ease both}
+/* ── Animations ── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.db-brand{animation:fadeUp .35s ease both}
+.clock-wrap{animation:fadeUp .35s .07s ease both}
+.date-row{animation:fadeUp .35s .12s ease both}
+.divider{animation:fadeUp .3s .16s ease both}
+.weather-block{animation:fadeUp .35s .2s ease both}
+.cal-wrap{animation:fadeUp .35s .25s ease both}
+.db-footer{animation:fadeUp .3s .3s ease both}
+.login-panel{animation:fadeUp .35s .08s ease both}
 </style>
 </head>
 <body>
 
-<!-- ── LEFT: Dashboard ── -->
 <div class="dashboard">
-
   <div class="db-brand">
     <div class="db-mark">W</div>
-    <div class="db-brand-text">
-      <div class="db-name">WESBELL</div>
-      <div class="db-sub">DISPATCH SYSTEM</div>
-    </div>
+    <div><div class="db-name">WESBELL</div><div class="db-sub">DISPATCH SYSTEM</div></div>
   </div>
-
   <div class="clock-wrap">
-    <div class="clock-time" id="clockTime">
-      <span id="clockH">--</span><span class="colon">:</span><span id="clockM">--</span><span id="clockS" style="font-size:.55em;color:var(--t2);margin-left:4px">--</span>
-    </div>
-    <span class="clock-ampm" id="clockAmpm"></span>
+    <span class="clock-time"><span id="ch">--</span><span class="colon">:</span><span id="cm">--</span><span class="clock-secs" id="cs">--</span></span><span class="clock-ampm" id="ca"></span>
   </div>
-
   <div class="date-row">
-    <span class="date-day" id="dateDay"></span>
-    <span class="date-full" id="dateFull"></span>
+    <span class="date-day" id="dd"></span>
+    <span class="date-full" id="df"></span>
   </div>
-
-  <div class="db-divider"></div>
-
-  <div class="weather-block" id="weatherBlock">
-    <div class="weather-loading" id="weatherLoading">Fetching weather…</div>
-  </div>
-
-  <div class="cal-wrap" id="calWrap"></div>
-
+  <div class="divider"></div>
+  <div class="weather-block" id="wb"><div class="weather-msg">Fetching weather&hellip;</div></div>
+  <div class="cal-wrap" id="cal"></div>
   <div class="db-footer">
-    <div class="db-footer-dot"></div>
-    <div class="db-footer-text" id="footerText">WESBELL DISPATCH · LOADING…</div>
+    <div class="live-dot"></div>
+    <div class="footer-txt" id="ft">WESBELL DISPATCH</div>
   </div>
-
 </div>
 
-<!-- ── RIGHT: Login ── -->
 <div class="login-panel">
-
   <div class="lp-brand">
     <div class="lp-mark">W</div>
-    <div>
-      <div class="lp-brand-name">WESBELL</div>
-      <div class="lp-brand-sub">DISPATCH</div>
-    </div>
+    <div><div class="lp-name">WESBELL</div><div class="lp-sub2">DISPATCH</div></div>
   </div>
-
   <div class="lp-heading">SIGN IN</div>
-  <div class="lp-sub">ENTER YOUR ROLE &amp; PIN TO CONTINUE</div>
-
+  <div class="lp-tagline">ENTER YOUR ROLE &amp; PIN TO CONTINUE</div>
   ${contextBadge}
   ${expiredBanner}
-
-  <label class="field-label" for="role">Role</label>
-  <select id="role" class="field-input">${roleOptions}</select>
-
-  <label class="field-label" for="pin">PIN</label>
-  <input id="pin" class="field-input" type="password" inputmode="numeric" placeholder="••••••" autocomplete="current-password"/>
-
-  <div class="err-msg" id="errMsg"></div>
-
-  <button class="sign-btn" id="go">
-    <span>SIGN IN</span>
-    <span class="arrow">→</span>
-  </button>
-
+  <label class="fl" for="role">Role</label>
+  <select id="role" class="fi">${roleOptions}</select>
+  <label class="fl" for="pin">PIN</label>
+  <input id="pin" class="fi" type="password" inputmode="numeric" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="current-password"/>
+  <div class="err-msg" id="em"></div>
+  <button class="sign-btn" id="go"><span>SIGN IN</span><span class="arrow">&rarr;</span></button>
   <div class="lp-hint">Contact management if you need a PIN.</div>
-
 </div>
 
 <script>
-/* ── Clock ── */
-function tickClock(){
-  const now=new Date();
-  let h=now.getHours(),m=now.getMinutes(),s=now.getSeconds();
-  const ampm=h>=12?"PM":"AM";
-  h=h%12||12;
-  document.getElementById("clockH").textContent=String(h).padStart(2,"0");
-  document.getElementById("clockM").textContent=String(m).padStart(2,"0");
-  document.getElementById("clockS").textContent=String(s).padStart(2,"0");
-  document.getElementById("clockAmpm").textContent=ampm;
-}
-tickClock();
-setInterval(tickClock,1000);
-
-/* ── Date ── */
 (function(){
-  const now=new Date();
-  const days=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-  const months=["January","February","March","April","May","June","July","August","September","October","November","December"];
-  document.getElementById("dateDay").textContent=days[now.getDay()];
-  document.getElementById("dateFull").textContent=months[now.getMonth()]+" "+now.getDate()+", "+now.getFullYear();
-  document.getElementById("footerText").textContent=
-    "WESBELL DISPATCH · "+days[now.getDay()].toUpperCase()+" "+months[now.getMonth()].toUpperCase().slice(0,3)+" "+now.getDate();
-})();
-
-/* ── Calendar ── */
-(function(){
-  const now=new Date();
-  const y=now.getFullYear(),mo=now.getMonth();
-  const months=["January","February","March","April","May","June","July","August","September","October","November","December"];
-  const first=new Date(y,mo,1).getDay();
-  const daysInMonth=new Date(y,mo+1,0).getDate();
-  const daysInPrev=new Date(y,mo,0).getDate();
-  const wrap=document.getElementById("calWrap");
-  let html='<div class="cal-header"><span class="cal-month">'+months[mo].toUpperCase()+'</span><span class="cal-year">'+y+'</span></div>';
-  html+='<div class="cal-grid">';
-  ["SU","MO","TU","WE","TH","FR","SA"].forEach(d=>html+='<div class="cal-dow">'+d+'</div>');
-  // Prev month fill
-  for(let i=first-1;i>=0;i--) html+='<div class="cal-cell other-month">'+(daysInPrev-i)+'</div>';
-  // Current month
-  for(let d=1;d<=daysInMonth;d++){
-    const isToday=d===now.getDate();
-    html+='<div class="cal-cell'+(isToday?" today":"")+'">'+d+'</div>';
+  // Clock
+  function tick(){
+    var n=new Date(),h=n.getHours(),m=n.getMinutes(),s=n.getSeconds(),ap=h>=12?"PM":"AM";
+    h=h%12||12;
+    document.getElementById("ch").textContent=String(h).padStart(2,"0");
+    document.getElementById("cm").textContent=String(m).padStart(2,"0");
+    document.getElementById("cs").textContent=String(s).padStart(2,"0");
+    document.getElementById("ca").textContent=ap;
   }
-  // Next month fill
-  const filled=first+daysInMonth;
-  const rem=filled%7===0?0:7-(filled%7);
-  for(let d=1;d<=rem;d++) html+='<div class="cal-cell other-month">'+d+'</div>';
-  html+='</div>';
-  wrap.innerHTML=html;
-})();
+  tick(); setInterval(tick,1000);
 
-/* ── Weather (Open-Meteo — no API key) ── */
-(function(){
-  const WMO={
-    0:"☀️",1:"🌤",2:"⛅",3:"☁️",
-    45:"🌫",48:"🌫",
-    51:"🌦",53:"🌦",55:"🌧",
-    56:"🌨",57:"🌨",
-    61:"🌧",63:"🌧",65:"🌧",
-    66:"🌨",67:"🌨",
-    71:"🌨",73:"❄️",75:"❄️",77:"🌨",
-    80:"🌦",81:"🌦",82:"⛈",
-    85:"🌨",86:"❄️",
-    95:"⛈",96:"⛈",99:"⛈"
-  };
-  const DESC={
-    0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",
-    45:"Fog",48:"Icy fog",
-    51:"Light drizzle",53:"Drizzle",55:"Heavy drizzle",
-    56:"Freezing drizzle",57:"Heavy freezing drizzle",
-    61:"Light rain",63:"Rain",65:"Heavy rain",
-    66:"Freezing rain",67:"Heavy freezing rain",
-    71:"Light snow",73:"Snow",75:"Heavy snow",77:"Snow grains",
-    80:"Light showers",81:"Showers",82:"Violent showers",
-    85:"Snow showers",86:"Heavy snow showers",
-    95:"Thunderstorm",96:"Thunderstorm w/ hail",99:"Heavy thunderstorm w/ hail"
-  };
-  navigator.geolocation.getCurrentPosition(async pos=>{
-    try{
-      const {latitude:lat,longitude:lon}=pos.coords;
-      const url="https://api.open-meteo.com/v1/forecast?latitude="+lat+"&longitude="+lon+
-        "&current=temperature_2m,weathercode,windspeed_10m,relative_humidity_2m&temperature_unit=celsius&windspeed_unit=kmh&timezone=auto";
-      const r=await fetch(url);
-      const d=await r.json();
-      const c=d.current;
-      const code=c.weathercode;
-      const icon=WMO[code]||"🌡";
-      const desc=DESC[code]||"Unknown";
-      const temp=Math.round(c.temperature_2m);
-      const wind=Math.round(c.windspeed_10m);
-      const hum=Math.round(c.relative_humidity_2m);
-      document.getElementById("weatherBlock").innerHTML=
-        '<div class="weather-icon">'+icon+'</div>'+
-        '<div class="weather-main">'+
-          '<div><span class="weather-temp">'+temp+'</span><span class="weather-unit">°C</span></div>'+
+  // Date
+  var now=new Date();
+  var DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  var MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  document.getElementById("dd").textContent=DAYS[now.getDay()];
+  document.getElementById("df").textContent=MONTHS[now.getMonth()]+" "+now.getDate()+", "+now.getFullYear();
+  document.getElementById("ft").textContent="WESBELL DISPATCH \u00b7 "+DAYS[now.getDay()].toUpperCase();
+
+  // Calendar
+  var y=now.getFullYear(),mo=now.getMonth();
+  var first=new Date(y,mo,1).getDay(),dim=new Date(y,mo+1,0).getDate(),dipm=new Date(y,mo,0).getDate();
+  var h='<div class="cal-head"><span class="cal-month">'+MONTHS[mo].toUpperCase()+'</span><span class="cal-year">'+y+'</span></div>';
+  h+='<div class="cal-grid">';
+  ["SU","MO","TU","WE","TH","FR","SA"].forEach(function(d){h+='<div class="cal-dow">'+d+'</div>';});
+  for(var i=first-1;i>=0;i--) h+='<div class="cal-cell other">'+(dipm-i)+'</div>';
+  for(var d=1;d<=dim;d++) h+='<div class="cal-cell'+(d===now.getDate()?" today":"")+'">'+d+'</div>';
+  var filled=first+dim,rem=filled%7===0?0:7-(filled%7);
+  for(var d=1;d<=rem;d++) h+='<div class="cal-cell other">'+d+'</div>';
+  h+='</div>';
+  document.getElementById("cal").innerHTML=h;
+
+  // Weather via Open-Meteo (no key needed)
+  var WMO={0:"☀️",1:"🌤",2:"⛅",3:"☁️",45:"🌫",48:"🌫",51:"🌦",53:"🌦",55:"🌧",61:"🌧",63:"🌧",65:"🌧",71:"🌨",73:"❄️",75:"❄️",80:"🌦",81:"🌦",82:"⛈",95:"⛈",96:"⛈",99:"⛈"};
+  var DESC={0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",45:"Fog",48:"Icy fog",51:"Light drizzle",53:"Drizzle",55:"Heavy drizzle",61:"Light rain",63:"Rain",65:"Heavy rain",71:"Light snow",73:"Snow",75:"Heavy snow",80:"Light showers",81:"Showers",82:"Violent showers",95:"Thunderstorm",96:"Thunderstorm w/ hail",99:"Heavy thunderstorm"};
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(function(pos){
+      var lat=pos.coords.latitude,lon=pos.coords.longitude;
+      fetch("https://api.open-meteo.com/v1/forecast?latitude="+lat+"&longitude="+lon+"&current=temperature_2m,weathercode,windspeed_10m,relative_humidity_2m&temperature_unit=celsius&windspeed_unit=kmh&timezone=auto")
+      .then(function(r){return r.json();})
+      .then(function(d){
+        var c=d.current,code=c.weathercode,icon=WMO[code]||"\ud83c\udf21",desc=DESC[code]||"",temp=Math.round(c.temperature_2m),wind=Math.round(c.windspeed_10m),hum=Math.round(c.relative_humidity_2m);
+        document.getElementById("wb").innerHTML=
+          '<div class="weather-icon">'+icon+'</div>'+
+          '<div><div><span class="weather-temp">'+temp+'</span><span class="weather-unit">\u00b0C</span></div>'+
           '<div class="weather-desc">'+desc+'</div>'+
-          '<div class="weather-meta">'+
-            '<div class="weather-meta-item">💨 <span>'+wind+' km/h</span></div>'+
-            '<div class="weather-meta-item">💧 <span>'+hum+'%</span></div>'+
-          '</div>'+
-        '</div>';
-    }catch{
-      document.getElementById("weatherBlock").innerHTML='<div class="weather-loading">Weather unavailable</div>';
-    }
-  }, ()=>{
-    document.getElementById("weatherBlock").innerHTML='<div class="weather-loading">Enable location for weather</div>';
-  },{timeout:8000});
-})();
-
-/* ── Login ── */
-const ROLE_HOME={dispatcher:"/",admin:"/",dock:"/dock",management:"/management"};
-const btn=document.getElementById("go");
-const err=document.getElementById("errMsg");
-async function doLogin(){
-  const role=document.getElementById("role").value;
-  const pin=document.getElementById("pin").value;
-  if(!pin){err.textContent="Enter your PIN.";err.classList.add("show");return;}
-  btn.disabled=true;
-  btn.innerHTML='<span>SIGNING IN…</span>';
-  err.classList.remove("show");
-  try{
-    const res=await fetch("/api/login",{
-      method:"POST",
-      headers:{"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},
-      body:JSON.stringify({role,pin})
-    });
-    if(!res.ok){err.textContent=await res.text();err.classList.add("show");return;}
-    location.href=ROLE_HOME[role]||"/";
-  }catch(e){
-    err.textContent="Connection error. Try again.";err.classList.add("show");
-  }finally{
-    btn.disabled=false;
-    btn.innerHTML='<span>SIGN IN</span><span class="arrow">→</span>';
+          '<div class="weather-meta"><div class="wm">\ud83d\udca8 <span>'+wind+' km/h</span></div><div class="wm">\ud83d\udca7 <span>'+hum+'%</span></div></div></div>';
+      }).catch(function(){document.getElementById("wb").innerHTML='<div class="weather-msg">Weather unavailable</div>';});
+    },function(){document.getElementById("wb").innerHTML='<div class="weather-msg">Enable location for weather</div>';},{timeout:8000});
+  } else {
+    document.getElementById("wb").innerHTML='<div class="weather-msg">Weather unavailable</div>';
   }
-}
-btn.addEventListener("click",doLogin);
-document.getElementById("pin").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin();});
-document.getElementById("pin").focus();
+
+  // Login
+  var ROLE_HOME={dispatcher:"/",admin:"/",dock:"/dock",management:"/management"};
+  var btn=document.getElementById("go"),em=document.getElementById("em");
+  function doLogin(){
+    var role=document.getElementById("role").value,pin=document.getElementById("pin").value;
+    if(!pin){em.textContent="Enter your PIN.";em.classList.add("show");return;}
+    btn.disabled=true;btn.innerHTML="<span>SIGNING IN\u2026</span>";em.classList.remove("show");
+    fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},body:JSON.stringify({role:role,pin:pin})})
+    .then(function(r){
+      if(!r.ok){r.text().then(function(t){em.textContent=t;em.classList.add("show");});return;}
+      location.href=ROLE_HOME[role]||"/";
+    }).catch(function(){em.textContent="Connection error. Try again.";em.classList.add("show");})
+    .finally(function(){btn.disabled=false;btn.innerHTML="<span>SIGN IN</span><span class=\"arrow\">&rarr;</span>";});
+  }
+  btn.addEventListener("click",doLogin);
+  document.getElementById("pin").addEventListener("keydown",function(e){if(e.key==="Enter")doLogin();});
+  document.getElementById("pin").focus();
+})();
 </script>
 </body>
 </html>`);
@@ -1569,17 +1257,6 @@ app.post("/api/report-issue", requireXHR, requireDriverAccess, async (req, res) 
        ipOf(req), req.headers["user-agent"] || ""]
     );
     await audit(req, "driver", "issue_reported", "trailer", trailer, { door, hasPhoto: !!photoData, note: note.slice(0, 80) });
-
-    // Immediately push-notify management so issues don't sit unnoticed
-    const photoFlag = photoData ? " 📷" : "";
-    const doorFlag  = door ? ` · Door ${door}` : "";
-    broadcastPush(
-      `⚠ Issue Report${photoFlag}`,
-      `Trailer ${trailer}${doorFlag}: ${note || "No description"}`,
-      { kind: "issue_report", id: result.lastID, trailer, door }
-    ).catch(() => {});
-    wsBroadcast("automation", { kind: "issue_report", id: result.lastID, trailer, door, hasPhoto: !!photoData });
-
     res.json({ ok: true, id: result.lastID });
   } catch (e) { res.status(500).send("Report failed"); }
 });
@@ -1604,182 +1281,6 @@ app.get("/api/issue-reports/:id/photo", requireRole(["dispatcher","management","
     res.setHeader("Cache-Control", "private, max-age=86400");
     res.send(buf);
   } catch (e) { res.status(500).send("Fetch failed"); }
-});
-
-
-/* ══════════════════════════════════════════
-   AUTOMATION ENGINE
-══════════════════════════════════════════ */
-
-// Tracks trailers already alerted this stale-check cycle (cleared when trailer updates)
-const _staleAlerted = new Set();
-function clearStaleAlert(trailer) { _staleAlerted.delete(trailer); }
-
-const STALE_THRESHOLDS = {
-  "Incoming":   STALE_INCOMING_MIN,
-  "Dropped":    STALE_DROPPED_MIN,
-  "Loading":    STALE_LOADING_MIN,
-  "Dock Ready": STALE_DOCKREADY_MIN,
-};
-
-// Job 1 — Stale trailer detection (runs every 5 min)
-async function checkStaleTrailers() {
-  try {
-    const now = Date.now();
-    const rows = await all(
-      `SELECT trailer, status, door, updatedAt FROM trailers
-       WHERE status IN ('Incoming','Dropped','Loading','Dock Ready')`
-    );
-    for (const r of rows) {
-      const threshMs = (STALE_THRESHOLDS[r.status] || 0) * 60_000;
-      if (!threshMs) continue;
-      if ((now - (r.updatedAt || 0)) < threshMs) continue;
-      const key = `${r.trailer}:${r.status}`;
-      if (_staleAlerted.has(key)) continue;
-      _staleAlerted.add(key);
-      const ageMin = Math.round((now - r.updatedAt) / 60_000);
-      const doorStr = r.door ? ` at door ${r.door}` : "";
-      const msg = `Trailer ${r.trailer}${doorStr} has been ${r.status} for ${ageMin} min`;
-      console.log(`[AUTO] Stale: ${msg}`);
-      wsBroadcast("automation", { kind: "stale", trailer: r.trailer, status: r.status, door: r.door || "", ageMin });
-      broadcastPush(`\u26a0\ufe0f Stale Trailer`, msg, { kind: "stale", trailer: r.trailer }).catch(() => {});
-      await run(
-        `INSERT INTO audit(at,actorRole,action,entityType,entityId,details,ip,userAgent) VALUES(?,?,?,?,?,?,?,?)`,
-        [now, "automation", "stale_alert", "trailer", r.trailer,
-         JSON.stringify({ status: r.status, door: r.door || "", ageMin }), "", "automation"]
-      ).catch(() => {});
-    }
-  } catch (e) { console.error("[AUTO] checkStaleTrailers:", e.message); }
-}
-
-// Job 2 — Auto-depart Ready trailers (runs every 10 min)
-async function autoDepartReady() {
-  if (!AUTO_DEPART_READY_MIN) return;
-  try {
-    const cutoff = Date.now() - AUTO_DEPART_READY_MIN * 60_000;
-    const rows = await all(`SELECT trailer, door FROM trailers WHERE status='Ready' AND updatedAt < ?`, [cutoff]);
-    if (!rows.length) return;
-    const now = Date.now();
-    for (const r of rows) {
-      await run(`UPDATE trailers SET status='Departed', updatedAt=? WHERE trailer=?`, [now, r.trailer]);
-      clearStaleAlert(r.trailer);
-      console.log(`[AUTO] Auto-departed ${r.trailer} (Ready >${AUTO_DEPART_READY_MIN}min)`);
-      await run(
-        `INSERT INTO audit(at,actorRole,action,entityType,entityId,details,ip,userAgent) VALUES(?,?,?,?,?,?,?,?)`,
-        [now, "automation", "auto_departed", "trailer", r.trailer,
-         JSON.stringify({ door: r.door || "", reason: `Ready >${AUTO_DEPART_READY_MIN}min` }), "", "automation"]
-      ).catch(() => {});
-    }
-    await broadcastTrailers();
-    wsBroadcast("automation", { kind: "auto_departed", trailers: rows.map(r => r.trailer) });
-    const names = rows.map(r => r.trailer).join(", ");
-    broadcastPush(
-      `\ud83dude9b Auto-Departed ${rows.length} Trailer${rows.length > 1 ? "s" : ""}`,
-      `${names} marked Departed after ${AUTO_DEPART_READY_MIN}min in Ready`,
-      { kind: "auto_departed" }
-    ).catch(() => {});
-  } catch (e) { console.error("[AUTO] autoDepartReady:", e.message); }
-}
-
-// Job 3 — Purge old Departed trailers (runs every hour)
-async function purgeOldDeparted() {
-  if (!DEPARTED_PURGE_HRS) return;
-  try {
-    const cutoff = Date.now() - DEPARTED_PURGE_HRS * 3_600_000;
-    const rows = await all(`SELECT trailer FROM trailers WHERE status='Departed' AND updatedAt < ?`, [cutoff]);
-    if (!rows.length) return;
-    const ids = rows.map(r => r.trailer);
-    const ph = ids.map(() => "?").join(",");
-    await run(`DELETE FROM trailers WHERE trailer IN (${ph})`, ids);
-    ids.forEach(clearStaleAlert);
-    console.log(`[AUTO] Purged ${ids.length} departed trailer(s)`);
-    await broadcastTrailers();
-    await run(
-      `INSERT INTO audit(at,actorRole,action,entityType,entityId,details,ip,userAgent) VALUES(?,?,?,?,?,?,?,?)`,
-      [Date.now(), "automation", "departed_purged", "trailer", ids.join(","),
-       JSON.stringify({ count: ids.length, trailers: ids }), "", "automation"]
-    ).catch(() => {});
-  } catch (e) { console.error("[AUTO] purgeOldDeparted:", e.message); }
-}
-
-// Job 4 — Shift-end report builder
-async function buildShiftReport() {
-  const since = Date.now() - 24 * 3_600_000;
-  const [auditRows, safetyRow, issueRow] = await Promise.all([
-    all(`SELECT action, entityId FROM audit WHERE at > ?`, [since]),
-    get(`SELECT count(*) as n FROM confirmations WHERE at > ?`, [since]),
-    get(`SELECT count(*) as n FROM issue_reports WHERE at > ?`, [since]),
-  ]);
-  const trailersProcessed = new Set(auditRows.filter(r => r.action === "driver_drop").map(r => r.entityId)).size;
-  const safetyCount  = safetyRow?.n  || 0;
-  const issueCount   = issueRow?.n   || 0;
-  const autoDeparted = auditRows.filter(r => r.action === "auto_departed").length;
-  const staleAlerts  = auditRows.filter(r => r.action === "stale_alert").length;
-  const activeNow    = await all(`SELECT trailer, status FROM trailers WHERE status NOT IN ('Departed','')`);
-  return { trailersProcessed, safetyCount, issueCount, autoDeparted, staleAlerts, activeNow, generatedAt: Date.now() };
-}
-
-let _lastShiftReportDate = null;
-async function maybeRunShiftReport() {
-  if (!SHIFT_REPORT_TIME) return;
-  try {
-    const d = new Date();
-    const hhmm  = `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
-    const today = d.toISOString().slice(0, 10);
-    if (hhmm !== SHIFT_REPORT_TIME || _lastShiftReportDate === today) return;
-    _lastShiftReportDate = today;
-    const report = await buildShiftReport();
-    const { trailersProcessed, safetyCount, issueCount, autoDeparted, staleAlerts, activeNow } = report;
-    const parts = [
-      `${trailersProcessed} trailers`,
-      `${safetyCount} safety confirmations`,
-      issueCount   ? `${issueCount} issue report${issueCount !== 1 ? "s" : ""}` : null,
-      autoDeparted ? `${autoDeparted} auto-departed` : null,
-      staleAlerts  ? `${staleAlerts} stale alerts` : null,
-      activeNow.length ? `${activeNow.length} still active` : "board clear",
-    ].filter(Boolean);
-    const body = parts.join(" \u00b7 ");
-    console.log(`[AUTO] Shift report: ${body}`);
-    wsBroadcast("automation", { kind: "shift_report", report });
-    broadcastPush("\ud83dudcca Shift Report", body, { kind: "shift_report", report }).catch(() => {});
-    await run(
-      `INSERT INTO audit(at,actorRole,action,entityType,entityId,details,ip,userAgent) VALUES(?,?,?,?,?,?,?,?)`,
-      [Date.now(), "automation", "shift_report", "system", "daily",
-       JSON.stringify(report), "", "automation"]
-    ).catch(() => {});
-  } catch (e) { console.error("[AUTO] maybeRunShiftReport:", e.message); }
-}
-
-// Master scheduler — single 1-min tick drives all jobs
-let _lastStaleCheck = 0, _lastAutodepart = 0, _lastPurge = 0;
-function startAutomation() {
-  setInterval(async () => {
-    const now = Date.now();
-    if (now - _lastStaleCheck > 5 * 60_000)  { _lastStaleCheck = now;  checkStaleTrailers(); }
-    if (now - _lastAutodepart > 10 * 60_000) { _lastAutodepart = now; autoDepartReady(); }
-    if (now - _lastPurge > 60 * 60_000)      { _lastPurge = now;      purgeOldDeparted(); }
-    maybeRunShiftReport();
-  }, 60_000).unref();
-  console.log(
-    `[AUTO] Started — stale:${STALE_INCOMING_MIN}/${STALE_DROPPED_MIN}/${STALE_LOADING_MIN}/${STALE_DOCKREADY_MIN}min` +
-    ` | auto-depart:${AUTO_DEPART_READY_MIN}min | purge:${DEPARTED_PURGE_HRS}h | report:${SHIFT_REPORT_TIME || "off"}`
-  );
-}
-
-// API — on-demand shift report
-app.get("/api/automation/shift-report", requireRole(["dispatcher","management","admin"]), async (req, res) => {
-  try { res.json(await buildShiftReport()); }
-  catch (e) { res.status(500).send("Report failed"); }
-});
-
-// API — automation config (lets the UI show thresholds)
-app.get("/api/automation/config", requireRole(["management","admin"]), (_req, res) => {
-  res.json({
-    staleThresholds: { Incoming: STALE_INCOMING_MIN, Dropped: STALE_DROPPED_MIN, Loading: STALE_LOADING_MIN, DockReady: STALE_DOCKREADY_MIN },
-    autoDepartReadyMin: AUTO_DEPART_READY_MIN,
-    departedPurgeHrs:   DEPARTED_PURGE_HRS,
-    shiftReportTime:    SHIFT_REPORT_TIME,
-  });
 });
 
 
@@ -1808,7 +1309,6 @@ initDb()
     server.listen(PORT, () => {
       console.log(`Wesbell Dispatch v${APP_VERSION} running on http://localhost:${PORT}`);
       console.log(`DB: ${DB_FILE}`);
-      startAutomation();
     });
   })
   .catch(e => { console.error("DB init failed:", e); process.exit(1); });

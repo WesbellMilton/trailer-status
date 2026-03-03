@@ -248,13 +248,28 @@
 
   function renderKpis() {
     const v=Object.values(trailers);
-    el("supKpis").innerHTML=[
+    const kpis=[
       {val:v.length,lbl:"Total Trailers",cls:"kpi-total"},
       {val:v.filter(r=>r.status==="Loading").length,lbl:"Loading",cls:"kpi-loading"},
       {val:v.filter(r=>["Ready","Dock Ready"].includes(r.status)).length,lbl:"Ready",cls:"kpi-ready"},
       {val:v.filter(r=>r.status==="Departed").length,lbl:"Departed",cls:"kpi-departed"},
       {val:confirmations.length,lbl:"Safety Confirms",cls:"kpi-conf"},
-    ].map(k=>`<div class="kpi ${k.cls}"><div class="k-val">${k.val}</div><div class="k-lbl">${k.lbl}</div></div>`).join("");
+    ];
+    el("supKpis").innerHTML=kpis.map(k=>`<div class="kpi ${k.cls}"><div class="k-val" data-target="${k.val}">0</div><div class="k-lbl">${k.lbl}</div></div>`).join("");
+    // Count-up animation
+    el("supKpis").querySelectorAll(".k-val[data-target]").forEach(el=>{
+      const target=parseInt(el.dataset.target)||0;
+      if(target===0){ el.textContent="0"; return; }
+      const dur=Math.min(600, target*80);
+      const start=performance.now();
+      const tick=now=>{
+        const t=Math.min(1,(now-start)/dur);
+        const eased=1-Math.pow(1-t,3); // ease-out cubic
+        el.textContent=Math.round(eased*target);
+        if(t<1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
   }
 
   function renderPlates() {
@@ -585,7 +600,42 @@
   }
 
   const ALL_SCREENS=["who-screen","flow-screen","shunt-screen","drop-screen","xdock-pickup-screen","xdock-offload-screen","safety-screen","done-screen"];
-  function showScreen(id){ ALL_SCREENS.forEach(s=>{ const e=el(s); if(e)e.style.display="none"; }); const t=el(id); if(t){ t.style.display=""; if(id==="who-screen"||id==="flow-screen") setTimeout(()=>t.querySelector("button")?.focus(),50); } }
+  let _currentScreen="who-screen";
+
+  function showScreen(id, forceBack=false){
+    const prev=_currentScreen;
+    const prevEl=el(prev);
+    const nextEl=el(id);
+    if(!nextEl) return;
+
+    // Determine slide direction based on screen order
+    const prevIdx=ALL_SCREENS.indexOf(prev);
+    const nextIdx=ALL_SCREENS.indexOf(id);
+    const goingBack=forceBack||nextIdx<prevIdx;
+
+    // Animate out current
+    if(prevEl&&prev!==id){
+      prevEl.classList.remove("screen-enter","screen-enter-back","screen-exit");
+      void prevEl.offsetWidth;
+      prevEl.classList.add("screen-exit");
+      setTimeout(()=>{ prevEl.style.display="none"; prevEl.classList.remove("screen-exit"); },180);
+    }
+
+    // Hide all others immediately
+    ALL_SCREENS.forEach(s=>{ if(s!==prev&&s!==id){ const e=el(s); if(e)e.style.display="none"; } });
+
+    // Show and animate in
+    nextEl.style.display="";
+    nextEl.classList.remove("screen-enter","screen-enter-back","screen-exit","done-screen-active");
+    void nextEl.offsetWidth;
+    nextEl.classList.add(goingBack?"screen-enter-back":"screen-enter");
+
+    // Done screen stagger celebration
+    if(id==="done-screen") setTimeout(()=>nextEl.classList.add("done-screen-active"),20);
+
+    _currentScreen=id;
+    if(id==="who-screen"||id==="flow-screen") setTimeout(()=>nextEl.querySelector("button")?.focus(),80);
+  }
 
   function selectWho(whoType){
     driverState.whoType=whoType;
@@ -871,7 +921,7 @@
     driverState.trailer=""; driverState.assignedDoor=""; driverState.selectedDoor="";
     driverState.dropType="Empty"; driverState.overrideMode=false;
     try{ sessionStorage.removeItem("wb_whoType"); }catch{}
-    showScreen("who-screen");
+    showScreen("who-screen",true);
   }
 
   function syncDriverWsDot(state){
@@ -1232,15 +1282,15 @@
     if(id==="btnBackToWho"){
       try{ sessionStorage.removeItem("wb_whoType"); }catch{}
       driverState.whoType=null;
-      showScreen("who-screen");
+      showScreen("who-screen",true);
       return;
     }
-    if(id==="btnBackToFlow2"||direct?.dataset?.flowBack){ showScreen("flow-screen"); return; }
+    if(id==="btnBackToFlow2"||direct?.dataset?.flowBack){ showScreen("flow-screen",true); return; }
     if(id==="btnBackToFlow"){
       const isOutside=driverState.whoType==="outside";
       const dropBtn=el("flowBtnDrop"); if(dropBtn)dropBtn.style.display=isOutside?"none":"";
       const shuntBtn=document.querySelector("[data-flow='shunt']"); if(shuntBtn)shuntBtn.style.display=isOutside?"none":"";
-      showScreen("flow-screen"); return;
+      showScreen("flow-screen",true); return;
     }
     if(id==="btnDriverDrop")    return driverDrop();
     if(id==="btnXdockPickup")   return xdockPickup();

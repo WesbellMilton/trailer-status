@@ -17,6 +17,19 @@ const PIN_MIN_LEN = 4;
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
 const COOKIE_NAME = "wb_session";
 
+/* ── Automation thresholds (override via env vars) ── */
+// How long a trailer can sit in a status before dispatcher is alerted (minutes)
+const STALE_INCOMING_MIN  = Number(process.env.STALE_INCOMING_MIN  || 90);   // 1.5 hrs
+const STALE_DROPPED_MIN   = Number(process.env.STALE_DROPPED_MIN   || 120);  // 2 hrs
+const STALE_LOADING_MIN   = Number(process.env.STALE_LOADING_MIN   || 180);  // 3 hrs
+const STALE_DOCKREADY_MIN = Number(process.env.STALE_DOCKREADY_MIN || 60);   // 1 hr
+// How long a Ready trailer can sit before being auto-departed (minutes, 0 = disabled)
+const AUTO_DEPART_READY_MIN = Number(process.env.AUTO_DEPART_READY_MIN || 240); // 4 hrs
+// Shift-end report — "HH:MM" 24h local time, empty string = disabled
+const SHIFT_REPORT_TIME = process.env.SHIFT_REPORT_TIME || "06:00";
+// How many hours to keep Departed trailers in DB before purging (0 = never)
+const DEPARTED_PURGE_HRS = Number(process.env.DEPARTED_PURGE_HRS || 24);
+
 const ENV_PINS = {
   dispatcher: process.env.DISPATCHER_PIN || "",
   dock:       process.env.DOCK_PIN       || "",
@@ -407,7 +420,16 @@ function wsBroadcast(type, payload) {
 }
 
 async function broadcastTrailers() {
-  try { invalidateTrailers(); wsBroadcast("state",         await getTrailersCache()); }
+  try {
+    invalidateTrailers();
+    const state = await getTrailersCache();
+    // Clear stale-alert tracking for any trailer that has moved recently (< 2 min)
+    const recentCutoff = Date.now() - 2 * 60_000;
+    for (const [trailer, data] of Object.entries(state)) {
+      if ((data.updatedAt || 0) > recentCutoff) clearStaleAlert(trailer);
+    }
+    wsBroadcast("state", state);
+  }
   catch(e) { console.error("[WS] broadcastTrailers:", e.message); }
 }
 async function broadcastPlates() {
@@ -488,7 +510,10 @@ function guardPage(allowedRoles) {
 
 app.get("/login", (req, res) => {
   const expired  = req.query.expired === "1";
-  const fromPath = req.query.from || req.get("Referer") || "";
+  // Only use the explicit ?from= param (set by session-expiry redirects).
+  // Never fall back to Referer — that would pre-select the dock role after
+  // a normal logout from the dock page.
+  const fromPath = req.query.from || "";
 
   // Already authenticated — bounce straight to their home page
   // This prevents the browser back button from stranding them on the login form
@@ -1058,6 +1083,17 @@ app.post("/api/report-issue", requireXHR, requireDriverAccess, async (req, res) 
        ipOf(req), req.headers["user-agent"] || ""]
     );
     await audit(req, "driver", "issue_reported", "trailer", trailer, { door, hasPhoto: !!photoData, note: note.slice(0, 80) });
+
+    // Immediately push-notify management so issues don't sit unnoticed
+    const photoFlag = photoData ? " 📷" : "";
+    const doorFlag  = door ? ` · Door ${door}` : "";
+    broadcastPush(
+      `⚠ Issue Report${photoFlag}`,
+      `Trailer ${trailer}${doorFlag}: ${note || "No description"}`,
+      { kind: "issue_report", id: result.lastID, trailer, door }
+    ).catch(() => {});
+    wsBroadcast("automation", { kind: "issue_report", id: result.lastID, trailer, door, hasPhoto: !!photoData });
+
     res.json({ ok: true, id: result.lastID });
   } catch (e) { res.status(500).send("Report failed"); }
 });
@@ -1082,6 +1118,182 @@ app.get("/api/issue-reports/:id/photo", requireRole(["dispatcher","management","
     res.setHeader("Cache-Control", "private, max-age=86400");
     res.send(buf);
   } catch (e) { res.status(500).send("Fetch failed"); }
+});
+
+
+/* ══════════════════════════════════════════
+   AUTOMATION ENGINE
+══════════════════════════════════════════ */
+
+// Tracks trailers already alerted this stale-check cycle (cleared when trailer updates)
+const _staleAlerted = new Set();
+function clearStaleAlert(trailer) { _staleAlerted.delete(trailer); }
+
+const STALE_THRESHOLDS = {
+  "Incoming":   STALE_INCOMING_MIN,
+  "Dropped":    STALE_DROPPED_MIN,
+  "Loading":    STALE_LOADING_MIN,
+  "Dock Ready": STALE_DOCKREADY_MIN,
+};
+
+// Job 1 — Stale trailer detection (runs every 5 min)
+async function checkStaleTrailers() {
+  try {
+    const now = Date.now();
+    const rows = await all(
+      `SELECT trailer, status, door, updatedAt FROM trailers
+       WHERE status IN ('Incoming','Dropped','Loading','Dock Ready')`
+    );
+    for (const r of rows) {
+      const threshMs = (STALE_THRESHOLDS[r.status] || 0) * 60_000;
+      if (!threshMs) continue;
+      if ((now - (r.updatedAt || 0)) < threshMs) continue;
+      const key = `${r.trailer}:${r.status}`;
+      if (_staleAlerted.has(key)) continue;
+      _staleAlerted.add(key);
+      const ageMin = Math.round((now - r.updatedAt) / 60_000);
+      const doorStr = r.door ? ` at door ${r.door}` : "";
+      const msg = `Trailer ${r.trailer}${doorStr} has been ${r.status} for ${ageMin} min`;
+      console.log(`[AUTO] Stale: ${msg}`);
+      wsBroadcast("automation", { kind: "stale", trailer: r.trailer, status: r.status, door: r.door || "", ageMin });
+      broadcastPush(`\u26a0\ufe0f Stale Trailer`, msg, { kind: "stale", trailer: r.trailer }).catch(() => {});
+      await run(
+        `INSERT INTO audit(at,actorRole,action,entityType,entityId,details,ip,userAgent) VALUES(?,?,?,?,?,?,?,?)`,
+        [now, "automation", "stale_alert", "trailer", r.trailer,
+         JSON.stringify({ status: r.status, door: r.door || "", ageMin }), "", "automation"]
+      ).catch(() => {});
+    }
+  } catch (e) { console.error("[AUTO] checkStaleTrailers:", e.message); }
+}
+
+// Job 2 — Auto-depart Ready trailers (runs every 10 min)
+async function autoDepartReady() {
+  if (!AUTO_DEPART_READY_MIN) return;
+  try {
+    const cutoff = Date.now() - AUTO_DEPART_READY_MIN * 60_000;
+    const rows = await all(`SELECT trailer, door FROM trailers WHERE status='Ready' AND updatedAt < ?`, [cutoff]);
+    if (!rows.length) return;
+    const now = Date.now();
+    for (const r of rows) {
+      await run(`UPDATE trailers SET status='Departed', updatedAt=? WHERE trailer=?`, [now, r.trailer]);
+      clearStaleAlert(r.trailer);
+      console.log(`[AUTO] Auto-departed ${r.trailer} (Ready >${AUTO_DEPART_READY_MIN}min)`);
+      await run(
+        `INSERT INTO audit(at,actorRole,action,entityType,entityId,details,ip,userAgent) VALUES(?,?,?,?,?,?,?,?)`,
+        [now, "automation", "auto_departed", "trailer", r.trailer,
+         JSON.stringify({ door: r.door || "", reason: `Ready >${AUTO_DEPART_READY_MIN}min` }), "", "automation"]
+      ).catch(() => {});
+    }
+    await broadcastTrailers();
+    wsBroadcast("automation", { kind: "auto_departed", trailers: rows.map(r => r.trailer) });
+    const names = rows.map(r => r.trailer).join(", ");
+    broadcastPush(
+      `\ud83dude9b Auto-Departed ${rows.length} Trailer${rows.length > 1 ? "s" : ""}`,
+      `${names} marked Departed after ${AUTO_DEPART_READY_MIN}min in Ready`,
+      { kind: "auto_departed" }
+    ).catch(() => {});
+  } catch (e) { console.error("[AUTO] autoDepartReady:", e.message); }
+}
+
+// Job 3 — Purge old Departed trailers (runs every hour)
+async function purgeOldDeparted() {
+  if (!DEPARTED_PURGE_HRS) return;
+  try {
+    const cutoff = Date.now() - DEPARTED_PURGE_HRS * 3_600_000;
+    const rows = await all(`SELECT trailer FROM trailers WHERE status='Departed' AND updatedAt < ?`, [cutoff]);
+    if (!rows.length) return;
+    const ids = rows.map(r => r.trailer);
+    const ph = ids.map(() => "?").join(",");
+    await run(`DELETE FROM trailers WHERE trailer IN (${ph})`, ids);
+    ids.forEach(clearStaleAlert);
+    console.log(`[AUTO] Purged ${ids.length} departed trailer(s)`);
+    await broadcastTrailers();
+    await run(
+      `INSERT INTO audit(at,actorRole,action,entityType,entityId,details,ip,userAgent) VALUES(?,?,?,?,?,?,?,?)`,
+      [Date.now(), "automation", "departed_purged", "trailer", ids.join(","),
+       JSON.stringify({ count: ids.length, trailers: ids }), "", "automation"]
+    ).catch(() => {});
+  } catch (e) { console.error("[AUTO] purgeOldDeparted:", e.message); }
+}
+
+// Job 4 — Shift-end report builder
+async function buildShiftReport() {
+  const since = Date.now() - 24 * 3_600_000;
+  const [auditRows, safetyRow, issueRow] = await Promise.all([
+    all(`SELECT action, entityId FROM audit WHERE at > ?`, [since]),
+    get(`SELECT count(*) as n FROM confirmations WHERE at > ?`, [since]),
+    get(`SELECT count(*) as n FROM issue_reports WHERE at > ?`, [since]),
+  ]);
+  const trailersProcessed = new Set(auditRows.filter(r => r.action === "driver_drop").map(r => r.entityId)).size;
+  const safetyCount  = safetyRow?.n  || 0;
+  const issueCount   = issueRow?.n   || 0;
+  const autoDeparted = auditRows.filter(r => r.action === "auto_departed").length;
+  const staleAlerts  = auditRows.filter(r => r.action === "stale_alert").length;
+  const activeNow    = await all(`SELECT trailer, status FROM trailers WHERE status NOT IN ('Departed','')`);
+  return { trailersProcessed, safetyCount, issueCount, autoDeparted, staleAlerts, activeNow, generatedAt: Date.now() };
+}
+
+let _lastShiftReportDate = null;
+async function maybeRunShiftReport() {
+  if (!SHIFT_REPORT_TIME) return;
+  try {
+    const d = new Date();
+    const hhmm  = `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+    const today = d.toISOString().slice(0, 10);
+    if (hhmm !== SHIFT_REPORT_TIME || _lastShiftReportDate === today) return;
+    _lastShiftReportDate = today;
+    const report = await buildShiftReport();
+    const { trailersProcessed, safetyCount, issueCount, autoDeparted, staleAlerts, activeNow } = report;
+    const parts = [
+      `${trailersProcessed} trailers`,
+      `${safetyCount} safety confirmations`,
+      issueCount   ? `${issueCount} issue report${issueCount !== 1 ? "s" : ""}` : null,
+      autoDeparted ? `${autoDeparted} auto-departed` : null,
+      staleAlerts  ? `${staleAlerts} stale alerts` : null,
+      activeNow.length ? `${activeNow.length} still active` : "board clear",
+    ].filter(Boolean);
+    const body = parts.join(" \u00b7 ");
+    console.log(`[AUTO] Shift report: ${body}`);
+    wsBroadcast("automation", { kind: "shift_report", report });
+    broadcastPush("\ud83dudcca Shift Report", body, { kind: "shift_report", report }).catch(() => {});
+    await run(
+      `INSERT INTO audit(at,actorRole,action,entityType,entityId,details,ip,userAgent) VALUES(?,?,?,?,?,?,?,?)`,
+      [Date.now(), "automation", "shift_report", "system", "daily",
+       JSON.stringify(report), "", "automation"]
+    ).catch(() => {});
+  } catch (e) { console.error("[AUTO] maybeRunShiftReport:", e.message); }
+}
+
+// Master scheduler — single 1-min tick drives all jobs
+let _lastStaleCheck = 0, _lastAutodepart = 0, _lastPurge = 0;
+function startAutomation() {
+  setInterval(async () => {
+    const now = Date.now();
+    if (now - _lastStaleCheck > 5 * 60_000)  { _lastStaleCheck = now;  checkStaleTrailers(); }
+    if (now - _lastAutodepart > 10 * 60_000) { _lastAutodepart = now; autoDepartReady(); }
+    if (now - _lastPurge > 60 * 60_000)      { _lastPurge = now;      purgeOldDeparted(); }
+    maybeRunShiftReport();
+  }, 60_000).unref();
+  console.log(
+    `[AUTO] Started — stale:${STALE_INCOMING_MIN}/${STALE_DROPPED_MIN}/${STALE_LOADING_MIN}/${STALE_DOCKREADY_MIN}min` +
+    ` | auto-depart:${AUTO_DEPART_READY_MIN}min | purge:${DEPARTED_PURGE_HRS}h | report:${SHIFT_REPORT_TIME || "off"}`
+  );
+}
+
+// API — on-demand shift report
+app.get("/api/automation/shift-report", requireRole(["dispatcher","management","admin"]), async (req, res) => {
+  try { res.json(await buildShiftReport()); }
+  catch (e) { res.status(500).send("Report failed"); }
+});
+
+// API — automation config (lets the UI show thresholds)
+app.get("/api/automation/config", requireRole(["management","admin"]), (_req, res) => {
+  res.json({
+    staleThresholds: { Incoming: STALE_INCOMING_MIN, Dropped: STALE_DROPPED_MIN, Loading: STALE_LOADING_MIN, DockReady: STALE_DOCKREADY_MIN },
+    autoDepartReadyMin: AUTO_DEPART_READY_MIN,
+    departedPurgeHrs:   DEPARTED_PURGE_HRS,
+    shiftReportTime:    SHIFT_REPORT_TIME,
+  });
 });
 
 
@@ -1110,6 +1322,7 @@ initDb()
     server.listen(PORT, () => {
       console.log(`Wesbell Dispatch v${APP_VERSION} running on http://localhost:${PORT}`);
       console.log(`DB: ${DB_FILE}`);
+      startAutomation();
     });
   })
   .catch(e => { console.error("DB init failed:", e); process.exit(1); });

@@ -7,6 +7,11 @@ const sqlite3 = require("sqlite3").verbose();
 const crypto = require("crypto");
 
 const app = express();
+
+// Prevent uncaught errors from crashing the whole server
+process.on('uncaughtException',  err  => console.error('[CRASH] uncaughtException:', err));
+process.on('unhandledRejection', reason => console.error('[CRASH] unhandledRejection:', reason));
+
 app.use(express.json({ limit: "6mb" }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -436,7 +441,13 @@ async function broadcastConfirmations() {
 /* ══════════════════════════════════════════
    STATIC / VIEWS
 ══════════════════════════════════════════ */
-app.use(express.static(path.join(__dirname)));
+// Static files — allowlist only: index.html, app.js, style.css, sw.js, manifest.json, icons
+const STATIC_ALLOWLIST = new Set(["index.html","app.js","style.css","sw.js","manifest.json"]);
+app.use((req, res, next) => {
+  const f = req.path.replace(/^\//, "");
+  if (STATIC_ALLOWLIST.has(f)) return express.static(path.join(__dirname))(req, res, next);
+  next();
+});
 // Serve ONLY image assets from project root (icons + splash screens)
 // Uses an allowlist so server.js, .env, sqlite, etc. are never exposed
 const ASSET_ALLOWLIST = /^\/(icon-[\w-]+\.png|apple-touch-icon\.png|favicon\.ico|splash\/splash-[\w-]+\.png)$/;
@@ -800,44 +811,10 @@ app.get("/api/whoami", (req, res) => {
 /* ══════════════════════════════════════════
    RATE LIMITING — LOGIN
 ══════════════════════════════════════════ */
-const loginAttempts = new Map(); // ip → { count, resetAt }
-const LOGIN_MAX     = 5;         // attempts before lockout
-const LOGIN_WINDOW  = 60_000;    // 1 minute window
-const LOGIN_LOCKOUT = 5 * 60_000;// 5 minute lockout after exceeding max
-
-// Prune stale entries every 10 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, v] of loginAttempts.entries()) if (v.resetAt < now) loginAttempts.delete(ip);
-}, 10 * 60_000).unref();
-
-function checkLoginRate(ip) {
-  const now = Date.now();
-  let entry = loginAttempts.get(ip);
-  if (!entry || entry.resetAt < now) {
-    entry = { count: 0, resetAt: now + LOGIN_WINDOW };
-    loginAttempts.set(ip, entry);
-  }
-  entry.count++;
-  if (entry.count > LOGIN_MAX) {
-    // Extend lockout on each additional attempt
-    entry.resetAt = now + LOGIN_LOCKOUT;
-    return { blocked: true, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
-  }
-  return { blocked: false, remaining: LOGIN_MAX - entry.count };
-}
-
-function resetLoginRate(ip) {
-  loginAttempts.delete(ip);
-}
+// Rate limiting removed — no lockout
 
 app.post("/api/login", requireXHR, async (req, res) => {
   try {
-    const ip = ipOf(req);
-    const rate = checkLoginRate(ip);
-    if (rate.blocked) {
-      return res.status(429).send(`Too many attempts. Try again in ${rate.retryAfter}s.`);
-    }
     const role = String(req.body.role || "").toLowerCase();
     const pin  = String(req.body.pin  || "");
     if (!["dispatcher","dock","management","admin"].includes(role)) return res.status(400).send("Invalid role");
@@ -845,7 +822,6 @@ app.post("/api/login", requireXHR, async (req, res) => {
     const ok = await verifyPin(role, pin);
     await audit(req, role, ok ? "login_success" : "login_failed", "auth", role, {});
     if (!ok) return res.status(401).send("Invalid PIN");
-    resetLoginRate(ip); // Clear counter on successful login
     const existing = getSession(req);
     if (existing?.sid) sessions.delete(existing.sid);
     const sid = newSession(role);
@@ -864,7 +840,7 @@ app.post("/api/logout", requireXHR, (req, res) => {
 /* ══════════════════════════════════════════
    API — TRAILERS
 ══════════════════════════════════════════ */
-app.get("/api/state", async (req, res) => res.json(await loadTrailersObject()));
+app.get("/api/state", requireXHR, async (req, res) => { try { res.json(await loadTrailersObject()); } catch(e) { res.status(500).send("State error"); } });
 
 app.post("/api/upsert", requireXHR, requireDockStatusAllowed, async (req, res) => {
   const actor = req.user.role;
@@ -948,7 +924,7 @@ app.post("/api/clear", requireXHR, requireRole(["dispatcher","management","admin
 /* ══════════════════════════════════════════
    API — DOCK PLATES
 ══════════════════════════════════════════ */
-app.get("/api/dockplates", async (req, res) => res.json(await loadDockPlatesObject()));
+app.get("/api/dockplates", requireXHR, async (req, res) => { try { res.json(await loadDockPlatesObject()); } catch(e) { res.status(500).send("Plates error"); } });
 
 app.post("/api/dockplates/set", requireXHR, requireRole(["dock","dispatcher","management","admin"]), async (req, res) => {
   const actor = req.user.role;
@@ -1285,12 +1261,12 @@ app.get("/api/issue-reports/:id/photo", requireRole(["dispatcher","management","
 
 
 wss.on("connection", async ws => {
-  try {
-    ws.send(JSON.stringify({ type: "version",       payload: { version: APP_VERSION } }));
-    ws.send(JSON.stringify({ type: "state",         payload: await loadTrailersObject() }));
-    ws.send(JSON.stringify({ type: "dockplates",    payload: await loadDockPlatesObject() }));
-    ws.send(JSON.stringify({ type: "confirmations", payload: await loadConfirmations(250) }));
-  } catch {}
+  ws.on("error", () => {}); // absorb socket errors, prevent crash
+  const safeSend = msg => { try { if (ws.readyState === WebSocket.OPEN) ws.send(msg); } catch {} };
+  try { safeSend(JSON.stringify({ type: "version",       payload: { version: APP_VERSION } })); } catch {}
+  try { safeSend(JSON.stringify({ type: "state",         payload: await loadTrailersObject() })); } catch {}
+  try { safeSend(JSON.stringify({ type: "dockplates",    payload: await loadDockPlatesObject() })); } catch {}
+  try { safeSend(JSON.stringify({ type: "confirmations", payload: await loadConfirmations(250) })); } catch {}
 });
 
 /* ══════════════════════════════════════════

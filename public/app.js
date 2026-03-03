@@ -56,9 +56,9 @@
   el("modalCancel").addEventListener("click",  ()=>{ el("modalOv").classList.add("hidden"); if(_mr){_mr(false);_mr=null;} });
   el("modalConfirm").addEventListener("click", ()=>{ el("modalOv").classList.add("hidden"); if(_mr){_mr(true);_mr=null;} });
   el("modalOv").addEventListener("click", e=>{ if(e.target===el("modalOv")){ el("modalOv").classList.add("hidden"); if(_mr){_mr(false);_mr=null;} } });
-el("dmModalCancel").addEventListener("click", () => el("dmModalOv").classList.add("hidden"));
-el("dmModalOv").addEventListener("click", e => { if(e.target===el("dmModalOv")) el("dmModalOv").classList.add("hidden"); });
-  
+  el("dmModalCancel").addEventListener("click", () => el("dmModalOv").classList.add("hidden"));
+  el("dmModalOv").addEventListener("click", e => { if(e.target===el("dmModalOv")) el("dmModalOv").classList.add("hidden"); });
+
   function setPlatesOpen(open) {
     const t=el("dockPlatesToggle"), b=el("dockPlatesBody"); if(!t||!b) return;
     t.setAttribute("aria-expanded", open?"true":"false");
@@ -111,26 +111,28 @@ el("dmModalOv").addEventListener("click", e => { if(e.target===el("dmModalOv")) 
     });
     return map;
   }
+
   function renderDockMap() {
-  const mapEl = el("dockMapGrid"); if (!mapEl) return;
-  const occupied = getOccupiedDoors();
-  const canEdit = ROLE==="dispatcher"||ROLE==="admin";
-  let html = "";
-  for (let d=28; d<=42; d++) {
-    const ds = String(d);
-    const occ = occupied[ds];
-    const cls = occ ? `dm-occupied dm-${(STATUS_ROW[occ.status]||"r-incoming").replace("r-","")}` : "dm-free";
-    const clickable = canEdit ? ` dm-clickable` : "";
-html += `<div class="dm-cell ${cls}${clickable}" data-dm-door="${ds}" ${occ && canEdit ? `tabindex="0" role="button" aria-label="Change status of trailer ${esc(occ.trailer)} at door ${ds}"` : ""}>
-      <span class="dm-door">D${ds}</span>
-      ${occ
-        ? `<span class="dm-trailer">${esc(occ.trailer)}</span><span class="dm-status">${esc(occ.status)}</span>`
-        : `<span class="dm-free-label" data-dm-door="${ds}">Free</span>`
-      }
-    </div>`;
+    const mapEl = el("dockMapGrid"); if (!mapEl) return;
+    const occupied = getOccupiedDoors();
+    const canEdit = ROLE==="dispatcher"||ROLE==="admin";
+    let html = "";
+    for (let d=28; d<=42; d++) {
+      const ds = String(d);
+      const occ = occupied[ds];
+      const cls = occ ? `dm-occupied dm-${(STATUS_ROW[occ.status]||"r-incoming").replace("r-","")}` : "dm-free";
+      const clickable = canEdit ? ` dm-clickable` : "";
+      const attrs = canEdit ? `tabindex="0" role="button" aria-label="${occ?`Change status of trailer ${esc(occ.trailer)} at door ${ds}`:`Set status for door ${ds}`}"` : "";
+      html += `<div class="dm-cell ${cls}${clickable}" data-dm-door="${ds}" ${attrs}>
+        <span class="dm-door" data-dm-door="${ds}">D${ds}</span>
+        ${occ
+          ? `<span class="dm-trailer" data-dm-door="${ds}">${esc(occ.trailer)}</span><span class="dm-status" data-dm-door="${ds}">${esc(occ.status)}</span>`
+          : `<span class="dm-free-label" data-dm-door="${ds}">Free</span>`
+        }
+      </div>`;
+    }
+    mapEl.innerHTML = html;
   }
-  mapEl.innerHTML = html;
-}
 
   /* ── BOARD ── */
   const prevStatuses={};
@@ -904,28 +906,24 @@ html += `<div class="dm-cell ${cls}${clickable}" data-dm-door="${ds}" ${occ && c
   }
 
   /* ── GLOBAL CLICK HANDLER ── */
-  // FIX #1: 'act' declared at the TOP of the handler so it's never in the temporal dead zone
- document.addEventListener("click", async ev => {
-  console.log("CLICK", ev.target, ev.target.dataset);  // ADD THIS LINE
-  const direct = ev.target;
+  document.addEventListener("click", async ev => {
+    const direct = ev.target;
     const id = direct?.id;
-
-    // Declare act early — was declared late in the original causing TDZ ReferenceError
     const act = direct?.dataset?.act || direct?.closest?.("[data-act]")?.dataset?.act;
     const trId = direct?.dataset?.trailerId || direct?.closest?.("[data-trailer-id]")?.dataset?.trailerId;
 
     if(direct?.closest?.("#dockPlatesToggle")){ setPlatesOpen(el("dockPlatesToggle").getAttribute("aria-expanded")!=="true"); return; }
-if(direct?.closest?.("#dockPlatesToggle2")){ setPlatesOpen2(el("dockPlatesToggle2").getAttribute("aria-expanded")!=="true"); return; }
-if(id==="btnLogout") return doLogout();
-if(id==="btnAudit"){ const s=el("auditCard").style.display!=="none"; el("auditCard").style.display=s?"none":""; if(!s)loadAuditInto(el("auditBody"),el("auditCount"),7); return; }
-if(id==="btnClearFilters"||id==="btnSupClearFilters"){ ["search","filterDir","filterStatus","supSearch","supFilterDir","supFilterStatus"].forEach(i=>{if(el(i))el(i).value="";}); renderBoard(); renderSupBoard(); return; }
-if(id==="btnSaveTrailer") return dispSave();
-if(id==="btnClearAll") return dispClear();
-if(id==="btnSetDispatcherPin") return setPin("dispatcher","pin_dispatcher","pin_dispatcher_confirm");
-if(id==="btnSetDockPin")       return setPin("dock","pin_dock","pin_dock_confirm");
-if(id==="btnSetSupervisorPin") return setPin("supervisor","pin_supervisor","pin_supervisor_confirm");
-if(id==="btnSetAdminPin")      return setPin("admin","pin_admin","pin_admin_confirm");
-if(id==="btnSetAdminPinSup")   return setPin("admin","pin_admin_sup","pin_admin_sup_confirm");
+    if(direct?.closest?.("#dockPlatesToggle2")){ setPlatesOpen2(el("dockPlatesToggle2").getAttribute("aria-expanded")!=="true"); return; }
+    if(id==="btnLogout") return doLogout();
+    if(id==="btnAudit"){ const s=el("auditCard").style.display!=="none"; el("auditCard").style.display=s?"none":""; if(!s)loadAuditInto(el("auditBody"),el("auditCount"),7); return; }
+    if(id==="btnClearFilters"||id==="btnSupClearFilters"){ ["search","filterDir","filterStatus","supSearch","supFilterDir","supFilterStatus"].forEach(i=>{if(el(i))el(i).value="";}); renderBoard(); renderSupBoard(); return; }
+    if(id==="btnSaveTrailer") return dispSave();
+    if(id==="btnClearAll") return dispClear();
+    if(id==="btnSetDispatcherPin") return setPin("dispatcher","pin_dispatcher","pin_dispatcher_confirm");
+    if(id==="btnSetDockPin")       return setPin("dock","pin_dock","pin_dock_confirm");
+    if(id==="btnSetSupervisorPin") return setPin("supervisor","pin_supervisor","pin_supervisor_confirm");
+    if(id==="btnSetAdminPin")      return setPin("admin","pin_admin","pin_admin_confirm");
+    if(id==="btnSetAdminPinSup")   return setPin("admin","pin_admin_sup","pin_admin_sup_confirm");
 
     const dockFilterBtn=direct?.closest?.("[data-dock-filter]");
     if(dockFilterBtn){
@@ -956,7 +954,6 @@ if(id==="btnSetAdminPinSup")   return setPin("admin","pin_admin_sup","pin_admin_
     if(id==="btnDriverRestart") return driverRestart();
     if(id==="btnPushToggle")    return _pushSub ? unsubscribePush() : subscribePush();
 
-    // FIX #1: act is now declared above, so this check is safe
     if(act==="shuntPickDoor"){
       const d=direct?.dataset?.door||direct?.closest?.("[data-door]")?.dataset?.door;
       if(d){ driverState.shuntDoor=d; buildShuntDoorPicker(); if(el("sh_door_display"))el("sh_door_display").textContent="Door "+d; updateShuntSubmitState(); }
@@ -967,7 +964,7 @@ if(id==="btnSetAdminPinSup")   return setPin("admin","pin_admin_sup","pin_admin_
     if(id==="oac_override"){ driverState.overrideMode=true; driverState.assignedDoor=""; driverState.selectedDoor=""; showDoorPicker("offloadDoorPickerWrap","offloadDoorPickerGrid"); updateOffloadSubmitState(); return; }
 
     const doorBtn=direct?.closest?.("[data-door]");
-    if(doorBtn&&doorBtn.dataset.door){
+    if(doorBtn&&doorBtn.dataset.door&&!doorBtn.dataset.dmDoor){
       driverState.selectedDoor=doorBtn.dataset.door; driverState.overrideMode=true;
       buildDoorPicker(doorBtn.dataset.picker||"doorPickerGrid");
       updateDropSubmitState(); updateOffloadSubmitState(); return;
@@ -990,12 +987,12 @@ if(id==="btnSetAdminPinSup")   return setPin("admin","pin_admin_sup","pin_admin_
     if(act==="dockSet"){ const to=direct?.dataset?.to; if(trId&&to)return dockSet(trId,to); }
     if(act==="markReady"&&trId) return markReady(trId);
 
+    // Dock map cell click — open status modal for any door (occupied or empty)
     const dmCell = direct?.closest?.("[data-dm-door]");
     if (dmCell && (ROLE==="dispatcher"||ROLE==="admin")) {
       const door = dmCell.dataset.dmDoor;
       const occupied = getOccupiedDoors();
       const occ = occupied[door];
-
       const nextStatuses = {
         "Incoming":   ["Dropped","Loading","Dock Ready","Ready","Departed"],
         "Dropped":    ["Loading","Dock Ready","Ready","Departed"],
@@ -1004,29 +1001,31 @@ if(id==="btnSetAdminPinSup")   return setPin("admin","pin_admin_sup","pin_admin_
         "Ready":      ["Departed"],
         "Departed":   ["Incoming","Dropped"],
       };
-  const options = occ ? (nextStatuses[occ.status] || []) : ["Incoming","Dropped","Loading","Dock Ready","Ready","Departed"];
-el("dmModalTitle").textContent = occ ? `Trailer ${occ.trailer} — D${door}` : `Door ${door} — Empty`;
-el("dmModalSub").textContent = occ ? `Current status: ${occ.status}` : "No trailer assigned";
-const btns = el("dmStatusBtns");
-btns.innerHTML = "";
-options.forEach(s => {
-  const cls = s==="Ready"?"btn-success":s==="Departed"?"btn-default":s==="Loading"?"btn-primary":"btn-cyan";
-  const b = document.createElement("button");
-  b.className = `btn ${cls} btn-full`;
-  b.dataset.dmStatus = s;
-  b.dataset.dmTrailer = occ ? occ.trailer : "";
-  b.textContent = s;
-  btns.appendChild(b);
-});
-el("dmModalOv").classList.remove("hidden");
-return;
+      const options = occ ? (nextStatuses[occ.status] || []) : ["Incoming","Dropped","Loading","Dock Ready","Ready","Departed"];
+      el("dmModalTitle").textContent = occ ? `Trailer ${occ.trailer} — D${door}` : `Door ${door} — Empty`;
+      el("dmModalSub").textContent = occ ? `Current status: ${occ.status}` : "No trailer assigned";
+      const btns = el("dmStatusBtns");
+      btns.innerHTML = "";
+      options.forEach(s => {
+        const cls = s==="Ready"?"btn-success":s==="Departed"?"btn-default":s==="Loading"?"btn-primary":"btn-cyan";
+        const b = document.createElement("button");
+        b.className = `btn ${cls} btn-full`;
+        b.dataset.dmStatus = s;
+        b.dataset.dmTrailer = occ ? occ.trailer : "";
+        b.textContent = s;
+        btns.appendChild(b);
+      });
+      el("dmModalOv").classList.remove("hidden");
+      return;
     }
 
+    // Dock map status button click
     const dmStatusBtn = direct?.closest?.("[data-dm-status]");
     if (dmStatusBtn) {
       const status  = dmStatusBtn.dataset.dmStatus;
       const trailer = dmStatusBtn.dataset.dmTrailer;
       el("dmModalOv").classList.add("hidden");
+      if (!trailer) { toast("No trailer","This door has no trailer assigned.","warn"); return; }
       try {
         await apiJson("/api/upsert", { method:"POST", headers:CSRF, body:JSON.stringify({ trailer, status }) });
         toast("Updated", `${trailer} → ${status}`, "ok");

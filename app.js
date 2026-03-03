@@ -4,6 +4,8 @@
   const plateEditOpen = {};
   let shuntOpen = {};
   const el = id => document.getElementById(id);
+  const lockScroll   = () => { document.body.style.overflow = "hidden"; document.body.style.touchAction = "none"; };
+  const unlockScroll = () => { document.body.style.overflow = ""; document.body.style.touchAction = ""; };
   const path = () => location.pathname.toLowerCase();
   const isDriver = () => path().startsWith("/driver");
   const isSuper  = () => path().startsWith("/management");
@@ -57,15 +59,15 @@
       _mr=r;
       el("modalTitle").textContent=title;
       el("modalBody").textContent=body;
-      el("modalOv").classList.remove("hidden");
+      el("modalOv").classList.remove("hidden"); lockScroll();
       el("modalConfirm").focus();
     });
   }
   el("modalCancel")?.addEventListener("click",  ()=>{ el("modalOv").classList.add("hidden"); if(_mr){_mr(false);_mr=null;} });
-  el("modalConfirm")?.addEventListener("click", ()=>{ el("modalOv").classList.add("hidden"); if(_mr){_mr(true);_mr=null;} });
+  el("modalConfirm")?.addEventListener("click", ()=>{ el("modalOv").classList.add("hidden"); unlockScroll(); if(_mr){_mr(true);_mr=null;} });
   el("modalOv")?.addEventListener("click", e=>{ if(e.target===el("modalOv")){ el("modalOv").classList.add("hidden"); if(_mr){_mr(false);_mr=null;} } });
-  el("dmModalCancel")?.addEventListener("click", () => el("dmModalOv")?.classList.add("hidden"));
-  el("dmModalOv")?.addEventListener("click", e => { if(e.target===el("dmModalOv")) el("dmModalOv").classList.add("hidden"); });
+  el("dmModalCancel")?.addEventListener("click", () => { el("dmModalOv")?.classList.add("hidden"); unlockScroll(); });
+  el("dmModalOv")?.addEventListener("click", e => { if(e.target===el("dmModalOv")) el("dmModalOv").classList.add("hidden"); unlockScroll(); });
 
   function setPlatesOpen(open) {
     const t=el("dockPlatesToggle"), b=el("dockPlatesBody"); if(!t||!b) return;
@@ -504,7 +506,7 @@
   async function plateSave(door){
     const status=(document.querySelector(`[data-plate-status="${CSS.escape(door)}"]`)?.value||"").trim();
     const note=(document.querySelector(`[data-plate-note="${CSS.escape(door)}"]`)?.value||"").trim();
-    try{ await apiJson("/api/dockplates/set",{method:"POST",headers:CSRF,body:JSON.stringify({door,status,note})}); dockPlates[door]={...(dockPlates[door]||{}),status,note}; toast("Plate updated",`Door ${door} → ${status}`,"ok"); plateEditOpen[door]=false; renderPlates(); }
+    try{ await apiJson("/api/dockplates/set",{method:"POST",headers:CSRF,body:JSON.stringify({door,status,note})}); toast("Plate updated",`Door ${door} → ${status}`,"ok"); plateEditOpen[door]=false; renderPlates(); }
     catch(e){ toast("Update failed",e.message,"err"); }
   }
   async function setPin(role,inputId,confirmId){
@@ -976,13 +978,13 @@
     if (pz)    pz.classList.remove("has-photo");
     if (ctx)   ctx.textContent = `Trailer ${trailer}${door ? " · Door " + door : ""}`;
     if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
-    el("dockIssueOv")?.classList.remove("hidden");
+    el("dockIssueOv")?.classList.remove("hidden"); lockScroll();
     document.body.style.overflow = "hidden";
     setTimeout(() => ni?.focus(), 120);
   }
 
   function closeDockIssueModal() {
-    el("dockIssueOv")?.classList.add("hidden");
+    el("dockIssueOv")?.classList.add("hidden"); unlockScroll();
     document.body.style.overflow = "";
   }
 
@@ -1684,7 +1686,7 @@
         b.textContent = s;
         btns.appendChild(b);
       });
-      el("dmModalOv").classList.remove("hidden");
+      el("dmModalOv").classList.remove("hidden"); lockScroll();
       return;
     }
 
@@ -1693,7 +1695,7 @@
     if (dmStatusBtn) {
       const status  = dmStatusBtn.dataset.dmStatus;
       const trailer = dmStatusBtn.dataset.dmTrailer;
-      el("dmModalOv").classList.add("hidden");
+      el("dmModalOv").classList.add("hidden"); unlockScroll();
       if (!trailer) { toast("No trailer","This door has no trailer assigned.","warn"); return; }
       try {
         await apiJson("/api/upsert", { method:"POST", headers:CSRF, body:JSON.stringify({ trailer, status }) });
@@ -1807,10 +1809,11 @@
         if(goBtn) goBtn.style.display = "";
       }
       ov.classList.remove("hidden");
+      lockScroll();
       setTimeout(() => (ROLE ? null : pinEl?.focus()), 100);
     }
 
-    function closeModal() { ov.classList.add("hidden"); }
+    function closeModal() { ov.classList.add("hidden"); unlockScroll(); }
 
     // Open triggers
     el("btnDockStaffLogin")?.addEventListener("click", openModal);

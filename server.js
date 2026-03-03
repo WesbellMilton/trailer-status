@@ -1,1262 +1,1296 @@
-:root {
-  --bg:#0a0d12; --s0:#0e1218; --s1:#121820; --s2:#161d27; --s3:#1b2330;
-  --b0:#1a2232; --b1:#213040; --b2:#2a3d55;
-  --t0:#e2e8f2; --t1:#8a9bb5; --t2:#4a5a72; --t3:#2d3d52;
-  --amber:#f0a030; --amber-bg:rgba(240,160,48,.09); --amber-bd:rgba(240,160,48,.20);
-  --cyan:#20c0d0;  --cyan-bg:rgba(32,192,208,.07); --cyan-bd:rgba(32,192,208,.18);
-  --green:#20d090; --green-bg:rgba(32,208,144,.07); --green-bd:rgba(32,208,144,.20);
-  --red:#e84848;   --red-bg:rgba(232,72,72,.08);   --red-bd:rgba(232,72,72,.20);
-  --violet:#9878f0;--violet-bg:rgba(152,120,240,.08); --violet-bd:rgba(152,120,240,.18);
-  --mono:'DM Mono', monospace; --sans:'DM Sans', system-ui, sans-serif;
-  --r:5px; --r2:9px; --sh:0 2px 16px rgba(0,0,0,.5); --sh-lg:0 12px 48px rgba(0,0,0,.7);
+// server.js — Wesbell Dispatch v3.2.0
+const express = require("express");
+const http = require("http");
+const path = require("path");
+const WebSocket = require("ws");
+const sqlite3 = require("sqlite3").verbose();
+const crypto = require("crypto");
+
+const app = express();
+
+// Prevent uncaught errors from crashing the whole server
+process.on('uncaughtException',  err  => console.error('[CRASH] uncaughtException:', err));
+process.on('unhandledRejection', reason => console.error('[CRASH] unhandledRejection:', reason));
+
+app.use(express.json({ limit: "6mb" }));
+app.use(express.urlencoded({ extended: true }));
+
+const PORT = process.env.PORT || 3000;
+const DB_FILE = process.env.DB_FILE || path.join(__dirname, "wesbell.sqlite");
+const APP_VERSION = process.env.APP_VERSION || "3.2.0";
+const PIN_MIN_LEN = 4;
+const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
+const COOKIE_NAME = "wb_session";
+
+const ENV_PINS = {
+  dispatcher: process.env.DISPATCHER_PIN || "",
+  dock:       process.env.DOCK_PIN       || "",
+  management: process.env.MANAGEMENT_PIN || "",
+  admin:      process.env.ADMIN_PIN      || "",
+};
+
+function requireXHR(req, res, next) {
+  if ((req.get("X-Requested-With") || "").toLowerCase() !== "xmlhttprequest")
+    return res.status(400).send("Bad request");
+  next();
 }
+
+/* ══════════════════════════════════════════
+   DB
+══════════════════════════════════════════ */
+const db = new sqlite3.Database(DB_FILE);
+const run = (sql, p = []) => new Promise((res, rej) => db.run(sql, p, function (e) { e ? rej(e) : res(this); }));
+const get = (sql, p = []) => new Promise((res, rej) => db.get(sql, p, (e, r) => { e ? rej(e) : res(r); }));
+const all = (sql, p = []) => new Promise((res, rej) => db.all(sql, p, (e, r) => { e ? rej(e) : res(r); }));
+
+/* ══════════════════════════════════════════
+   CACHES
+══════════════════════════════════════════ */
+let _trailersCache = null;
+let _platesCache   = null;
+function invalidateTrailers() { _trailersCache = null; }
+function invalidatePlates()   { _platesCache   = null; }
+async function getTrailersCache() { if (!_trailersCache) _trailersCache = await loadTrailersObject(); return _trailersCache; }
+async function getPlatesCache()   { if (!_platesCache)   _platesCache   = await loadDockPlatesObject(); return _platesCache; }
+
+/* ══════════════════════════════════════════
+   VAPID / PUSH
+══════════════════════════════════════════ */
+const VAPID_FILE = process.env.VAPID_FILE || path.join(__dirname, "vapid.json");
+let VAPID_KEYS = null;
+const pushSubs = new Map();
+
+function loadOrGenVapid() {
+  const fs = require("fs");
+  try {
+    if (fs.existsSync(VAPID_FILE)) {
+      VAPID_KEYS = JSON.parse(fs.readFileSync(VAPID_FILE, "utf8"));
+      console.log("[VAPID] Loaded existing keys");
+      return;
+    }
+  } catch {}
+  try {
+    const { publicKey, privateKey } = crypto.generateKeyPairSync("ec", {
+      namedCurve: "P-256",
+      publicKeyEncoding:  { type: "spki",  format: "der" },
+      privateKeyEncoding: { type: "pkcs8", format: "der" },
+    });
+    const pubRaw = publicKey.slice(26);
+    let privRaw;
+    for (let i = 0; i < privateKey.length - 34; i++) {
+      if (privateKey[i] === 0x04 && privateKey[i + 1] === 0x20) {
+        privRaw = privateKey.slice(i + 2, i + 34);
+        break;
+      }
+    }
+    if (!privRaw) throw new Error("Could not extract private key bytes");
+    VAPID_KEYS = {
+      publicKey:  pubRaw.toString("base64url"),
+      privateKey: privRaw.toString("base64url"),
+    };
+    fs.writeFileSync(VAPID_FILE, JSON.stringify(VAPID_KEYS));
+    console.log("[VAPID] Generated new key pair");
+  } catch (e) {
+    console.error("[VAPID] Key generation failed:", e.message);
+  }
+}
+
+const b64url    = buf => Buffer.isBuffer(buf) ? buf.toString("base64url") : Buffer.from(buf).toString("base64url");
+const fromb64url = s  => Buffer.from(s, "base64url");
+
+async function hkdf(salt, ikm, info, len) {
+  const prk = crypto.createHmac("sha256", salt).update(ikm).digest();
+  const t   = crypto.createHmac("sha256", prk).update(Buffer.concat([info, Buffer.alloc(1, 1)])).digest();
+  return t.slice(0, len);
+}
+
+async function buildVapidJWT(audience) {
+  const header  = b64url(JSON.stringify({ typ: "JWT", alg: "ES256" }));
+  const now     = Math.floor(Date.now() / 1000);
+  const payload = b64url(JSON.stringify({ aud: audience, exp: now + 12 * 3600, sub: "mailto:dispatch@wesbell.com" }));
+  const sigInput = `${header}.${payload}`;
+  const privBytes = fromb64url(VAPID_KEYS.privateKey);
+  const privKey = crypto.createPrivateKey({
+    key: Buffer.concat([
+      Buffer.from("308187020100301306072a8648ce3d020106082a8648ce3d030107046d306b0201010420", "hex"),
+      privBytes,
+      Buffer.from("a144034200", "hex"),
+      fromb64url(VAPID_KEYS.publicKey),
+    ]),
+    format: "der", type: "pkcs8",
+  });
+  const sig = crypto.sign(null, Buffer.from(sigInput), { key: privKey, dsaEncoding: "ieee-p1363" });
+  return `${sigInput}.${b64url(sig)}`;
+}
+
+async function encryptPushPayload(plaintext, keys) {
+  const serverKeys   = crypto.generateKeyPairSync("ec", { namedCurve: "P-256" });
+  const serverPubRaw = serverKeys.publicKey.export({ type: "spki", format: "der" }).slice(26);
+  const clientPubRaw = fromb64url(keys.p256dh);
+  const authSecret   = fromb64url(keys.auth);
+  const clientPub = crypto.createPublicKey({
+    key: Buffer.concat([
+      Buffer.from("3059301306072a8648ce3d020106082a8648ce3d030107034200", "hex"),
+      clientPubRaw,
+    ]),
+    format: "der", type: "spki",
+  });
+  const sharedSecret = crypto.diffieHellman({ privateKey: serverKeys.privateKey, publicKey: clientPub });
+  const prk  = await hkdf(authSecret, sharedSecret, Buffer.concat([Buffer.from("WebPush: info\x00"), clientPubRaw, serverPubRaw]), 32);
+  const salt = crypto.randomBytes(16);
+  const cek  = await hkdf(salt, prk, Buffer.concat([Buffer.from("Content-Encoding: aes128gcm\x00"), Buffer.alloc(1, 1)]), 16);
+  const nonce= await hkdf(salt, prk, Buffer.concat([Buffer.from("Content-Encoding: nonce\x00"),    Buffer.alloc(1, 1)]), 12);
+  const cipher    = crypto.createCipheriv("aes-128-gcm", cek, nonce);
+  const msg       = Buffer.concat([Buffer.from(plaintext), Buffer.alloc(1, 2)]);
+  const encrypted = Buffer.concat([cipher.update(msg), cipher.final(), cipher.getAuthTag()]);
+  const rs = Buffer.alloc(4); rs.writeUInt32BE(4096);
+  return Buffer.concat([salt, rs, Buffer.alloc(1, serverPubRaw.length), serverPubRaw, encrypted]);
+}
+
+async function sendPush(subscription, payload) {
+  const { endpoint, keys } = subscription;
+  const url       = new URL(endpoint);
+  const audience  = `${url.protocol}//${url.host}`;
+  const jwt       = await buildVapidJWT(audience);
+  const authHeader = `vapid t=${jwt},k=${VAPID_KEYS.publicKey}`;
+  const encrypted  = await encryptPushPayload(payload, keys);
+  const https = require("https");
+  return new Promise((resolve, reject) => {
+    const req = https.request(endpoint, {
+      method: "POST",
+      headers: {
+        "Authorization":    authHeader,
+        "Content-Type":     "application/octet-stream",
+        "Content-Encoding": "aes128gcm",
+        "TTL":              "86400",
+        "Content-Length":   encrypted.length,
+      },
+    }, res => { res.resume(); resolve(res.statusCode); });
+    req.on("error", reject);
+    req.write(encrypted);
+    req.end();
+  });
+}
+
+async function broadcastPush(title, body, data) {
+  if (!VAPID_KEYS || pushSubs.size === 0) return;
+  const payload = JSON.stringify({ title, body, data: data || {} });
+  const dead = [];
+  for (const [endpoint, sub] of pushSubs) {
+    try {
+      const status = await sendPush(sub, payload);
+      if (status === 410 || status === 404) dead.push(endpoint);
+    } catch {}
+  }
+  if (dead.length) {
+    dead.forEach(ep => pushSubs.delete(ep));
+    const ph = dead.map(() => "?").join(",");
+    await run(`DELETE FROM push_subscriptions WHERE endpoint IN (${ph})`, dead).catch(() => {});
+  }
+}
+
+/* ══════════════════════════════════════════
+   DB INIT
+══════════════════════════════════════════ */
+async function initDb() {
+  await run(`CREATE TABLE IF NOT EXISTS trailers (
+    trailer TEXT PRIMARY KEY, direction TEXT, status TEXT, door TEXT,
+    note TEXT, dropType TEXT, carrierType TEXT DEFAULT '', updatedAt INTEGER
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS dockplates (
+    door TEXT PRIMARY KEY, status TEXT, note TEXT, updatedAt INTEGER
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS confirmations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, trailer TEXT,
+    door TEXT, action TEXT, ip TEXT, userAgent TEXT
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, actorRole TEXT,
+    action TEXT, entityType TEXT, entityId TEXT, details TEXT, ip TEXT, userAgent TEXT
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS push_subscriptions (
+    endpoint TEXT PRIMARY KEY, subscription TEXT, createdAt INTEGER
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS issue_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, trailer TEXT,
+    door TEXT, note TEXT, photo_data TEXT, photo_mime TEXT, ip TEXT, userAgent TEXT
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS pins (
+    role TEXT PRIMARY KEY, salt BLOB, hash BLOB, iter INTEGER
+  )`);
+
+  // Migrations (safe to re-run)
+  await run(`DELETE FROM dockplates WHERE CAST(door AS INTEGER) < 28`);
+  try { await run(`ALTER TABLE confirmations ADD COLUMN action TEXT`); }      catch {}
+  try { await run(`ALTER TABLE trailers ADD COLUMN carrierType TEXT DEFAULT ''`); } catch {}
+
+  // Seed dock plate doors 28–42
+  const existingPlates = new Set((await all(`SELECT door FROM dockplates`)).map(r => r.door));
+  for (let d = 28; d <= 42; d++) {
+    const door = String(d);
+    if (!existingPlates.has(door))
+      await run(`INSERT INTO dockplates(door,status,note,updatedAt) VALUES(?,?,?,?)`, [door, "Unknown", "", Date.now()]);
+  }
+
+  // Seed PINs — env vars always win so Render config takes effect on every deploy
+  for (const role of ["dispatcher", "dock", "management", "admin"]) {
+    const row = await get(`SELECT role FROM pins WHERE role=?`, [role]);
+    const envPin = ENV_PINS[role] && ENV_PINS[role].length >= PIN_MIN_LEN ? ENV_PINS[role] : null;
+    if (!row) {
+      // First boot: use env var or generate a random PIN
+      const pin = envPin || genTempPin();
+      await setPin(role, pin);
+      console.log(`[SECURITY] ${role} PIN initialised`);
+    } else if (envPin) {
+      // Env var is set — always sync to DB so redeploys apply it immediately
+      await setPin(role, envPin);
+      console.log(`[SECURITY] ${role} PIN synced from environment`);
+    }
+  }
+}
+
+function genTempPin() { return String(crypto.randomInt(100000, 1000000)); }
+
+function pbkdf2Hash(pin, salt, iter = 140000) {
+  return new Promise((res, rej) =>
+    crypto.pbkdf2(pin, salt, iter, 32, "sha256", (e, d) => e ? rej(e) : res(d))
+  );
+}
+
+async function setPin(role, pin) {
+  const salt = crypto.randomBytes(16), iter = 140000;
+  const hash = await pbkdf2Hash(pin, salt, iter);
+  await run(
+    `INSERT INTO pins(role,salt,hash,iter) VALUES(?,?,?,?)
+     ON CONFLICT(role) DO UPDATE SET salt=excluded.salt,hash=excluded.hash,iter=excluded.iter`,
+    [role, salt, hash, iter]
+  );
+}
+
+async function verifyPin(role, pin) {
+  const row = await get(`SELECT salt,hash,iter FROM pins WHERE role=?`, [role]);
+  if (!row) return false;
+  const candidate = await pbkdf2Hash(pin, row.salt, row.iter || 140000);
+  if (candidate.length !== row.hash.length) return false;
+  return crypto.timingSafeEqual(candidate, row.hash);
+}
+
+/* ══════════════════════════════════════════
+   SESSIONS
+══════════════════════════════════════════ */
+const sessions = new Map();
+// Prune expired sessions every 30 minutes to prevent memory leak
+setInterval(() => {
+  const now = Date.now();
+  for (const [sid, s] of sessions.entries()) if (s.exp < now) sessions.delete(sid);
+}, 30 * 60 * 1000).unref();
+
+function newSession(role) {
+  const sid = crypto.randomBytes(24).toString("hex");
+  sessions.set(sid, { role, exp: Date.now() + SESSION_TTL_MS });
+  return sid;
+}
+
+function parseCookies(req) {
+  const out = {};
+  (req.headers.cookie || "").split(";").forEach(p => {
+    const i = p.indexOf("=");
+    if (i > -1) out[p.slice(0, i).trim()] = decodeURIComponent(p.slice(i + 1).trim());
+  });
+  return out;
+}
+
+function getSession(req) {
+  const sid = parseCookies(req)[COOKIE_NAME];
+  if (!sid) return null;
+  const s = sessions.get(sid);
+  if (!s) return null;
+  if (Date.now() > s.exp) { sessions.delete(sid); return null; }
+  return { sid, ...s };
+}
+
+function setSessionCookie(res, sid) {
+  const secure = process.env.NODE_ENV === "production";
+  res.setHeader("Set-Cookie",
+    `${COOKIE_NAME}=${encodeURIComponent(sid)}; Path=/; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`
+  );
+}
+
+function clearSessionCookie(res) {
+  res.setHeader("Set-Cookie", `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+}
+
+function requireRole(roles) {
+  return (req, res, next) => {
+    const s = getSession(req);
+    if (!s) return res.status(401).send("Unauthorized");
+    if (s.role !== "admin" && !roles.includes(s.role)) return res.status(401).send("Unauthorized");
+    req.user = { role: s.role };
+    next();
+  };
+}
+
+// Driver endpoints — accessible without any session (personal phones, no login)
+// But if a session IS present it must NOT be a dock or dispatcher (they shouldn't
+// be submitting driver actions)
+function requireDriverAccess(req, res, next) {
+  const s = getSession(req);
+  if (s && ["dock","dispatcher","management","admin"].includes(s.role)) {
+    return res.status(403).send("Driver endpoint — not accessible from this role");
+  }
+  next();
+}
+
+// Issue reports can come from drivers (no session) OR dock/dispatcher/management/admin
+function requireIssueAccess(req, res, next) {
+  next();
+}
+
+// Dock workers can only advance status through dock-appropriate transitions.
+// Dispatchers/admin can do anything. This prevents a dock worker from e.g.
+// marking a trailer Ready or Departed by hitting the API directly.
+function requireDockStatusAllowed(req, res, next) {
+  const s = getSession(req);
+  if (!s) return res.status(401).send("Unauthorized");
+  req.user = { role: s.role }; // populate req.user so handlers can read actor role
+  // Admin, dispatcher, and management have full status control
+  if (["admin","dispatcher","management"].includes(s.role)) return next();
+  if (s.role === "dock") {
+    const status = req.body?.status;
+    const DOCK_ALLOWED = ["Loading", "Staged", "Dock Ready"]; // dock workers may only set these
+    if (status && !DOCK_ALLOWED.includes(status)) {
+      return res.status(403).send(`Dock role cannot set status: ${status}`);
+    }
+    return next();
+  }
+  return res.status(403).send("Unauthorized");
+}
+
+/* ══════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════ */
+function ipOf(req) {
+  const xf = req.headers["x-forwarded-for"];
+  return xf ? String(xf).split(",")[0].trim() : req.socket.remoteAddress || "";
+}
+
+async function audit(req, actorRole, action, entityType, entityId, details) {
+  let d = ""; try { d = JSON.stringify(details || {}); } catch {}
+  await run(
+    `INSERT INTO audit(at,actorRole,action,entityType,entityId,details,ip,userAgent) VALUES(?,?,?,?,?,?,?,?)`,
+    [Date.now(), actorRole || "unknown", action, entityType, entityId, d, ipOf(req), req.headers["user-agent"] || ""]
+  );
+}
+
+async function loadTrailersObject() {
+  const rows = await all(`SELECT * FROM trailers`);
+  const obj = {};
+  for (const r of rows) {
+    obj[r.trailer] = {
+      direction:   r.direction   || "",
+      status:      r.status      || "",
+      door:        r.door        || "",
+      note:        r.note        || "",
+      dropType:    r.dropType    || "",
+      carrierType: r.carrierType || "",
+      updatedAt:   r.updatedAt   || 0,
+    };
+  }
+  return obj;
+}
+
+async function loadDockPlatesObject() {
+  const rows = await all(`SELECT * FROM dockplates ORDER BY CAST(door AS INTEGER) ASC`);
+  const obj = {};
+  for (const r of rows) obj[r.door] = { status: r.status || "Unknown", note: r.note || "", updatedAt: r.updatedAt || 0 };
+  return obj;
+}
+
+async function loadConfirmations(limit = 250) {
+  return all(`SELECT at,trailer,door,action,ip,userAgent FROM confirmations ORDER BY at DESC LIMIT ?`, [limit]);
+}
+
+/* ══════════════════════════════════════════
+   WEBSOCKET
+══════════════════════════════════════════ */
+const server = http.createServer(app);
+const wss    = new WebSocket.Server({ server });
+
+function wsBroadcast(type, payload) {
+  const msg = JSON.stringify({ type, payload });
+  for (const client of wss.clients) {
+    if (client.readyState === WebSocket.OPEN) {
+      try { client.send(msg); } catch { /* stale socket */ }
+    }
+  }
+}
+
+async function broadcastTrailers() {
+  try { invalidateTrailers(); wsBroadcast("state",         await getTrailersCache()); }
+  catch(e) { console.error("[WS] broadcastTrailers:", e.message); }
+}
+async function broadcastPlates() {
+  try { invalidatePlates();   wsBroadcast("dockplates",    await getPlatesCache()); }
+  catch(e) { console.error("[WS] broadcastPlates:", e.message); }
+}
+async function broadcastConfirmations() {
+  try {                       wsBroadcast("confirmations", await loadConfirmations(250)); }
+  catch(e) { console.error("[WS] broadcastConfirmations:", e.message); }
+}
+
+/* ══════════════════════════════════════════
+   STATIC / VIEWS
+══════════════════════════════════════════ */
+// Static asset allowlist — only serve known safe files, never expose server.js / sqlite / vapid
+const SAFE_STATIC = /^\/(app\.js|style\.css|manifest\.json|sw\.js|favicon\.ico|favicon-\d+\.png|icon-[\w-]+\.png|apple-touch-icon\.png|splash\/splash-[\w-]+\.png)$/;
+app.use((req, res, next) => {
+  if (!SAFE_STATIC.test(req.path)) return next();
+  // sw.js needs special headers
+  if (req.path === "/sw.js") {
+    res.setHeader("Service-Worker-Allowed", "/");
+    res.setHeader("Content-Type", "application/javascript");
+  } else if (/\.png$|\.ico$/.test(req.path)) {
+    res.setHeader("Cache-Control", "public, max-age=604800, immutable");
+  }
+  const safePath = path.join(__dirname, req.path.replace(/\/\.\./g, ""));
+  res.sendFile(safePath, err => { if (err && !res.headersSent) res.status(404).end(); });
+});
+
+const INDEX_FILE = path.join(__dirname, "index.html");
+const sendIndex  = (_, res) => res.sendFile(INDEX_FILE, err => {
+  if (err && !res.headersSent) {
+    console.error("[sendIndex] failed:", err.message, "INDEX_FILE:", INDEX_FILE);
+    res.status(500).send("Page load error — contact support");
+  }
+});
+
+/* ── ROLE → ALLOWED PATHS ── */
+const ROLE_HOME = {
+  dispatcher: "/",
+  admin:      "/",
+  dock:       "/dock",
+  management: "/management",
+  // drivers have no session — they always land on /driver
+};
+
+// Returns the canonical home path for a role (or null for unauthenticated driver)
+function roleHome(role) { return ROLE_HOME[role] || null; }
+
+// Middleware: enforce that a logged-in role can only view their own page.
+// Drivers (no session) are always allowed on /driver only.
+function guardPage(allowedRoles) {
+  return (req, res, next) => {
+    const s = getSession(req);
+    const role = s?.role || null;
+
+    // No session — allow if page accepts unauthenticated (__driver__), otherwise login
+    if (!role) {
+      if (allowedRoles.includes("__driver__")) return next();
+      return res.redirect(302, `/login?from=${encodeURIComponent(req.path)}`);
+    }
+
+    // Admin goes anywhere, no questions asked
+    if (role === "admin") return next();
+
+    // Management can go anywhere authenticated pages exist
+    if (role === "management") return next();
+
+    // Dispatcher can view board, dock, and driver pages
+    if (role === "dispatcher") return next();
+
+    // Dock workers locked to /dock and /driver only
+    if (role === "dock") {
+      if (allowedRoles.includes("dock")) return next();
+      return res.redirect(302, "/dock");
+    }
+
+    // Any other authenticated role — send home
+    const home = roleHome(role);
+    return res.redirect(302, home || "/");
+  };
+}
+
+app.get("/login", (req, res) => {
+  const expired  = req.query.expired === "1";
+  const fromPath = req.query.from || "";
+
+  if (fromPath.includes("/driver")) return res.redirect(302, "/driver");
+
+  if (!expired) {
+    const s = getSession(req);
+    if (s?.role) return res.redirect(302, ROLE_HOME[s.role] || "/");
+  }
+
+  const isDock = fromPath.includes("/dock");
+  const isSup  = fromPath.includes("/management");
+
+  // ── DOCK: simple friendly login ──────────────────────────────────────────
+  if (isDock) {
+    res.setHeader("content-type", "text/html; charset=utf-8");
+    const expiredHtml = expired ? '<div class="exp-banner">Session expired — sign in again</div>' : "";
+    return res.end(`<!doctype html><html lang="en"><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<title>Wesbell Dock</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet"/>
+<style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-::-webkit-scrollbar{width:6px;height:6px}
-::-webkit-scrollbar-track{background:var(--bg)}
-::-webkit-scrollbar-thumb{background:var(--b2);border-radius:3px}
-::-webkit-scrollbar-thumb:hover{background:var(--t3)}
-html{font-size:14px;-webkit-font-smoothing:antialiased}
-.view-fade{animation:viewFadeIn .18s ease}
-@keyframes viewFadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-body{background:var(--bg);color:var(--t0);font-family:var(--sans);line-height:1.5;min-height:100vh}
-a{color:var(--cyan);text-decoration:none}
-
-/* ═══════════════════════════════════════════
-   TOPBAR
-═══════════════════════════════════════════ */
-.topbar{position:sticky;top:0;z-index:100;background:rgba(10,13,18,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--b0)}
-.topbar-inner{max-width:1600px;margin:0 auto;padding:0 20px;height:54px;display:flex;align-items:center}
-.brand-block{display:flex;align-items:center;gap:10px;padding-right:20px;border-right:1px solid var(--b0);margin-right:16px;flex-shrink:0}
-.brand-mark{width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,var(--amber) 0%,#c04800 100%);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;font-weight:700;color:#000;letter-spacing:-.5px;box-shadow:0 2px 8px rgba(240,120,0,.35)}
-.brand-name{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--t0);letter-spacing:.06em}
-.brand-sub{font-size:9px;color:var(--t2);letter-spacing:.06em;margin-top:1px}
-
-.nav{display:flex;align-items:center;gap:1px;flex:1}
-.nav-item{display:flex;align-items:center;gap:6px;padding:0 13px;height:54px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--t2);border-bottom:2px solid transparent;background:transparent;border:none;cursor:pointer;transition:color .15s,border-color .15s,background .15s;text-decoration:none}
-.nav-item:hover{color:var(--t1);background:rgba(255,255,255,.025)}
-.nav-item.active{color:var(--amber);border-bottom-color:var(--amber);background:linear-gradient(to bottom,transparent,var(--amber-bg))}
-
-.topbar-right{display:flex;align-items:center;gap:6px;padding-left:16px;border-left:1px solid var(--b0);margin-left:auto;flex-shrink:0}
-.chip{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;border:1px solid var(--b0);background:var(--s1);font-family:var(--mono);font-size:10px;color:var(--t2);white-space:nowrap;letter-spacing:.04em}
-.live-dot{width:6px;height:6px;border-radius:50%;background:var(--t3);transition:all .3s}
-.live-dot.ok{background:var(--green);box-shadow:0 0 7px var(--green)}
-.live-dot.bad{background:var(--red);box-shadow:0 0 7px var(--red)}
-.live-dot.warn{background:var(--amber);box-shadow:0 0 7px var(--amber)}
-.tb-btn{display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:var(--r);border:1px solid var(--b1);background:var(--s2);color:var(--t1);font-size:11px;font-weight:600;letter-spacing:.04em;cursor:pointer;transition:all .15s}
-.tb-btn:hover{color:var(--t0);border-color:var(--b2)}
-.tb-btn.danger{color:var(--red);border-color:var(--red-bd)}
-.tb-btn.danger:hover{background:var(--red-bg)}
-
-/* ═══════════════════════════════════════════
-   LAYOUT
-═══════════════════════════════════════════ */
-.page{max-width:1600px;margin:0 auto;padding:16px 18px}
-.grid-main{display:grid;grid-template-columns:1fr 280px;gap:14px;align-items:start}
-@media(max-width:1100px){.grid-main{grid-template-columns:1fr}}
-.col-stack{display:flex;flex-direction:column;gap:14px}
-
-/* ═══════════════════════════════════════════
-   PANELS
-═══════════════════════════════════════════ */
-.panel{background:var(--s1);border:1px solid var(--b0);border-radius:var(--r2);overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.2)}
-.panel-hd{padding:10px 14px;border-bottom:1px solid var(--b0);display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--s0)}
-.panel-title{font-family:var(--mono);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);display:flex;align-items:center;gap:7px}
-.ptdot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
-.panel-body{padding:14px}
-.panel-body-flush{padding:0}
-
-/* ═══════════════════════════════════════════
-   BADGES
-═══════════════════════════════════════════ */
-.badge{display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.04em;white-space:nowrap;border:1px solid var(--b0);background:var(--s2);color:var(--t2)}
-.badge-num{border-color:var(--b1);background:var(--s3);color:var(--t1)}
-
-/* ═══════════════════════════════════════════
-   STATUS TAGS
-═══════════════════════════════════════════ */
-.stag{display:inline-flex;align-items:center;gap:4px;padding:2px 6px;border-radius:3px;font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.04em;white-space:nowrap;border:1px solid}
-.sp{width:4px;height:4px;border-radius:50%;flex-shrink:0}
-.stag-loading{background:var(--amber-bg);color:var(--amber);border-color:var(--amber-bd)} .stag-loading .sp{background:var(--amber)}
-.stag-staged{background:rgba(139,92,246,.12);color:#a78bfa;border-color:rgba(139,92,246,.3)} .stag-staged .sp{background:#a78bfa}
-.stag-ready{background:var(--green-bg);color:var(--green);border-color:var(--green-bd)} .stag-ready .sp{background:var(--green)}
-.stag-dockready{background:var(--cyan-bg);color:var(--cyan);border-color:var(--cyan-bd)} .stag-dockready .sp{background:var(--cyan)}
-.stag-dropped{background:var(--violet-bg);color:var(--violet);border-color:var(--violet-bd)} .stag-dropped .sp{background:var(--violet)}
-.stag-incoming{background:var(--s2);color:var(--t1);border-color:var(--b1)} .stag-incoming .sp{background:var(--t2)}
-.stag-departed{background:var(--s1);color:var(--t2);border-color:var(--b0)} .stag-departed .sp{background:var(--t3)}
-.stag-unknown{background:var(--s2);color:var(--t2);border-color:var(--b0)}
-
-/* ═══════════════════════════════════════════
-   TRAILER TABLE
-═══════════════════════════════════════════ */
-.tbl-hd,.tbl-row{display:grid;grid-template-columns:86px 68px 108px 48px 68px 1fr 86px minmax(220px,auto);align-items:center}
-.tbl-hd>span,.tbl-row>span,.tbl-row>div{padding:7px 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.tbl-hd{background:var(--s0);border-bottom:1px solid var(--b0)}
-.tbl-hd>span{font-family:var(--mono);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t3)}
-.tbl-row{border-bottom:1px solid var(--b0);border-left:3px solid transparent;transition:background .15s}
-.tbl-row:last-child{border-bottom:none}
-.tbl-row:hover{background:rgba(255,255,255,.018)}
-.tbl-row.r-loading{border-left-color:var(--amber)}
-.tbl-row.r-staged{border-left-color:#a78bfa}
-.tbl-row.r-ready{border-left-color:var(--green)}
-.tbl-row.r-dockready{border-left-color:var(--cyan)}
-.tbl-row.r-dropped{border-left-color:var(--violet)}
-.tbl-row.r-incoming{border-left-color:var(--b1)}
-.tbl-row.r-departed{border-left-color:var(--b0);opacity:.45}
-.tbl-row.carrier-outside{background:rgba(152,120,240,.035)}
-.tbl-row.carrier-outside:hover{background:rgba(152,120,240,.065)}
-
-@keyframes rowPulse{0%{background:rgba(240,160,48,.10)}100%{background:transparent}}
-.tbl-row.flashing{animation:rowPulse .9s ease-out}
-
-@keyframes readyGlow{0%,100%{background:rgba(32,208,144,.06)}50%{background:rgba(32,208,144,.14)}}
-@keyframes tagPulse{0%,100%{box-shadow:0 0 0 0 rgba(32,208,144,.5)}50%{box-shadow:0 0 0 4px rgba(32,208,144,.15)}}
-.tbl-row.ready-flash{animation:readyGlow 1.2s ease-in-out infinite}
-.tbl-row.ready-flash .stag-ready{animation:tagPulse 1.2s ease-in-out infinite}
-
-.t-num{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--t0);letter-spacing:.02em}
-.t-dir{font-size:11px;color:var(--t2)}
-.t-door{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--cyan)}
-.t-note{font-size:11px;color:var(--t1)}
-.t-time{font-family:var(--mono);font-size:10px;color:var(--t2)}
-.t-acts{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
-.tbl-empty{padding:40px 16px;text-align:center;color:var(--t2);font-size:11px;font-family:var(--mono);letter-spacing:.06em;display:flex;flex-direction:column;align-items:center;gap:8px}
-.tbl-empty::before{content:"📋";font-size:28px;opacity:.4}
-
-/* ═══════════════════════════════════════════
-   FILTER BAR
-═══════════════════════════════════════════ */
-.filter-bar{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;padding:10px 14px;background:var(--s0);border-bottom:1px solid var(--b0)}
-.filter-bar .field{flex:1 1 110px;margin:0}
-.filter-bar .tight{flex:0 0 auto}
-
-/* ═══════════════════════════════════════════
-   FORM
-═══════════════════════════════════════════ */
-.fl{display:block;font-family:var(--mono);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);margin-bottom:4px}
-.field{margin-bottom:10px}
-.field-row{display:flex;gap:8px}
-.field-row>.field{flex:1}
-input,select,textarea{width:100%;padding:7px 10px;border-radius:var(--r);border:1px solid var(--b1);background:var(--s0);color:var(--t0);font-family:var(--sans);font-size:13px;outline:none;transition:border-color .15s,box-shadow .15s;-webkit-appearance:none}
-input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
-input:focus,select:focus,textarea:focus{border-color:var(--amber);box-shadow:0 0 0 3px var(--amber-bg)}
-select option{background:var(--s1)}
-textarea{min-height:60px;resize:vertical}
-
-/* ═══════════════════════════════════════════
-   BUTTONS
-═══════════════════════════════════════════ */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:7px 12px;border-radius:var(--r);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap;border:1px solid}
-.btn-primary{background:var(--amber-bg);border-color:var(--amber-bd);color:var(--amber)}
-.btn-primary:hover{background:rgba(240,160,48,.16)}
-.btn-default{background:var(--s2);border-color:var(--b1);color:var(--t1)}
-.btn-default:hover{border-color:var(--b2);color:var(--t0)}
-.btn-danger{background:var(--red-bg);border-color:var(--red-bd);color:var(--red)}
-.btn-danger:hover{background:rgba(232,72,72,.14)}
-.btn-success{background:var(--green-bg);border-color:var(--green-bd);color:var(--green)}
-.btn-success:hover{background:rgba(32,208,144,.14)}
-.btn-cyan{background:var(--cyan-bg);border-color:var(--cyan-bd);color:var(--cyan)}
-.btn-cyan:hover{background:rgba(32,192,208,.14)}
-.btn-sm{padding:4px 9px;font-size:11px;border-radius:4px}
-.btn-full{width:100%}
-
-/* ═══════════════════════════════════════════
-   INFOBOX
-═══════════════════════════════════════════ */
-.infobox{padding:9px 11px;border-radius:var(--r);border-left:2px solid;margin-bottom:11px;font-size:12px;line-height:1.55;color:var(--t1)}
-.infobox-amber{background:var(--amber-bg);border-color:var(--amber)}
-.infobox-cyan{background:var(--cyan-bg);border-color:var(--cyan)}
-.infobox-green{background:var(--green-bg);border-color:var(--green)}
-.infobox .ib-title{font-weight:700;color:var(--t0);margin-bottom:3px;font-size:11px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em}
-
-/* ═══════════════════════════════════════════
-   ACCORDION
-═══════════════════════════════════════════ */
-.acc-head{width:100%;display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--s0);border:none;border-bottom:1px solid var(--b0);font-family:var(--mono);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);cursor:pointer;transition:color .15s,background .15s}
-.acc-head:hover{color:var(--t1);background:rgba(255,255,255,.02)}
-.acc-head .chev{font-size:9px;transition:transform .25s cubic-bezier(.4,0,.2,1);pointer-events:none;opacity:.6}
-.acc-head[aria-expanded="true"] .chev{transform:rotate(180deg);opacity:1}
-.acc-body{overflow:hidden;max-height:0;transition:max-height .3s cubic-bezier(.4,0,.2,1)}
-
-/* ═══════════════════════════════════════════
-   DOCK PLATES
-═══════════════════════════════════════════ */
-.plate-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;padding:10px}
-@media(max-width:900px){.plate-grid{grid-template-columns:repeat(6,1fr)}}
-@media(max-width:640px){.plate-grid{grid-template-columns:repeat(5,1fr);gap:3px;padding:8px}}
-.plate{border-radius:var(--r);border:1px solid var(--b0);background:var(--s0);padding:4px 5px;display:flex;flex-direction:column;gap:2px;min-height:0}
-.plate.p-ok{border-color:var(--green-bd);background:var(--green-bg)}
-.plate.p-service{border-color:var(--red-bd);background:var(--red-bg)}
-.plate .p-door{font-family:var(--mono);font-size:8px;color:var(--t3);letter-spacing:.04em}
-.plate .p-note{font-size:9px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.plate .p-btns{display:flex;gap:2px;margin-top:2px}
-.plate .p-btn{padding:1px 4px;font-size:8px;font-weight:600;border-radius:3px;border:1px solid var(--b1);background:var(--s1);color:var(--t2);font-family:var(--mono);cursor:pointer;letter-spacing:.03em}
-.plate .p-btn:hover{color:var(--t0);border-color:var(--b2)}
-.plate select,.plate input{padding:2px 4px;font-size:9px;border-radius:3px}
-
-/* ═══════════════════════════════════════════
-   DATA TABLE
-═══════════════════════════════════════════ */
-.data-tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-.data-tbl-wrap table{width:100%;border-collapse:collapse}
-.data-tbl-wrap th,.data-tbl-wrap td{padding:7px 12px;text-align:left;border-bottom:1px solid var(--b0);font-size:11px;white-space:nowrap}
-.data-tbl-wrap th{font-family:var(--mono);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t3);background:var(--s0)}
-.data-tbl-wrap tr:hover td{background:rgba(255,255,255,.015)}
-.data-tbl-wrap td.mono{font-family:var(--mono)}
-.data-tbl-wrap td.muted{color:var(--t2);font-family:var(--mono);font-size:10px}
-
-/* ═══════════════════════════════════════════
-   BOARD FOOTER
-═══════════════════════════════════════════ */
-.board-footer{padding:5px 14px;border-top:1px solid var(--b0);background:var(--s0);display:flex;align-items:center;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:.04em}
-.divider{height:1px;background:var(--b0);margin:11px 0}
-
-/* ═══════════════════════════════════════════
-   MODAL
-═══════════════════════════════════════════ */
-.modal-ov{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:16px}
-.modal-ov.hidden{display:none}
-.modal{background:var(--s2);border:1px solid var(--b2);border-radius:var(--r2);padding:22px;max-width:380px;width:100%;box-shadow:var(--sh-lg)}
-.modal h4{font-size:14px;font-weight:700;margin-bottom:6px;color:var(--t0);font-family:var(--mono);letter-spacing:.04em}
-.modal .m-sub{font-size:12px;color:var(--t1);margin-bottom:18px;line-height:1.55}
-.modal .m-btns{display:flex;gap:8px;justify-content:flex-end}
-
-/* ═══════════════════════════════════════════
-   TOAST
-═══════════════════════════════════════════ */
-.toast{position:fixed;right:16px;bottom:16px;z-index:600;width:min(360px,calc(100vw - 32px));background:var(--s2);border:1px solid var(--b2);border-left:3px solid var(--b2);border-radius:var(--r2);padding:14px 16px;box-shadow:var(--sh-lg);display:none;animation:toastIn .25s cubic-bezier(.16,1,.3,1)}
-@keyframes toastIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-.toast-bar{display:none}
-.toast.t-ok{border-left-color:var(--green)}
-.toast.t-warn{border-left-color:var(--amber)}
-.toast.t-err{border-left-color:var(--red)}
-.toast strong{display:block;font-size:12px;font-weight:700;margin:3px 0 2px;color:var(--t0);font-family:var(--mono)}
-.toast .t-body{font-size:11px;color:var(--t1)}
-
-/* ═══════════════════════════════════════════
-   DRIVER PORTAL
-═══════════════════════════════════════════ */
-.driver-shell{min-height:calc(100vh - 48px);background:var(--bg);background-image:radial-gradient(ellipse 900px 500px at 50% -60px,rgba(240,160,48,.08) 0%,transparent 65%),radial-gradient(ellipse 600px 400px at 90% 100%,rgba(32,192,208,.05) 0%,transparent 65%);display:flex;align-items:flex-start;justify-content:center;padding:28px 16px 48px}
-.driver-wrap{width:100%;max-width:440px;display:flex;flex-direction:column;gap:14px}
-
-/* New compact driver topbar replacing conn-bar + header */
-.driver-topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;background:var(--s1);border:1px solid var(--b0);border-radius:var(--r2)}
-.dtb-brand{display:flex;align-items:center;gap:9px}
-.dtb-mark{width:28px;height:28px;border-radius:6px;background:linear-gradient(135deg,var(--amber) 0%,#c04800 100%);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:700;color:#000;letter-spacing:-.5px;flex-shrink:0}
-.dtb-title{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--t0);letter-spacing:.04em}
-.dtb-right{display:flex;align-items:center;gap:7px}
-.dtb-status{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;color:var(--t2);letter-spacing:.03em}
-/* keep conn-bar styles in case any JS still references .driver-conn-bar */
-.driver-conn-bar{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:var(--s1);border:1px solid var(--b0);border-radius:var(--r2);font-family:var(--mono);font-size:10px;color:var(--t2);letter-spacing:.04em}
-.driver-conn-bar .dcb-left{display:flex;align-items:center;gap:7px}
-.driver-conn-bar .dcb-right{font-size:10px;color:var(--t3)}
-.driver-hdr{text-align:center;padding:4px 0 8px}
-.driver-hdr h1{font-size:22px;font-weight:700;letter-spacing:-.03em;color:var(--t0);margin-bottom:3px}
-.driver-hdr p{font-size:10px;color:var(--t2);font-family:var(--mono);letter-spacing:.1em}
-
-.driver-panel{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r2);overflow:hidden;transition:border-color .2s}
-.driver-panel.active-step{border-color:rgba(240,160,48,.25)}
-.driver-phd{padding:12px 16px;border-bottom:1px solid var(--b0);background:var(--s0);display:flex;align-items:center;justify-content:space-between}
-.driver-phd-title{font-family:var(--mono);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);display:flex;align-items:center;gap:8px}
-.driver-pbody{padding:18px 16px}
-
-.trailer-hero-input{width:100%;padding:14px 16px;border-radius:var(--r2);border:2px solid var(--b1);background:var(--s0);color:var(--t0);font-family:var(--mono);font-size:24px;font-weight:500;letter-spacing:.06em;outline:none;transition:border-color .2s,box-shadow .2s;text-align:center}
-.trailer-hero-input::placeholder{color:var(--t3);font-size:18px}
-.trailer-hero-input:focus{border-color:var(--amber);box-shadow:0 0 0 4px var(--amber-bg)}
-.trailer-hero-input:focus-visible{outline:3px solid var(--amber);outline-offset:1px}
-.trailer-hero-input.has-value{border-color:var(--b2);color:var(--t0)}
-
-.assignment-card{display:none;padding:12px 14px;border-radius:var(--r);border:1px solid var(--cyan-bd);background:var(--cyan-bg);margin-top:12px;gap:10px;align-items:flex-start}
-.assignment-card.visible{display:flex}
-.assignment-card .ac-icon{font-size:18px;flex-shrink:0;margin-top:1px}
-.assignment-card .ac-body{flex:1;min-width:0}
-.assignment-card .ac-label{font-family:var(--mono);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--cyan);margin-bottom:4px}
-.assignment-card .ac-door{font-family:var(--mono);font-size:28px;font-weight:500;color:var(--t0);line-height:1;margin-bottom:3px}
-.assignment-card .ac-meta{font-size:11px;color:var(--t1)}
-.assignment-card .ac-override{font-family:var(--mono);font-size:9px;color:var(--cyan);cursor:pointer;margin-top:5px;text-decoration:underline;opacity:.7}
-.assignment-card .ac-override:hover{opacity:1}
-
-.door-picker-wrap{display:none;margin-top:12px}
-.door-picker-wrap.visible{display:block}
-.door-picker-label{font-family:var(--mono);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);margin-bottom:8px}
-.door-picker-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
-.door-btn{padding:0;min-height:52px;border-radius:var(--r);border:1px solid var(--b1);background:var(--s0);color:var(--t1);font-family:var(--mono);font-size:13px;font-weight:500;cursor:pointer;transition:all .12s;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;position:relative;letter-spacing:.02em;-webkit-tap-highlight-color:transparent}
-.door-btn:hover{border-color:var(--b2);color:var(--t0);background:var(--s2)}
-.door-btn:active{transform:scale(.96)}
-.door-btn.selected{border-color:var(--amber-bd);background:var(--amber-bg);color:var(--amber)}
-.door-btn.occupied{border-color:var(--violet-bd);background:var(--violet-bg);color:var(--violet)}
-.door-btn.occupied::after{content:'●';font-size:6px;position:absolute;top:4px;right:5px;opacity:.7}
-.door-btn .door-btn-sub{font-size:8px;opacity:.6;font-family:var(--sans);letter-spacing:0}
-
-.drop-type-toggle{display:flex;gap:8px;margin-top:12px}
-.drop-type-btn{flex:1;min-height:64px;border-radius:var(--r);border:1px solid var(--b1);background:var(--s0);color:var(--t1);font-family:var(--mono);font-size:12px;font-weight:500;cursor:pointer;transition:all .12s;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;-webkit-tap-highlight-color:transparent}
-.drop-type-btn .dtb-icon{font-size:20px}
-.drop-type-btn:hover{border-color:var(--b2);color:var(--t0)}
-.drop-type-btn:active{transform:scale(.97)}
-.drop-type-btn.selected{border-color:var(--amber-bd);background:var(--amber-bg);color:var(--amber)}
-
-.driver-submit{width:100%;min-height:60px;border-radius:var(--r2);border:1px solid var(--amber-bd);background:var(--amber-bg);color:var(--amber);font-family:var(--mono);font-size:14px;font-weight:500;letter-spacing:.06em;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:10px;margin-top:16px;-webkit-tap-highlight-color:transparent}
-.driver-submit:hover{background:rgba(240,160,48,.16)}
-.driver-submit:active{transform:scale(.98)}
-.driver-submit:disabled{opacity:.4;cursor:not-allowed;transform:none}
-.driver-submit.green{border-color:var(--green-bd);background:var(--green-bg);color:var(--green)}
-.driver-submit.green:hover{background:rgba(32,208,144,.14)}
-
-.checkline{display:flex;align-items:center;gap:14px;padding:16px;border:1px solid var(--b1);border-radius:var(--r);background:var(--s0);cursor:pointer;transition:border-color .15s,background .15s;margin-bottom:8px;min-height:72px;-webkit-tap-highlight-color:transparent}
-.checkline:has(input:checked){border-color:var(--green-bd);background:var(--green-bg)}
-.checkline input[type="checkbox"]{width:26px;height:26px;accent-color:var(--green);cursor:pointer;flex-shrink:0}
-.checkline .cl-main{font-weight:600;font-size:15px;color:var(--t0)}
-.checkline .cl-sub{font-size:11px;color:var(--t2);margin-top:2px}
-
-.context-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;border:1px solid var(--b1);background:var(--s0);font-family:var(--mono);font-size:11px;color:var(--t1);margin-bottom:14px}
-.context-chip strong{color:var(--t0)}
-
-.driver-done{display:flex;flex-direction:column;align-items:center;padding:28px 20px 24px;text-align:center;gap:10px}
-.done-ring{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;background:var(--green-bg);border:1px solid var(--green-bd);margin-bottom:4px}
-.done-title{font-size:18px;font-weight:700;color:var(--t0)}
-.done-detail{font-size:12px;color:var(--t1);font-family:var(--mono);line-height:1.7}
-.done-restart-btn{margin-top:8px !important;border-color:var(--b2) !important;background:var(--s2) !important;color:var(--t0) !important}
-.done-restart-btn:hover{background:var(--s3) !important}
-
-.session-history{background:var(--s1);border:1px solid var(--b0);border-radius:var(--r2);overflow:hidden}
-.sh-hd{padding:10px 14px;background:var(--s0);border-bottom:1px solid var(--b0);font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);display:flex;align-items:center;justify-content:space-between}
-.sh-body{padding:4px 0}
-.sh-row{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-bottom:1px solid var(--b0);font-size:11px}
-.sh-row:last-child{border-bottom:none}
-.sh-row .sh-trailer{font-family:var(--mono);font-weight:500;color:var(--t0)}
-.sh-row .sh-meta{font-family:var(--mono);font-size:10px;color:var(--t2)}
-.sh-empty{padding:16px 14px;font-size:11px;color:var(--t3);font-family:var(--mono)}
-.sh-status-ok{color:var(--green)}
-.sh-status-err{color:var(--red)}
-
-/* ═══════════════════════════════════════════
-   SUPERVISOR
-═══════════════════════════════════════════ */
-.sup-shell{max-width:1600px;margin:0 auto;padding:16px 18px}
-.sup-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-@media(max-width:900px){.sup-grid{grid-template-columns:1fr}}
-.kpi-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
-.kpi{flex:1 1 110px;padding:16px 18px;border-radius:var(--r2);border:1px solid var(--b0);background:var(--s1);position:relative;overflow:hidden;transition:transform .15s,box-shadow .15s}
-.kpi:hover{transform:translateY(-1px)}
-.kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px}
-.kpi-total::before{background:var(--amber)}
-.kpi-total{box-shadow:inset 0 0 30px rgba(240,160,48,.03)}
-.kpi-loading::before{background:var(--amber)}
-.kpi-staged{color:#a78bfa}
-.kpi-loading{box-shadow:inset 0 0 30px rgba(240,160,48,.04)}
-.kpi-ready::before{background:var(--green)}
-.kpi-ready{box-shadow:inset 0 0 30px rgba(32,208,144,.04)}
-.kpi-departed::before{background:var(--t3)}
-.kpi-conf::before{background:var(--cyan)}
-.kpi-conf{box-shadow:inset 0 0 30px rgba(32,192,208,.04)}
-.kpi .k-val{font-family:var(--mono);font-size:28px;font-weight:500;line-height:1;color:var(--t0);margin-bottom:5px}
-.kpi .k-lbl{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--t3)}
-.kpi-loading .k-val{color:var(--amber)}
-.kpi-ready .k-val{color:var(--green)}
-.kpi-conf .k-val{color:var(--cyan)}
-
-.feed-item{display:flex;align-items:flex-start;gap:9px;padding:7px 0;border-bottom:1px solid var(--b0)}
-.feed-item:last-child{border-bottom:none}
-.feed-pip{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:5px}
-.feed-content{flex:1;min-width:0}
-.feed-action{font-size:11px;color:var(--t1);line-height:1.4}
-.feed-action strong{color:var(--t0);font-weight:600}
-.feed-time{font-family:var(--mono);font-size:10px;color:var(--t3);margin-top:1px}
-
-.pin-row{display:grid;grid-template-columns:1fr 1fr auto;gap:9px;align-items:end;padding:11px;border:1px solid var(--b0);border-radius:var(--r);background:var(--s0);margin-bottom:8px}
-.side-sticky{position:sticky;top:60px}
-
-/* ═══════════════════════════════════════════
-   LOOKUP SPINNER
-═══════════════════════════════════════════ */
-@keyframes spin{to{transform:rotate(360deg)}}
-.lookup-spinner{display:none;width:14px;height:14px;border:2px solid var(--b1);border-top-color:var(--amber);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
-.lookup-spinner.visible{display:block}
-
-/* ═══════════════════════════════════════════
-   WHO / FLOW SCREENS
-═══════════════════════════════════════════ */
-.who-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.who-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:96px;border-radius:var(--r2);border:1px solid var(--b1);background:var(--s0);color:var(--t1);cursor:pointer;transition:all .15s;padding:16px;-webkit-tap-highlight-color:transparent}
-.who-btn:hover{border-color:var(--amber-bd);background:var(--amber-bg)}
-.who-btn:hover .who-icon{transform:scale(1.1)}
-.who-btn:active{transform:scale(.96)}
-.who-btn .who-icon{font-size:30px;transition:transform .15s}
-.who-btn .who-label{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--t0);letter-spacing:.03em}
-.who-btn .who-sub{font-size:10px;color:var(--t2)}
-
-.flow-sub{font-size:11px;color:var(--t2);font-family:var(--mono);letter-spacing:.04em;margin-bottom:12px}
-.flow-grid{display:flex;flex-direction:column;gap:10px}
-.flow-btn{display:flex;align-items:center;gap:14px;min-height:64px;border-radius:var(--r);border:1px solid var(--b1);background:var(--s0);color:var(--t1);cursor:pointer;transition:all .15s;padding:14px 16px;text-align:left;-webkit-tap-highlight-color:transparent}
-.flow-btn:hover{border-color:var(--amber-bd);background:var(--amber-bg)}
-.flow-btn:active{transform:scale(.99)}
-.flow-btn .flow-icon{font-size:22px;flex-shrink:0}
-.flow-btn .flow-label{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--t0);display:block}
-.flow-btn .flow-desc{font-size:11px;color:var(--t2);display:block;margin-top:2px}
-
-.no-assignment-msg{display:none;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:var(--r);border:1px solid var(--amber-bd);background:var(--amber-bg);margin-top:12px;font-size:14px}
-.no-assignment-msg.visible{display:flex}
-
-.no-safety-note{text-align:center;font-family:var(--mono);font-size:10px;color:var(--green);margin-top:8px;letter-spacing:.04em}
-.safety-required-note{text-align:center;font-family:var(--mono);font-size:10px;color:var(--amber);margin-top:8px;letter-spacing:.04em}
-
-/* ═══════════════════════════════════════════
-   DOCK MAP
-═══════════════════════════════════════════ */
-.dock-map-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px}
-.dm-cell{border-radius:var(--r);border:1px solid var(--b1);padding:6px 8px;min-height:56px;display:flex;flex-direction:column;gap:2px;transition:border-color .15s;-webkit-tap-highlight-color:transparent}
-.dm-free{border-color:rgba(32,208,144,.2);background:rgba(32,208,144,.04)}
-.dm-occupied{border-color:rgba(240,160,48,.3);background:rgba(240,160,48,.06)}
-.dm-occupied.dm-ready{border-color:rgba(32,208,144,.4);background:rgba(32,208,144,.07)}
-.dm-occupied.dm-departed{border-color:var(--b1);opacity:.5}
-.dm-door{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--t1)}
-.dm-trailer{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--t0)}
-.dm-status{font-size:9px;color:var(--t2);letter-spacing:.03em;margin-top:1px}
-.dm-free-label{font-size:9px;color:var(--green);letter-spacing:.04em;margin-top:auto}
-.dm-clickable{cursor:pointer;transition:filter .15s,transform .12s}
-.dm-clickable:hover{filter:brightness(1.25);transform:scale(1.04)}
-.dm-clickable:active{transform:scale(.97)}
-.dm-clickable:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
-
-/* Status modal buttons — big enough for thumbs */
-#dmStatusBtns .btn{min-height:48px;font-size:14px;font-family:var(--mono);letter-spacing:.03em}
-
-/* ═══════════════════════════════════════════
-   QUICK STATUS BUTTONS
-═══════════════════════════════════════════ */
-.qs-btn{font-size:10px !important;padding:3px 7px !important;border-radius:4px !important;font-family:var(--mono) !important;letter-spacing:.02em}
-.qs-secondary{opacity:.55;font-size:10px !important;padding:3px 7px !important}
-.qs-secondary:hover{opacity:1}
-
-/* ═══════════════════════════════════════════
-   OFFLINE BANNER
-═══════════════════════════════════════════ */
-.offline-banner{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;background:rgba(232,72,72,.12);border:1px solid rgba(232,72,72,.3);border-radius:var(--r);margin-bottom:10px;font-size:12px;font-family:var(--mono);color:#e84848;letter-spacing:.03em}
-.offline-dots{display:flex;gap:4px}
-.offline-dots span{width:6px;height:6px;border-radius:50%;background:#e84848;opacity:.4;animation:offpulse 1.2s ease-in-out infinite}
-.offline-dots span:nth-child(2){animation-delay:.2s}
-.offline-dots span:nth-child(3){animation-delay:.4s}
-@keyframes offpulse{0%,100%{opacity:.4}50%{opacity:1}}
-
-/* ═══════════════════════════════════════════
-   READY NOTIFICATION BANNER
-═══════════════════════════════════════════ */
-.ready-notif-banner{display:flex;align-items:center;gap:10px;padding:12px 16px;background:rgba(32,208,144,.12);border:1px solid rgba(32,208,144,.35);border-radius:var(--r);margin-bottom:10px;animation:rnbslide .3s ease}
-@keyframes rnbslide{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
-.rnb-icon{font-size:18px;flex-shrink:0}
-.ready-notif-banner span:nth-child(2){font-family:var(--mono);font-size:13px;font-weight:500;color:var(--green);flex:1}
-.rnb-close{background:none;border:none;color:var(--t2);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:4px;flex-shrink:0;min-width:32px;min-height:32px}
-.rnb-close:hover{color:var(--t0);background:var(--s1)}
-
-/* ═══════════════════════════════════════════
-   DOCK VIEW
-═══════════════════════════════════════════ */
-.dock-shell{min-height:calc(100vh - 52px);background:var(--bg);display:flex;flex-direction:column;max-width:680px;margin:0 auto;padding:0 0 80px}
-
-.dock-toolbar{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--b1);position:sticky;top:52px;background:var(--bg);z-index:10}
-.dock-toolbar-left{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--t2);flex-shrink:0}
-.dock-toolbar-right{display:flex;align-items:center;gap:5px;margin-left:auto;flex-shrink:0}
-.dock-filter-wrap{display:flex;gap:4px;margin:0 auto}
-.dock-filter-btn{padding:5px 14px;border-radius:20px;border:1px solid var(--b1);background:transparent;color:var(--t2);font-size:12px;font-family:var(--mono);cursor:pointer;transition:all .15s;min-height:36px;-webkit-tap-highlight-color:transparent}
-.dock-filter-btn.active{background:var(--amber-bg);border-color:var(--amber-bd);color:var(--amber)}
-
-.dock-search-bar{padding:10px 16px 4px}
-.dock-search-bar input{width:100%;padding:10px 14px;border-radius:var(--r);border:1px solid var(--b1);background:var(--s0);color:var(--t0);font-size:15px}
-
-.dock-cards{display:flex;flex-direction:column;gap:10px;padding:10px 16px}
-.dock-empty{text-align:center;padding:48px 20px;color:var(--t3);font-family:var(--mono);font-size:13px}
-
-.dock-card{border-radius:var(--r2);border:1px solid var(--b1);background:var(--s0);padding:14px 16px;display:flex;flex-direction:column;gap:10px;transition:border-color .15s,box-shadow .15s}
-.dock-card:active{transform:scale(.995)}
-.dock-card.dc-loading{border-color:rgba(240,160,48,.45);background:rgba(240,160,48,.035);border-left-width:3px;border-left-color:var(--amber)}
-.dock-card.dc-staged{border-color:rgba(139,92,246,.35);background:rgba(139,92,246,.035);border-left-width:3px;border-left-color:#a78bfa}
-.dock-card.dc-dockready{border-color:rgba(32,192,208,.35);background:rgba(32,192,208,.035);border-left-width:3px;border-left-color:var(--cyan)}
-.dock-card.dc-ready{border-color:rgba(32,208,144,.5);background:rgba(32,208,144,.05);border-left-width:3px;border-left-color:var(--green)}
-.dock-card.dc-dropped{border-left-width:3px;border-left-color:var(--violet)}
-.dock-card.dc-incoming{border-left-width:3px;border-left-color:var(--t3)}
-.dock-card.dc-departed{opacity:.38;pointer-events:none}
-
-/* Card top row: trailer+note on left, door badge+status on right */
-.dc-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-.dc-trailer-block{flex:1;min-width:0}
-.dc-trailer{font-family:var(--mono);font-size:28px;font-weight:600;color:var(--t0);letter-spacing:-.01em;line-height:1.05}
-.dc-note{font-size:11px;color:var(--t2);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dc-right-block{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0}
-/* Door badge: big, bold, instantly readable */
-.dc-door-badge{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--amber);line-height:1;background:var(--amber-bg);border:1px solid var(--amber-bd);border-radius:var(--r);padding:4px 10px;letter-spacing:.04em}
-.dc-door-empty{font-family:var(--mono);font-size:11px;color:var(--t3);padding:4px 6px}
-/* Status pill: dot + label, replacing tiny badge */
-.dc-status-pill{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--t2)}
-.dc-status-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--dot,var(--t3));flex-shrink:0}
-
-.dc-meta-row{display:flex;align-items:center;gap:8px;min-height:14px}
-.dc-ago{font-family:var(--mono);font-size:10px;color:var(--t3)}
-
-.dc-action-btn{width:100%;padding:18px 16px;border-radius:var(--r);border:1px solid var(--b1);background:var(--s1);color:var(--t1);font-size:16px;font-weight:700;font-family:var(--sans);cursor:pointer;transition:all .15s;text-align:center;letter-spacing:.01em;min-height:58px;-webkit-tap-highlight-color:transparent}
-.dc-action-btn:active{transform:scale(.97)}
-.dc-btn-default{border-color:var(--amber-bd);background:var(--amber-bg);color:var(--amber)}
-.dc-btn-default:hover{background:rgba(240,160,48,.16)}
-.dc-btn-cyan{border-color:rgba(32,192,208,.3);background:rgba(32,192,208,.08);color:var(--cyan)}
-.dc-btn-staged{background:rgba(139,92,246,.12);border-color:rgba(139,92,246,.3);color:#a78bfa}
-.dc-btn-cyan:hover{background:rgba(32,192,208,.15)}
-.dc-btn-signin{border-color:var(--b1);background:var(--s2);color:var(--t2);font-size:13px;font-weight:500;min-height:46px;padding:12px}
-.dc-btn-signin:hover{color:var(--amber);border-color:var(--amber-bd)}
-.dc-no-action{text-align:center;font-family:var(--mono);font-size:11px;color:var(--t3);padding:8px 0 2px;letter-spacing:.04em}
-.dc-issue-btn{width:100%;padding:10px 16px;border-radius:var(--r);border:1px solid var(--red-bd);background:var(--red-bg);color:var(--red);font-size:13px;font-weight:600;font-family:var(--mono);cursor:pointer;transition:all .15s;text-align:center;letter-spacing:.04em;margin-top:6px;min-height:40px;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
-.dc-issue-btn:hover{background:rgba(232,72,72,.14);border-color:rgba(232,72,72,.4)}
-.dc-issue-btn:active{transform:scale(.98)}
-
-.dock-plates-inline{margin:0 16px 80px;border-radius:var(--r2);border:1px solid var(--b1);background:var(--s0);overflow:hidden}
-.dock-plates-inline .plate-grid{grid-template-columns:repeat(5,1fr);gap:3px;padding:8px}
-@media(max-width:480px){.dock-plates-inline .plate-grid{grid-template-columns:repeat(4,1fr);gap:3px;padding:6px}}
-
-/* ═══════════════════════════════════════════
-   PUSH TOGGLE
-═══════════════════════════════════════════ */
-.push-toggle-btn{margin-top:10px;padding:8px 16px;border-radius:20px;border:1px solid var(--b1);background:var(--s1);color:var(--t2);font-size:12px;font-family:var(--mono);cursor:pointer;transition:all .15s;letter-spacing:.03em;min-height:36px}
-.push-toggle-btn:hover{border-color:var(--amber-bd);color:var(--amber)}
-.push-toggle-btn.push-on{border-color:rgba(32,208,144,.3);background:rgba(32,208,144,.08);color:var(--green)}
-
-/* ═══════════════════════════════════════════
-   SHUNT INLINE PICKER
-═══════════════════════════════════════════ */
-.shunt-picker{grid-column:1 / -1;padding:10px 12px 12px;background:var(--s0);border-top:1px solid var(--b0);border-left:3px solid var(--amber);display:flex;flex-wrap:wrap;align-items:center;gap:8px}
-.shunt-label{font-family:var(--mono);font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}
-.shunt-doors{display:flex;flex-wrap:wrap;gap:4px;flex:1}
-.shunt-door-btn{padding:8px 10px;border-radius:var(--r);border:1px solid var(--b1);background:var(--s2);color:var(--t1);font-family:var(--mono);font-size:12px;font-weight:500;cursor:pointer;transition:all .12s;position:relative;min-height:40px;-webkit-tap-highlight-color:transparent}
-.shunt-door-btn:hover:not(:disabled){border-color:var(--amber-bd);background:var(--amber-bg);color:var(--amber)}
-.shunt-door-btn.current{border-color:var(--b0);color:var(--t3);cursor:not-allowed;opacity:.4}
-.shunt-door-btn.occ{border-color:var(--violet-bd);color:var(--violet);background:var(--violet-bg)}
-.shunt-occ-dot{display:inline-block;width:4px;height:4px;border-radius:50%;background:var(--violet);margin-left:3px;vertical-align:middle}
-
-/* ═══════════════════════════════════════════
-   ADMIN ROLE BADGE
-═══════════════════════════════════════════ */
-#roleBadge[style*="amber"]{font-weight:700;letter-spacing:.04em}
-
-/* ═══════════════════════════════════════════
-   ACCESSIBILITY — SKIP LINK + FOCUS
-═══════════════════════════════════════════ */
-.skip-link{position:absolute;top:-100px;left:16px;z-index:9999;background:var(--amber);color:var(--bg);padding:8px 16px;border-radius:var(--r);font-family:var(--mono);font-size:13px;font-weight:600;text-decoration:none;transition:top .15s}
-.skip-link:focus{top:16px}
-button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
-.nav-item:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:var(--r)}
-.p-btn:focus-visible,.acc-head:focus-visible,.dock-filter-btn:focus-visible,.who-btn:focus-visible,.flow-btn:focus-visible,.door-btn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
-.dc-action-btn:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
-
-/* ═══════════════════════════════════════════
-   RESPONSIVE — 1100px (tablet landscape)
-═══════════════════════════════════════════ */
-@media(max-width:1100px){
-  .grid-main{grid-template-columns:1fr}
-  .side-sticky{position:static}
-}
-
-/* ═══════════════════════════════════════════
-   RESPONSIVE — 768px (tablet portrait)
-═══════════════════════════════════════════ */
-@media(max-width:768px){
-  .topbar-inner{padding:0 10px}
-  .brand-sub{display:none}
-  .nav-item{padding:0 8px;font-size:10px}
-  .topbar-right .chip:not(:first-child){display:none}
-
-  /* Trailer table — horizontal scroll on tablet */
-  #tbody,.tbl-hd{min-width:620px}
-  .panel:has(.tbl-hd){overflow-x:auto;-webkit-overflow-scrolling:touch}
-
-  /* Dock map — tighter grid */
-  .dock-map-grid{grid-template-columns:repeat(auto-fill,minmax(60px,1fr))}
-
-  /* Supervisor */
-  .sup-grid{grid-template-columns:1fr}
-  .kpi-row{gap:8px}
-}
-
-/* ═══════════════════════════════════════════
-   RESPONSIVE — 480px (mobile)
-═══════════════════════════════════════════ */
-@media(max-width:480px){
-  /* Topbar */
-  .topbar-inner{padding:0 10px;height:48px}
-  .brand-name{font-size:12px}
-  .brand-mark{width:24px;height:24px;font-size:10px}
-  .brand-block{gap:7px;padding-right:12px;margin-right:10px}
-  .topbar-right .chip{display:none}
-  .topbar-right{gap:4px;padding-left:8px}
-  .tb-btn{padding:5px 9px;font-size:10px;min-height:36px}
-  .nav-item{padding:0 7px;font-size:9px;gap:3px;height:48px}
-  .nav-item svg{width:14px;height:14px}
-
-  /* Page */
-  .page{padding:10px}
-
-  /* Trailer board — card layout on mobile */
-  .tbl-hd{display:none !important}
-  .tbl-row{
-    display:flex !important;
-    flex-direction:column;
-    gap:6px;
-    padding:12px 14px !important;
-    border-left-width:4px;
-    position:relative;
+:root{--bg:#060b10;--card:#0d1620;--border:#1a2535;--amber:#f0a030;--cyan:#20c0d0;--red:#e84848;--t0:#e8eef8;--t1:#8a9db8;--t2:#4a5e78;--mono:"DM Mono",monospace;--sans:"DM Sans",system-ui,sans-serif}
+html,body{height:100%;-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--t0);font-family:var(--sans);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;min-height:100vh;gap:0}
+.logo{font-family:var(--mono);font-size:11px;letter-spacing:.15em;color:var(--t2);text-transform:uppercase;margin-bottom:32px;display:flex;align-items:center;gap:10px}
+.logo-mark{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--amber),#c07020);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#000}
+.heading{font-family:var(--mono);font-size:clamp(28px,8vw,42px);font-weight:700;color:var(--t0);letter-spacing:.04em;text-align:center;margin-bottom:6px}
+.sub{font-family:var(--mono);font-size:12px;color:var(--t2);letter-spacing:.08em;text-align:center;margin-bottom:36px}
+.exp-banner{background:rgba(232,72,72,.1);border:1px solid rgba(232,72,72,.25);color:var(--red);font-family:var(--mono);font-size:12px;letter-spacing:.04em;padding:10px 16px;border-radius:8px;margin-bottom:20px;text-align:center;width:100%;max-width:340px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px 24px;width:100%;max-width:340px}
+.pin-label{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--t2);margin-bottom:10px;display:block}
+.pin-input{width:100%;padding:18px 16px;border-radius:10px;border:2px solid var(--border);background:#080f18;color:var(--t0);font-family:var(--mono);font-size:28px;font-weight:700;letter-spacing:.2em;text-align:center;outline:none;-webkit-appearance:none;transition:border-color .15s;margin-bottom:20px}
+.pin-input:focus{border-color:var(--cyan)}
+.pin-input::placeholder{color:var(--t2);letter-spacing:.1em;font-size:20px}
+.sign-btn{width:100%;padding:18px;border-radius:12px;border:none;background:linear-gradient(135deg,var(--cyan),#18a0ae);color:#000;font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:.08em;cursor:pointer;touch-action:manipulation;transition:opacity .15s,transform .1s;-webkit-tap-highlight-color:transparent}
+.sign-btn:active{opacity:.85;transform:scale(.98)}
+.sign-btn:disabled{opacity:.4;cursor:not-allowed}
+.err-msg{display:none;margin-top:14px;color:var(--red);font-family:var(--mono);font-size:12px;letter-spacing:.04em;text-align:center}
+.err-msg.show{display:block}
+.hint{font-family:var(--mono);font-size:10px;color:var(--t2);text-align:center;margin-top:20px;letter-spacing:.04em}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.logo{animation:fadeUp .3s ease both}
+.heading{animation:fadeUp .3s .06s ease both}
+.sub{animation:fadeUp .3s .1s ease both}
+.card{animation:fadeUp .3s .14s ease both}
+</style></head><body>
+<div class="logo"><div class="logo-mark">W</div>WESBELL DISPATCH</div>
+<div class="heading">DOCK LOGIN</div>
+<div class="sub">ENTER YOUR DOCK PIN</div>
+${expiredHtml}
+<div class="card">
+  <label class="pin-label" for="pin">PIN</label>
+  <input id="pin" class="pin-input" type="password" inputmode="numeric" placeholder="- - - -" autocomplete="current-password" maxlength="12"/>
+  <button class="sign-btn" id="go">SIGN IN</button>
+  <div class="err-msg" id="em"></div>
+</div>
+<div class="hint">Contact management if you need a PIN.</div>
+<script>
+(function(){
+  var btn=document.getElementById("go"),pin=document.getElementById("pin"),em=document.getElementById("em");
+  function doLogin(){
+    var p=pin.value.trim();
+    if(!p){em.textContent="Enter your PIN.";em.classList.add("show");return;}
+    btn.disabled=true;btn.textContent="SIGNING IN...";em.classList.remove("show");
+    fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},body:JSON.stringify({role:"dock",pin:p})})
+    .then(function(r){if(!r.ok){r.text().then(function(t){em.textContent=t;em.classList.add("show");});return;}location.href="/dock";})
+    .catch(function(){em.textContent="Connection error.";em.classList.add("show");})
+    .finally(function(){btn.disabled=false;btn.textContent="SIGN IN";});
   }
-  .tbl-row>span,.tbl-row>div{padding:0 !important;white-space:normal !important;overflow:visible !important}
-
-  /* Row header line: trailer number + status tag side by side */
-  .tbl-row .t-num{font-size:19px !important;font-weight:700;font-family:var(--mono);color:var(--t0);line-height:1.1}
-  .tbl-row .stag{font-size:11px !important;padding:3px 8px !important}
-
-  /* Secondary info row */
-  .t-dir{font-size:11px;color:var(--t2)}
-  .t-door{font-size:14px;font-family:var(--mono);font-weight:600;color:var(--cyan)}
-  .t-time{font-size:10px;color:var(--t3);font-family:var(--mono)}
-  .t-note{font-size:11px;color:var(--t2);white-space:normal !important}
-
-  /* Action buttons — full width tap targets */
-  .t-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
-  .t-acts .btn{min-height:40px;padding:8px 12px;font-size:12px;flex:1 1 auto}
-  .qs-btn{flex:1;min-width:72px;text-align:center;min-height:40px !important;padding:8px 10px !important}
-  .qs-secondary{opacity:.7}
-
-  /* Filters */
-  .filter-bar{flex-direction:column !important;gap:8px;padding:10px}
-  .filter-bar .field{min-width:0 !important;flex:1 1 100%}
-  .filter-bar .tight{margin-top:0 !important}
-  .filter-bar input,.filter-bar select{padding:10px 12px;font-size:14px}
-
-  /* Board footer */
-  .board-footer{flex-direction:column;gap:2px;font-size:10px;padding:8px 12px;align-items:flex-start}
-
-  /* Dock map */
-  .dock-map-grid{grid-template-columns:repeat(5,1fr) !important;gap:4px}
-  .dm-cell{padding:6px 4px;min-height:50px}
-  .dm-door{font-size:9px}
-  .dm-trailer{font-size:10px}
-  .dm-status{font-size:8px}
-
-  /* Dock map modal — sheet-style on mobile */
-  .modal-ov{align-items:flex-end;padding:0}
-  .modal{max-width:100%;width:100%;border-radius:var(--r2) var(--r2) 0 0;padding:20px 16px 32px;max-height:85vh;overflow-y:auto}
-  #dmStatusBtns .btn{min-height:52px;font-size:15px}
-  .modal .m-btns{justify-content:stretch}
-  .modal .m-btns .btn{flex:1;min-height:44px}
-
-  /* Controls panel */
-  .side-sticky{position:static !important}
-  .field-row{flex-direction:column !important;gap:8px}
-  .panel-body{padding:12px !important}
-  .panel-hd{padding:10px 12px}
-  input,select,textarea{padding:10px 12px;font-size:16px}
-
-  /* Dock plates */
-  .plate-grid{grid-template-columns:repeat(3,1fr) !important;gap:4px;padding:8px}
-  .plate{min-height:52px;padding:5px}
-  .plate .p-btn{padding:4px 6px;font-size:9px;min-height:28px}
-
-  /* Supervisor */
-  .sup-shell{padding:10px}
-  .sup-grid{grid-template-columns:1fr !important}
-  .kpi-row{gap:6px}
-  .kpi{flex:1 1 80px;padding:12px}
-  .kpi .k-val{font-size:24px !important}
-  .data-tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-
-  /* Dock view */
-  .dock-toolbar{padding:8px 12px;gap:8px;top:48px}
-  .dock-filter-btn{padding:6px 12px;font-size:11px;min-height:38px}
-  .dock-search-bar{padding:8px 12px 4px}
-  .dock-search-bar input{font-size:15px;padding:10px 14px}
-  .dock-cards{padding:8px 12px;gap:8px}
-  .dock-card{padding:12px 14px}
-  .dc-trailer{font-size:26px !important}
-  .dc-door-badge{font-size:20px !important;padding:3px 8px !important}
-  .dc-action-btn{padding:18px !important;font-size:16px !important;min-height:60px}
-  .dock-plates-inline{margin:0 12px 60px}
-
-  /* Driver portal */
-  .driver-shell{padding:8px 10px 40px}
-  .driver-wrap{max-width:100%;gap:8px}
-  .driver-topbar{padding:8px 12px}
-  .dtb-mark{width:24px;height:24px;font-size:10px}
-  .dtb-title{font-size:11px}
-  .driver-panel{border-radius:var(--r2)}
-  .driver-pbody{padding:12px 14px}
-  .trailer-hero-input{font-size:28px !important;padding:14px !important;letter-spacing:.04em}
-  .who-grid{grid-template-columns:1fr 1fr;gap:8px}
-  .who-btn{min-height:80px;padding:10px 8px;gap:6px}
-  .who-btn .who-icon{font-size:24px}
-  .who-btn .who-label{font-size:13px}
-  .flow-grid{gap:8px}
-  .flow-btn{min-height:60px;padding:12px 14px}
-  .door-picker-grid{grid-template-columns:repeat(4,1fr) !important;gap:5px}
-  .door-btn{min-height:52px;font-size:14px}
-  .drop-type-btn{min-height:60px}
-  .checkline{min-height:64px;padding:14px}
-  .checkline input[type="checkbox"]{width:28px;height:28px}
-  .checkline .cl-main{font-size:14px}
-  .driver-submit{min-height:60px;font-size:15px}
-
-  /* Shunt picker */
-  .shunt-picker{padding:10px}
-  .shunt-doors{gap:5px}
-  .shunt-door-btn{padding:10px 12px;font-size:13px;min-height:44px}
-
-  /* Toast — full width at bottom */
-  .toast{right:8px;left:8px;width:auto;bottom:12px}
-
-  /* Dock toolbar — prevent staff button from getting squashed */
-  .dock-toolbar{flex-wrap:wrap;gap:6px}
-  .dock-toolbar-left{flex:0 0 auto}
-  .dock-toolbar-right{flex:0 0 auto;margin-left:auto}
-  .dock-filter-wrap{order:3;flex:0 0 100%;justify-content:center;margin:0}
-
-  /* Staff login modal — sheet from bottom */
-  #staffLoginOv{align-items:flex-end;padding:0}
-  #staffLoginOv .modal{max-width:100%;width:100%;border-radius:var(--r2) var(--r2) 0 0;padding:20px 16px 36px;max-height:90vh;overflow-y:auto}
-
-  /* PIN rows — stack vertically on mobile */
-  .pin-row{grid-template-columns:1fr;gap:6px}
-  .pin-row .btn{width:100%;min-height:44px}
-}
-
-/* ═══════════════════════════════════════════
-   RESPONSIVE — 360px (small phones)
-═══════════════════════════════════════════ */
-@media(max-width:360px){
-  /* Nav — icons only */
-  .nav-item span{display:none}
-  .nav-item svg{display:block !important;width:16px;height:16px}
-  .nav-item{padding:0 9px}
-
-  .dock-map-grid{grid-template-columns:repeat(4,1fr) !important}
-  .dm-trailer{font-size:9px}
-
-  .plate-grid{grid-template-columns:repeat(2,1fr) !important}
-  .who-grid{grid-template-columns:1fr}
-  .door-picker-grid{grid-template-columns:repeat(3,1fr) !important}
-  .door-btn{min-height:48px}
-
-  .kpi{flex:1 1 70px;padding:10px}
-  .kpi .k-val{font-size:20px !important}
-
-  .dc-trailer{font-size:20px !important}
-}
-
-/* ═══════════════════════════════════════════
-   TOUCH ACTION — prevent double-tap zoom
-═══════════════════════════════════════════ */
-button,.btn,.nav-item,.who-btn,.flow-btn,.door-btn,.drop-type-btn,
-.dc-action-btn,.dock-filter-btn,.driver-submit,.checkline,
-.shunt-door-btn,.dm-cell,.p-btn,.tb-btn,.acc-head,.bn-item,
-.issue-toggle-label,.issue-photo-zone,.ipz-remove{
-  touch-action:manipulation;
-}
-
-/* ═══════════════════════════════════════════
-   PULL TO REFRESH
-═══════════════════════════════════════════ */
-.ptr-indicator{
-  display:flex;align-items:center;justify-content:center;gap:8px;
-  height:0;overflow:hidden;transition:height .2s ease;
-  font-family:var(--mono);font-size:11px;color:var(--t2);letter-spacing:.04em;
-  background:var(--bg);
-}
-.ptr-indicator.ptr-visible{height:48px}
-.ptr-indicator.ptr-loading{height:48px}
-.ptr-spinner{
-  width:16px;height:16px;border:2px solid var(--b1);
-  border-top-color:var(--amber);border-radius:50%;
-  animation:spin .7s linear infinite;flex-shrink:0;
-}
-
-/* ═══════════════════════════════════════════
-   BOTTOM NAV (mobile only)
-═══════════════════════════════════════════ */
-.bottom-nav{
-  display:none;
-  position:fixed;bottom:0;left:0;right:0;z-index:200;
-  background:rgba(10,13,18,.95);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-  border-top:1px solid var(--b0);
-  padding:6px 0 8px;
-}
-.bottom-nav-inner{
-  display:flex;align-items:stretch;justify-content:space-around;
-  max-width:480px;margin:0 auto;
-}
-.bn-item{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:3px;flex:1;padding:4px 8px;
-  font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:.06em;
-  text-transform:uppercase;color:var(--t2);text-decoration:none;
-  border:none;background:transparent;cursor:pointer;
-  transition:color .15s;touch-action:manipulation;min-height:48px;
-}
-.bn-item svg{width:18px;height:18px;opacity:.6;transition:opacity .15s}
-.bn-item.active{color:var(--amber)}
-.bn-item.active svg{opacity:1}
-.bn-item:active{opacity:.7}
-
-@media(max-width:768px){
-  .bottom-nav{display:block}
-  .topbar .nav{display:none}
-  main{padding-bottom:64px}
-  .dock-shell{padding-bottom:calc(80px + 64px)}
-  .driver-shell{padding-bottom:calc(48px + 64px)}
-  /* Management view needs bottom padding for bottom nav */
-  .sup-shell{padding-bottom:80px}
-  /* Staff login button — shrink label on tight toolbars */
-  #btnDockStaffLogin,#btnDriverStaffLogin{font-size:10px;padding:4px 8px}
-  /* Staff modal sheets up from bottom on mobile */
-  #staffLoginOv{align-items:flex-end;padding:0}
-  #staffLoginOv .modal{max-width:100%;width:100%;border-radius:var(--r2) var(--r2) 0 0;padding:20px 16px 32px;max-height:90vh;overflow-y:auto}
-  /* Management table needs horizontal scroll on tablet */
-  #managementView .panel:has(.tbl-hd){overflow-x:auto;-webkit-overflow-scrolling:touch}
-  #managementView #supTbody,#managementView .tbl-hd{min-width:560px}
-}
-
-/* ═══════════════════════════════════════════
-   SWIPE TOAST DISMISS
-═══════════════════════════════════════════ */
-.toast{transition:transform .2s ease,opacity .2s ease,display 0s}
-.toast.swiping{transition:none}
-.toast.swipe-out{transform:translateX(120%);opacity:0}
-
-/* ═══════════════════════════════════════════
-   LANDSCAPE MODE
-═══════════════════════════════════════════ */
-@media(max-width:900px) and (orientation:landscape){
-  .driver-shell{padding:8px 16px 16px}
-  .driver-wrap{max-width:100%;flex-direction:row;flex-wrap:wrap;align-items:flex-start;gap:10px}
-  .driver-conn-bar{flex:0 0 100%}
-  .driver-hdr{flex:0 0 100%;padding:2px 0 4px}
-  .driver-panel{flex:1 1 calc(50% - 5px);min-width:0}
-  .session-history{flex:1 1 calc(50% - 5px);min-width:0}
-  .who-grid{grid-template-columns:repeat(2,1fr)}
-  .flow-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  .door-picker-grid{grid-template-columns:repeat(6,1fr) !important}
-  .dock-shell{flex-direction:row;flex-wrap:wrap;max-width:100%}
-  .dock-toolbar{flex:0 0 100%}
-  .dock-search-bar{flex:0 0 100%}
-  .dock-cards{flex:1;overflow-y:auto;max-height:calc(100vh - 160px)}
-  .dock-plates-inline{flex:0 0 280px;margin:0 0 0 8px;align-self:flex-start;position:sticky;top:110px}
-  .trailer-hero-input{font-size:22px !important}
-  .checkline{min-height:56px}
-  .driver-submit{min-height:52px}
-}
-
-/* ═══════════════════════════════════════════
-   SCROLL SNAP — dock cards feel native
-═══════════════════════════════════════════ */
-@media(max-width:480px){
-  .dock-cards{scroll-snap-type:y proximity;-webkit-overflow-scrolling:touch}
-  .dock-card{scroll-snap-align:start}
-}
-
-/* ═══════════════════════════════════════════
-   SAFE AREA (iPhone notch / home indicator)
-═══════════════════════════════════════════ */
-@supports(padding-bottom:env(safe-area-inset-bottom)){
-  .driver-shell{padding-bottom:calc(48px + env(safe-area-inset-bottom))}
-  .dock-shell{padding-bottom:calc(144px + env(safe-area-inset-bottom))}
-  .sup-shell{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
-  .toast{bottom:calc(72px + env(safe-area-inset-bottom))}
-  .modal-ov:not(#staffLoginOv){padding-bottom:env(safe-area-inset-bottom)}
-  #staffLoginOv .modal{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
-  .topbar{padding-top:env(safe-area-inset-top)}
-  .bottom-nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))}
-  /* Compensate for taller topbar */
-  .dock-toolbar{top:calc(52px + env(safe-area-inset-top))}
-  /* Lightbox close button stays below status bar on notch phones */
-  .issue-lightbox{padding-top:max(16px, env(safe-area-inset-top))}
-  .issue-lightbox-close{top:calc(16px + env(safe-area-inset-top))}
-}
-
-/* ═══════════════════════════════════════════
-   SWIPE VIEW TRANSITION HINT
-═══════════════════════════════════════════ */
-@media(max-width:768px){
-  /* Subtle edge indicator when on non-first/last view */
-  .view-fade{animation:viewSlideIn .22s cubic-bezier(.22,1,.36,1)}
-  @keyframes viewSlideIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
-}
-
-/* ═══════════════════════════════════════════
-   PWA INSTALL BUTTON
-═══════════════════════════════════════════ */
-#btnInstallPwa{
-  border-color:var(--amber-bd);
-  color:var(--amber);
-  background:var(--amber-bg);
-  animation:installPulse 2.5s ease-in-out infinite;
-}
-@keyframes installPulse{
-  0%,100%{box-shadow:0 0 0 0 rgba(240,160,48,0)}
-  50%{box-shadow:0 0 0 4px rgba(240,160,48,.15)}
-}
-@media(max-width:480px){
-  #btnInstallPwa span{display:none}
-}
-
-/* ═══════════════════════════════════════════
-   DRIVER FULL RESET BUTTON
-═══════════════════════════════════════════ */
-#btnDriverFullReset:hover,
-#btnDriverFullReset:active{
-  color:var(--t1);
-  border-color:var(--b2);
-}
-
-/* ═══════════════════════════════════════════
-   ANIMATIONS — COMPREHENSIVE UPGRADE
-═══════════════════════════════════════════ */
-
-/* ── Core easing variables ── */
-:root {
-  --ease-spring: cubic-bezier(.34,1.56,.64,1);
-  --ease-out-quart: cubic-bezier(.25,.46,.45,.94);
-  --ease-in-out-quint: cubic-bezier(.83,0,.17,1);
-}
-
-/* ── Driver screen transitions ── */
-/* Screens slide in from right, out to left */
-@keyframes screenIn  { from { opacity:0; transform:translateX(22px) } to { opacity:1; transform:none } }
-@keyframes screenOut { from { opacity:1; transform:none } to { opacity:0; transform:translateX(-16px) } }
-@keyframes screenInBack { from { opacity:0; transform:translateX(-22px) } to { opacity:1; transform:none } }
-
-.screen-enter { animation: screenIn  .26s var(--ease-out-quart) both }
-.screen-enter-back { animation: screenInBack .26s var(--ease-out-quart) both }
-.screen-exit  { animation: screenOut .18s ease-in both; pointer-events:none }
-
-/* ── Assignment card pop-in ── */
-@keyframes cardReveal {
-  from { opacity:0; transform:translateY(-8px) scale(.97) }
-  to   { opacity:1; transform:none }
-}
-.assignment-card.visible  { animation: cardReveal .22s var(--ease-spring) both }
-.door-picker-wrap.visible { animation: cardReveal .2s  var(--ease-out-quart) both }
-.no-assignment-msg.visible { animation: cardReveal .2s var(--ease-out-quart) both }
-
-/* ── Door button spring on select ── */
-.door-btn { transform-origin: center }
-.door-btn.selected { animation: doorPop .2s var(--ease-spring) }
-@keyframes doorPop {
-  0%   { transform: scale(1) }
-  50%  { transform: scale(1.12) }
-  100% { transform: scale(1) }
-}
-
-/* ── Drop-type toggle spring ── */
-.drop-type-btn.selected { animation: dtbPop .22s var(--ease-spring) }
-@keyframes dtbPop {
-  0%   { transform: scale(1) }
-  55%  { transform: scale(1.06) }
-  100% { transform: scale(1) }
-}
-
-/* ── Done screen — staggered celebration ── */
-@keyframes doneRingPop {
-  0%   { opacity:0; transform: scale(0.3) rotate(-15deg) }
-  60%  { transform: scale(1.18) rotate(6deg) }
-  80%  { transform: scale(0.94) rotate(-2deg) }
-  100% { opacity:1; transform: scale(1) rotate(0deg) }
-}
-@keyframes doneTextSlide {
-  from { opacity:0; transform:translateY(10px) }
-  to   { opacity:1; transform:none }
-}
-@keyframes doneDetailSlide {
-  from { opacity:0; transform:translateY(8px) }
-  to   { opacity:1; transform:none }
-}
-@keyframes doneBtnSlide {
-  from { opacity:0; transform:translateY(6px) }
-  to   { opacity:1; transform:none }
-}
-.done-screen-active .done-ring   { animation: doneRingPop   .5s  var(--ease-spring)     both }
-.done-screen-active .done-title  { animation: doneTextSlide .32s var(--ease-out-quart)  .18s both }
-.done-screen-active .done-detail { animation: doneDetailSlide .3s var(--ease-out-quart) .26s both }
-.done-screen-active .done-btn    { animation: doneBtnSlide   .28s var(--ease-out-quart) .34s both }
-
-/* ── Checkline check spring ── */
-@keyframes checkBounce {
-  0%   { transform: scale(1) }
-  40%  { transform: scale(1.04) }
-  70%  { transform: scale(.98) }
-  100% { transform: scale(1) }
-}
-.checkline:has(input:checked) { animation: checkBounce .25s var(--ease-spring) }
-
-/* ── Submit button pulse when enabled ── */
-@keyframes submitGlow {
-  0%,100% { box-shadow: 0 0 0 0 rgba(240,160,48,0) }
-  50%      { box-shadow: 0 0 0 6px rgba(240,160,48,.12) }
-}
-.driver-submit:not(:disabled) { animation: submitGlow 2.8s ease-in-out infinite }
-.driver-submit.green:not(:disabled) { animation: submitGlowGreen 2.8s ease-in-out infinite }
-@keyframes submitGlowGreen {
-  0%,100% { box-shadow: 0 0 0 0 rgba(32,208,144,0) }
-  50%      { box-shadow: 0 0 0 6px rgba(32,208,144,.12) }
-}
-
-/* ── Board row stagger on initial load ── */
-@keyframes rowIn {
-  from { opacity:0; transform:translateX(-6px) }
-  to   { opacity:1; transform:none }
-}
-.tbl-row { animation: rowIn .18s var(--ease-out-quart) both }
-.tbl-row:nth-child(1)  { animation-delay:.02s }
-.tbl-row:nth-child(2)  { animation-delay:.04s }
-.tbl-row:nth-child(3)  { animation-delay:.06s }
-.tbl-row:nth-child(4)  { animation-delay:.08s }
-.tbl-row:nth-child(5)  { animation-delay:.10s }
-.tbl-row:nth-child(6)  { animation-delay:.12s }
-.tbl-row:nth-child(7)  { animation-delay:.14s }
-.tbl-row:nth-child(8)  { animation-delay:.15s }
-.tbl-row:nth-child(9)  { animation-delay:.16s }
-.tbl-row:nth-child(n+10) { animation-delay:.17s }
-
-/* ── Dock card stagger ── */
-@keyframes dockCardIn {
-  from { opacity:0; transform:translateY(10px) }
-  to   { opacity:1; transform:none }
-}
-.dock-card { animation: dockCardIn .22s var(--ease-out-quart) both }
-.dock-card:nth-child(1) { animation-delay:.03s }
-.dock-card:nth-child(2) { animation-delay:.07s }
-.dock-card:nth-child(3) { animation-delay:.11s }
-.dock-card:nth-child(4) { animation-delay:.14s }
-.dock-card:nth-child(5) { animation-delay:.17s }
-.dock-card:nth-child(n+6) { animation-delay:.19s }
-
-/* ── Dock card action button press ── */
-.dc-action-btn:active { transform:scale(.97); transition:transform .08s }
-
-/* ── KPI number count-up shimmer ── */
-@keyframes kpiIn {
-  from { opacity:0; transform:translateY(6px) }
-  to   { opacity:1; transform:none }
-}
-.kpi { animation: kpiIn .28s var(--ease-out-quart) both }
-.kpi:nth-child(1) { animation-delay:.05s }
-.kpi:nth-child(2) { animation-delay:.10s }
-.kpi:nth-child(3) { animation-delay:.15s }
-.kpi:nth-child(4) { animation-delay:.20s }
-.kpi:nth-child(5) { animation-delay:.25s }
-
-/* ── Feed item stagger ── */
-@keyframes feedIn {
-  from { opacity:0; transform:translateX(8px) }
-  to   { opacity:1; transform:none }
-}
-.feed-item { animation: feedIn .2s var(--ease-out-quart) both }
-.feed-item:nth-child(1) { animation-delay:.03s }
-.feed-item:nth-child(2) { animation-delay:.07s }
-.feed-item:nth-child(3) { animation-delay:.10s }
-.feed-item:nth-child(4) { animation-delay:.13s }
-.feed-item:nth-child(5) { animation-delay:.15s }
-.feed-item:nth-child(n+6) { animation-delay:.17s }
-
-/* ── Modal entrance ── */
-@keyframes modalIn {
-  from { opacity:0; transform:scale(.94) translateY(8px) }
-  to   { opacity:1; transform:none }
-}
-@keyframes overlayIn { from { opacity:0 } to { opacity:1 } }
-.modal-ov:not(.hidden) { animation: overlayIn .18s ease both }
-.modal-ov:not(.hidden) .modal { animation: modalIn .24s var(--ease-spring) both }
-
-/* On mobile the modal sheets up from bottom */
-@media(max-width:480px) {
-  @keyframes modalSheetIn {
-    from { opacity:0; transform:translateY(40px) }
-    to   { opacity:1; transform:none }
+  btn.addEventListener("click",doLogin);
+  pin.addEventListener("keydown",function(e){if(e.key==="Enter")doLogin();});
+  pin.focus();
+})();
+</script></body></html>`);
   }
-  .modal-ov:not(.hidden) .modal { animation: modalSheetIn .28s var(--ease-out-quart) both }
+
+  // ── DISPATCHER / MANAGEMENT / ADMIN: full dashboard login ────────────────
+  const roleOptions = isSup
+    ? '<option value="management" selected>Management</option><option value="admin">&#9889; Admin</option>'
+    : '<option value="dispatcher" selected>Dispatcher</option><option value="dock">Dock</option><option value="management">Management</option><option value="admin">&#9889; Admin</option>';
+
+  const expiredBanner = expired
+    ? '<div class="ctx-badge ctx-err">&#9888; Session expired &#8212; please sign in again.</div>'
+    : "";
+
+  res.setHeader("content-type", "text/html; charset=utf-8");
+  res.end(`<!doctype html><html lang="en"><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<title>Wesbell Dispatch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#070a0f;--s0:#0c1018;--s1:#101620;
+  --b0:#1a2535;--b1:#1f2e42;
+  --t0:#e8eef8;--t1:#8a9db8;--t2:#4a5e78;--t3:#293848;
+  --amber:#f0a030;--amber-d:#c07020;
+  --cyan:#20c0d0;--green:#20d090;--red:#e84848;
+  --mono:"DM Mono",monospace;--sans:"DM Sans",system-ui,sans-serif;--display:"Bebas Neue",sans-serif;
 }
-
-/* ── Toast — more spring ── */
-@keyframes toastIn { from { opacity:0; transform:translateY(10px) scale(.96) } to { opacity:1; transform:none } }
-.toast { animation: toastIn .3s var(--ease-spring) }
-
-/* ── Bottom nav active indicator slide ── */
-.bn-item { position:relative; overflow:visible }
-.bn-item.active::after {
-  content:"";
-  position:absolute;
-  bottom:-6px; left:50%;
-  transform:translateX(-50%);
-  width:18px; height:2px;
-  border-radius:1px;
-  background:var(--amber);
-  animation: navIndicator .22s var(--ease-spring) both;
+html{height:100%;-webkit-font-smoothing:antialiased}
+body{min-height:100vh;background:var(--bg);color:var(--t0);font-family:var(--sans);display:grid;grid-template-columns:1fr 380px;overflow:hidden}
+/* ── Dashboard ── */
+.dashboard{position:relative;z-index:1;display:flex;flex-direction:column;padding:44px 52px 36px;background:linear-gradient(135deg,#070c14 0%,#0a1020 60%,#08111c 100%);border-right:1px solid var(--b0);overflow:hidden}
+.dashboard::after{content:"";position:absolute;top:-80px;left:-80px;width:600px;height:600px;background:radial-gradient(ellipse at center,rgba(240,160,48,.055) 0%,transparent 70%);pointer-events:none}
+.db-brand{display:flex;align-items:center;gap:12px;margin-bottom:44px;position:relative;z-index:1}
+.db-mark{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--amber) 0%,var(--amber-d) 100%);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:15px;font-weight:700;color:#000;box-shadow:0 4px 16px rgba(240,120,0,.3);flex-shrink:0}
+.db-name{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.1em;color:var(--t0)}
+.db-sub{font-size:10px;color:var(--t2);letter-spacing:.08em;margin-top:1px}
+.clock-wrap{position:relative;z-index:1;margin-bottom:8px}
+.clock-time{font-family:var(--display);font-size:clamp(80px,9vw,130px);line-height:.9;color:var(--t0);letter-spacing:.01em;text-shadow:0 0 60px rgba(240,160,48,.12)}
+.colon{color:var(--amber);animation:blink 1s step-start infinite}
+@keyframes blink{0%,49%{opacity:1}50%,100%{opacity:.2}}
+.clock-secs{font-size:.52em;color:var(--t2);margin-left:4px;vertical-align:baseline}
+.clock-ampm{font-family:var(--mono);font-size:clamp(13px,1.5vw,20px);color:var(--amber);letter-spacing:.1em;margin-left:6px;vertical-align:super}
+.date-row{display:flex;align-items:baseline;gap:12px;margin-bottom:36px;position:relative;z-index:1}
+.date-day{font-family:var(--display);font-size:clamp(26px,3.5vw,42px);color:var(--t1);letter-spacing:.04em}
+.date-full{font-family:var(--mono);font-size:clamp(11px,1vw,13px);color:var(--t2);letter-spacing:.06em;text-transform:uppercase}
+.divider{height:1px;background:linear-gradient(90deg,var(--b1) 0%,transparent 100%);margin-bottom:32px;position:relative;z-index:1}
+.weather-block{display:flex;align-items:flex-start;gap:20px;margin-bottom:36px;position:relative;z-index:1;min-height:60px}
+.weather-icon{font-size:48px;line-height:1;flex-shrink:0}
+.weather-temp{font-family:var(--display);font-size:clamp(36px,4.5vw,56px);color:var(--t0);line-height:1}
+.weather-unit{font-family:var(--mono);font-size:15px;color:var(--t2);vertical-align:super}
+.weather-desc{font-family:var(--mono);font-size:11px;color:var(--t1);letter-spacing:.06em;text-transform:uppercase;margin-top:4px}
+.weather-meta{display:flex;gap:14px;margin-top:7px}
+.wm{font-family:var(--mono);font-size:11px;color:var(--t2)}
+.wm span{color:var(--t1)}
+.weather-msg{font-family:var(--mono);font-size:12px;color:var(--t3);letter-spacing:.04em;padding:8px 0}
+.cal-wrap{flex:1;position:relative;z-index:1}
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.cal-month{font-family:var(--display);font-size:clamp(20px,2.5vw,30px);color:var(--t1);letter-spacing:.06em}
+.cal-year{font-family:var(--mono);font-size:12px;color:var(--t2);letter-spacing:.08em}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-dow{font-family:var(--mono);font-size:9px;letter-spacing:.08em;color:var(--t3);text-align:center;padding:3px 0 7px;text-transform:uppercase}
+.cal-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:clamp(10px,1.1vw,12px);color:var(--t2);border-radius:5px}
+.cal-cell.other{color:var(--t3)}
+.cal-cell.today{background:var(--amber);color:#000;font-weight:700;box-shadow:0 2px 10px rgba(240,160,48,.35)}
+.db-footer{position:relative;z-index:1;display:flex;align-items:center;gap:8px;margin-top:20px;padding-top:14px;border-top:1px solid var(--b0)}
+.live-dot{width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:beat 2.4s ease-in-out infinite}
+@keyframes beat{0%,100%{box-shadow:0 0 0 0 rgba(32,208,144,.6)}50%{box-shadow:0 0 0 5px rgba(32,208,144,0)}}
+.footer-txt{font-family:var(--mono);font-size:10px;color:var(--t2);letter-spacing:.06em}
+/* ── Login Panel ── */
+.login-panel{position:relative;z-index:1;display:flex;flex-direction:column;justify-content:flex-start;padding:40px 40px 36px;padding-top:max(40px,env(safe-area-inset-top,40px));background:var(--s0);overflow-y:auto}
+.lp-brand{display:flex;align-items:center;gap:10px;margin-bottom:32px}
+.lp-mark{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,var(--amber),var(--amber-d));display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px;font-weight:700;color:#000;box-shadow:0 3px 12px rgba(240,120,0,.25);flex-shrink:0}
+.lp-name{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.1em;color:var(--t1)}
+.lp-sub2{font-size:9px;color:var(--t2);letter-spacing:.08em;margin-top:1px}
+.lp-heading{font-family:var(--display);font-size:36px;color:var(--t0);letter-spacing:.04em;margin-bottom:4px}
+.lp-tagline{font-family:var(--mono);font-size:11px;color:var(--t2);letter-spacing:.06em;margin-bottom:28px}
+.ctx-badge{padding:8px 12px;border-radius:6px;font-family:var(--mono);font-size:11px;letter-spacing:.04em;margin-bottom:14px}
+.ctx-err{background:rgba(232,72,72,.08);border:1px solid rgba(232,72,72,.2);color:var(--red)}
+.fl{display:block;font-family:var(--mono);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);margin:0 0 7px}
+.fi{width:100%;padding:14px 16px;border-radius:8px;border:1px solid var(--b1);background:var(--s1);color:var(--t0);font-family:var(--mono);font-size:16px;outline:none;-webkit-appearance:none;transition:border-color .15s,box-shadow .15s;margin-bottom:16px}
+.fi:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(240,160,48,.1)}
+.fi::placeholder{color:var(--t3)}
+.sign-btn{width:100%;padding:15px;border-radius:10px;border:1px solid rgba(240,160,48,.3);background:rgba(240,160,48,.1);color:var(--amber);font-family:var(--mono);font-size:14px;font-weight:500;letter-spacing:.08em;cursor:pointer;touch-action:manipulation;transition:all .15s;margin-top:4px;display:flex;align-items:center;justify-content:center;gap:10px}
+.sign-btn:hover{background:rgba(240,160,48,.18);border-color:rgba(240,160,48,.5)}
+.sign-btn:active{transform:scale(.99)}
+.sign-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.arrow{transition:transform .15s}
+.sign-btn:hover .arrow{transform:translateX(3px)}
+.err-msg{display:none;padding:10px 12px;border-radius:6px;background:rgba(232,72,72,.08);border:1px solid rgba(232,72,72,.2);color:var(--red);font-family:var(--mono);font-size:12px;letter-spacing:.03em;margin-top:12px}
+.err-msg.show{display:block}
+.lp-hint{font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:.04em;text-align:center;margin-top:20px;line-height:1.6}
+/* ── Mobile ── */
+@media(max-width:768px){
+  body{grid-template-columns:1fr;grid-template-rows:auto 1fr;overflow-y:auto;height:auto;min-height:100vh}
+  .dashboard{padding:20px 20px 16px;border-right:none;border-bottom:1px solid var(--b0);flex-direction:row;flex-wrap:wrap;align-items:center;gap:12px 20px}
+  .db-brand{margin-bottom:0;flex:1 0 auto}
+  .clock-wrap{order:-1;flex:0 0 100%;margin-bottom:0}
+  .clock-time{font-size:clamp(48px,14vw,72px)}
+  .clock-secs{display:none}
+  .date-row{flex:0 0 100%;margin-bottom:0}
+  .divider{display:none}
+  .weather-block{flex:1 1 50%;min-height:0;margin-bottom:0}
+  .weather-icon{font-size:28px}
+  .weather-temp{font-size:clamp(22px,6vw,32px)}
+  .weather-unit{font-size:11px}
+  .weather-desc{font-size:9px}
+  .weather-meta{gap:8px}
+  .cal-wrap{display:none}
+  .db-footer{flex:0 0 100%;margin-top:8px;padding-top:8px}
+  .login-panel{padding:28px 20px max(28px,env(safe-area-inset-bottom,28px));justify-content:flex-start}
+  .lp-brand{margin-bottom:20px}
 }
-@keyframes navIndicator {
-  from { width:0; opacity:0 }
-  to   { width:18px; opacity:1 }
-}
-.bn-item.active svg { animation: navIconPop .22s var(--ease-spring) }
-@keyframes navIconPop {
-  0%   { transform:translateY(0) }
-  45%  { transform:translateY(-3px) }
-  100% { transform:translateY(0) }
-}
-
-/* ── Live dot pulse when connected ── */
-@keyframes liveBeat {
-  0%,100% { box-shadow: 0 0 0 0 rgba(32,208,144,.6) }
-  50%      { box-shadow: 0 0 0 5px rgba(32,208,144,0) }
-}
-.live-dot.ok { animation: liveBeat 2.4s ease-in-out infinite }
-
-/* ── Panel entrance ── */
-@keyframes panelIn {
-  from { opacity:0; transform:translateY(8px) }
-  to   { opacity:1; transform:none }
-}
-.panel { animation: panelIn .24s var(--ease-out-quart) both }
-.col-stack .panel:nth-child(1) { animation-delay:.04s }
-.col-stack .panel:nth-child(2) { animation-delay:.09s }
-.col-stack .panel:nth-child(3) { animation-delay:.13s }
-.col-stack .panel:nth-child(4) { animation-delay:.16s }
-
-/* ── Who / Flow button hover lift ── */
-.who-btn:hover  { transform:translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,.3) }
-.who-btn:active { transform:scale(.96) }
-.flow-btn:hover { transform:translateX(3px) }
-.flow-btn:active{ transform:scale(.99) translateX(1px) }
-
-/* ── Shunt door button pop on select ── */
-.shunt-door-btn:hover:not(:disabled) { transform:scale(1.08) }
-.shunt-door-btn:active:not(:disabled){ transform:scale(.95) }
-
-/* ── Dock map cell hover ── */
-.dm-clickable:hover { transform:scale(1.06); filter:brightness(1.2) }
-.dm-clickable:active{ transform:scale(.96) }
-
-/* ── Accordion chevron transition (already exists — make smoother) ── */
-.acc-head .chev { transition:transform .3s var(--ease-in-out-quint), opacity .2s }
-
-/* ── Status tag colour transitions ── */
-.stag { transition: background .25s, color .25s, border-color .25s }
-
-/* ── Lookup spinner entrance ── */
-.lookup-spinner.visible { animation: spin .7s linear infinite, fadeIn .15s ease both }
-@keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
-
-/* ── Ready notification banner — bounces in ── */
-@keyframes rnbBounce {
-  0%   { opacity:0; transform:translateY(-10px) scale(.96) }
-  60%  { transform:translateY(2px) scale(1.01) }
-  100% { opacity:1; transform:none }
-}
-.ready-notif-banner { animation: rnbBounce .35s var(--ease-spring) both }
-
-/* ── Offline banner shake in ── */
-@keyframes offlineShake {
-  0%,100% { transform:translateX(0) }
-  20%     { transform:translateX(-5px) }
-  40%     { transform:translateX(4px) }
-  60%     { transform:translateX(-3px) }
-  80%     { transform:translateX(2px) }
-}
-.offline-banner { animation: offlineShake .4s ease both }
-
-/* ── Session history row fade-in ── */
-@keyframes shRowIn {
-  from { opacity:0; transform:translateY(-4px) }
-  to   { opacity:1; transform:none }
-}
-.sh-row:first-child { animation: shRowIn .2s var(--ease-out-quart) both }
-
-/* ── Dock plates grid stagger ── */
-@keyframes plateIn {
-  from { opacity:0; transform:scale(.9) }
-  to   { opacity:1; transform:none }
-}
-.plate { animation: plateIn .18s var(--ease-spring) both }
-.plate:nth-child(1)  { animation-delay:.01s }
-.plate:nth-child(2)  { animation-delay:.03s }
-.plate:nth-child(3)  { animation-delay:.05s }
-.plate:nth-child(4)  { animation-delay:.07s }
-.plate:nth-child(5)  { animation-delay:.09s }
-.plate:nth-child(6)  { animation-delay:.11s }
-.plate:nth-child(n+7){ animation-delay:.13s }
-
-/* ═══════════════════════════════════════════
-   ISSUE REPORT — safety screen
-═══════════════════════════════════════════ */
-
-/* Toggle row */
-.issue-toggle-wrap{margin-top:10px;border-radius:var(--r);border:1px solid var(--b1);overflow:hidden;transition:border-color .2s}
-.issue-toggle-wrap:has(input:checked){border-color:rgba(232,72,72,.4);background:rgba(232,72,72,.04)}
-.issue-toggle-label{display:flex;align-items:center;gap:14px;padding:14px 16px;cursor:pointer;min-height:60px;-webkit-tap-highlight-color:transparent}
-.issue-toggle-label input[type="checkbox"]{width:22px;height:22px;accent-color:var(--red);cursor:pointer;flex-shrink:0}
-.itl-body{flex:1}
-.itl-main{font-weight:600;font-size:14px;color:var(--t1)}
-.itl-sub{font-size:11px;color:var(--t2);margin-top:2px}
-.issue-toggle-wrap:has(input:checked) .itl-main{color:var(--red)}
-
-/* Expandable body */
-.issue-report-body{padding:0 14px 14px;border-top:1px solid var(--b0);background:rgba(232,72,72,.03);animation:issueBodyIn .2s ease both}
-@keyframes issueBodyIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
-
-/* Photo zone */
-.issue-photo-zone{position:relative;border-radius:var(--r);border:2px dashed var(--b2);background:var(--s0);min-height:130px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;transition:border-color .2s;margin-top:12px;-webkit-tap-highlight-color:transparent}
-.issue-photo-zone:hover{border-color:var(--red)}
-.issue-photo-zone:active{opacity:.85}
-.ipz-empty{display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;padding:20px}
-.ipz-icon{font-size:28px;opacity:.6}
-.ipz-label{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--t1);letter-spacing:.04em}
-.ipz-sub{font-size:10px;color:var(--t3);letter-spacing:.03em}
-.ipz-preview{width:100%;height:100%;object-fit:cover;position:absolute;inset:0;border-radius:calc(var(--r) - 2px)}
-.ipz-remove{position:absolute;top:8px;right:8px;z-index:2;width:28px;height:28px;border-radius:50%;border:none;background:rgba(10,13,18,.75);color:var(--t0);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);-webkit-tap-highlight-color:transparent}
-.ipz-remove:hover{background:var(--red-bg);color:var(--red)}
-.issue-photo-zone.has-photo{border-style:solid;border-color:rgba(232,72,72,.4);min-height:200px}
-
-/* Issue textarea */
-.issue-report-body textarea{margin-top:0;border-radius:var(--r);min-height:80px}
-
-/* ═══════════════════════════════════════════
-   ISSUE REPORTS — management panel
-═══════════════════════════════════════════ */
-.issue-card{display:flex;gap:14px;padding:14px 16px;border-bottom:1px solid var(--b0);align-items:flex-start;transition:background .15s}
-.issue-card:last-child{border-bottom:none}
-.issue-card:hover{background:rgba(232,72,72,.03)}
-.issue-thumb-wrap{flex-shrink:0;width:72px;height:72px;border-radius:var(--r);overflow:hidden;border:1px solid var(--b1);background:var(--s2);cursor:pointer;position:relative}
-.issue-thumb-wrap img{width:100%;height:100%;object-fit:cover;transition:transform .2s}
-.issue-thumb-wrap:hover img{transform:scale(1.06)}
-.issue-thumb-empty{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--t3)}
-.issue-body{flex:1;min-width:0}
-.issue-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px}
-.issue-trailer{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--t0)}
-.issue-door{font-family:var(--mono);font-size:12px;color:var(--amber)}
-.issue-time{font-family:var(--mono);font-size:10px;color:var(--t3)}
-.issue-note{font-size:12px;color:var(--t1);line-height:1.55}
-.issue-no-note{font-size:11px;color:var(--t3);font-style:italic}
-.issue-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.05em;background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd);text-transform:uppercase}
-
-/* Lightbox */
-.issue-lightbox{position:fixed;inset:0;z-index:800;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;padding:16px;cursor:pointer}
-.issue-lightbox.open{display:flex;animation:overlayIn .18s ease both}
-.issue-lightbox img{max-width:100%;max-height:90vh;border-radius:var(--r2);box-shadow:var(--sh-lg);cursor:default;animation:modalIn .22s var(--ease-spring) both}
-.issue-lightbox-close{position:absolute;top:16px;right:16px;width:36px;height:36px;border-radius:50%;border:none;background:rgba(255,255,255,.1);color:var(--t0);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px)}
-.issue-lightbox-close:hover{background:rgba(255,255,255,.2)}
-
-/* ── Issue report — mobile ── */
 @media(max-width:480px){
-  .issue-toggle-label{min-height:64px;padding:14px}
-  .issue-toggle-label input[type="checkbox"]{width:26px;height:26px}
-  .itl-main{font-size:14px}
-  .issue-photo-zone{min-height:160px}
-  .issue-photo-zone.has-photo{min-height:220px}
-  .issue-lightbox-close{width:44px;height:44px;font-size:20px}
+  .dashboard{padding:14px 16px 12px;gap:8px 16px}
+  .clock-time{font-size:clamp(40px,16vw,60px)}
+  .weather-block{flex:0 0 100%}
+  .login-panel{padding:20px 16px max(24px,env(safe-area-inset-bottom,24px))}
+  .lp-brand{margin-bottom:16px}
+  .lp-heading{font-size:28px}
+  .lp-tagline{font-size:10px;margin-bottom:20px}
+  .fi{font-size:16px!important;padding:13px 14px}
+  .sign-btn{padding:14px;font-size:13px}
 }
-
-/* ── Reduced motion ── */
-@media(prefers-reduced-motion:reduce) {
-  *,*::before,*::after {
-    animation-duration:.01ms !important;
-    animation-delay:.01ms !important;
-    transition-duration:.01ms !important;
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.db-brand,.clock-wrap,.date-row,.weather-block,.cal-wrap,.db-footer{animation:fadeUp .3s ease both}
+.login-panel{animation:fadeUp .3s .06s ease both}
+</style></head><body>
+<div class="dashboard">
+  <div class="db-brand">
+    <div class="db-mark">W</div>
+    <div><div class="db-name">WESBELL</div><div class="db-sub">DISPATCH SYSTEM</div></div>
+  </div>
+  <div class="clock-wrap">
+    <span class="clock-time"><span id="ch">--</span><span class="colon">:</span><span id="cm">--</span><span class="clock-secs" id="cs">--</span></span><span class="clock-ampm" id="ca"></span>
+  </div>
+  <div class="date-row">
+    <span class="date-day" id="dd"></span>
+    <span class="date-full" id="df"></span>
+  </div>
+  <div class="divider"></div>
+  <div class="weather-block" id="wb"><div class="weather-msg">Fetching weather&hellip;</div></div>
+  <div class="cal-wrap" id="cal"></div>
+  <div class="db-footer"><div class="live-dot"></div><div class="footer-txt" id="ft">WESBELL DISPATCH</div></div>
+</div>
+<div class="login-panel">
+  <div class="lp-brand">
+    <div class="lp-mark">W</div>
+    <div><div class="lp-name">WESBELL</div><div class="lp-sub2">DISPATCH</div></div>
+  </div>
+  <div class="lp-heading">SIGN IN</div>
+  <div class="lp-tagline">ENTER YOUR ROLE &amp; PIN TO CONTINUE</div>
+  ${expiredBanner}
+  <label class="fl" for="role">Role</label>
+  <select id="role" class="fi">${roleOptions}</select>
+  <label class="fl" for="pin">PIN</label>
+  <input id="pin" class="fi" type="password" inputmode="numeric" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="current-password"/>
+  <div class="err-msg" id="em"></div>
+  <button class="sign-btn" id="go"><span id="btn-lbl">SIGN IN</span><span class="arrow">&rarr;</span></button>
+  <div class="lp-hint">Contact management if you need a PIN.</div>
+</div>
+<script>
+(function(){
+  var DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  var MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  var now=new Date();
+  function tick(){var n=new Date(),h=n.getHours(),m=n.getMinutes(),s=n.getSeconds(),ap=h>=12?"PM":"AM";h=h%12||12;document.getElementById("ch").textContent=String(h).padStart(2,"0");document.getElementById("cm").textContent=String(m).padStart(2,"0");document.getElementById("cs").textContent=String(s).padStart(2,"0");document.getElementById("ca").textContent=ap;}
+  tick();setInterval(tick,1000);
+  document.getElementById("dd").textContent=DAYS[now.getDay()];
+  document.getElementById("df").textContent=MONTHS[now.getMonth()]+" "+now.getDate()+", "+now.getFullYear();
+  document.getElementById("ft").textContent="WESBELL DISPATCH \u00b7 "+DAYS[now.getDay()].toUpperCase();
+  (function(){var y=now.getFullYear(),mo=now.getMonth(),first=new Date(y,mo,1).getDay(),dim=new Date(y,mo+1,0).getDate(),dipm=new Date(y,mo,0).getDate(),c="",i,d;
+  c+='<div class="cal-head"><span class="cal-month">'+MONTHS[mo].toUpperCase()+'</span><span class="cal-year">'+y+'</span></div><div class="cal-grid">';
+  ["SU","MO","TU","WE","TH","FR","SA"].forEach(function(x){c+='<div class="cal-dow">'+x+'</div>';});
+  for(i=first-1;i>=0;i--)c+='<div class="cal-cell other">'+(dipm-i)+'</div>';
+  for(d=1;d<=dim;d++)c+='<div class="cal-cell'+(d===now.getDate()?" today":"")+'" >'+d+'</div>';
+  var rem=(first+dim)%7===0?0:7-(first+dim)%7;for(d=1;d<=rem;d++)c+='<div class="cal-cell other">'+d+'</div>';
+  c+='</div>';document.getElementById("cal").innerHTML=c;})();
+  var WMO={0:"\u2600\ufe0f",1:"\ud83c\udf24",2:"\u26c5",3:"\u2601\ufe0f",45:"\ud83c\udf2b",48:"\ud83c\udf2b",51:"\ud83c\udf26",53:"\ud83c\udf26",55:"\ud83c\udf27",61:"\ud83c\udf27",63:"\ud83c\udf27",65:"\ud83c\udf27",71:"\ud83c\udf28",73:"\u2744\ufe0f",75:"\u2744\ufe0f",80:"\ud83c\udf26",81:"\ud83c\udf26",82:"\u26c8",95:"\u26c8",96:"\u26c8",99:"\u26c8"};
+  var DESC={0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",45:"Fog",48:"Icy fog",51:"Light drizzle",53:"Drizzle",55:"Heavy drizzle",61:"Light rain",63:"Rain",65:"Heavy rain",71:"Light snow",73:"Snow",75:"Heavy snow",80:"Light showers",81:"Showers",82:"Violent showers",95:"Thunderstorm",96:"Thunderstorm w/ hail",99:"Heavy thunderstorm"};
+  if(navigator.geolocation){navigator.geolocation.getCurrentPosition(function(pos){var lat=pos.coords.latitude,lon=pos.coords.longitude;fetch("https://api.open-meteo.com/v1/forecast?latitude="+lat+"&longitude="+lon+"&current=temperature_2m,weathercode,windspeed_10m,relative_humidity_2m&temperature_unit=celsius&windspeed_unit=kmh&timezone=auto").then(function(r){return r.json();}).then(function(data){var c=data.current,code=c.weathercode,icon=WMO[code]||"\ud83c\udf21",desc=DESC[code]||"",temp=Math.round(c.temperature_2m),wind=Math.round(c.windspeed_10m),hum=Math.round(c.relative_humidity_2m);document.getElementById("wb").innerHTML='<div class="weather-icon">'+icon+'</div><div><div><span class="weather-temp">'+temp+'</span><span class="weather-unit">\u00b0C</span></div><div class="weather-desc">'+desc+'</div><div class="weather-meta"><div class="wm">\ud83d\udca8 <span>'+wind+' km/h</span></div><div class="wm">\ud83d\udca7 <span>'+hum+'%</span></div></div></div>';}).catch(function(){document.getElementById("wb").innerHTML='<div class="weather-msg">Weather unavailable</div>';});},function(){document.getElementById("wb").innerHTML='<div class="weather-msg">Enable location for weather</div>';},{timeout:8000});}else{document.getElementById("wb").innerHTML='<div class="weather-msg">Weather unavailable</div>';}
+  var ROLE_HOME={dispatcher:"/",admin:"/",dock:"/dock",management:"/management"};
+  var btn=document.getElementById("go"),lbl=document.getElementById("btn-lbl"),em=document.getElementById("em");
+  function doLogin(){
+    var role=document.getElementById("role").value,pin=document.getElementById("pin").value;
+    if(!pin){em.textContent="Enter your PIN.";em.classList.add("show");return;}
+    btn.disabled=true;lbl.textContent="SIGNING IN...";em.classList.remove("show");
+    fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},body:JSON.stringify({role:role,pin:pin})})
+    .then(function(r){if(!r.ok){r.text().then(function(t){em.textContent=t;em.classList.add("show");});return;}location.href=ROLE_HOME[role]||"/";})
+    .catch(function(){em.textContent="Connection error. Try again.";em.classList.add("show");})
+    .finally(function(){btn.disabled=false;lbl.textContent="SIGN IN";});
   }
-}
+  btn.addEventListener("click",doLogin);
+  document.getElementById("pin").addEventListener("keydown",function(e){if(e.key==="Enter")doLogin();});
+  document.getElementById("pin").focus();
+})();
+</script></body></html>`);
+});
+
+
+app.get("/",           guardPage(["dispatcher","management","admin"]),              sendIndex);
+app.get("/dock",       guardPage(["dock","dispatcher","management","admin","__driver__"]), sendIndex);
+app.get("/driver",     guardPage(["__driver__","dock","dispatcher","management","admin"]), sendIndex);
+app.get("/management", guardPage(["management","admin"]),                              sendIndex);
+
+/* ══════════════════════════════════════════
+   API — AUTH
+══════════════════════════════════════════ */
+app.get("/api/whoami", (req, res) => {
+  const s = getSession(req);
+  const role = s?.role || null;
+  // Admin and management can visit any page freely — no redirect hint
+  // Other roles get redirected to their home if they land on the wrong page
+  const freeRoam = !role || role === "admin" || role === "management";
+  const redirectTo = freeRoam ? null : (ROLE_HOME[role] || "/");
+  res.json({ role, version: APP_VERSION, redirectTo });
+});
+
+/* ══════════════════════════════════════════
+   RATE LIMITING — LOGIN
+══════════════════════════════════════════ */
+// Rate limiting removed — no lockout
+
+app.post("/api/login", requireXHR, async (req, res) => {
+  try {
+    const role = String(req.body.role || "").toLowerCase();
+    const pin  = String(req.body.pin  || "");
+    if (!["dispatcher","dock","management","admin"].includes(role)) return res.status(400).send("Invalid role");
+    if (pin.length < PIN_MIN_LEN) return res.status(400).send("PIN too short");
+    const ok = await verifyPin(role, pin);
+    await audit(req, role, ok ? "login_success" : "login_failed", "auth", role, {});
+    if (!ok) return res.status(401).send("Invalid PIN");
+    const existing = getSession(req);
+    if (existing?.sid) sessions.delete(existing.sid);
+    const sid = newSession(role);
+    setSessionCookie(res, sid);
+    res.json({ ok: true, role, version: APP_VERSION });
+  } catch (e) { res.status(500).send("Login error"); }
+});
+
+app.post("/api/logout", requireXHR, (req, res) => {
+  const s = getSession(req);
+  if (s?.sid) sessions.delete(s.sid);
+  clearSessionCookie(res);
+  res.json({ ok: true });
+});
+
+/* ══════════════════════════════════════════
+   API — TRAILERS
+══════════════════════════════════════════ */
+app.get("/api/state", requireXHR, async (req, res) => { try { res.json(await loadTrailersObject()); } catch(e) { res.status(500).send("State error"); } });
+
+app.post("/api/upsert", requireXHR, requireDockStatusAllowed, async (req, res) => {
+  const actor = req.user.role;
+  try {
+    const trailer = String(req.body.trailer || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    const now = Date.now();
+
+    const direction   = req.body.direction   !== undefined ? String(req.body.direction   || "").trim() : (existing?.direction   || "");
+    const status      = req.body.status      !== undefined ? String(req.body.status      || "").trim() : (existing?.status      || "");
+    const door        = req.body.door        !== undefined ? String(req.body.door        || "").trim() : (existing?.door        || "");
+    const note        = req.body.note        !== undefined ? String(req.body.note        || "").trim() : (existing?.note        || "");
+    const dropType    = req.body.dropType    !== undefined ? String(req.body.dropType    || "").trim() : (existing?.dropType    || "");
+    const carrierType = req.body.carrierType !== undefined ? String(req.body.carrierType || "").trim() : (existing?.carrierType || "");
+
+    if (actor === "dock") {
+      const onlyStatus =
+        req.body.status    !== undefined &&
+        req.body.direction === undefined &&
+        req.body.door      === undefined &&
+        req.body.note      === undefined &&
+        req.body.dropType  === undefined;
+      if (!onlyStatus) return res.status(403).send("Dock can only update trailer status");
+      if (!["Loading","Staged","Dock Ready"].includes(status)) return res.status(403).send("Dock can only set Loading, Staged or Dock Ready");
+    }
+
+    // Auto-set Incoming for Wesbell drops from driver portal
+    const isDriverDrop = req.body.flow === "drop" && carrierType.toLowerCase() === "wesbell";
+    const finalStatus  = isDriverDrop ? "Incoming" : status;
+
+    const allowed = ["Incoming","Dropped","Loading","Staged","Dock Ready","Ready","Departed",""];
+    if (!allowed.includes(finalStatus)) return res.status(400).send("Invalid status");
+
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt)
+       VALUES(?,?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET
+         direction=excluded.direction, status=excluded.status, door=excluded.door,
+         note=excluded.note, dropType=excluded.dropType, carrierType=excluded.carrierType,
+         updatedAt=excluded.updatedAt`,
+      [trailer, direction, finalStatus, door, note, dropType, carrierType, now]
+    );
+
+    await audit(req, actor, existing ? "trailer_update" : "trailer_create", "trailer", trailer, { direction, status: finalStatus, door, dropType, note });
+    if (req.body.status !== undefined || isDriverDrop) await audit(req, actor, "trailer_status_set", "trailer", trailer, { status: finalStatus });
+
+    if (finalStatus === "Ready" && ["dispatcher","management","admin"].includes(actor)) {
+      wsBroadcast("notify", { kind: "ready", trailer, door: door || "" });
+      broadcastPush("🟢 Trailer Ready", `Trailer ${trailer} is ready${door ? " at door " + door : ""}`, { trailer, door }).catch(() => {});
+    }
+
+    await broadcastTrailers();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).send("Upsert failed"); }
+});
+
+app.post("/api/delete", requireXHR, requireRole(["dispatcher","management","admin"]), async (req, res) => {
+  const actor = req.user.role;
+  try {
+    const trailer = String(req.body.trailer || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+    await run(`DELETE FROM trailers WHERE trailer=?`, [trailer]);
+    await audit(req, actor, "trailer_delete", "trailer", trailer, {});
+    await broadcastTrailers();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).send("Delete failed"); }
+});
+
+app.post("/api/clear", requireXHR, requireRole(["dispatcher","management","admin"]), async (req, res) => {
+  const actor = req.user.role;
+  try {
+    await run(`DELETE FROM trailers`);
+    await audit(req, actor, "trailer_clear_all", "trailer", "*", {});
+    await broadcastTrailers();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).send("Clear failed"); }
+});
+
+/* ══════════════════════════════════════════
+   API — DOCK PLATES
+══════════════════════════════════════════ */
+app.get("/api/dockplates", requireXHR, async (req, res) => { try { res.json(await loadDockPlatesObject()); } catch(e) { res.status(500).send("Plates error"); } });
+
+app.post("/api/dockplates/set", requireXHR, requireRole(["dock","dispatcher","management","admin"]), async (req, res) => {
+  const actor = req.user.role;
+  try {
+    const door   = String(req.body.door   || "").trim();
+    const status = String(req.body.status || "Unknown").trim();
+    const note   = String(req.body.note   || "").trim();
+    const dNum = Number(door);
+    if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send("Invalid door");
+    if (!["OK","Service","Unknown"].includes(status)) return res.status(400).send("Invalid plate status");
+    await run(
+      `INSERT INTO dockplates(door,status,note,updatedAt) VALUES(?,?,?,?)
+       ON CONFLICT(door) DO UPDATE SET status=excluded.status,note=excluded.note,updatedAt=excluded.updatedAt`,
+      [door, status, note, Date.now()]
+    );
+    await audit(req, actor, "plate_set", "dockplate", door, { status, note });
+    await broadcastPlates();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).send("Dock plate set failed"); }
+});
+
+/* ══════════════════════════════════════════
+   API — DRIVER
+══════════════════════════════════════════ */
+app.get("/api/driver/assignment", async (req, res) => {
+  try {
+    const trailer = String(req.query.trailer || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+    const row = await get(`SELECT door,direction,status,dropType FROM trailers WHERE trailer=?`, [trailer]);
+    if (!row) return res.json({ found: false });
+    if (!["Incoming","Dropped","Loading","Dock Ready","Ready"].includes(row.status)) return res.json({ found: false });
+    res.json({ found: true, door: row.door || "", direction: row.direction || "", status: row.status || "", dropType: row.dropType || "" });
+  } catch (e) { res.status(500).send("Lookup failed"); }
+});
+
+app.post("/api/driver/drop",       requireXHR, requireDriverAccess, async (req, res) => {
+  try {
+    const trailer     = String(req.body.trailer     || "").trim();
+    const door        = String(req.body.door        || "").trim();
+    const dropType    = String(req.body.dropType    || "Empty").trim();
+    const carrierType = String(req.body.carrierType || "Wesbell").trim();
+
+    if (!trailer) return res.status(400).send("Missing trailer");
+    if (door) {
+      const dNum = Number(door);
+      if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send("Invalid door (28–42)");
+    }
+    if (!["Empty","Loaded"].includes(dropType)) return res.status(400).send("Invalid drop type");
+
+    const existing  = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    const now       = Date.now();
+    const direction = existing?.direction || "Inbound";
+
+    // Duplicate guard: warn if trailer is already active on the board
+    // Allow force=true to bypass (set by client after user confirms)
+    const ACTIVE_STATUSES = ["Incoming","Dropped","Loading","Dock Ready","Ready"];
+    if (existing && ACTIVE_STATUSES.includes(existing.status) && !req.body.force) {
+      return res.status(409).json({
+        duplicate: true,
+        trailer,
+        currentStatus: existing.status,
+        currentDoor:   existing.door || null,
+        message: `Trailer ${trailer} is already on the board (${existing.status}${existing.door ? " at door " + existing.door : ""}). Submit again to overwrite.`,
+      });
+    }
+
+    // Auto-assign door if none provided
+    let assignedDoor = door;
+    if (!assignedDoor) {
+      const occupied = await all(
+        `SELECT door FROM trailers WHERE door IS NOT NULL AND door != '' AND status NOT IN ('Departed','') AND trailer != ?`,
+        [trailer]
+      );
+      const occupiedSet = new Set(occupied.map(r => String(r.door)));
+      for (let d = 28; d <= 42; d++) {
+        if (!occupiedSet.has(String(d))) { assignedDoor = String(d); break; }
+      }
+    }
+
+    // Driver drops always land as Incoming
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt)
+       VALUES(?,?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET
+         direction=excluded.direction, status=excluded.status, door=excluded.door,
+         dropType=excluded.dropType, carrierType=excluded.carrierType, updatedAt=excluded.updatedAt`,
+      [trailer, direction, "Incoming", assignedDoor || "", existing?.note || "", dropType, carrierType, now]
+    );
+
+    await audit(req, "driver", "driver_drop", "trailer", trailer, { door: assignedDoor || "", dropType, carrierType });
+    await broadcastTrailers();
+    res.json({ ok: true, door: assignedDoor || null });
+  } catch (e) { res.status(500).send("Drop failed"); }
+});
+
+app.post("/api/crossdock/pickup",  requireXHR, requireDriverAccess, async (req, res) => {
+  try {
+    const trailer = String(req.body.trailer || "").trim();
+    const door    = String(req.body.door    || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+    const dNum = Number(door);
+    if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send("Invalid door (28–42)");
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    // Status is intentionally preserved here — Departed is set by /api/confirm-safety
+    // after the driver completes the safety checklist. This two-step design means
+    // if the driver drops connection after pickup but before safety, the trailer
+    // stays visible on the board rather than disappearing silently.
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
+       VALUES(?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET door=excluded.door,updatedAt=excluded.updatedAt`,
+      [trailer, existing?.direction || "Cross Dock", existing?.status || "Ready", door, existing?.note || "", existing?.dropType || "", Date.now()]
+    );
+    await audit(req, "driver", "crossdock_pickup", "trailer", trailer, { door });
+    await broadcastTrailers();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).send("Cross dock pickup failed"); }
+});
+
+app.post("/api/crossdock/offload", requireXHR, requireDriverAccess, async (req, res) => {
+  try {
+    const trailer = String(req.body.trailer || "").trim();
+    const door    = String(req.body.door    || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+    const dNum = Number(door);
+    if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send("Invalid door (28–42)");
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    // Duplicate guard: warn if trailer is already active (not Departed) with a different door
+    const ACTIVE_STATUSES = ["Incoming","Dropped","Loading","Dock Ready","Ready"];
+    if (existing && ACTIVE_STATUSES.includes(existing.status) && existing.door && existing.door !== door && !req.body.force) {
+      return res.status(409).json({
+        duplicate: true,
+        trailer,
+        currentStatus: existing.status,
+        currentDoor:   existing.door,
+        message: `Trailer ${trailer} is already active at door ${existing.door} (${existing.status}). Submit again to overwrite.`,
+      });
+    }
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
+       VALUES(?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET door=excluded.door,status=excluded.status,dropType=excluded.dropType,updatedAt=excluded.updatedAt`,
+      [trailer, existing?.direction || "Cross Dock", "Dropped", door, existing?.note || "", "Loaded", Date.now()]
+    );
+    await audit(req, "driver", "crossdock_offload", "trailer", trailer, { door });
+    await broadcastTrailers();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).send("Cross dock offload failed"); }
+});
+
+app.post("/api/shunt", requireXHR, async (req, res) => {
+  try {
+    const session = getSession(req);
+    const actor   = session?.role || "driver";
+
+    if (session && !["dispatcher","dock","management","admin"].includes(session.role))
+      return res.status(403).send("Unauthorized");
+
+    const trailer = String(req.body.trailer || "").trim();
+    const door    = String(req.body.door    || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+    if (!door)    return res.status(400).send("Missing door");
+    const dNum = Number(door);
+    if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send("Invalid door (28–42)");
+
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    if (!existing) return res.status(404).send("Trailer not found");
+
+    const now = Date.now();
+    await run(`UPDATE trailers SET door=?,status='Dropped',updatedAt=? WHERE trailer=?`, [door, now, trailer]);
+    await audit(req, actor, "trailer_shunt", "trailer", trailer, { fromDoor: existing.door || "—", toDoor: door });
+    await broadcastTrailers();
+    res.json({ ok: true, door });
+  } catch (e) { res.status(500).send("Shunt failed"); }
+});
+
+/* ══════════════════════════════════════════
+   API — PUSH
+══════════════════════════════════════════ */
+app.get("/api/push/vapid-public-key", (req, res) => {
+  if (!VAPID_KEYS) return res.status(503).send("VAPID not ready");
+  res.json({ publicKey: VAPID_KEYS.publicKey });
+});
+
+app.post("/api/push/subscribe", requireXHR, async (req, res) => {
+  try {
+    const sub = req.body;
+    if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) return res.status(400).send("Invalid subscription");
+    pushSubs.set(sub.endpoint, sub);
+    await run(
+      `INSERT INTO push_subscriptions(endpoint,subscription,createdAt) VALUES(?,?,?)
+       ON CONFLICT(endpoint) DO UPDATE SET subscription=excluded.subscription`,
+      [sub.endpoint, JSON.stringify(sub), Date.now()]
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).send("Subscribe failed"); }
+});
+
+app.post("/api/push/unsubscribe", requireXHR, async (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    if (endpoint) {
+      pushSubs.delete(endpoint);
+      await run(`DELETE FROM push_subscriptions WHERE endpoint=?`, [endpoint]);
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).send("Unsubscribe failed"); }
+});
+
+/* ══════════════════════════════════════════
+   API — AUDIT
+══════════════════════════════════════════ */
+app.get("/api/audit", requireRole(["dispatcher","management","admin"]), async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(500, Number(req.query.limit || 200)));
+    const rows = await all(
+      `SELECT at,actorRole,action,entityType,entityId,details,ip,userAgent FROM audit ORDER BY at DESC LIMIT ?`,
+      [limit]
+    );
+    res.json(rows.map(r => {
+      let details = {}; try { details = r.details ? JSON.parse(r.details) : {}; } catch {}
+      return { ...r, details };
+    }));
+  } catch (e) { res.status(500).send("Audit failed"); }
+});
+
+/* ══════════════════════════════════════════
+   API — MANAGEMENT PIN MANAGEMENT
+══════════════════════════════════════════ */
+app.post("/api/management/set-pin", requireXHR, requireRole(["management","admin"]), async (req, res) => {
+  const actor = req.user.role;
+  try {
+    const role = String(req.body.role || "").toLowerCase();
+    const pin  = String(req.body.pin  || "");
+    if (!["dispatcher","dock","management","admin"].includes(role)) return res.status(400).send("Invalid role");
+    // Only admin can change the admin PIN
+    if (role === "admin" && actor !== "admin") return res.status(403).send("Only admin can change the admin PIN");
+    if (pin.length < PIN_MIN_LEN) return res.status(400).send("PIN too short");
+    await setPin(role, pin);
+    for (const [sid, s] of sessions.entries()) if (s.role === role) sessions.delete(sid);
+    await audit(req, actor, "pin_changed", "auth", role, {});
+    res.json({ ok: true });
+  } catch (e) { res.status(500).send("Set PIN failed"); }
+});
+
+/* ══════════════════════════════════════════
+   API — SAFETY CONFIRM
+══════════════════════════════════════════ */
+app.post("/api/confirm-safety", requireXHR, requireDriverAccess, async (req, res) => {
+  try {
+    const trailer    = String(req.body.trailer    || "").trim();
+    const door       = String(req.body.door       || "").trim();
+    const loadSecured = !!req.body.loadSecured;
+    const dockPlateUp = !!req.body.dockPlateUp;
+    if (!loadSecured || !dockPlateUp) return res.status(400).send("Both confirmations required");
+    const action = String(req.body.action || "safety").trim();
+    const at = Date.now();
+    if (action === "xdock_pickup" && trailer)
+      await run(`UPDATE trailers SET status='Departed',updatedAt=? WHERE trailer=?`, [at, trailer]);
+    await run(
+      `INSERT INTO confirmations(at,trailer,door,action,ip,userAgent) VALUES(?,?,?,?,?,?)`,
+      [at, trailer || "", door || "", action, ipOf(req), req.headers["user-agent"] || ""]
+    );
+    await audit(req, "driver", "safety_confirmed", "safety", trailer || "-", { trailer, door, action, loadSecured, dockPlateUp });
+    await broadcastTrailers();
+    await broadcastConfirmations();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).send("Confirm failed"); }
+});
+
+/* ══════════════════════════════════════════
+   API — ISSUE REPORTS
+══════════════════════════════════════════ */
+
+// Max ~4 MB base64 image
+const MAX_PHOTO_BYTES = 4 * 1024 * 1024;
+
+app.post("/api/report-issue", requireXHR, requireIssueAccess, async (req, res) => {
+  // Allow drivers (no session) and all authenticated roles to file issue reports
+  const s = getSession(req);
+  const actorRole = s?.role || "driver";
+  try {
+    const trailer  = String(req.body.trailer  || "").trim();
+    const door     = String(req.body.door     || "").trim();
+    const note     = String(req.body.note     || "").trim().slice(0, 1000);
+    const photoData = req.body.photo_data ? String(req.body.photo_data) : null;
+    const photoMime = req.body.photo_mime ? String(req.body.photo_mime).slice(0, 32) : null;
+
+    if (!trailer) return res.status(400).send("Missing trailer");
+
+    // Validate image data if provided
+    if (photoData) {
+      if (!photoMime || !photoMime.startsWith("image/"))
+        return res.status(400).send("Invalid photo MIME type");
+      // Check base64 size (each char ≈ 0.75 bytes)
+      if (photoData.length * 0.75 > MAX_PHOTO_BYTES)
+        return res.status(413).send("Photo too large (max 4 MB)");
+    }
+
+    const at = Date.now();
+    const result = await run(
+      `INSERT INTO issue_reports(at,trailer,door,note,photo_data,photo_mime,ip,userAgent)
+       VALUES(?,?,?,?,?,?,?,?)`,
+      [at, trailer, door, note, photoData || null, photoMime || null,
+       ipOf(req), req.headers["user-agent"] || ""]
+    );
+    await audit(req, actorRole, "issue_reported", "trailer", trailer, { door, hasPhoto: !!photoData, note: note.slice(0, 80) });
+    broadcastPush("⚠️ Issue Report", `Trailer ${trailer}${door ? " at door " + door : ""}${note ? ": " + note.slice(0, 60) : ""}`, { trailer, door }).catch(() => {});
+    res.json({ ok: true, id: result.lastID });
+  } catch (e) { res.status(500).send("Report failed"); }
+});
+
+app.get("/api/issue-reports", requireRole(["dispatcher","management","admin"]), async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(200, Number(req.query.limit || 50)));
+    const rows = await all(
+      `SELECT id,at,trailer,door,note,photo_data,photo_mime,ip FROM issue_reports ORDER BY at DESC LIMIT ?`,
+      [limit]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).send("Fetch failed"); }
+});
+
+app.get("/api/issue-reports/:id/photo", requireRole(["dispatcher","management","admin"]), async (req, res) => {
+  try {
+    const row = await get(`SELECT photo_data,photo_mime FROM issue_reports WHERE id=?`, [req.params.id]);
+    if (!row || !row.photo_data) return res.status(404).send("No photo");
+    const buf = Buffer.from(row.photo_data, "base64");
+    res.setHeader("Content-Type", row.photo_mime || "image/jpeg");
+    res.setHeader("Cache-Control", "private, max-age=86400");
+    res.send(buf);
+  } catch (e) { res.status(500).send("Fetch failed"); }
+});
+
+
+wss.on("connection", async ws => {
+  ws.on("error", () => {}); // absorb socket errors, prevent crash
+  const safeSend = msg => { try { if (ws.readyState === WebSocket.OPEN) ws.send(msg); } catch {} };
+  try { safeSend(JSON.stringify({ type: "version",       payload: { version: APP_VERSION } })); } catch {}
+  try { safeSend(JSON.stringify({ type: "state",         payload: await loadTrailersObject() })); } catch {}
+  try { safeSend(JSON.stringify({ type: "dockplates",    payload: await loadDockPlatesObject() })); } catch {}
+  try { safeSend(JSON.stringify({ type: "confirmations", payload: await loadConfirmations(250) })); } catch {}
+});
+
+/* ══════════════════════════════════════════
+   START
+══════════════════════════════════════════ */
+// Catch-all: unknown routes
+app.use((req, res) => {
+  if (req.path.startsWith("/api/")) return res.status(404).json({ error: "Not found" });
+  // Non-API 404 — redirect to login rather than showing a blank error
+  res.redirect(302, "/login");
+});
+
+initDb()
+  .then(async () => {
+    loadOrGenVapid();
+    const subs = await all(`SELECT endpoint,subscription FROM push_subscriptions`);
+    for (const s of subs) {
+      try { pushSubs.set(s.endpoint, JSON.parse(s.subscription)); } catch {}
+    }
+    console.log(`[PUSH] Loaded ${pushSubs.size} push subscriptions`);
+  })
+  .then(() => {
+    server.listen(PORT, () => {
+      console.log(`Wesbell Dispatch v${APP_VERSION} running on http://localhost:${PORT}`);
+      console.log(`DB: ${DB_FILE}`);
+    });
+  })
+  .catch(e => { console.error("DB init failed:", e); process.exit(1); });

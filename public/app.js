@@ -1186,6 +1186,21 @@
 
     if(direct?.closest?.("#dockPlatesToggle")){ setPlatesOpen(el("dockPlatesToggle").getAttribute("aria-expanded")!=="true"); return; }
     if(direct?.closest?.("#dockPlatesToggle2")){ setPlatesOpen2(el("dockPlatesToggle2").getAttribute("aria-expanded")!=="true"); return; }
+    // PIN management accordions
+    if(direct?.closest?.("#pinMgmtToggle")){
+      const tog=el("pinMgmtToggle"), body=el("pinMgmtBody"); if(!tog||!body)return;
+      const open=tog.getAttribute("aria-expanded")==="true";
+      tog.setAttribute("aria-expanded",open?"false":"true");
+      body.style.maxHeight=open?"0px":(body.scrollHeight+40)+"px";
+      return;
+    }
+    if(direct?.closest?.("#adminPinToggle")){
+      const tog=el("adminPinToggle"), body=el("adminPinBody"); if(!tog||!body)return;
+      const open=tog.getAttribute("aria-expanded")==="true";
+      tog.setAttribute("aria-expanded",open?"false":"true");
+      body.style.maxHeight=open?"0px":(body.scrollHeight+40)+"px";
+      return;
+    }
     if(id==="btnLogout") return doLogout();
     if(id==="btnAudit"){ const s=el("auditCard").style.display!=="none"; el("auditCard").style.display=s?"none":""; if(!s)loadAuditInto(el("auditBody"),el("auditCount"),7); return; }
     if(id==="btnClearFilters"||id==="btnSupClearFilters"){ ["search","filterDir","filterStatus","supSearch","supFilterDir","supFilterStatus"].forEach(i=>{if(el(i))el(i).value="";}); renderBoard(); renderSupBoard(); return; }

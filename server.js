@@ -20,7 +20,7 @@ const COOKIE_NAME = "wb_session";
 const ENV_PINS = {
   dispatcher: process.env.DISPATCHER_PIN || "",
   dock:       process.env.DOCK_PIN       || "",
-  supervisor: process.env.SUPERVISOR_PIN || "",
+  management: process.env.MANAGEMENT_PIN || "",
   admin:      process.env.ADMIN_PIN      || "",
 };
 
@@ -224,7 +224,7 @@ async function initDb() {
   }
 
   // Seed PINs
-  for (const role of ["dispatcher", "dock", "supervisor", "admin"]) {
+  for (const role of ["dispatcher", "dock", "management", "admin"]) {
     const row = await get(`SELECT role FROM pins WHERE role=?`, [role]);
     if (!row) {
       const pin = ENV_PINS[role] && ENV_PINS[role].length >= PIN_MIN_LEN ? ENV_PINS[role] : genTempPin();
@@ -315,7 +315,7 @@ function requireRole(roles) {
 // be submitting driver actions)
 function requireDriverAccess(req, res, next) {
   const s = getSession(req);
-  if (s && ["dock","dispatcher","supervisor"].includes(s.role)) {
+  if (s && ["dock","dispatcher","management"].includes(s.role)) {
     return res.status(403).send("Driver endpoint — not accessible from this role");
   }
   next();
@@ -327,7 +327,8 @@ function requireDriverAccess(req, res, next) {
 function requireDockStatusAllowed(req, res, next) {
   const s = getSession(req);
   if (!s) return res.status(401).send("Unauthorized");
-  if (s.role === "admin" || s.role === "dispatcher") return next();
+  // Admin, dispatcher, and management have full status control
+  if (["admin","dispatcher","management"].includes(s.role)) return next();
   if (s.role === "dock") {
     const status = req.body?.status;
     const DOCK_ALLOWED = ["Loading", "Dock Ready"]; // dock workers may only set these
@@ -417,7 +418,7 @@ const ROLE_HOME = {
   dispatcher: "/",
   admin:      "/",
   dock:       "/dock",
-  supervisor: "/supervisor",
+  management: "/management",
   // drivers have no session — they always land on /driver
 };
 
@@ -442,9 +443,9 @@ function guardPage(allowedRoles) {
     // Admin can go anywhere
     if (role === "admin") return next();
 
-    // Dispatcher and supervisor can VIEW any page (read-only context)
+    // Dispatcher and management can VIEW any page (read-only context)
     // The API layer enforces what they can actually do
-    if (role === "dispatcher" || role === "supervisor") return next();
+    if (role === "dispatcher" || role === "management") return next();
 
     // Dock and other specific roles — must match their allowed pages
     if (!allowedRoles.includes(role)) {
@@ -464,19 +465,19 @@ app.get("/login", (req, res) => {
   // /dock?expired=1 → pre-select dock, hide other roles
   // /driver has no login (no session needed for driver view)
   const isDock  = fromPath.includes("/dock");
-  const isSup   = fromPath.includes("/supervisor");
+  const isSup   = fromPath.includes("/management");
   
-  // Build role options — dock workers only see "Dock", supervisors see more
+  // Build role options — dock workers only see "Dock", managements see more
   const roleOptions = isDock
     ? `<option value="dock" selected>Dock</option>`
     : isSup
-    ? `<option value="supervisor" selected>Supervisor</option><option value="admin">⚡ Admin</option>`
-    : `<option value="dispatcher" selected>Dispatcher</option><option value="dock">Dock</option><option value="supervisor">Supervisor</option><option value="admin">⚡ Admin</option>`;
+    ? `<option value="management" selected>Management</option><option value="admin">⚡ Admin</option>`
+    : `<option value="dispatcher" selected>Dispatcher</option><option value="dock">Dock</option><option value="management">Management</option><option value="admin">⚡ Admin</option>`;
 
   const contextMsg = isDock
     ? `<div style="padding:8px 10px;border-radius:6px;background:rgba(32,192,208,.08);border:1px solid rgba(32,192,208,.2);color:#20c0d0;font-size:12px;margin-bottom:10px;">🏭 Dock sign-in</div>`
     : isSup
-    ? `<div style="padding:8px 10px;border-radius:6px;background:rgba(240,160,48,.08);border:1px solid rgba(240,160,48,.2);color:#f0a030;font-size:12px;margin-bottom:10px;">📊 Supervisor sign-in</div>`
+    ? `<div style="padding:8px 10px;border-radius:6px;background:rgba(240,160,48,.08);border:1px solid rgba(240,160,48,.2);color:#f0a030;font-size:12px;margin-bottom:10px;">📊 Management sign-in</div>`
     : "";
 
   res.setHeader("content-type", "text/html; charset=utf-8");
@@ -514,10 +515,10 @@ button:active{background:rgba(240,160,48,.18)}
   <input id="pin" type="password" inputmode="numeric" placeholder="Enter PIN" autocomplete="current-password"/>
   <div class="err" id="errMsg"></div>
   <button id="go">Sign In →</button>
-  <div class="hint">Contact your supervisor if you don't have a PIN.</div>
+  <div class="hint">Contact your management if you don't have a PIN.</div>
 </div>
 <script>
-const ROLE_HOME = {dispatcher:"/",admin:"/",dock:"/dock",supervisor:"/supervisor"};
+const ROLE_HOME = {dispatcher:"/",admin:"/",dock:"/dock",management:"/management"};
 const btn = document.getElementById("go");
 const err = document.getElementById("errMsg");
 async function doLogin() {
@@ -549,7 +550,7 @@ document.getElementById("pin").focus();
 app.get("/",           guardPage(["dispatcher","admin"]),                    sendIndex);
 app.get("/dock",       guardPage(["dock","admin"]),                          sendIndex);
 app.get("/driver",     guardPage(["__driver__","admin"]),                    sendIndex);
-app.get("/supervisor", guardPage(["supervisor","admin"]),                    sendIndex);
+app.get("/management", guardPage(["management","admin"]),                    sendIndex);
 
 /* ══════════════════════════════════════════
    API — AUTH
@@ -568,7 +569,7 @@ app.post("/api/login", requireXHR, async (req, res) => {
   try {
     const role = String(req.body.role || "").toLowerCase();
     const pin  = String(req.body.pin  || "");
-    if (!["dispatcher","dock","supervisor","admin"].includes(role)) return res.status(400).send("Invalid role");
+    if (!["dispatcher","dock","management","admin"].includes(role)) return res.status(400).send("Invalid role");
     if (pin.length < PIN_MIN_LEN) return res.status(400).send("PIN too short");
     const ok = await verifyPin(role, pin);
     await audit(req, role, ok ? "login_success" : "login_failed", "auth", role, {});
@@ -640,7 +641,7 @@ app.post("/api/upsert", requireXHR, requireDockStatusAllowed, async (req, res) =
     await audit(req, actor, existing ? "trailer_update" : "trailer_create", "trailer", trailer, { direction, status: finalStatus, door, dropType, note });
     if (req.body.status !== undefined || isDriverDrop) await audit(req, actor, "trailer_status_set", "trailer", trailer, { status: finalStatus });
 
-    if (finalStatus === "Ready" && ["dispatcher","supervisor","admin"].includes(actor)) {
+    if (finalStatus === "Ready" && ["dispatcher","management","admin"].includes(actor)) {
       wsBroadcast("notify", { kind: "ready", trailer, door: door || "" });
       broadcastPush("🟢 Trailer Ready", `Trailer ${trailer} is ready${door ? " at door " + door : ""}`, { trailer, door }).catch(() => {});
     }
@@ -650,7 +651,7 @@ app.post("/api/upsert", requireXHR, requireDockStatusAllowed, async (req, res) =
   } catch (e) { res.status(500).send("Upsert failed"); }
 });
 
-app.post("/api/delete", requireXHR, requireRole(["dispatcher","supervisor","admin"]), async (req, res) => {
+app.post("/api/delete", requireXHR, requireRole(["dispatcher","management","admin"]), async (req, res) => {
   const actor = req.user.role;
   try {
     const trailer = String(req.body.trailer || "").trim();
@@ -662,7 +663,7 @@ app.post("/api/delete", requireXHR, requireRole(["dispatcher","supervisor","admi
   } catch (e) { res.status(500).send("Delete failed"); }
 });
 
-app.post("/api/clear", requireXHR, requireRole(["dispatcher","supervisor","admin"]), async (req, res) => {
+app.post("/api/clear", requireXHR, requireRole(["dispatcher","management","admin"]), async (req, res) => {
   const actor = req.user.role;
   try {
     await run(`DELETE FROM trailers`);
@@ -677,7 +678,7 @@ app.post("/api/clear", requireXHR, requireRole(["dispatcher","supervisor","admin
 ══════════════════════════════════════════ */
 app.get("/api/dockplates", async (req, res) => res.json(await loadDockPlatesObject()));
 
-app.post("/api/dockplates/set", requireXHR, requireRole(["dock","dispatcher","supervisor","admin"]), async (req, res) => {
+app.post("/api/dockplates/set", requireXHR, requireRole(["dock","dispatcher","management","admin"]), async (req, res) => {
   const actor = req.user.role;
   try {
     const door   = String(req.body.door   || "").trim();
@@ -858,7 +859,7 @@ app.post("/api/push/unsubscribe", requireXHR, async (req, res) => {
 /* ══════════════════════════════════════════
    API — AUDIT
 ══════════════════════════════════════════ */
-app.get("/api/audit", requireRole(["dispatcher","supervisor","admin"]), async (req, res) => {
+app.get("/api/audit", requireRole(["dispatcher","management","admin"]), async (req, res) => {
   try {
     const limit = Math.max(1, Math.min(500, Number(req.query.limit || 200)));
     const rows = await all(
@@ -873,14 +874,16 @@ app.get("/api/audit", requireRole(["dispatcher","supervisor","admin"]), async (r
 });
 
 /* ══════════════════════════════════════════
-   API — SUPERVISOR PIN MANAGEMENT
+   API — MANAGEMENT PIN MANAGEMENT
 ══════════════════════════════════════════ */
-app.post("/api/supervisor/set-pin", requireXHR, requireRole(["supervisor","admin"]), async (req, res) => {
+app.post("/api/management/set-pin", requireXHR, requireRole(["management","admin"]), async (req, res) => {
   const actor = req.user.role;
   try {
     const role = String(req.body.role || "").toLowerCase();
     const pin  = String(req.body.pin  || "");
-    if (!["dispatcher","dock","supervisor","admin"].includes(role)) return res.status(400).send("Invalid role");
+    if (!["dispatcher","dock","management","admin"].includes(role)) return res.status(400).send("Invalid role");
+    // Only admin can change the admin PIN
+    if (role === "admin" && actor !== "admin") return res.status(403).send("Only admin can change the admin PIN");
     if (pin.length < PIN_MIN_LEN) return res.status(400).send("PIN too short");
     await setPin(role, pin);
     for (const [sid, s] of sessions.entries()) if (s.role === role) sessions.delete(sid);

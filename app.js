@@ -150,6 +150,96 @@
     mapEl.innerHTML = html;
   }
 
+  /* ── BOARD ── */
+  const prevStatuses={};
+  function renderBoardInto(tbodyEl,countEl,countStrEl,sq,dq,stq,readOnly) {
+    if(!tbodyEl)return;
+    const q=(sq?.value||"").trim().toLowerCase(), df=(dq?.value||"").trim(), sf=(stq?.value||"").trim();
+    const rows=Object.entries(trailers).map(([t,r])=>({trailer:t,...r})).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+    const filt=rows.filter(r=>{
+      if(df&&r.direction!==df)return false;
+      if(sf&&r.status!==sf)return false;
+      if(q&&!`${r.trailer} ${r.door||""} ${r.note||""} ${r.direction||""} ${r.status||""} ${r.dropType||""}`.toLowerCase().includes(q))return false;
+      return true;
+    });
+    if(countEl) countEl.textContent=filt.length;
+    if(countStrEl) countStrEl.textContent=`${filt.length} trailer${filt.length===1?"":"s"} shown`;
+    if(!filt.length){ tbodyEl.innerHTML=`<div class="tbl-empty">No trailers match filters</div>`; return; }
+    const canEdit=!readOnly&&(ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin");
+    const canDock=!readOnly&&(ROLE==="dock"||ROLE==="admin");
+    const occupied = getOccupiedDoors();
+
+    tbodyEl.innerHTML=filt.map(r=>{
+      const rowCls=STATUS_ROW[r.status]||"";
+      const flash=(r.trailer in prevStatuses && prevStatuses[r.trailer]!==r.status)?" flashing":"";
+      prevStatuses[r.trailer]=r.status;
+      const readyFlash=((ROLE==="dispatcher"||ROLE==="management")&&!readOnly&&r.status==="Ready")?" ready-flash":"";
+      const door = r.door ? `<span class="t-door">${esc(r.door)}</span>` : `<span style="color:var(--t3)">—</span>`;
+      const note=r.note?`<span class="t-note" title="${esc(r.note)}">${esc(r.note)}</span>`:`<span style="color:var(--t3)">—</span>`;
+      const dtype=r.dropType?`<span style="font-size:10px;color:var(--t2);font-family:var(--mono);">${esc(r.dropType)}</span>`:`<span style="color:var(--t3)">—</span>`;
+      const ctag=carrierTag(r.carrierType);
+      const ago=r.updatedAt?timeAgo(r.updatedAt):"";
+
+      let acts=`<span style="color:var(--t3)">—</span>`;
+      if(canEdit){
+        const nextStatuses = {
+          "Incoming":  ["Dropped","Departed"],
+          "Dropped":   ["Loading","Departed"],
+          "Loading":   ["Dock Ready","Departed"],
+          "Dock Ready":["Ready","Departed"],
+          "Ready":     ["Departed"],
+          "Departed":  ["Incoming"],
+        };
+        const nexts = nextStatuses[r.status] || [];
+        const quickBtns = nexts.map((s,i) => {
+          if(i===0){
+            const btnCls = s==="Ready"?"btn-success":"btn-primary";
+            return `<button class="btn ${btnCls} btn-sm qs-btn" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}" aria-label="${esc(s)} trailer ${esc(r.trailer)}">${esc(s)}</button>`;
+          }
+          return `<button class="btn btn-default btn-sm qs-btn qs-secondary" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}" aria-label="${esc(s)} trailer ${esc(r.trailer)}">${esc(s)}</button>`;
+        }).join("");
+        acts = `<div class="t-acts">
+          ${quickBtns}
+          ${r.status==="Dock Ready"?`<button class="btn btn-success btn-sm" data-act="markReady" data-trailer-id="${esc(r.trailer)}" style="font-weight:800;" aria-label="Mark trailer ${esc(r.trailer)} ready">✓ Ready</button>`:""}
+          <button class="btn btn-default btn-sm" data-act="shuntToggle" data-trailer-id="${esc(r.trailer)}" aria-label="Move trailer ${esc(r.trailer)} to new door">Move</button>
+          <button class="btn btn-default btn-sm" data-act="edit" data-trailer-id="${esc(r.trailer)}" aria-label="Edit trailer ${esc(r.trailer)}">Edit</button>
+          <button class="btn btn-danger btn-sm" data-act="delete" data-trailer-id="${esc(r.trailer)}" aria-label="Delete trailer ${esc(r.trailer)}">Del</button>
+        </div>`;
+      } else if(canDock){
+        if(r.status==="Dropped"||r.status==="Incoming")
+          acts=`<div class="t-acts"><button class="btn btn-default btn-sm" data-act="dockSet" data-to="Loading" data-trailer-id="${esc(r.trailer)}">Loading</button></div>`;
+        else if(r.status==="Loading")
+          acts=`<div class="t-acts"><button class="btn btn-cyan btn-sm" data-act="dockSet" data-to="Dock Ready" data-trailer-id="${esc(r.trailer)}">Dock Ready</button></div>`;
+        else
+          acts=`<span style="color:var(--t3);font-size:10px;font-family:var(--mono);">${esc(r.status==="Dock Ready"?"Awaiting dispatch":r.status==="Ready"?"Ready":"—")}</span>`;
+      }
+
+      const shuntPickerHtml = (shuntOpen[r.trailer] && canEdit) ? `
+        <div class="shunt-picker" data-shunt-trailer="${esc(r.trailer)}">
+          <span class="shunt-label">Move to door:</span>
+          <div class="shunt-doors">${Array.from({length:15},(_,i)=>i+28).map(d=>{
+            const ds=String(d);
+            const isCurrent=ds===(r.door||"");
+            const isOcc=!!occupied[ds]&&!isCurrent;
+            return `<button class="shunt-door-btn${isCurrent?" current":""}${isOcc?" occ":""}" data-act="shuntDoor" data-door="${ds}" data-trailer-id="${esc(r.trailer)}" ${isCurrent?"disabled":""} aria-label="Move to door ${ds}${isOcc?" (occupied)":""}">${ds}${isOcc?`<span class="shunt-occ-dot"></span>`:""}</button>`;
+          }).join("")}</div>
+          <button class="btn btn-default btn-sm" data-act="shuntToggle" data-trailer-id="${esc(r.trailer)}" style="margin-top:4px;">Cancel</button>
+        </div>` : "";
+
+      const carrierCls=r.carrierType==="Outside"?" carrier-outside":"";
+      return `<div class="tbl-row ${rowCls}${flash}${readyFlash}${carrierCls}" data-trailer="${esc(r.trailer)}">
+        <span class="t-num">${esc(r.trailer)}</span>
+        <span class="t-dir">${esc(r.direction||"—")}</span>
+        <span>${statusTag(r.status)}</span>
+        <span>${door}</span>
+        <span>${ctag||dtype}</span>
+        <span>${note}</span>
+        <span class="t-time" title="${esc(fmtTime(r.updatedAt))}">${esc(ago)}</span>
+        <span>${acts}</span>
+      </div>${shuntPickerHtml}`;
+    }).join("");
+  }
+
   function renderBoard() {
     renderBoardInto(el("tbody"),el("countsPill"),el("boardCountStr"),el("search"),el("filterDir"),el("filterStatus"),false);
     const lu=el("lastUpdated"); if(lu) lu.textContent="Updated "+fmtTime(Date.now());

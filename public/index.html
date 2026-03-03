@@ -63,9 +63,9 @@
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="4" width="8" height="5" rx="1.2" stroke="currentColor" stroke-width="1.2"/><path d="M9 6.5h1.5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H9" stroke="currentColor" stroke-width="1.2"/><circle cx="3" cy="9" r="1" fill="currentColor"/><circle cx="7" cy="9" r="1" fill="currentColor"/><path d="M1 6.5 2.5 4h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
         Driver
       </a>
-      <a href="/supervisor" class="nav-item" id="navSupervisor">
+      <a href="/management" class="nav-item" id="navManagement">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="4" r="2" stroke="currentColor" stroke-width="1.2"/><path d="M1.5 10.5c0-1.8 2-3 4.5-3s4.5 1.2 4.5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-        Supervisor
+        Management
       </a>
     </nav>
     <div class="topbar-right">
@@ -94,9 +94,9 @@
       <svg viewBox="0 0 12 12" fill="none"><rect x="1" y="4" width="8" height="5" rx="1.2" stroke="currentColor" stroke-width="1.2"/><path d="M9 6.5h1.5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H9" stroke="currentColor" stroke-width="1.2"/><circle cx="3" cy="9" r="1" fill="currentColor"/><circle cx="7" cy="9" r="1" fill="currentColor"/><path d="M1 6.5 2.5 4h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
       <span>Driver</span>
     </a>
-    <a href="/supervisor" class="bn-item" id="bnSupervisor">
+    <a href="/management" class="bn-item" id="bnManagement">
       <svg viewBox="0 0 12 12" fill="none"><circle cx="6" cy="4" r="2" stroke="currentColor" stroke-width="1.2"/><path d="M1.5 10.5c0-1.8 2-3 4.5-3s4.5 1.2 4.5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-      <span>Super</span>
+      <span>Mgmt</span>
     </a>
   </div>
 </nav>
@@ -422,9 +422,9 @@
 </div>
 
 <!-- ═══════════════════════════════════════════
-     SUPERVISOR VIEW
+     MANAGEMENT VIEW
 ═══════════════════════════════════════════ -->
-<div id="supervisorView" style="display:none;">
+<div id="managementView" style="display:none;">
   <div class="sup-shell">
     <div class="kpi-row" id="supKpis"></div>
     <div class="sup-grid">
@@ -475,7 +475,7 @@
         <div class="panel-body">
           <div class="infobox infobox-amber" style="margin-bottom:14px;">
             <div class="ib-title">Security Notice</div>
-            PINs are hashed server-side — cannot be viewed, only reset. All changes are audit-logged and active sessions are invalidated immediately.
+            PINs are hashed server-side — cannot be viewed, only reset. All changes are audit-logged and active sessions are invalidated immediately. Management can change Dispatcher, Dock and Management PINs. Only Admin can change the Admin PIN.
           </div>
           <div class="pin-row">
             <div><label class="fl">Dispatcher PIN</label><input type="password" id="pin_dispatcher" placeholder="New PIN (min 4)" aria-label="Dispatcher new PIN" autocomplete="new-password"/></div>
@@ -488,11 +488,11 @@
             <button class="btn btn-success btn-sm" id="btnSetDockPin" style="padding:7px 13px;">Update</button>
           </div>
           <div class="pin-row">
-            <div><label class="fl">Supervisor PIN</label><input type="password" id="pin_supervisor" placeholder="New PIN (min 4)" aria-label="Supervisor new PIN" autocomplete="new-password"/></div>
-            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_supervisor_confirm" placeholder="Repeat" aria-label="Confirm supervisor PIN" autocomplete="new-password"/></div>
-            <button class="btn btn-success btn-sm" id="btnSetSupervisorPin" style="padding:7px 13px;">Update</button>
+            <div><label class="fl">Management PIN</label><input type="password" id="pin_management" placeholder="New PIN (min 4)" aria-label="Management new PIN" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_management_confirm" placeholder="Repeat" aria-label="Confirm management PIN" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetManagementPin" style="padding:7px 13px;">Update</button>
           </div>
-          <div class="pin-row">
+          <div class="pin-row" id="adminPinRow" style="display:none;">
             <div><label class="fl">Admin PIN</label><input type="password" id="pin_admin_sup" placeholder="New PIN (min 4)" aria-label="Admin new PIN" autocomplete="new-password"/></div>
             <div><label class="fl">Confirm PIN</label><input type="password" id="pin_admin_sup_confirm" placeholder="Repeat" aria-label="Confirm admin PIN" autocomplete="new-password"/></div>
             <button class="btn btn-success btn-sm" id="btnSetAdminPinSup" style="padding:7px 13px;">Update</button>

@@ -93,7 +93,7 @@
     return `<span class="stag ${cls}" style="font-size:9px;padding:1px 5px;" title="Carrier: ${esc(c)}">${icon} ${esc(c)}</span>`;
   }
   function plateStatusTag(s) {
-    const cls = s==="OK"?"stag-ready":s==="Service"?"stag-loading":"stag-unknown";
+    const cls = s==="OK"?"stag-ready":s==="Service"?"stag-service":s==="Out of Order"?"stag-error":"stag-unknown";
     return `<span class="stag ${cls}" style="font-size:9px;padding:1px 5px;"><span class="sp"></span>${esc(s||"Unknown")}</span>`;
   }
 
@@ -281,16 +281,16 @@
     const canEdit=ROLE==="dispatcher"||ROLE==="dock"||ROLE==="management"||ROLE==="admin";
     const doors=[]; for(let d=28;d<=42;d++) doors.push(String(d));
     const v=Object.values(dockPlates||{});
-    const summary=`${v.filter(p=>p?.status==="OK").length} OK · ${v.filter(p=>p?.status==="Service").length} Svc`;
+    const summary=`${v.filter(p=>p?.status==="OK").length} OK · ${v.filter(p=>p?.status==="Service").length} Svc · ${v.filter(p=>p?.status==="Out of Order").length} OOO`;
     ["platesMini","platesMini2"].forEach(id=>{ const e=el(id); if(e)e.textContent=summary; });
     const plateHtml=doors.map(door=>{
       const p=dockPlates[door]||{status:"Unknown",note:""};
       const open=!!plateEditOpen[door]&&canEdit;
-      const cls=p.status==="OK"?"p-ok":p.status==="Service"?"p-service":"";
+      const cls=p.status==="OK"?"p-ok":p.status==="Service"?"p-service":p.status==="Out of Order"?"p-out-of-order":"";
       return `<div class="plate ${cls}">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:3px;"><span class="p-door">D${esc(door)}</span>${plateStatusTag(p.status)}</div>
         <div class="p-note">${p.note?esc(p.note):`<span style="color:var(--t3)">—</span>`}</div>
-        ${open?`<select data-plate-status="${esc(door)}" style="margin-top:3px;"><option ${p.status==="OK"?"selected":""}>OK</option><option ${p.status==="Service"?"selected":""}>Service</option><option ${p.status==="Unknown"?"selected":""}>Unknown</option></select><input data-plate-note="${esc(door)}" placeholder="Note" value="${esc(p.note||"")}" style="margin-top:3px;"/>`:""}
+        ${open?`<select data-plate-status="${esc(door)}" style="margin-top:3px;"><option ${p.status==="OK"?"selected":""}>OK</option><option ${p.status==="Service"?"selected":""}>Service</option><option ${p.status==="Out of Order"?"selected":""}>Out of Order</option></select><input data-plate-note="${esc(door)}" placeholder="Note" value="${esc(p.note||"")}" style="margin-top:3px;"/>`:""}
         <div class="p-btns" style="margin-top:3px;">${canEdit?`<button class="p-btn" data-plate-toggle="${esc(door)}">${open?"Close":"Edit"}</button>${open?`<button class="p-btn" data-plate-save="${esc(door)}">Save</button>`:""}`:" "}</div>
       </div>`;
     }).join("");

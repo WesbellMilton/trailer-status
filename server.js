@@ -761,7 +761,8 @@ async function broadcastConfirmations() {
    STATIC / VIEWS
 ══════════════════════════════════════════ */
 // Safe static file serving — allowlist regex, never exposes server.js/sqlite/vapid
-const SAFE_FILES = /^\/(app\.js|style\.css|sw\.js|sw2\.js|manifest\.json|manifest\.webmanifest|icons\/[a-z0-9._-]+\.(png|ico)|splash\/[a-z0-9._-]+\.png)$/i;
+const SAFE_FILES =
+  /^\/(app\.js|style\.css|sw\.js|sw2\.js|manifest\.json|manifest\.webmanifest|icons\/[a-z0-9._-]+\.(png|ico)|splash\/[a-z0-9._-]+\.png)$/i;
 app.use((req, res, next) => {
   if (req.path === "/sw.js" || req.path === "/sw2.js") {
   const file = req.path === "/sw2.js" ? "sw2.js" : "sw.js";

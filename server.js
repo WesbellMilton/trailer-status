@@ -236,6 +236,13 @@ async function initDb() {
   await run(`CREATE TABLE IF NOT EXISTS pins (
     role TEXT PRIMARY KEY, salt BLOB, hash BLOB, iter INTEGER
   )`);
+  await run(`CREATE TABLE IF NOT EXISTS door_reservations (
+    door       TEXT PRIMARY KEY,
+    trailer    TEXT NOT NULL,
+    carrierType TEXT NOT NULL DEFAULT 'Outside',
+    reservedAt INTEGER NOT NULL,
+    expiresAt  INTEGER NOT NULL
+  )`);
 
   // Migrations (safe to re-run)
   await run(`DELETE FROM dockplates WHERE CAST(door AS INTEGER) < 28`);
@@ -447,6 +454,80 @@ async function broadcastTrailers() {
   try { invalidateTrailers(); wsBroadcast("state",         await getTrailersCache()); }
   catch(e) { console.error("[WS] broadcastTrailers:", e.message); }
 }
+
+/* ══════════════════════════════════════════
+   DOOR RESERVATION HELPERS
+══════════════════════════════════════════ */
+const RESERVATION_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+// Get all currently occupied/reserved/blocked doors as a Set
+async function getOccupiedDoorSet(excludeTrailer = null) {
+  const occupied = await all(
+    `SELECT door FROM trailers WHERE door IS NOT NULL AND door != ''
+     AND status NOT IN ('Departed','')${excludeTrailer ? " AND trailer != ?" : ""}`,
+    excludeTrailer ? [excludeTrailer] : []
+  );
+  const blocks   = await all(`SELECT door FROM doorblocks`);
+  const reserved = await all(
+    `SELECT door FROM door_reservations WHERE expiresAt > ?`, [Date.now()]
+  );
+  return new Set([
+    ...occupied.map(r => String(r.door)),
+    ...blocks.map(r => String(r.door)),
+    ...reserved.map(r => String(r.door)),
+  ]);
+}
+
+// Pick the best available door (28–42), respecting dockplates status
+async function pickBestDoor(excludeTrailer = null) {
+  const occupiedSet = await getOccupiedDoorSet(excludeTrailer);
+  // Prefer doors whose dockplate is OK (not Service / Out of Order)
+  const plates = await all(`SELECT door, status FROM dockplates`);
+  const plateMap = {};
+  plates.forEach(p => { plateMap[String(p.door)] = p.status; });
+  // Sort: OK plates first, then Unknown, skip Service/OOO
+  const candidates = [];
+  for (let d = 28; d <= 42; d++) {
+    const ds = String(d);
+    if (occupiedSet.has(ds)) continue;
+    const plateStatus = plateMap[ds] || 'Unknown';
+    if (plateStatus === 'Out of Order') continue; // never assign
+    candidates.push({ door: ds, priority: plateStatus === 'OK' ? 0 : plateStatus === 'Unknown' ? 1 : 2 });
+  }
+  candidates.sort((a, b) => a.priority - b.priority);
+  return candidates[0]?.door || null;
+}
+
+// Reserve a door for a trailer (overwrites any existing reservation for that door)
+async function reserveDoor(door, trailer, carrierType) {
+  const now = Date.now();
+  await run(
+    `INSERT INTO door_reservations(door, trailer, carrierType, reservedAt, expiresAt)
+     VALUES(?,?,?,?,?)
+     ON CONFLICT(door) DO UPDATE SET
+       trailer=excluded.trailer, carrierType=excluded.carrierType,
+       reservedAt=excluded.reservedAt, expiresAt=excluded.expiresAt`,
+    [door, trailer, carrierType, now, now + RESERVATION_TTL_MS]
+  );
+}
+
+// Release reservation for a door (call when trailer is Dropped or departed)
+async function releaseReservation(trailer) {
+  await run(`DELETE FROM door_reservations WHERE trailer=?`, [trailer]);
+}
+
+// Cleanup expired reservations and broadcast if anything changed
+async function cleanupExpiredReservations() {
+  const result = await run(`DELETE FROM door_reservations WHERE expiresAt <= ?`, [Date.now()]);
+  if (result.changes > 0) {
+    console.log(`[reservations] Cleaned up ${result.changes} expired reservation(s)`);
+    await broadcastTrailers();
+  }
+}
+
+// Run cleanup every 2 minutes
+setInterval(cleanupExpiredReservations, 2 * 60 * 1000);
+
 async function broadcastPlates() {
   try { invalidatePlates();   wsBroadcast("dockplates",    await getPlatesCache()); }
   catch(e) { console.error("[WS] broadcastPlates:", e.message); }
@@ -980,36 +1061,28 @@ app.post("/api/dockplates/set", requireXHR, requireRole(["dock","dispatcher","ma
 /* ══════════════════════════════════════════
    API — DRIVER
 ══════════════════════════════════════════ */
-// ── On My Way — Wesbell driver notifies they're inbound, get a door ──
+// ── On My Way — Wesbell driver notifies they're inbound, gets a door immediately ──
 app.post("/api/driver/omw", requireXHR, async (req, res) => {
   try {
     const trailer = String(req.body.trailer || "").trim().toUpperCase();
-    const eta     = parseInt(req.body.eta) || null; // minutes, optional
+    const eta     = parseInt(req.body.eta) || null;
     if (!trailer) return res.status(400).send("Missing trailer number");
     if (trailer.length > 20) return res.status(400).send("Trailer number too long");
 
     const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
     const ACTIVE   = ["Incoming","Dropped","Loading","Dock Ready","Ready"];
 
-    // If already active, return current door so driver sees it
+    // Already active — return current assignment
     if (existing && ACTIVE.includes(existing.status)) {
       return res.json({ ok: true, door: existing.door || "", alreadyActive: true, status: existing.status });
     }
 
-    // Auto-assign first free door (28–42), accounting for doorblocks too
-    const occupiedTrailers = await all(
-      `SELECT door FROM trailers WHERE door IS NOT NULL AND door != '' AND status NOT IN ('Departed','') AND trailer != ?`,
-      [trailer]
-    );
-    const occupiedBlocks = await all(`SELECT door FROM doorblocks`);
-    const occupiedSet = new Set([
-      ...occupiedTrailers.map(r => String(r.door)),
-      ...occupiedBlocks.map(r => String(r.door)),
-    ]);
-    let assignedDoor = "";
-    for (let d = 28; d <= 42; d++) {
-      if (!occupiedSet.has(String(d))) { assignedDoor = String(d); break; }
-    }
+    // Pick best available door respecting blocks, dockplates, existing reservations
+    const assignedDoor = await pickBestDoor(trailer);
+    if (!assignedDoor) return res.status(409).send("No doors available right now. Please ask dispatch.");
+
+    // Reserve the door — auto-expires in 30 min if driver never drops
+    await reserveDoor(assignedDoor, trailer, "Wesbell");
 
     const note = eta ? `ETA ~${eta} min` : "On my way";
     const now  = Date.now();
@@ -1038,6 +1111,73 @@ app.get("/api/driver/assignment", async (req, res) => {
     if (!["Incoming","Dropped","Loading","Dock Ready","Ready"].includes(row.status)) return res.json({ found: false });
     res.json({ found: true, door: row.door || "", direction: row.direction || "", status: row.status || "", dropType: row.dropType || "" });
   } catch (e) { res.status(500).send("Lookup failed"); }
+});
+
+// ── QR Scan Arrival — any driver scans QR on arrival, gets a door ──
+// ── Available doors — for driver door picker ──
+app.get("/api/available-doors", async (req, res) => {
+  try {
+    const excludeTrailer = String(req.query.trailer || "").trim().toUpperCase() || null;
+    const occupiedSet = await getOccupiedDoorSet(excludeTrailer);
+    const plates = await all(`SELECT door, status FROM dockplates`);
+    const plateMap = {};
+    plates.forEach(p => { plateMap[String(p.door)] = p.status; });
+    const doors = [];
+    for (let d = 28; d <= 42; d++) {
+      const ds = String(d);
+      const plateStatus = plateMap[ds] || "Unknown";
+      if (plateStatus === "Out of Order") continue;
+      doors.push({
+        door: ds,
+        available: !occupiedSet.has(ds),
+        plateStatus,
+      });
+    }
+    res.json({ doors });
+  } catch (e) { res.status(500).send("Available doors error"); }
+});
+
+app.post("/api/driver/arrive", requireXHR, async (req, res) => {
+  try {
+    const trailer     = String(req.body.trailer     || "").trim().toUpperCase();
+    const carrierType = String(req.body.carrierType || "Outside").trim();
+    const dropType    = String(req.body.dropType    || "Loaded").trim();
+    const direction   = String(req.body.direction   || "Inbound").trim();
+
+    if (!trailer) return res.status(400).send("Missing trailer number");
+    if (trailer.length > 20) return res.status(400).send("Trailer number too long");
+
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    const ACTIVE   = ["Incoming","Dropped","Loading","Dock Ready","Ready"];
+
+    // If Wesbell driver already has OMW reservation, confirm that door
+    if (existing && ACTIVE.includes(existing.status) && existing.door) {
+      // Release the reservation since they've arrived
+      await releaseReservation(trailer);
+      return res.json({ ok: true, door: existing.door, alreadyActive: true, status: existing.status });
+    }
+
+    // Pick best available door
+    const assignedDoor = await pickBestDoor(trailer);
+    if (!assignedDoor) return res.status(409).send("No doors available. Please ask dispatch.");
+
+    // Reserve with 30-min TTL in case they never drop
+    await reserveDoor(assignedDoor, trailer, carrierType);
+
+    const now = Date.now();
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt)
+       VALUES(?,?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET
+         direction=excluded.direction, status=excluded.status, door=excluded.door,
+         dropType=excluded.dropType, carrierType=excluded.carrierType, updatedAt=excluded.updatedAt`,
+      [trailer, direction, "Incoming", assignedDoor, "", dropType, carrierType, now]
+    );
+
+    await audit(req, "driver", "arrive", "trailer", trailer, { door: assignedDoor, carrierType });
+    await broadcastTrailers();
+    res.json({ ok: true, door: assignedDoor, alreadyActive: false });
+  } catch (e) { console.error("[arrive]", e); res.status(500).send("Arrival failed"); }
 });
 
 app.post("/api/driver/drop",       requireXHR, requireDriverAccess, async (req, res) => {
@@ -1071,18 +1211,8 @@ app.post("/api/driver/drop",       requireXHR, requireDriverAccess, async (req, 
       });
     }
 
-    // Auto-assign door if none provided
-    let assignedDoor = door;
-    if (!assignedDoor) {
-      const occupied = await all(
-        `SELECT door FROM trailers WHERE door IS NOT NULL AND door != '' AND status NOT IN ('Departed','') AND trailer != ?`,
-        [trailer]
-      );
-      const occupiedSet = new Set(occupied.map(r => String(r.door)));
-      for (let d = 28; d <= 42; d++) {
-        if (!occupiedSet.has(String(d))) { assignedDoor = String(d); break; }
-      }
-    }
+    // No auto-assign — dispatcher assigns door manually
+    let assignedDoor = door || "";
 
     // Driver drops always land as Incoming
     await run(
@@ -1094,6 +1224,8 @@ app.post("/api/driver/drop",       requireXHR, requireDriverAccess, async (req, 
       [trailer, direction, "Incoming", assignedDoor || "", existing?.note || "", dropType, carrierType, now]
     );
 
+    // Release door reservation — driver has physically arrived and dropped
+    await releaseReservation(trailer);
     await audit(req, "driver", "driver_drop", "trailer", trailer, { door: assignedDoor || "", dropType, carrierType });
     await broadcastTrailers();
     res.json({ ok: true, door: assignedDoor || null });
@@ -1264,6 +1396,7 @@ app.post("/api/confirm-safety", requireXHR, requireDriverAccess, async (req, res
     const at = Date.now();
     if (action === "xdock_pickup" && trailer)
       await run(`UPDATE trailers SET status='Departed',updatedAt=? WHERE trailer=?`, [at, trailer]);
+      await releaseReservation(trailer); // free the door reservation on departure
     await run(
       `INSERT INTO confirmations(at,trailer,door,action,ip,userAgent) VALUES(?,?,?,?,?,?)`,
       [at, trailer || "", door || "", action, ipOf(req), req.headers["user-agent"] || ""]

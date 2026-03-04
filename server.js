@@ -764,10 +764,12 @@ async function broadcastConfirmations() {
 const SAFE_FILES = /^\/(app\.js|style\.css|sw\.js|sw2\.js|manifest\.json|manifest\.webmanifest|icons\/[a-z0-9._-]+\.(png|ico)|splash\/[a-z0-9._-]+\.png)$/i;
 app.use((req, res, next) => {
   if (req.path === "/sw.js" || req.path === "/sw2.js") {
-    res.setHeader("Service-Worker-Allowed", "/");
-    res.setHeader("Content-Type", "application/javascript");
-    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    return res.sendFile(path.join(__dirname, "sw.js"), err => { if (err && !res.headersSent) res.status(404).end(); });
+  const file = req.path === "/sw2.js" ? "sw2.js" : "sw.js";
+  res.setHeader("Service-Worker-Allowed", "/");
+  res.setHeader("Content-Type", "application/javascript");
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  return res.sendFile(path.join(__dirname, file), err => { if (err && !res.headersSent) res.status(404).end(); });
+}
   }
   if (req.path === "/manifest.json") {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");

@@ -14,7 +14,14 @@ app.use(express.static(__dirname));
 // Prevent uncaught errors from crashing the whole server
 process.on('uncaughtException',  err  => { console.error('[CRASH] uncaughtException:', err); logEvent('error','crash','uncaughtException', String(err?.stack||err)).catch(()=>{}); });
 process.on('unhandledRejection', reason => { console.error('[CRASH] unhandledRejection:', reason); logEvent('error','crash','unhandledRejection', String(reason?.stack||reason)).catch(()=>{}); });
-
+// Skip compression for binary/static assets that can break if gzipped incorrectly
+const u = (req.url || "").toLowerCase();
+if (
+  u.startsWith("/icons/") ||
+  u.endsWith(".png") || u.endsWith(".jpg") || u.endsWith(".jpeg") ||
+  u.endsWith(".ico") || u.endsWith(".webmanifest") ||
+  u.endsWith(".woff") || u.endsWith(".woff2")
+) return next();
 // ── Gzip compression ──────────────────────────────────────────────────────
 app.use((req, res, next) => {
   const ae = req.headers["accept-encoding"] || "";

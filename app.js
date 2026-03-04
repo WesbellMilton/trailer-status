@@ -550,6 +550,10 @@
     if (!("serviceWorker" in navigator)) return;
     try {
       const reg = await navigator.serviceWorker.register("/sw.js",{scope:"/"});
+      // Auto-reload when SW sends cache-cleared signal
+      navigator.serviceWorker.addEventListener("message", e => {
+        if (e.data?.type === "SW_UPDATED") location.reload();
+      });
       // Detect SW update and notify user
       reg.addEventListener("updatefound", () => {
         const nw = reg.installing;

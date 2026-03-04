@@ -889,9 +889,9 @@
     <h4>⚠ Report Trailer Issue</h4>
     <div class="m-sub" id="dockIssueCtx" style="margin-bottom:14px;font-family:var(--mono);font-size:11px;color:var(--t2);letter-spacing:.04em;"></div>
 
-    <!-- Photo zone -->
-    <input type="file" id="dockIssuePhotoInput" accept="image/*" capture="environment" style="display:none;" aria-label="Take photo"/>
-    <div class="issue-photo-zone" id="dockIssuePhotoZone">
+    <!-- Photo zone — label wraps input for iOS tap compatibility -->
+    <label for="dockIssuePhotoInput" class="issue-photo-zone" id="dockIssuePhotoZone" style="cursor:pointer;">
+    <input type="file" id="dockIssuePhotoInput" accept="image/*" capture="environment" style="display:none;position:absolute;width:0;height:0;opacity:0;" aria-label="Take photo"/>
       <div id="dockIssueEmpty" class="ipz-empty">
         <span class="ipz-icon">📷</span>
         <span class="ipz-label">Tap to take photo</span>
@@ -899,7 +899,7 @@
       </div>
       <img class="ipz-preview" id="dockIssuePrev" alt="Issue photo preview" style="display:none;"/>
       <button class="ipz-remove" id="dockIssueRemovePhoto" style="display:none;" aria-label="Remove photo">✕</button>
-    </div>
+    </label>
 
     <!-- Note -->
     <div class="field" style="margin-top:14px;">

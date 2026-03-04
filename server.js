@@ -16,7 +16,14 @@ app.use(express.json({ limit: "6mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 const PORT = process.env.PORT || 3000;
-const DB_FILE = process.env.DB_FILE || path.join(__dirname, "wesbell.sqlite");
+// Use persistent disk if available (Render mounts at /var/data), then /tmp, never ephemeral app dir
+const DB_FILE = process.env.DB_FILE || (() => {
+  const fs = require("fs"), p = require("path");
+  for (const candidate of ["/var/data/wesbell.sqlite", "/tmp/wesbell.sqlite"]) {
+    try { fs.mkdirSync(p.dirname(candidate), { recursive: true }); return candidate; } catch {}
+  }
+  return p.join(__dirname, "wesbell.sqlite");
+})();
 const APP_VERSION = process.env.APP_VERSION || "3.2.0";
 const PIN_MIN_LEN = 4;
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
@@ -38,6 +45,7 @@ function requireXHR(req, res, next) {
 /* ══════════════════════════════════════════
    DB
 ══════════════════════════════════════════ */
+console.log("[DB] Using database at:", DB_FILE);
 const db = new sqlite3.Database(DB_FILE);
 const run = (sql, p = []) => new Promise((res, rej) => db.run(sql, p, function (e) { e ? rej(e) : res(this); }));
 const get = (sql, p = []) => new Promise((res, rej) => db.get(sql, p, (e, r) => { e ? rej(e) : res(r); }));
@@ -649,15 +657,7 @@ body{min-height:100vh;background:var(--bg);color:var(--t0);font-family:var(--san
 .date-day{font-family:var(--display);font-size:clamp(26px,3.5vw,42px);color:var(--t1);letter-spacing:.04em}
 .date-full{font-family:var(--mono);font-size:clamp(11px,1vw,13px);color:var(--t2);letter-spacing:.06em;text-transform:uppercase}
 .divider{height:1px;background:linear-gradient(90deg,var(--b1) 0%,transparent 100%);margin-bottom:32px;position:relative;z-index:1}
-.weather-block{display:flex;align-items:flex-start;gap:20px;margin-bottom:36px;position:relative;z-index:1;min-height:60px}
-.weather-icon{font-size:48px;line-height:1;flex-shrink:0}
-.weather-temp{font-family:var(--display);font-size:clamp(36px,4.5vw,56px);color:var(--t0);line-height:1}
-.weather-unit{font-family:var(--mono);font-size:15px;color:var(--t2);vertical-align:super}
-.weather-desc{font-family:var(--mono);font-size:11px;color:var(--t1);letter-spacing:.06em;text-transform:uppercase;margin-top:4px}
-.weather-meta{display:flex;gap:14px;margin-top:7px}
-.wm{font-family:var(--mono);font-size:11px;color:var(--t2)}
 .wm span{color:var(--t1)}
-.weather-msg{font-family:var(--mono);font-size:12px;color:var(--t3);letter-spacing:.04em;padding:8px 0}
 .cal-wrap{flex:1;position:relative;z-index:1}
 .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .cal-month{font-family:var(--display);font-size:clamp(20px,2.5vw,30px);color:var(--t1);letter-spacing:.06em}
@@ -704,13 +704,7 @@ body{min-height:100vh;background:var(--bg);color:var(--t0);font-family:var(--san
   .clock-secs{display:none}
   .date-row{flex:0 0 100%;margin-bottom:0}
   .divider{display:none}
-  .weather-block{flex:1 1 50%;min-height:0;margin-bottom:0}
-  .weather-icon{font-size:28px}
-  .weather-temp{font-size:clamp(22px,6vw,32px)}
-  .weather-unit{font-size:11px}
-  .weather-desc{font-size:9px}
-  .weather-meta{gap:8px}
-  .cal-wrap{display:none}
+              .cal-wrap{display:none}
   .db-footer{flex:0 0 100%;margin-top:8px;padding-top:8px}
   .login-panel{padding:28px 20px max(28px,env(safe-area-inset-bottom,28px));justify-content:flex-start}
   .lp-brand{margin-bottom:20px}
@@ -718,8 +712,7 @@ body{min-height:100vh;background:var(--bg);color:var(--t0);font-family:var(--san
 @media(max-width:480px){
   .dashboard{padding:14px 16px 12px;gap:8px 16px}
   .clock-time{font-size:clamp(40px,16vw,60px)}
-  .weather-block{flex:0 0 100%}
-  .login-panel{padding:20px 16px max(24px,env(safe-area-inset-bottom,24px))}
+    .login-panel{padding:20px 16px max(24px,env(safe-area-inset-bottom,24px))}
   .lp-brand{margin-bottom:16px}
   .lp-heading{font-size:28px}
   .lp-tagline{font-size:10px;margin-bottom:20px}
@@ -727,7 +720,7 @@ body{min-height:100vh;background:var(--bg);color:var(--t0);font-family:var(--san
   .sign-btn{padding:14px;font-size:13px}
 }
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-.db-brand,.clock-wrap,.date-row,.weather-block,.cal-wrap,.db-footer{animation:fadeUp .3s ease both}
+.db-brand,.clock-wrap,.date-row,.cal-wrap,.db-footer{animation:fadeUp .3s ease both}
 .login-panel{animation:fadeUp .3s .06s ease both}
 </style></head><body>
 <div class="dashboard">
@@ -743,7 +736,7 @@ body{min-height:100vh;background:var(--bg);color:var(--t0);font-family:var(--san
     <span class="date-full" id="df"></span>
   </div>
   <div class="divider"></div>
-  <div class="weather-block" id="wb"><div class="weather-msg">Fetching weather&hellip;</div></div>
+
   <div class="cal-wrap" id="cal"></div>
   <div class="db-footer"><div class="live-dot"></div><div class="footer-txt" id="ft">WESBELL DISPATCH</div></div>
 </div>
@@ -780,10 +773,7 @@ body{min-height:100vh;background:var(--bg);color:var(--t0);font-family:var(--san
   for(d=1;d<=dim;d++)c+='<div class="cal-cell'+(d===now.getDate()?" today":"")+'" >'+d+'</div>';
   var rem=(first+dim)%7===0?0:7-(first+dim)%7;for(d=1;d<=rem;d++)c+='<div class="cal-cell other">'+d+'</div>';
   c+='</div>';document.getElementById("cal").innerHTML=c;})();
-  var WMO={0:"\u2600\ufe0f",1:"\ud83c\udf24",2:"\u26c5",3:"\u2601\ufe0f",45:"\ud83c\udf2b",48:"\ud83c\udf2b",51:"\ud83c\udf26",53:"\ud83c\udf26",55:"\ud83c\udf27",61:"\ud83c\udf27",63:"\ud83c\udf27",65:"\ud83c\udf27",71:"\ud83c\udf28",73:"\u2744\ufe0f",75:"\u2744\ufe0f",80:"\ud83c\udf26",81:"\ud83c\udf26",82:"\u26c8",95:"\u26c8",96:"\u26c8",99:"\u26c8"};
-  var DESC={0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",45:"Fog",48:"Icy fog",51:"Light drizzle",53:"Drizzle",55:"Heavy drizzle",61:"Light rain",63:"Rain",65:"Heavy rain",71:"Light snow",73:"Snow",75:"Heavy snow",80:"Light showers",81:"Showers",82:"Violent showers",95:"Thunderstorm",96:"Thunderstorm w/ hail",99:"Heavy thunderstorm"};
-  if(navigator.geolocation){navigator.geolocation.getCurrentPosition(function(pos){var lat=pos.coords.latitude,lon=pos.coords.longitude;fetch("https://api.open-meteo.com/v1/forecast?latitude="+lat+"&longitude="+lon+"&current=temperature_2m,weathercode,windspeed_10m,relative_humidity_2m&temperature_unit=celsius&windspeed_unit=kmh&timezone=auto").then(function(r){return r.json();}).then(function(data){var c=data.current,code=c.weathercode,icon=WMO[code]||"\ud83c\udf21",desc=DESC[code]||"",temp=Math.round(c.temperature_2m),wind=Math.round(c.windspeed_10m),hum=Math.round(c.relative_humidity_2m);document.getElementById("wb").innerHTML='<div class="weather-icon">'+icon+'</div><div><div><span class="weather-temp">'+temp+'</span><span class="weather-unit">\u00b0C</span></div><div class="weather-desc">'+desc+'</div><div class="weather-meta"><div class="wm">\ud83d\udca8 <span>'+wind+' km/h</span></div><div class="wm">\ud83d\udca7 <span>'+hum+'%</span></div></div></div>';}).catch(function(){document.getElementById("wb").innerHTML='<div class="weather-msg">Weather unavailable</div>';});},function(){document.getElementById("wb").innerHTML='<div class="weather-msg">Enable location for weather</div>';},{timeout:8000});}else{document.getElementById("wb").innerHTML='<div class="weather-msg">Weather unavailable</div>';}
-  var ROLE_HOME={dispatcher:"/",admin:"/",dock:"/dock",management:"/management"};
+      var ROLE_HOME={dispatcher:"/",admin:"/",dock:"/dock",management:"/management"};
   var btn=document.getElementById("go"),lbl=document.getElementById("btn-lbl"),em=document.getElementById("em");
   function doLogin(){
     var role=document.getElementById("role").value,pin=document.getElementById("pin").value;

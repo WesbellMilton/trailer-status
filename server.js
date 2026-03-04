@@ -612,7 +612,23 @@ async function wsSendInitial(ws) {
 wss.on("connection", async (ws, req) => {
   try {
     const role = wsRoleFromReq(req);
+/* =========================
+   WEBSOCKET KEEPALIVE
+========================= */
 
+setInterval(() => {
+
+  for (const ws of wss.clients) {
+
+    if (ws.readyState !== WebSocket.OPEN) continue;
+
+    try {
+      ws.send(JSON.stringify({ type: "ping" }));
+    } catch {}
+
+  }
+
+}, 25000);
     // Block unknown users (prevents outside connections from receiving your board)
     if (!role) {
       try { ws.close(1008, "Unauthorized"); } catch {}

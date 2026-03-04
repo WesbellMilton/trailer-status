@@ -728,6 +728,7 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
 .p-btn:focus-visible,.acc-head:focus-visible,.dock-filter-btn:focus-visible,.who-btn:focus-visible,.flow-btn:focus-visible,.door-btn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 .dc-action-btn:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
 
+
 /* ═══════════════════════════════════════════
    RESPONSIVE — 1100px
 ═══════════════════════════════════════════ */
@@ -737,19 +738,15 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
 }
 
 /* ═══════════════════════════════════════════
-   RESPONSIVE — 768px
+   RESPONSIVE — 768px  (tablets / large phones)
 ═══════════════════════════════════════════ */
 @media(max-width:768px){
   .topbar-inner{padding:0 10px}
   .brand-sub{display:none}
   .nav-item{padding:0 8px;font-size:10px}
   .topbar-right .chip:not(:first-child){display:none}
-  #tbody,.tbl-hd{min-width:620px}
-  .panel:has(.tbl-hd){overflow-x:auto;-webkit-overflow-scrolling:touch}
-  .dock-map-grid{grid-template-columns:repeat(auto-fill,minmax(60px,1fr))}
   .sup-grid{grid-template-columns:1fr}
   .kpi-row{gap:8px}
-  /* Dispatcher — single column stack, keep controls visible */
   .grid-main{grid-template-columns:1fr !important}
   .col-stack{width:100%}
   #dispatchView .grid-main>div:last-child{display:block !important;width:100%}
@@ -757,7 +754,7 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
 }
 
 /* ═══════════════════════════════════════════
-   RESPONSIVE — 480px
+   RESPONSIVE — 480px  (all phones)
 ═══════════════════════════════════════════ */
 @media(max-width:480px){
   .topbar-inner{padding:0 10px;height:48px}
@@ -769,221 +766,198 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
   .tb-btn{padding:5px 9px;font-size:10px;min-height:36px}
   .nav-item{padding:0 7px;font-size:9px;gap:3px;height:48px}
   .nav-item svg{width:14px;height:14px}
-  .page{padding:10px}
+
+  /* Page shells */
+  .page{padding:8px 10px 90px;box-sizing:border-box;width:100%;overflow-x:hidden}
+  .sup-shell{padding:8px 10px 90px;box-sizing:border-box;width:100%;overflow-x:hidden}
+
+  /* Modals */
+  .modal-ov{align-items:flex-end;padding:0}
+  .modal{max-width:100%;width:100%;border-radius:var(--r2) var(--r2) 0 0;padding:20px 16px calc(28px + env(safe-area-inset-bottom));max-height:88vh;overflow-y:auto;overscroll-behavior:contain}
+  #dmStatusBtns .btn{min-height:52px;font-size:15px}
+  .modal .m-btns{justify-content:stretch}
+  .modal .m-btns .btn{flex:1;min-height:44px}
+
+  /* Panels */
+  .panel{width:100%;box-sizing:border-box;border-radius:10px}
+  .panel-hd{padding:10px 12px;flex-wrap:wrap;gap:6px}
+  .panel-body{padding:12px !important}
+  .side-sticky{position:static !important}
+  .field-row{flex-direction:column !important;gap:8px}
+
+  /* ── TRAILER TABLE (both dispatcher & management) ── */
   .tbl-hd{display:none !important}
+  /* Panels that contain the trailer table must NOT clip — rows are cards, no h-scroll */
+  .panel:has(#tbody),.panel:has(#supTbody){overflow:visible !important}
+  #tbody,#supTbody{width:100% !important;overflow-x:hidden !important;min-width:0 !important}
+
   .tbl-row{
-    display:flex !important;flex-direction:column;gap:6px;
-    padding:12px 14px !important;border-left-width:4px;position:relative;
+    display:flex !important;flex-direction:column;gap:0;
+    padding:12px 14px !important;border-left-width:3px !important;
+    border-bottom:1px solid var(--b0);position:relative;
+    width:100%;box-sizing:border-box;
   }
-  .tbl-row>span,.tbl-row>div{padding:0 !important;white-space:normal !important;overflow:visible !important}
-  .tbl-row .t-num{font-size:19px !important;font-weight:700;font-family:var(--mono);color:var(--t0);line-height:1.1}
-  .tbl-row .stag{font-size:11px !important;padding:3px 8px !important}
-  .t-dir{font-size:11px;color:var(--t2)}
-  .t-door{font-size:14px;font-family:var(--mono);font-weight:600;color:var(--cyan)}
-  .t-time{font-size:10px;color:var(--t3);font-family:var(--mono)}
-  .t-note{font-size:11px;color:var(--t2);white-space:normal !important}
-  .t-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
-  .t-acts .btn{min-height:40px;padding:8px 12px;font-size:12px;flex:1 1 auto}
-  .qs-btn{flex:1;min-width:72px;text-align:center;min-height:40px !important;padding:8px 10px !important}
-  .qs-secondary{opacity:.7}
-  .filter-bar{flex-direction:column !important;gap:8px;padding:10px;position:sticky;top:48px;z-index:9;background:var(--s0);border-bottom:1px solid var(--b0)}
-  .filter-bar .field{min-width:0 !important;flex:1 1 100%}
-  .filter-bar .tight{margin-top:0 !important}
-  .filter-bar input,.filter-bar select{padding:10px 12px;font-size:14px}
-  .board-footer{flex-direction:column;gap:2px;font-size:10px;padding:8px 12px;align-items:flex-start}
+  .tbl-row>span,.tbl-row>div{padding:0 !important;white-space:normal !important;overflow:visible !important;text-overflow:unset !important}
+  /* Row header line: trailer number + status tag side by side */
+  .tbl-row .t-num{font-size:20px !important;font-weight:700;font-family:var(--mono);color:var(--t0);line-height:1.1;display:block;margin-bottom:2px}
+  .tbl-row .t-status{display:block;margin-bottom:4px}
+  /* Override: put t-num and t-status on same line */
+  .tbl-row{position:relative}
+  .tbl-row .t-status{position:absolute;top:12px;right:14px}
+  .tbl-row .stag{font-size:10px !important;padding:2px 7px !important}
+  /* Meta */
+  .tbl-row .t-dir{font-size:11px;color:var(--t2);margin-right:6px}
+  .tbl-row .t-door-cell .t-door{font-size:13px;font-family:var(--mono);font-weight:600;color:var(--cyan);margin-right:6px}
+  .tbl-row .t-type{font-size:10px;color:var(--t3);margin-right:6px}
+  .tbl-row .t-time{font-size:10px;color:var(--t3);font-family:var(--mono)}
+  .tbl-row .t-note,.tbl-row .t-note-cell{display:block;font-size:11px;color:var(--t2);margin-top:3px;white-space:normal !important}
+  /* Actions */
+  .tbl-row .t-acts,.tbl-row .t-acts-wrap{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;width:100%}
+  .tbl-row .t-acts .btn,.tbl-row .t-acts-wrap .btn{flex:1 1 auto;min-height:40px;padding:8px 10px;font-size:12px}
+  .qs-btn{flex:1;min-width:60px;min-height:40px !important;padding:8px 10px !important;font-size:11px !important}
+
+  /* ── FILTER BAR ── */
+  .filter-bar{
+    display:flex;flex-direction:column !important;
+    gap:8px;padding:10px 12px;
+    position:sticky;top:48px;z-index:10;
+    background:var(--s0);border-bottom:1px solid var(--b0);
+    width:100%;box-sizing:border-box;
+  }
+  .filter-bar .field{min-width:0 !important;flex:1 1 100% !important;width:100%;box-sizing:border-box}
+  .filter-bar .field label,.filter-bar .field .fl{display:block;margin-bottom:4px}
+  .filter-bar input,.filter-bar select{
+    font-size:16px !important;padding:10px 12px;
+    width:100%;box-sizing:border-box;display:block;
+  }
+  .filter-bar .tight{margin-top:0 !important;width:100%}
+  .filter-bar .tight .btn,.filter-bar .btn{width:100%;min-height:42px}
+
+  /* Board footer */
+  .board-footer{flex-direction:column;gap:2px;font-size:9px;padding:7px 12px;align-items:flex-start}
+
+  /* ── MANAGEMENT SPECIFIC ── */
+  .sup-grid{display:flex !important;flex-direction:column !important;gap:10px;width:100%}
+  #managementView .kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px;width:100%;box-sizing:border-box}
+  #managementView .kpi{padding:10px 8px;text-align:center;min-width:0;border-radius:8px}
+  #managementView .kpi .k-val{font-size:20px !important}
+  #managementView .kpi .k-lbl{font-size:8px}
+
+  /* Activity feed */
+  #supFeed{padding:10px 12px !important}
+  .feed-item{padding:7px 0;gap:8px}
+
+  /* Safety confirmations & issue reports — scrollable tables */
+  .data-tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;width:100%;-webkit-overflow-scrolling:touch}
+  .data-tbl-wrap table{min-width:400px}
+  .data-tbl-wrap th,.data-tbl-wrap td{padding:7px 10px;font-size:10px;white-space:nowrap}
+  .data-tbl-wrap th{font-size:8px}
+
+  /* Issue reports stacked */
+  .issue-row{flex-direction:column !important;gap:8px;padding:12px !important}
+  .issue-thumb{width:100% !important;max-height:160px;border-radius:8px;object-fit:cover}
+  .issue-body{width:100%}
+
+  /* PIN management */
+  .pin-row{display:flex !important;flex-direction:column !important;gap:8px;padding:10px;margin-bottom:8px}
+  .pin-row>div{width:100%}
+  .pin-row input{width:100%;box-sizing:border-box;font-size:16px !important;padding:10px 12px;min-height:44px}
+  .pin-row .btn{width:100%;min-height:46px;font-size:14px;padding:10px}
+  .infobox{font-size:11px;line-height:1.5}
+
+  /* Dock map */
   .dock-map-grid{grid-template-columns:repeat(5,1fr) !important;gap:4px}
   .dm-cell{padding:6px 4px;min-height:50px}
   .dm-door{font-size:9px}
   .dm-trailer{font-size:10px}
   .dm-status{font-size:8px}
-  .modal-ov{align-items:flex-end;padding:0}
-  .modal{max-width:100%;width:100%;border-radius:var(--r2) var(--r2) 0 0;padding:20px 16px 32px;max-height:85vh;overflow-y:auto;overscroll-behavior:contain}
-  #dmStatusBtns .btn{min-height:52px;font-size:15px}
-  .modal .m-btns{justify-content:stretch}
-  .modal .m-btns .btn{flex:1;min-height:44px}
-  .side-sticky{position:static !important}
-  .field-row{flex-direction:column !important;gap:8px}
-  .panel-body{padding:12px !important}
-  .panel-hd{padding:10px 12px}
-  input,select,textarea{padding:10px 12px;font-size:16px}
-  .plate-grid{grid-template-columns:repeat(3,1fr) !important;gap:4px;padding:8px}
-  .plate{min-height:52px;padding:5px}
-  .plate .p-btn{padding:4px 6px;font-size:9px;min-height:28px}
-  .sup-shell{padding:10px}
-  .sup-grid{grid-template-columns:1fr !important}
-  .kpi-row{gap:6px}
-  .kpi{flex:1 1 80px;padding:12px}
-  .kpi .k-val{font-size:24px !important}
-  .data-tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  .dock-toolbar{padding:8px 12px;gap:8px;top:48px}
-  .dock-filter-btn{padding:6px 12px;font-size:11px;min-height:38px}
-  .dock-search-bar{padding:8px 12px 4px}
-  .dock-search-bar input{font-size:15px;padding:10px 14px}
+
+  /* Dock cards */
   .dock-cards{padding:8px 12px;gap:8px}
   .dock-card{padding:12px 14px}
   .dc-trailer{font-size:26px !important}
   .dc-door-badge{font-size:20px !important;padding:3px 8px !important}
   .dc-action-btn{padding:18px !important;font-size:16px !important;min-height:60px}
-  .dock-plates-inline{margin:0 12px 60px}
+
+  /* Plates */
+  .plate-grid{grid-template-columns:repeat(3,1fr) !important;gap:4px;padding:8px}
+  .plate{min-height:52px;padding:6px}
+  .plate .p-btn{padding:4px 6px;font-size:9px;min-height:28px}
+
+  /* Driver */
   .driver-shell{padding:8px 10px 40px}
   .driver-wrap{max-width:100%;gap:8px}
   .driver-topbar{padding:8px 12px}
-  .dtb-mark{width:24px;height:24px;font-size:10px}
-  .dtb-title{font-size:11px}
-  .driver-panel{border-radius:var(--r2)}
-  .driver-pbody{padding:12px 14px}
-  .trailer-hero-input{font-size:28px !important;padding:14px !important;letter-spacing:.04em}
-  .who-grid{grid-template-columns:1fr 1fr;gap:8px}
-  .who-btn{min-height:80px;padding:10px 8px;gap:6px}
-  .who-btn .who-icon{font-size:24px}
-  .who-btn .who-label{font-size:13px}
-  .flow-grid{gap:8px}
-  .flow-btn{min-height:60px;padding:12px 14px}
-  .door-picker-grid{grid-template-columns:repeat(4,1fr) !important;gap:5px}
-  .door-btn{min-height:52px;font-size:14px}
-  .drop-type-btn{min-height:60px}
-  .checkline{min-height:64px;padding:14px}
-  .checkline input[type="checkbox"]{width:28px;height:28px}
-  .checkline .cl-main{font-size:14px}
-  .driver-submit{min-height:60px;font-size:15px}
-  .shunt-picker{padding:10px}
-  .shunt-doors{gap:5px}
-  .shunt-door-btn{padding:10px 12px;font-size:13px;min-height:44px}
-  .toast{right:8px;left:8px;width:auto;bottom:calc(64px + 8px)}
-  .dock-toolbar{flex-wrap:wrap;gap:6px}
-  .dock-toolbar-left{flex:0 0 auto}
-  .dock-toolbar-right{flex:0 0 auto;margin-left:auto}
-  .dock-filter-wrap{order:3;flex:0 0 100%;justify-content:center;margin:0}
-  #staffLoginOv{align-items:flex-end;padding:0}
-  #staffLoginOv .modal{max-width:100%;width:100%;border-radius:var(--r2) var(--r2) 0 0;padding:20px 16px 36px;max-height:90vh;overflow-y:auto}
-  .pin-row{grid-template-columns:1fr;gap:6px}
-  .pin-row .btn{width:100%;min-height:44px}
-}
 
-/* ═══════════════════════════════════════════
-   RESPONSIVE — 360px
-═══════════════════════════════════════════ */
-@media(max-width:360px){
-  .nav-item span{display:none}
-  .nav-item svg{display:block !important;width:16px;height:16px}
-  .nav-item{padding:0 9px}
-  .dock-map-grid{grid-template-columns:repeat(4,1fr) !important}
-  .dm-trailer{font-size:9px}
-  .plate-grid{grid-template-columns:repeat(2,1fr) !important}
-  .who-grid{grid-template-columns:1fr}
-  .door-picker-grid{grid-template-columns:repeat(3,1fr) !important}
-  .door-btn{min-height:48px}
-  .kpi{flex:1 1 70px;padding:10px}
+  /* Dispatch controls panel */
+  #adminPanel{width:100% !important}
+  #panelBody input,#panelBody select{font-size:16px !important;padding:10px 12px}
+  #panelBody .btn{width:100%;min-height:46px;font-size:14px}
+  #panelBody .field-row{flex-direction:column !important;gap:8px}
+
+  /* KPI row for dispatcher */
+  .kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px}
+  .kpi{flex:unset;padding:10px 8px;text-align:center;min-width:0}
   .kpi .k-val{font-size:20px !important}
-  .dc-trailer{font-size:20px !important}
+  .kpi .k-lbl{font-size:8px}
+
+  /* Dock toolbar */
+  .dock-toolbar{padding:8px 12px;gap:8px;top:48px}
+  .dock-filter-btn{padding:6px 12px;font-size:11px;min-height:38px}
+  .dock-search-bar{padding:8px 12px 4px}
+  .dock-search-bar input{font-size:15px;padding:10px 14px}
+  .dock-plates-inline{margin:0 12px 60px}
 }
 
-/* ═══════════════════════════════════════════
-   TOUCH ACTION
-═══════════════════════════════════════════ */
-button,.btn,.nav-item,.who-btn,.flow-btn,.door-btn,.drop-type-btn,
-.dc-action-btn,.dock-filter-btn,.driver-submit,.checkline,
-.shunt-door-btn,.dm-cell,.p-btn,.tb-btn,.acc-head,.bn-item,
-.issue-toggle-label,.issue-photo-zone,.ipz-remove{touch-action:manipulation}
-
-/* ═══════════════════════════════════════════
-   PULL TO REFRESH
-═══════════════════════════════════════════ */
-.ptr-indicator{display:flex;align-items:center;justify-content:center;gap:8px;height:0;overflow:hidden;transition:height .2s ease;font-family:var(--mono);font-size:11px;color:var(--t2);letter-spacing:.04em;background:var(--bg)}
-.ptr-indicator.ptr-visible{height:48px}
-.ptr-indicator.ptr-loading{height:48px}
-.ptr-spinner{width:16px;height:16px;border:2px solid var(--b1);border-top-color:var(--amber);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
-
-/* ═══════════════════════════════════════════
-   BOTTOM NAV
-═══════════════════════════════════════════ */
-.bottom-nav{
-  display:none;position:fixed;bottom:0;left:0;right:0;z-index:200;
-  background:rgba(7,10,15,.96);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
-  border-top:1px solid var(--b0);
-  padding:6px 0 8px;
-  box-shadow:0 -4px 24px rgba(0,0,0,.5);
-}
-.bottom-nav-inner{display:flex;align-items:stretch;justify-content:space-around;max-width:480px;margin:0 auto}
-.bn-item{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:3px;flex:1;padding:4px 8px;
-  font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:.06em;
-  text-transform:uppercase;color:var(--t2);text-decoration:none;
-  border:none;background:transparent;cursor:pointer;transition:color .15s;
-  touch-action:manipulation;min-height:48px;position:relative;overflow:visible;
-}
-.bn-item svg{width:18px;height:18px;opacity:.5;transition:opacity .15s}
-.bn-item.active{color:var(--amber)}
-.bn-item.active svg{opacity:1}
-.bn-item:active{opacity:.7}
-
-@media(max-width:768px){
-  .bottom-nav{display:block}
-  .topbar .nav{display:none}
-  main{padding-bottom:64px}
-  .dock-shell{padding-bottom:calc(80px + 64px)}
-  .driver-shell{padding-bottom:calc(48px + 64px)}
-  #btnDockStaffLogin,#btnDriverStaffLogin{font-size:10px;padding:4px 8px}
-  #staffLoginOv{align-items:flex-end;padding:0}
-  #staffLoginOv .modal{max-width:100%;width:100%;border-radius:var(--r2) var(--r2) 0 0;padding:20px 16px 32px;max-height:90vh;overflow-y:auto}
-  #managementView .panel:has(.tbl-hd){overflow-x:auto;-webkit-overflow-scrolling:touch}
-  #managementView #supTbody,#managementView .tbl-hd{min-width:560px}
+/* ── Extra small: 360px and below (Samsung S24 base, iPhone SE) ── */
+@media(max-width:360px){
+  .page,.sup-shell{padding:6px 8px 90px}
+  #managementView .kpi-row{grid-template-columns:repeat(2,1fr);gap:5px}
+  .kpi-row{grid-template-columns:repeat(2,1fr)}
+  .kpi .k-val{font-size:18px !important}
+  .tbl-row .t-num{font-size:17px !important}
+  .dock-map-grid{grid-template-columns:repeat(4,1fr) !important}
+  .plate-grid{grid-template-columns:repeat(2,1fr) !important}
+  .qs-btn{min-width:48px;font-size:10px !important}
+  .data-tbl-wrap table{min-width:360px}
 }
 
-/* ═══════════════════════════════════════════
-   SWIPE DISMISS
-═══════════════════════════════════════════ */
-.toast{transition:transform .2s ease,opacity .2s ease}
-.toast.swiping{transition:none}
-.toast.swipe-out{transform:translateX(120%);opacity:0}
-
-/* ═══════════════════════════════════════════
-   LANDSCAPE
-═══════════════════════════════════════════ */
-@media(max-width:900px) and (orientation:landscape){
-  .driver-shell{padding:8px 16px 16px}
-  .driver-wrap{max-width:100%;flex-direction:row;flex-wrap:wrap;align-items:flex-start;gap:10px}
-  .driver-conn-bar{flex:0 0 100%}
-  .driver-hdr{flex:0 0 100%;padding:2px 0 4px}
-  .driver-panel{flex:1 1 calc(50% - 5px);min-width:0}
-  .session-history{flex:1 1 calc(50% - 5px);min-width:0}
-  .who-grid{grid-template-columns:repeat(2,1fr)}
-  .flow-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  .door-picker-grid{grid-template-columns:repeat(6,1fr) !important}
-  .dock-shell{flex-direction:row;flex-wrap:wrap;max-width:100%}
-  .dock-toolbar{flex:0 0 100%}
-  .dock-search-bar{flex:0 0 100%}
-  .dock-cards{flex:1;overflow-y:auto;max-height:calc(100vh - 160px)}
-  .dock-plates-inline{flex:0 0 280px;margin:0 0 0 8px;align-self:flex-start;position:sticky;top:110px}
-  .trailer-hero-input{font-size:22px !important}
-  .checkline{min-height:56px}
-  .driver-submit{min-height:52px}
+/* ── Large phones 430px+ (Pro Max, Ultra) ── */
+@media(min-width:430px) and (max-width:768px){
+  #managementView .kpi-row{grid-template-columns:repeat(5,1fr)}
+  .kpi-row{grid-template-columns:repeat(5,1fr)}
+  .kpi .k-val{font-size:24px !important}
+  .tbl-row .t-num{font-size:21px !important}
 }
 
-/* ═══════════════════════════════════════════
-   SCROLL SNAP
-═══════════════════════════════════════════ */
-@media(max-width:480px){
-  .dock-cards{scroll-snap-type:y proximity;-webkit-overflow-scrolling:touch}
-  .dock-card{scroll-snap-align:start}
+/* ── Safe area insets (notch / Dynamic Island / punch-hole) ── */
+@supports(padding:env(safe-area-inset-top)){
+  .topbar-inner{padding-top:env(safe-area-inset-top);padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right))}
+  .bottom-nav{padding-bottom:env(safe-area-inset-bottom)}
+  .page,.sup-shell{padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right))}
+  .driver-shell{padding-bottom:max(40px,calc(env(safe-area-inset-bottom)+16px))}
+  .dock-shell{padding-bottom:max(60px,calc(env(safe-area-inset-bottom)+16px));padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+  .toast-wrap{bottom:calc(80px + env(safe-area-inset-bottom))}
 }
 
-/* ═══════════════════════════════════════════
-   SAFE AREA
-═══════════════════════════════════════════ */
-@supports(padding-bottom:env(safe-area-inset-bottom)){
-  .driver-shell{padding-bottom:calc(48px + env(safe-area-inset-bottom))}
-  .dock-shell{padding-bottom:calc(144px + env(safe-area-inset-bottom))}
-  .toast{bottom:calc(72px + env(safe-area-inset-bottom))}
-  .modal-ov:not(#staffLoginOv){padding-bottom:env(safe-area-inset-bottom)}
-  #staffLoginOv .modal{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
-  .topbar{padding-top:env(safe-area-inset-top)}
-  .bottom-nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))}
-  .dock-toolbar{top:calc(52px + env(safe-area-inset-top))}
-  .issue-lightbox{padding-top:max(16px,env(safe-area-inset-top))}
-  .issue-lightbox-close{top:calc(16px + env(safe-area-inset-top))}
+/* ── iOS/Android landscape ── */
+@media(max-height:430px) and (max-width:900px){
+  .driver-shell{padding:6px 16px 12px}
+  .submit-btn,.flow-btn{min-height:48px}
+  .who-btn{min-height:60px}
+  .checkline{min-height:48px}
+  .door-btn{min-height:40px}
+  .filter-bar{top:44px}
 }
+
+/* ── iOS Safari height fix ── */
+@supports(-webkit-touch-callout:none){
+  html,body{height:-webkit-fill-available}
+  body{overscroll-behavior:none}
+  input,select,textarea{font-size:16px}
+}
+
+
 
 /* ═══════════════════════════════════════════
    VIEW TRANSITION
@@ -2057,452 +2031,4 @@ input, select, textarea {
   /* Door map 3 cols */
   .dock-map-grid { grid-template-columns:repeat(3,1fr) !important; gap:5px; }
   .dm-cell { min-height:54px; font-size:11px; }
-}
-
-/* ═══════════════════════════════════════════
-   DISPATCHER + MANAGEMENT — MOBILE FIRST
-   Full fix for all Apple & Samsung phones
-═══════════════════════════════════════════ */
-
-@media screen and (max-width:768px) {
-
-  /* ── Page shell ── */
-  .page { padding:8px 10px 90px; box-sizing:border-box; width:100%; overflow-x:hidden; }
-  .sup-shell { padding:8px 10px 90px; box-sizing:border-box; width:100%; overflow-x:hidden; }
-
-  /* ── Grid: single column on all phones ── */
-  .grid-main { grid-template-columns:1fr !important; gap:10px; width:100%; }
-  .sup-grid   { grid-template-columns:1fr !important; gap:10px; }
-  .col-stack  { width:100%; gap:10px; }
-
-  /* ── Controls panel — keep visible, full width ── */
-  #dispatchView .grid-main > div:last-child { display:block !important; width:100%; }
-  .side-sticky { position:static !important; width:100% !important; }
-  #adminPanel  { width:100% !important; }
-
-  /* ── KPI row — wrap tightly ── */
-  .kpi-row { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; margin-bottom:10px; }
-  .kpi { padding:10px 8px; text-align:center; }
-  .kpi .k-label { font-size:8px; }
-  .kpi .k-val   { font-size:20px !important; }
-
-  /* ── Panel ── */
-  .panel { width:100%; box-sizing:border-box; border-radius:10px; overflow:hidden; }
-  .panel-hd { padding:10px 12px; flex-wrap:wrap; gap:6px; }
-  .panel-title { font-size:11px; }
-  .panel-body  { padding:10px 12px !important; }
-
-  /* ── Trailer table header — hidden, use card layout ── */
-  .tbl-hd { display:none !important; }
-
-  /* ── Trailer table — scrollable container ── */
-  .panel:has(#tbody),
-  .panel:has(#supTbody) { overflow:hidden; }
-  #tbody, #supTbody { overflow-x:hidden; width:100%; }
-
-  /* ── Trailer rows — card layout ── */
-  .tbl-row {
-    display:grid !important;
-    grid-template-columns:1fr auto !important;
-    grid-template-rows:auto auto auto !important;
-    gap:0 !important;
-    padding:12px 14px !important;
-    border-left-width:3px !important;
-    border-bottom:1px solid var(--b0);
-    position:relative;
-    width:100%;
-    box-sizing:border-box;
-  }
-  .tbl-row > span,
-  .tbl-row > div { padding:0 !important; white-space:normal !important; overflow:visible !important; text-overflow:unset !important; }
-
-  /* Trailer number — top left, big */
-  .tbl-row .t-num {
-    grid-column:1; grid-row:1;
-    font-size:20px !important; font-weight:700;
-    font-family:var(--mono); color:var(--t0); line-height:1.1;
-    margin-bottom:4px;
-  }
-  /* Status tag — top right */
-  .tbl-row .t-status {
-    grid-column:2; grid-row:1;
-    display:flex; align-items:flex-start; justify-content:flex-end;
-  }
-  .tbl-row .stag { font-size:10px !important; padding:3px 7px !important; }
-
-  /* Meta row — dir, door, type, time */
-  .tbl-row .t-dir  { display:inline; font-size:11px; color:var(--t2); margin-right:8px; }
-  .tbl-row .t-door { display:inline; font-size:13px; font-family:var(--mono); font-weight:600; color:var(--cyan); margin-right:8px; }
-  .tbl-row .t-type { display:inline; font-size:10px; color:var(--t3); margin-right:8px; }
-  .tbl-row .t-time { display:inline; font-size:10px; color:var(--t3); font-family:var(--mono); }
-  .tbl-row .t-note { display:block; font-size:11px; color:var(--t2); margin-top:3px; white-space:normal !important; }
-
-  /* Action buttons row — full width */
-  .tbl-row .t-acts {
-    grid-column:1/-1; grid-row:3;
-    display:flex; flex-wrap:wrap; gap:6px;
-    margin-top:8px;
-  }
-  .tbl-row .t-acts .btn { flex:1 1 auto; min-height:40px; padding:8px 10px; font-size:12px; }
-  .qs-btn { flex:1; min-width:60px; min-height:40px !important; padding:8px 10px !important; font-size:11px !important; }
-
-  /* ── Filter bar ── */
-  .filter-bar {
-    flex-direction:column !important;
-    gap:8px; padding:10px 12px;
-    position:sticky; top:48px; z-index:10;
-    background:var(--s0);
-    border-bottom:1px solid var(--b0);
-    width:100%; box-sizing:border-box;
-  }
-  .filter-bar .field { min-width:0 !important; flex:1 1 100% !important; width:100%; }
-  .filter-bar input,
-  .filter-bar select { font-size:16px !important; padding:10px 12px; width:100%; box-sizing:border-box; }
-  .filter-bar .tight  { margin-top:0 !important; }
-  .filter-bar .btn    { width:100%; min-height:42px; }
-
-  /* ── Board footer ── */
-  .board-footer { flex-direction:column; gap:2px; font-size:10px; padding:8px 12px; align-items:flex-start; }
-
-  /* ── Door occupancy map ── */
-  #dockMapCard .panel-body { padding:8px 10px !important; }
-  .dock-map-grid { grid-template-columns:repeat(5,1fr) !important; gap:4px; }
-  .dm-cell  { padding:6px 4px; min-height:52px; }
-  .dm-door  { font-size:9px; }
-  .dm-trailer { font-size:10px; }
-  .dm-status  { font-size:8px; }
-
-  /* ── Admin panel ── */
-  #adminPanel .panel-body { padding:10px !important; }
-  .pin-row { flex-direction:column !important; gap:8px; }
-  .pin-row input { width:100%; box-sizing:border-box; }
-  .pin-row .btn  { width:100%; min-height:44px; }
-
-  /* ── Controls (add trailer) panel ── */
-  #panelBody .field { margin-bottom:8px; }
-  #panelBody input,
-  #panelBody select { font-size:16px !important; padding:10px 12px; }
-  #panelBody .btn   { width:100%; min-height:46px; font-size:14px; }
-  #panelBody .field-row { flex-direction:column !important; gap:8px; }
-
-  /* ── Dock plates ── */
-  .plate-grid { grid-template-columns:repeat(3,1fr) !important; gap:4px; padding:8px; }
-  .plate { min-height:52px; padding:6px; }
-  .plate .p-btn { padding:4px 6px; font-size:9px; min-height:28px; }
-
-  /* ── Management tables ── */
-  .data-tbl-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; width:100%; }
-  .data-tbl-wrap table { min-width:460px; }
-
-  /* ── Audit log ── */
-  #auditCard .data-tbl-wrap table { min-width:680px; }
-
-  /* ── Modals ── */
-  .modal-ov { align-items:flex-end; padding:0; }
-  .modal {
-    max-width:100% !important; width:100% !important;
-    border-radius:14px 14px 0 0 !important;
-    padding:20px 16px calc(28px + env(safe-area-inset-bottom)) !important;
-    max-height:88vh; overflow-y:auto;
-    overscroll-behavior:contain;
-  }
-  #dmStatusBtns .btn { min-height:52px; font-size:15px; }
-  .modal .m-btns { justify-content:stretch; gap:8px; }
-  .modal .m-btns .btn { flex:1; min-height:44px; }
-}
-
-/* ── Extra small phones (360px and below) ── */
-@media screen and (max-width:360px) {
-  .kpi-row { grid-template-columns:repeat(2,1fr); }
-  .kpi .k-val { font-size:18px !important; }
-  .tbl-row .t-num { font-size:18px !important; }
-  .dock-map-grid { grid-template-columns:repeat(4,1fr) !important; }
-  .plate-grid { grid-template-columns:repeat(2,1fr) !important; }
-  .qs-btn { min-width:50px; font-size:10px !important; padding:6px 8px !important; }
-  .page, .sup-shell { padding:6px 8px 90px; }
-}
-
-/* ── Topbar on all phones ── */
-@media screen and (max-width:768px) {
-  .topbar-inner { padding:0 10px; height:48px; }
-  .brand-name { font-size:12px; letter-spacing:.06em; }
-  .brand-sub  { display:none; }
-  .brand-mark { width:24px; height:24px; font-size:10px; }
-  .brand-block { gap:7px; }
-  /* Hide desktop nav — use bottom nav instead */
-  .nav { display:none !important; }
-  .topbar-right .chip { display:none; }
-  .topbar-right .chip:first-child { display:flex; }
-  .topbar-right { gap:5px; }
-  .tb-btn { padding:5px 9px; font-size:10px; min-height:36px; }
-  #btnLogout { display:flex !important; }
-}
-
-/* ═══════════════════════════════════════════
-   MANAGEMENT VIEW — FULL MOBILE REWRITE
-   Compatible: iPhone SE → 17 Pro Max
-               Samsung Galaxy A → S25 Ultra
-═══════════════════════════════════════════ */
-
-/* ── Base shell ── */
-#managementView .sup-shell {
-  width: 100%;
-  box-sizing: border-box;
-  overflow-x: hidden;
-}
-
-/* ── Mobile (all phones up to 768px) ── */
-@media screen and (max-width: 768px) {
-
-  #managementView .sup-shell {
-    padding: 8px 10px calc(80px + env(safe-area-inset-bottom));
-    overflow-x: hidden;
-  }
-
-  /* Single column grid */
-  #managementView .sup-grid {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 10px;
-    width: 100%;
-  }
-
-  /* All panels full width */
-  #managementView .panel {
-    width: 100% !important;
-    box-sizing: border-box;
-    grid-column: unset !important;
-    overflow: hidden;
-    border-radius: 10px;
-  }
-
-  /* ── KPI row — 3 across, wrap to 2 on tiny screens ── */
-  #managementView .kpi-row {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-    margin-bottom: 10px;
-    width: 100%;
-    box-sizing: border-box;
-  }
-  #managementView .kpi {
-    padding: 10px 8px;
-    text-align: center;
-    min-width: 0;
-    border-radius: 8px;
-  }
-  #managementView .kpi .k-val { font-size: 22px !important; }
-  #managementView .kpi .k-lbl { font-size: 8px; }
-
-  /* ── Panel headers ── */
-  #managementView .panel-hd {
-    padding: 10px 12px;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-  #managementView .panel-title { font-size: 11px; }
-
-  /* ── Trailer board ── */
-  #managementView .tbl-hd { display: none !important; }
-  #managementView #supTbody { width: 100%; overflow-x: hidden; }
-
-  /* Management trailer rows — card layout */
-  #managementView .tbl-row {
-    display: grid !important;
-    grid-template-columns: 1fr auto !important;
-    gap: 0 !important;
-    padding: 11px 12px !important;
-    border-left-width: 3px !important;
-    border-bottom: 1px solid var(--b0);
-    position: relative;
-    width: 100%;
-    box-sizing: border-box;
-  }
-  #managementView .tbl-row > span,
-  #managementView .tbl-row > div {
-    padding: 0 !important;
-    white-space: normal !important;
-    overflow: visible !important;
-    text-overflow: unset !important;
-  }
-  #managementView .tbl-row .t-num {
-    grid-column: 1; grid-row: 1;
-    font-size: 18px !important;
-    font-weight: 700; font-family: var(--mono);
-    color: var(--t0); line-height: 1.1;
-    margin-bottom: 3px;
-  }
-  #managementView .tbl-row .t-status {
-    grid-column: 2; grid-row: 1;
-    display: flex; align-items: flex-start; justify-content: flex-end;
-  }
-  #managementView .tbl-row .stag {
-    font-size: 9px !important; padding: 2px 6px !important;
-  }
-  #managementView .tbl-row .t-dir  { font-size: 10px; color: var(--t2); margin-right: 7px; }
-  #managementView .tbl-row .t-door { font-size: 12px; font-family: var(--mono); font-weight: 600; color: var(--cyan); margin-right: 7px; }
-  #managementView .tbl-row .t-type { font-size: 9px; color: var(--t3); margin-right: 6px; }
-  #managementView .tbl-row .t-time { font-size: 9px; color: var(--t3); font-family: var(--mono); }
-  #managementView .tbl-row .t-note { font-size: 10px; color: var(--t2); margin-top: 2px; white-space: normal !important; }
-  #managementView .tbl-row .t-acts {
-    grid-column: 1 / -1; grid-row: 3;
-    display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px;
-  }
-  #managementView .tbl-row .t-acts .btn {
-    flex: 1 1 auto; min-height: 38px; padding: 7px 10px; font-size: 11px;
-  }
-  #managementView .qs-btn {
-    flex: 1; min-width: 52px; min-height: 38px !important;
-    padding: 7px 8px !important; font-size: 10px !important;
-  }
-
-  /* ── Filter bar ── */
-  #managementView .filter-bar {
-    flex-direction: column !important;
-    gap: 7px; padding: 10px 12px;
-    position: sticky; top: 48px; z-index: 10;
-    background: var(--s0);
-    border-bottom: 1px solid var(--b0);
-    width: 100%; box-sizing: border-box;
-  }
-  #managementView .filter-bar .field {
-    min-width: 0 !important; flex: 1 1 100% !important; width: 100%;
-  }
-  #managementView .filter-bar input,
-  #managementView .filter-bar select {
-    font-size: 16px !important; padding: 10px 12px;
-    width: 100%; box-sizing: border-box;
-  }
-  #managementView .filter-bar .tight { margin-top: 0 !important; }
-  #managementView .filter-bar .btn { width: 100%; min-height: 42px; }
-
-  /* ── Board footer ── */
-  #managementView .board-footer {
-    flex-direction: column; gap: 2px;
-    font-size: 9px; padding: 7px 12px;
-    align-items: flex-start;
-  }
-
-  /* ── Recent Activity feed ── */
-  #managementView #supFeed { padding: 10px 12px !important; }
-  #managementView .feed-item { padding: 8px 0; gap: 8px; }
-  #managementView .feed-time { font-size: 9px; white-space: nowrap; }
-  #managementView .feed-content { font-size: 11px; }
-
-  /* ── Safety confirmations table ── */
-  #managementView .panel:has(#supConfBody) .panel-body-flush { padding: 0; }
-  #managementView .data-tbl-wrap {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    width: 100%;
-  }
-  #managementView .data-tbl-wrap table { min-width: 420px; }
-  #managementView .data-tbl-wrap th,
-  #managementView .data-tbl-wrap td {
-    padding: 8px 10px; font-size: 10px;
-  }
-  #managementView .data-tbl-wrap th { font-size: 8px; }
-
-  /* ── Issue reports ── */
-  #managementView #supIssueBody { width: 100%; }
-  #managementView .issue-row {
-    flex-direction: column !important;
-    gap: 8px; padding: 12px !important;
-  }
-  #managementView .issue-thumb {
-    width: 100% !important; max-height: 160px;
-    border-radius: 8px; object-fit: cover;
-  }
-  #managementView .issue-body { width: 100%; }
-  #managementView .issue-meta { flex-wrap: wrap; gap: 4px; }
-  #managementView .issue-time,
-  #managementView .issue-trailer { font-size: 10px; }
-  #managementView .issue-note { font-size: 12px; margin-top: 4px; }
-
-  /* ── PIN Management accordion ── */
-  #managementView #pinMgmtToggle {
-    padding: 12px 14px;
-    font-size: 13px;
-    min-height: 48px;
-  }
-  #managementView .pin-row {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 8px;
-    padding: 10px;
-    margin-bottom: 8px;
-  }
-  #managementView .pin-row > div { width: 100%; }
-  #managementView .pin-row input {
-    width: 100%; box-sizing: border-box;
-    font-size: 16px !important; padding: 10px 12px;
-    min-height: 44px;
-  }
-  #managementView .pin-row .btn {
-    width: 100%; min-height: 46px;
-    font-size: 14px; padding: 10px;
-  }
-  #managementView .infobox {
-    font-size: 11px; line-height: 1.5;
-  }
-  #managementView .panel-body { padding: 12px !important; }
-
-  /* ── Accordion smooth open ── */
-  #managementView .acc-body {
-    transition: max-height .35s cubic-bezier(.22,1,.36,1);
-  }
-}
-
-/* ── Extra small (360px and below) — Samsung S24/S25 base ── */
-@media screen and (max-width: 360px) {
-  #managementView .kpi-row {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 5px;
-  }
-  #managementView .kpi .k-val { font-size: 18px !important; }
-  #managementView .kpi .k-lbl { font-size: 7px; }
-  #managementView .sup-shell { padding: 6px 8px calc(80px + env(safe-area-inset-bottom)); }
-  #managementView .tbl-row .t-num { font-size: 16px !important; }
-  #managementView .panel-hd { padding: 8px 10px; }
-  #managementView .data-tbl-wrap table { min-width: 380px; }
-}
-
-/* ── Medium phones 390–430px — iPhone 14–17, Samsung S24+/Ultra ── */
-@media screen and (min-width: 390px) and (max-width: 430px) {
-  #managementView .kpi-row { grid-template-columns: repeat(3, 1fr); gap: 7px; }
-  #managementView .kpi .k-val { font-size: 24px !important; }
-  #managementView .tbl-row .t-num { font-size: 19px !important; }
-}
-
-/* ── Large phones 430px+ — iPhone Pro Max, Samsung Ultra ── */
-@media screen and (min-width: 430px) and (max-width: 768px) {
-  #managementView .kpi-row { grid-template-columns: repeat(5, 1fr); gap: 7px; }
-  #managementView .kpi .k-val { font-size: 26px !important; }
-  #managementView .tbl-row .t-num { font-size: 20px !important; }
-  #managementView .tbl-row .stag { font-size: 10px !important; padding: 3px 7px !important; }
-  #managementView .data-tbl-wrap table { min-width: 460px; }
-}
-
-/* ── Safe areas (notch / Dynamic Island / punch hole) ── */
-@supports (padding: env(safe-area-inset-bottom)) {
-  #managementView .sup-shell {
-    padding-left: max(10px, env(safe-area-inset-left));
-    padding-right: max(10px, env(safe-area-inset-right));
-  }
-}
-
-/* ── Management tbl-row semantic classes ── */
-@media screen and (max-width: 768px) {
-  #managementView .tbl-row .t-status { grid-column:2; grid-row:1; display:flex; align-items:flex-start; justify-content:flex-end; }
-  #managementView .tbl-row .t-door-cell { display:inline; }
-  #managementView .tbl-row .t-door-cell .t-door { font-size:12px; font-family:var(--mono); font-weight:600; color:var(--cyan); }
-  #managementView .tbl-row .t-note-cell { display:block; font-size:10px; color:var(--t2); margin-top:2px; }
-  #managementView .tbl-row .t-acts-wrap { grid-column:1/-1; display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }
-  #managementView .tbl-row .t-acts-wrap .t-acts { display:contents; }
-  #managementView .tbl-row .t-acts-wrap .btn { flex:1 1 auto; min-height:38px; padding:7px 10px; font-size:11px; }
-  #managementView .tbl-row .t-acts-wrap .qs-btn { flex:1; min-width:52px; min-height:38px !important; padding:7px 8px !important; font-size:10px !important; }
-  /* Shunt picker inside rows */
-  #managementView .shunt-picker { padding:10px 0 4px; width:100%; }
-  #managementView .shunt-doors { display:flex; flex-wrap:wrap; gap:5px; margin:6px 0; }
-  #managementView .shunt-door-btn { min-width:42px; min-height:38px; font-size:12px; }
 }

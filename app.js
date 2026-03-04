@@ -2272,7 +2272,10 @@
   }
   function connectWs(){
     wsStatus("warn");
-    const ws=new WebSocket(`${location.protocol==="https:"?"wss":"ws"}://${location.host}`);
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+const isDriverPath = location.pathname.toLowerCase().startsWith("/driver");
+const wsPath = isDriverPath ? "/ws/driver" : "/ws";
+const ws = new WebSocket(`${proto}//${location.host}${wsPath}`);
     let lastMsg=Date.now();
     const watchdog=setInterval(()=>{ if(Date.now()-lastMsg>35000){ try{ws.close();}catch{} } },5000);
     ws.onopen=()=>{ wsRetry=0; wsStatus("ok"); };

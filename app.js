@@ -179,6 +179,16 @@
       const dtype=r.dropType?`<span style="font-size:10px;color:var(--t2);font-family:var(--mono);">${esc(r.dropType)}</span>`:`<span style="color:var(--t3)">—</span>`;
       const ctag=carrierTag(r.carrierType);
       const ago=r.updatedAt?timeAgo(r.updatedAt):"";
+      // OMW badge
+      const omwBadge = r.omwAt && r.status==="Incoming"
+        ? `<span class="omw-badge">🚛 OMW${r.omwEta?` ~${r.omwEta}m`:""}</span>` : "";
+      // Time on door
+      const doorAge = r.doorAt && r.door
+        ? `<span class="door-age" title="At door ${timeAgo(r.doorAt)}">${timeAgo(r.doorAt)}</span>` : "";
+      // Inline note (editable for dispatchers)
+      const noteHtml = canEdit
+        ? `<span class="t-note-edit" data-trailer="${esc(r.trailer)}" data-note="${esc(r.note||"")}" title="Click to edit note">${r.note?`<span class="t-note">${esc(r.note)}</span>`:`<span style="color:var(--t3);font-style:italic">add note…</span>`}</span>`
+        : (r.note?`<span class="t-note" title="${esc(r.note)}">${esc(r.note)}</span>`:`<span style="color:var(--t3)">—</span>`);
 
       let acts=`<span style="color:var(--t3)">—</span>`;
       if(canEdit){
@@ -228,20 +238,36 @@
 
       const carrierCls=r.carrierType==="Outside"?" carrier-outside":"";
       return `<div class="tbl-row ${rowCls}${flash}${readyFlash}${carrierCls}" data-trailer="${esc(r.trailer)}">
-        <span class="t-num">${esc(r.trailer)}</span>
+        <span class="t-num">${esc(r.trailer)}${omwBadge}</span>
         <span class="t-dir">${esc(r.direction||"—")}</span>
         <span class="t-status">${statusTag(r.status)}</span>
-        <span class="t-door-cell">${door}</span>
+        <span class="t-door-cell">${door}${doorAge}</span>
         <span class="t-type">${ctag||dtype}</span>
-        <span class="t-note-cell">${note}</span>
+        <span class="t-note-cell">${noteHtml}</span>
         <span class="t-time" title="${esc(fmtTime(r.updatedAt))}">${esc(ago)}</span>
         <div class="t-acts-wrap">${acts}</div>
       </div>${shuntPickerHtml}`;
     }).join("");
   }
 
+  function renderDispKpis() {
+    const kpiEl = el("dispKpis");
+    if(!kpiEl) return;
+    const v = Object.values(trailers);
+    const omwCount = v.filter(r=>r.omwAt && r.status==="Incoming").length;
+    const kpis=[
+      {val:v.length, lbl:"Total", cls:"kpi-total"},
+      {val:v.filter(r=>r.status==="Incoming").length, lbl:"Incoming", cls:"kpi-incoming"},
+      {val:v.filter(r=>r.status==="Loading").length, lbl:"Loading", cls:"kpi-loading"},
+      {val:v.filter(r=>["Ready","Dock Ready"].includes(r.status)).length, lbl:"Ready", cls:"kpi-ready"},
+      {val:v.filter(r=>r.status==="Departed").length, lbl:"Departed", cls:"kpi-departed"},
+      {val:omwCount, lbl:"On Way", cls:"kpi-conf"},
+    ];
+    kpiEl.innerHTML=kpis.map(k=>`<div class="kpi ${k.cls}"><div class="k-val">${k.val}</div><div class="k-lbl">${k.lbl}</div></div>`).join("");
+  }
   function renderBoard() {
     renderBoardInto(el("tbody"),el("countsPill"),el("boardCountStr"),el("search"),el("filterDir"),el("filterStatus"),false);
+    renderDispKpis();
     const lu=el("lastUpdated"); if(lu) lu.textContent="Updated "+fmtTime(Date.now());
     renderDockMap();
     const occupied = getOccupiedDoors();
@@ -353,7 +379,16 @@
     </div>
     <div class="field"><label class="fl" for="d_carrierType">Carrier</label><select id="d_carrierType"><option value="">—</option><option>Wesbell</option><option>Outside</option></select></div>
     <div class="field"><label class="fl" for="d_note">Note</label><textarea id="d_note" placeholder="Optional note…"></textarea></div>
-    <button class="btn btn-primary btn-full" id="btnSaveTrailer" style="min-height:48px;">Save Trailer Record</button>`; }
+    <button class="btn btn-primary btn-full" id="btnSaveTrailer" style="min-height:48px;">Save Trailer Record</button>
+    <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--b0)">
+      <div class="panel-title" style="margin-bottom:10px"><div class="ptdot" style="background:var(--cyan)"></div>Export & Logs</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        <a href="/api/export/trailers.csv" class="btn btn-default btn-sm" download>⬇ Trailers CSV</a>
+        <a href="/api/export/audit.csv" class="btn btn-default btn-sm" download>⬇ Audit CSV</a>
+        <button class="btn btn-default btn-sm" id="btnViewLogs">🖥 Server Logs</button>
+        <a href="/health" class="btn btn-default btn-sm" target="_blank">❤ Health</a>
+      </div>
+    </div>`; }
 
   function dockPanelHtml(){ return `
     <div class="infobox infobox-cyan"><div class="ib-title">Dock Workflow</div>1. Trailer arrives → tap <strong>Loading</strong><br/>2. Loading done → tap <strong>Dock Ready</strong><br/>3. Dispatcher confirms → driver notified.</div>
@@ -413,6 +448,7 @@
           </div>
           <div class="dc-right-block">
             ${r.door?`<div class="dc-door-badge">D${esc(r.door)}</div>`:`<div class="dc-door-empty">No door</div>`}
+            ${r.doorAt&&r.door?`<div class="dc-time-on-door" title="At door since ${fmtTime(r.doorAt)}">⏱ ${timeAgo(r.doorAt)}</div>`:r.omwAt&&r.status==="Incoming"?`<div class="dc-omw-badge">🚛 OMW${r.omwEta?` ~${r.omwEta}m`:""}</div>`:""}
             <div class="dc-status-pill" style="--dot:${statusDot}">${esc(r.status)}</div>
           </div>
         </div>
@@ -1685,6 +1721,9 @@
     if(act==="openStaffLogin"){ el("btnDockStaffLogin")?.click(); return; }
     if(id==="btnLogout") return doLogout();
     if(id==="btnAudit"){ const s=el("auditCard").style.display!=="none"; el("auditCard").style.display=s?"none":""; if(!s)loadAuditInto(el("auditBody"),el("auditCount"),7); return; }
+    if(id==="btnShiftSummary"){ openShiftSummary(); return; }
+    if(id==="btnHistoryBoard"){ openHistoryBoard(); return; }
+    if(id==="btnViewLogs"){ openServerLogs(); return; }
     if(id==="btnClearFilters"||id==="btnSupClearFilters"){ ["search","filterDir","filterStatus","supSearch","supFilterDir","supFilterStatus"].forEach(i=>{if(el(i))el(i).value="";}); renderBoard(); renderSupBoard(); return; }
     if(id==="btnSaveTrailer") return dispSave();
     if(id==="btnClearAll") return dispClear();
@@ -1772,6 +1811,20 @@
       el("d_door").value=r.door||""; el("d_note").value=r.note||""; el("d_dropType").value=r.dropType||"";
       if(el("d_carrierType"))el("d_carrierType").value=r.carrierType||"";
       toast("Record loaded",`Editing trailer ${trId}`,"ok"); return;
+    }
+    
+    // Inline note editing
+    const noteEditEl = direct?.closest?.(".t-note-edit");
+    if(noteEditEl){
+      const trailer = noteEditEl.dataset.trailer;
+      const cur = noteEditEl.dataset.note || "";
+      const val = prompt(`Note for trailer ${trailer}:`, cur);
+      if(val !== null){
+        apiFetch("/api/upsert",{method:"POST",body:JSON.stringify({trailer,note:val.trim()})})
+          .then(()=>showToast("Note updated","ok"))
+          .catch(()=>showToast("Failed to update note","err"));
+      }
+      return;
     }
     if(act==="dockSet"){ const to=direct?.dataset?.to; if(trId&&to)return dockSet(trId,to); }
     if(act==="dockReportIssue"){ const door=direct?.dataset?.door||direct?.closest?.("[data-door]")?.dataset?.door||""; if(trId) return openDockIssueModal(trId,door); }
@@ -1921,6 +1974,8 @@
       else if(type==="doorblocks"){ doorBlocks=payload||{}; renderDockMap(); renderBoard(); }
       else if(type==="confirmations"){ confirmations=Array.isArray(payload)?payload:[]; if(isSuper())renderSupConf(); }
       else if(type==="ping"){/* keepalive — lastMsg already updated above */}
+      else if(type==="omw"){ showToast(`🚛 ${payload.trailer} on way → Door ${payload.door}${payload.eta?` · ETA ~${payload.eta}min`:""}`, "info", 6000); renderBoard(); }
+      else if(type==="arrive"){ showToast(`✅ ${payload.trailer} arrived at Door ${payload.door}`, "success", 6000); renderBoard(); }
       else if(type==="version"){ VERSION=payload?.version||VERSION; el("verText").textContent=VERSION||"—"; }
       else if(type==="notify"&&payload?.kind==="ready"){
         toast("🟢 Trailer Ready",`${payload.trailer} is READY${payload.door?" at door "+payload.door:""}.`,"ok",8000);
@@ -2053,6 +2108,151 @@
     initIssueCamera();
     initIssueLightbox();
     initDockIssueModal();
-    connectWs();
+  
+  /* ══════════════════════════════════════════
+     SHIFT SUMMARY MODAL
+  ══════════════════════════════════════════ */
+  async function openServerLogs() {
+    const ov = el("serverLogsOv");
+    if(!ov) return;
+    ov.classList.remove("hidden");
+    el("serverLogsBody").innerHTML = '<div style="text-align:center;padding:20px;color:var(--t2)">Loading…</div>';
+    try {
+      const res = await apiFetch("/api/logs");
+      const logs = await res.json();
+      const levelColor = { error:"var(--red)", warn:"var(--amber)", info:"var(--t2)" };
+      const fmt = ts => new Date(ts).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+      if(!logs.length){ el("serverLogsBody").innerHTML='<div style="color:var(--t3);padding:16px">No logs yet</div>'; return; }
+      el("serverLogsBody").innerHTML = logs.map(l=>`
+        <div class="log-row">
+          <span class="log-time">${fmt(l.at)}</span>
+          <span class="log-level" style="color:${levelColor[l.level]||"var(--t2)"}">${(l.level||"").toUpperCase()}</span>
+          <span class="log-ctx" style="color:var(--cyan)">${l.context||""}</span>
+          <span class="log-msg">${l.message||""}</span>
+          ${l.detail?`<span class="log-detail">${l.detail}</span>`:""}
+        </div>`).join("");
+    } catch(e) {
+      el("serverLogsBody").innerHTML = '<div style="color:var(--red);padding:16px">Failed to load logs (admin only)</div>';
+    }
+  }
+
+  async function openShiftSummary() {
+    const ov = el("shiftSummaryOv");
+    if(!ov) return;
+    ov.classList.remove("hidden");
+    el("shiftSummaryBody").innerHTML = '<div style="text-align:center;padding:30px;color:var(--t2)">Loading…</div>';
+    try {
+      const res = await apiFetch("/api/shift-summary?hours=12");
+      const data = await res.json();
+      const fmt = ts => ts ? new Date(ts).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}) : "—";
+      const statusColors = {Incoming:"var(--t2)",Dropped:"var(--amber)",Loading:"var(--amber)",
+        "Dock Ready":"var(--cyan)","Ready":"var(--green)",Departed:"var(--t3)"};
+      
+      const kpiHtml = [
+        {v:data.total, l:"Total Trailers", c:"var(--amber)"},
+        {v:data.active, l:"Still Active", c:"var(--cyan)"},
+        {v:data.departed, l:"Departed", c:"var(--t3)"},
+        {v:data.arrivals, l:"Arrivals", c:"var(--green)"},
+        {v:data.omw, l:"OMW Events", c:"var(--t2)"},
+        {v:data.issues, l:"Issues Filed", c:"var(--red)"},
+      ].map(k=>`<div class="ss-kpi"><div class="ss-kval" style="color:${k.c}">${k.v}</div><div class="ss-klbl">${k.l}</div></div>`).join("");
+
+      const byStatusHtml = Object.entries(data.byStatus||{})
+        .map(([s,n])=>`<div class="ss-stat-row"><span style="color:${statusColors[s]||"var(--t1)"}">${s}</span><span class="ss-stat-n">${n}×</span></div>`).join("") || "<div style='color:var(--t3)'>No changes</div>";
+
+      const eventsHtml = (data.recentEvents||[]).slice(0,30).map(e=>{
+        const detail = e.details?.status || e.details?.door || e.details?.eta ? 
+          ` <span style="color:var(--t3);font-size:10px">${e.details.status||e.details.door||""}</span>` : "";
+        return `<div class="ss-ev"><span class="ss-ev-time">${fmt(e.at)}</span><span class="ss-ev-actor" style="color:var(--amber)">${e.actor}</span><span class="ss-ev-action">${e.action.replace(/_/g," ")}</span><span class="ss-ev-entity" style="color:var(--cyan)">${e.entity||""}</span>${detail}</div>`;
+      }).join("") || "<div style='color:var(--t3)'>No events</div>";
+
+      el("shiftSummaryBody").innerHTML = `
+        <div class="ss-section"><div class="ss-title">Last 12 Hours — ${new Date(data.since).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})} to now</div></div>
+        <div class="ss-kpi-row">${kpiHtml}</div>
+        <div class="ss-cols">
+          <div class="ss-col">
+            <div class="ss-section-hd">Status Changes</div>
+            ${byStatusHtml}
+          </div>
+          <div class="ss-col">
+            <div class="ss-section-hd">Recent Activity</div>
+            <div class="ss-events">${eventsHtml}</div>
+          </div>
+        </div>`;
+    } catch(e) {
+      el("shiftSummaryBody").innerHTML = '<div style="color:var(--red);padding:20px">Failed to load summary</div>';
+    }
+  }
+
+  /* ══════════════════════════════════════════
+     HISTORICAL BOARD
+  ══════════════════════════════════════════ */
+  async function openHistoryBoard() {
+    const ov = el("historyBoardOv");
+    if(!ov) return;
+    ov.classList.remove("hidden");
+    el("historyBoardBody").innerHTML = '<div style="text-align:center;padding:30px;color:var(--t2)">Loading audit log…</div>';
+    try {
+      const res = await apiFetch("/api/audit?limit=200");
+      const data = await res.json();
+      const events = (data.rows||data||[]).filter(e=>
+        ["trailer_update","trailer_create","trailer_status_set","upsert"].includes(e.action)
+      );
+      const fmt = ts => new Date(ts).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
+      const statusColors = {Incoming:"var(--t2)",Dropped:"var(--amber)",Loading:"var(--amber)",
+        "Dock Ready":"var(--cyan)","Ready":"var(--green)",Departed:"var(--t3)"};
+
+      if(!events.length){
+        el("historyBoardBody").innerHTML = '<div style="color:var(--t3);padding:20px">No trailer history found</div>';
+        return;
+      }
+      el("historyBoardBody").innerHTML = `
+        <div class="hist-hd"><span>Time</span><span>Actor</span><span>Trailer</span><span>Change</span></div>
+        ${events.map(e=>{
+          let det = {}; try{ det=JSON.parse(e.details||"{}"); }catch{}
+          const status = det.status||det.after?.status||"";
+          const door = det.door||det.after?.door||"";
+          const change = [status&&`<span style="color:${statusColors[status]||"var(--t1)"}">${status}</span>`,door&&`Door ${door}`].filter(Boolean).join(" · ")||e.action.replace(/_/g," ");
+          return `<div class="hist-row">
+            <span class="hist-time">${fmt(e.at)}</span>
+            <span class="hist-actor" style="color:var(--amber)">${e.actorRole||"—"}</span>
+            <span class="hist-trailer" style="color:var(--cyan);font-family:var(--mono)">${e.entityId||"—"}</span>
+            <span class="hist-change">${change}</span>
+          </div>`;
+        }).join("")}`;
+    } catch(e) {
+      el("historyBoardBody").innerHTML = '<div style="color:var(--red);padding:20px">Failed to load history</div>';
+    }
+  }
+
+  /* ══════════════════════════════════════════
+     QUICK DROP MODE (DRIVER)
+  ══════════════════════════════════════════ */
+  function initQuickDrop() {
+    const input = el("quickDropTrailer");
+    if(!input) return;
+    let debounce;
+    input.addEventListener("input", ()=>{
+      clearTimeout(debounce);
+      const val = input.value.trim().toUpperCase();
+      if(val.length < 3) return;
+      debounce = setTimeout(async ()=>{
+        try {
+          const r = await apiFetch("/api/upsert",{method:"POST",body:JSON.stringify({
+            trailer:val, direction:"Inbound", status:"Dropped", dropType:"Loaded", carrierType:"Outside"
+          })});
+          if(r.ok){
+            showToast(`✅ Trailer ${val} dropped!`,"success",5000);
+            input.value="";
+            input.classList.add("quick-drop-success");
+            setTimeout(()=>input.classList.remove("quick-drop-success"),1500);
+          }
+        } catch(e){ showToast("Quick drop failed","err"); }
+      }, 800);
+    });
+  }
+
+  connectWs();
+  initQuickDrop();
   });
 })();

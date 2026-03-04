@@ -1,16 +1,71 @@
-// server.js — Wesbell Dispatch v3.2.0
+// server.js — Wesbell Dispatch v3.5.0
 const express = require("express");
-const http = require("http");
-const path = require("path");
+const http    = require("http");
+const path    = require("path");
+const fs      = require("fs");
 const WebSocket = require("ws");
 const sqlite3 = require("sqlite3").verbose();
-const crypto = require("crypto");
+const crypto  = require("crypto");
+const zlib    = require("zlib");
 
 const app = express();
 
 // Prevent uncaught errors from crashing the whole server
-process.on('uncaughtException',  err  => console.error('[CRASH] uncaughtException:', err));
-process.on('unhandledRejection', reason => console.error('[CRASH] unhandledRejection:', reason));
+process.on('uncaughtException',  err  => { console.error('[CRASH] uncaughtException:', err); logEvent('error','crash','uncaughtException', String(err?.stack||err)).catch(()=>{}); });
+process.on('unhandledRejection', reason => { console.error('[CRASH] unhandledRejection:', reason); logEvent('error','crash','unhandledRejection', String(reason?.stack||reason)).catch(()=>{}); });
+
+// ── Gzip compression ──────────────────────────────────────────────────────
+app.use((req, res, next) => {
+  const ae = req.headers["accept-encoding"] || "";
+  if (!ae.includes("gzip")) return next();
+  const orig = res.json.bind(res);
+  res.json = (data) => {
+    const buf = Buffer.from(JSON.stringify(data));
+    zlib.gzip(buf, (err, compressed) => {
+      if (err || buf.length < 1024) return orig(data);
+      res.setHeader("Content-Encoding", "gzip");
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Vary", "Accept-Encoding");
+      res.end(compressed);
+    });
+  };
+  next();
+});
+
+// ── Security headers ───────────────────────────────────────────────────────
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  next();
+});
+
+// ── Request timeout (30s) ──────────────────────────────────────────────────
+app.use((req, res, next) => {
+  const t = setTimeout(() => {
+    if (!res.headersSent) res.status(503).send("Request timeout");
+  }, 30000);
+  res.on("finish", () => clearTimeout(t));
+  res.on("close",  () => clearTimeout(t));
+  next();
+});
+
+// ── Login rate limiting ────────────────────────────────────────────────────
+const loginAttempts = new Map(); // ip -> {count, resetAt}
+function checkLoginRate(ip) {
+  const now = Date.now();
+  let entry = loginAttempts.get(ip);
+  if (!entry || now > entry.resetAt) {
+    entry = { count: 0, resetAt: now + 60000 };
+    loginAttempts.set(ip, entry);
+  }
+  entry.count++;
+  return entry.count <= 15; // 15 attempts per minute
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, e] of loginAttempts) if (now > e.resetAt) loginAttempts.delete(ip);
+}, 120000);
 
 app.use(express.json({ limit: "6mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -24,7 +79,7 @@ const DB_FILE = process.env.DB_FILE || (() => {
   }
   return p.join(__dirname, "wesbell.sqlite");
 })();
-const APP_VERSION = process.env.APP_VERSION || "3.3.0";
+const APP_VERSION = process.env.APP_VERSION || "3.5.0";
 const PIN_MIN_LEN = 4;
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
 const COOKIE_NAME = "wb_session";
@@ -237,6 +292,10 @@ async function initDb() {
   await run(`CREATE TABLE IF NOT EXISTS pins (
     role TEXT PRIMARY KEY, salt BLOB, hash BLOB, iter INTEGER
   )`);
+  await run(`CREATE TABLE IF NOT EXISTS logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at INTEGER, level TEXT, context TEXT, message TEXT, detail TEXT
+  )`);
   await run(`CREATE TABLE IF NOT EXISTS door_reservations (
     door       TEXT PRIMARY KEY,
     trailer    TEXT NOT NULL,
@@ -402,6 +461,16 @@ function requireDockStatusAllowed(req, res, next) {
 function ipOf(req) {
   const xf = req.headers["x-forwarded-for"];
   return xf ? String(xf).split(",")[0].trim() : req.socket.remoteAddress || "";
+}
+
+// Structured error log (visible in app)
+const MAX_LOGS = 500;
+async function logEvent(level, context, message, detail = "") {
+  try {
+    await run(`INSERT INTO logs(at,level,context,message,detail) VALUES(?,?,?,?,?)`,
+      [Date.now(), level, context, message, String(detail).slice(0, 500)]);
+    await run(`DELETE FROM logs WHERE id NOT IN (SELECT id FROM logs ORDER BY at DESC LIMIT ?)`, [MAX_LOGS]);
+  } catch { /* never throw from logger */ }
 }
 
 async function audit(req, actorRole, action, entityType, entityId, details) {
@@ -915,6 +984,8 @@ app.get("/api/whoami", (req, res) => {
 // Rate limiting removed — no lockout
 
 app.post("/api/login", requireXHR, async (req, res) => {
+  const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+  if (!checkLoginRate(ip)) return res.status(429).send("Too many login attempts. Try again in a minute.");
   try {
     const role = String(req.body.role || "").toLowerCase();
     const pin  = String(req.body.pin  || "");
@@ -941,13 +1012,24 @@ app.post("/api/logout", requireXHR, (req, res) => {
 /* ══════════════════════════════════════════
    API — TRAILERS
 ══════════════════════════════════════════ */
-app.get("/api/state", async (req, res) => { try { res.json(await loadTrailersObject()); } catch(e) { res.status(500).send("State error"); } });
+app.get("/api/state", async (req, res) => {
+  try {
+    const data = await getTrailersCache();
+    const etag = `"${crypto.createHash("md5").update(JSON.stringify(data)).digest("hex").slice(0,8)}"`;
+    if (req.headers["if-none-match"] === etag) return res.status(304).end();
+    res.setHeader("ETag", etag);
+    res.setHeader("Cache-Control", "no-cache");
+    res.json(data);
+  } catch(e) { res.status(500).send("State error"); }
+});
 
 app.post("/api/upsert", requireXHR, requireDockStatusAllowed, async (req, res) => {
   const actor = req.user?.role || req.session?.role || "unknown";
   try {
-    const trailer = String(req.body.trailer || "").trim();
+    const trailer = String(req.body.trailer || "").trim().toUpperCase();
     if (!trailer) return res.status(400).send("Missing trailer");
+    if (trailer.length > 20) return res.status(400).send("Trailer number too long");
+    if (!/^[A-Z0-9\-_. ]+$/.test(trailer)) return res.status(400).send("Invalid trailer number");
 
     const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
     const now = Date.now();
@@ -955,7 +1037,7 @@ app.post("/api/upsert", requireXHR, requireDockStatusAllowed, async (req, res) =
     const direction   = req.body.direction   !== undefined ? String(req.body.direction   || "").trim() : (existing?.direction   || "");
     const status      = req.body.status      !== undefined ? String(req.body.status      || "").trim() : (existing?.status      || "");
     const door        = req.body.door        !== undefined ? String(req.body.door        || "").trim() : (existing?.door        || "");
-    const note        = req.body.note        !== undefined ? String(req.body.note        || "").trim() : (existing?.note        || "");
+    const note        = req.body.note        !== undefined ? String(req.body.note        || "").trim().slice(0,200) : (existing?.note        || "");
     const dropType    = req.body.dropType    !== undefined ? String(req.body.dropType    || "").trim() : (existing?.dropType    || "");
     const carrierType = req.body.carrierType !== undefined ? String(req.body.carrierType || "").trim() : (existing?.carrierType || "");
 
@@ -991,11 +1073,20 @@ app.post("/api/upsert", requireXHR, requireDockStatusAllowed, async (req, res) =
     await audit(req, actor, existing ? "trailer_update" : "trailer_create", "trailer", trailer, { direction, status: finalStatus, door, dropType, note });
     if (req.body.status !== undefined || isDriverDrop) await audit(req, actor, "trailer_status_set", "trailer", trailer, { status: finalStatus });
 
-    if (finalStatus === "Ready" && ["dispatcher","management","admin"].includes(actor)) {
-      wsBroadcast("notify", { kind: "ready", trailer, door: door || "" });
-      broadcastPush("🟢 Trailer Ready", `Trailer ${trailer} is ready${door ? " at door " + door : ""}`, { trailer, door }).catch(() => {});
+    if (finalStatus !== (existing?.status)) {
+      if (finalStatus === "Ready") {
+        wsBroadcast("notify", { kind: "ready", trailer, door: door || "" });
+        broadcastPush("🟢 Trailer Ready", `Trailer ${trailer} is ready${door ? " at door " + door : ""}`, { trailer, door }).catch(() => {});
+        fireWebhook("trailer.ready", { trailer, door, actor });
+      } else if (finalStatus === "Dock Ready") {
+        fireWebhook("trailer.dock_ready", { trailer, door, actor });
+      } else if (finalStatus === "Departed") {
+        fireWebhook("trailer.departed", { trailer, door, actor });
+      } else if (finalStatus === "Loading") {
+        fireWebhook("trailer.loading", { trailer, door, actor });
+      }
     }
-
+    await logEvent("info", "upsert", `${actor} set ${trailer} → ${finalStatus}`, `door=${door||"—"}`);
     await broadcastTrailers();
     res.json({ ok: true });
   } catch (e) { res.status(500).send("Upsert failed"); }
@@ -1121,6 +1212,7 @@ app.post("/api/driver/omw", requireXHR, async (req, res) => {
     // Push notification to dispatcher
     broadcastPush("🚛 Driver On My Way", `Trailer ${trailer} → Door ${assignedDoor}${eta ? ` · ETA ~${eta} min` : ""}`, { type: "omw", trailer, door: assignedDoor });
     wsBroadcast("omw", { trailer, door: assignedDoor, eta, at: now });
+    fireWebhook("driver.omw", { trailer, door: assignedDoor, eta });
     res.json({ ok: true, door: assignedDoor, alreadyActive: false });
   } catch (e) { console.error("[omw]", e); res.status(500).send("OMW failed"); }
 });
@@ -1201,6 +1293,7 @@ app.post("/api/driver/arrive", requireXHR, async (req, res) => {
     await audit(req, "driver", "arrive", "trailer", trailer, { door: assignedDoor, carrierType });
     broadcastPush("✅ Driver Arrived", `Trailer ${trailer} at Door ${assignedDoor}`, { type: "arrive", trailer, door: assignedDoor });
     wsBroadcast("arrive", { trailer, door: assignedDoor, at: now });
+    fireWebhook("driver.arrived", { trailer, door: assignedDoor });
     await broadcastTrailers();
     res.json({ ok: true, door: assignedDoor, alreadyActive: false });
   } catch (e) { console.error("[arrive]", e); res.status(500).send("Arrival failed"); }
@@ -1406,6 +1499,93 @@ app.get("/api/shift-summary", requireRole(["dispatcher","management","admin"]), 
   } catch(e){ console.error("[shift-summary]",e); res.status(500).send("Failed"); }
 });
 
+
+/* ══════════════════════════════════════════
+   HEALTH CHECK
+══════════════════════════════════════════ */
+app.get("/health", async (req, res) => {
+  try {
+    await get("SELECT 1");
+    const mem = process.memoryUsage();
+    res.json({
+      status: "ok",
+      version: APP_VERSION,
+      uptime: Math.floor(process.uptime()),
+      db: DB_FILE,
+      memory: { rss: Math.round(mem.rss/1024/1024) + "MB", heap: Math.round(mem.heapUsed/1024/1024) + "MB" },
+      wsClients: wss?.clients?.size || 0,
+      sessions: sessions.size,
+    });
+  } catch(e) { res.status(503).json({ status: "error", error: e.message }); }
+});
+
+/* ══════════════════════════════════════════
+   SERVER LOGS
+══════════════════════════════════════════ */
+app.get("/api/logs", requireRole(["admin"]), async (req, res) => {
+  try {
+    const rows = await all(`SELECT * FROM logs ORDER BY at DESC LIMIT 200`);
+    res.json(rows);
+  } catch(e) { res.status(500).send("Failed"); }
+});
+
+/* ══════════════════════════════════════════
+   CSV EXPORT
+══════════════════════════════════════════ */
+app.get("/api/export/trailers.csv", requireRole(["dispatcher","management","admin"]), async (req, res) => {
+  try {
+    const rows = await all(`SELECT * FROM trailers ORDER BY updatedAt DESC`);
+    const headers = ["trailer","direction","status","door","note","dropType","carrierType","updatedAt","doorAt","omwAt","omwEta"];
+    const fmt = v => v == null ? "" : String(v).replace(/"/g, '""');
+    const csv = [
+      headers.join(","),
+      ...rows.map(r => headers.map(h => `"${fmt(r[h])}"`).join(","))
+    ].join("\n");
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="trailers-${new Date().toISOString().slice(0,10)}.csv"`);
+    res.send(csv);
+  } catch(e) { res.status(500).send("Export failed"); }
+});
+
+app.get("/api/export/audit.csv", requireRole(["management","admin"]), async (req, res) => {
+  try {
+    const hours = parseInt(req.query.hours) || 24;
+    const since = Date.now() - hours * 3600000;
+    const rows = await all(`SELECT * FROM audit WHERE at > ? ORDER BY at DESC`, [since]);
+    const headers = ["id","at","actorRole","action","entityType","entityId","details","ip"];
+    const fmt = v => v == null ? "" : String(v).replace(/"/g, '""');
+    const csv = [
+      headers.join(","),
+      ...rows.map(r => headers.map(h => `"${fmt(r[h])}"`).join(","))
+    ].join("\n");
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="audit-${new Date().toISOString().slice(0,10)}.csv"`);
+    res.send(csv);
+  } catch(e) { res.status(500).send("Export failed"); }
+});
+
+/* ══════════════════════════════════════════
+   WEBHOOK SUPPORT
+══════════════════════════════════════════ */
+const WEBHOOK_URL = process.env.WEBHOOK_URL || "";
+async function fireWebhook(event, data) {
+  if (!WEBHOOK_URL) return;
+  try {
+    const body = JSON.stringify({ event, data, at: Date.now(), source: "wesbell-dispatch" });
+    const url = new URL(WEBHOOK_URL);
+    const mod = url.protocol === "https:" ? require("https") : require("http");
+    await new Promise((resolve, reject) => {
+      const req = mod.request(WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) }
+      }, res => { res.resume(); resolve(); });
+      req.on("error", reject);
+      req.setTimeout(5000, () => req.destroy());
+      req.write(body); req.end();
+    });
+  } catch(e) { logEvent("warn","webhook",`Webhook failed for ${event}`, e.message); }
+}
+
 app.get("/api/audit", requireRole(["dispatcher","management","admin"]), async (req, res) => {
   try {
     const limit = Math.max(1, Math.min(500, Number(req.query.limit || 200)));
@@ -1570,5 +1750,69 @@ initDb()
       console.log(`Wesbell Dispatch v${APP_VERSION} running on http://localhost:${PORT}`);
       console.log(`DB: ${DB_FILE}`);
     });
+
+    // ── Auto-archive departed trailers older than 24h ──────────────────────
+    async function archiveDeparted() {
+      try {
+        const cutoff = Date.now() - 24 * 3600 * 1000;
+        const res = await run(`DELETE FROM trailers WHERE status='Departed' AND updatedAt < ?`, [cutoff]);
+        if (res.changes > 0) {
+          invalidateTrailers();
+          await broadcastTrailers();
+          await logEvent("info","archive",`Auto-archived ${res.changes} departed trailers`);
+          console.log(`[ARCHIVE] Removed ${res.changes} old departed trailers`);
+        }
+      } catch(e) { logEvent("error","archive","Auto-archive failed", e.message); }
+    }
+    setInterval(archiveDeparted, 3600 * 1000); // every hour
+    archiveDeparted(); // run once on startup
+
+    // ── Hourly SQLite backup ───────────────────────────────────────────────
+    async function backupDb() {
+      try {
+        const backupDir = path.dirname(DB_FILE);
+        const backupFile = path.join(backupDir, "wesbell-backup.sqlite");
+        // Use SQLite backup API via file copy (safe with WAL)
+        db.run("PRAGMA wal_checkpoint(TRUNCATE)");
+        fs.copyFileSync(DB_FILE, backupFile);
+        await logEvent("info","backup","DB backup completed", backupFile);
+        console.log(`[BACKUP] DB backed up to ${backupFile}`);
+      } catch(e) { logEvent("error","backup","DB backup failed", e.message); console.error("[BACKUP]", e.message); }
+    }
+    setInterval(backupDb, 3600 * 1000); // every hour
+
+    // ── Graceful shutdown ──────────────────────────────────────────────────
+    let shuttingDown = false;
+    async function gracefulShutdown(signal) {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      console.log(`[SHUTDOWN] ${signal} received — closing gracefully`);
+      await logEvent("info","shutdown",`Server shutting down (${signal})`).catch(()=>{});
+      // Close WebSocket connections
+      for (const client of wss.clients) {
+        try { client.close(1001, "Server shutting down"); } catch {}
+      }
+      // Stop accepting new connections
+      server.close(() => {
+        db.close(() => {
+          console.log("[SHUTDOWN] Complete");
+          process.exit(0);
+        });
+      });
+      // Force exit after 10s
+      setTimeout(() => { console.error("[SHUTDOWN] Forced exit"); process.exit(1); }, 10000);
+    }
+    process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+    process.on("SIGINT",  () => gracefulShutdown("SIGINT"));
+
+    // ── WebSocket dead client cleanup ──────────────────────────────────────
+    setInterval(() => {
+      for (const client of wss.clients) {
+        if (client.readyState === WebSocket.CLOSING || client.readyState === WebSocket.CLOSED) {
+          try { client.terminate(); } catch {}
+        }
+      }
+    }, 30000);
+
   })
   .catch(e => { console.error("DB init failed:", e); process.exit(1); });

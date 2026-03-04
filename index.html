@@ -67,7 +67,7 @@ body{background-image:none!important;background:transparent!important}
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="/style.css?v=3.4.0"/>
+  <link rel="stylesheet" href="/style.css?v=3.5.0"/>
 </head>
 <body>
 <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -203,10 +203,21 @@ body{background-image:none!important;background:transparent!important}
       </div>
 
       <!-- ── SCREEN: WHO ARE YOU ── -->
+      <!-- Quick Drop Mode -->
+      <div id="quickDropPanel" class="quick-drop-panel" style="display:none;">
+        <div class="qdp-label">⚡ Quick Drop</div>
+        <input id="quickDropTrailer" class="quick-drop-input" type="text" inputmode="numeric" placeholder="Trailer #" maxlength="10" autocomplete="off" autocorrect="off" spellcheck="false"/>
+        <div class="qdp-hint">Type trailer number — auto-submits as Dropped · Inbound · Loaded</div>
+        <button class="btn btn-default btn-sm" onclick="document.getElementById('quickDropPanel').style.display='none';document.getElementById('who-screen').style.display='';" style="margin-top:10px;">← Back to normal</button>
+      </div>
+
       <div id="who-screen">
         <div class="driver-panel active-step">
           <div class="driver-phd">
-            <span class="driver-phd-title">Select your carrier</span>
+            <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+              <span class="driver-phd-title">Select your carrier</span>
+              <button class="btn btn-default btn-sm" onclick="document.getElementById('quickDropPanel').style.display='';document.getElementById('who-screen').style.display='none';" style="font-size:10px;">⚡ Quick Drop</button>
+            </div>
           </div>
           <div class="driver-pbody">
             <div class="who-grid">
@@ -752,6 +763,15 @@ body{background-image:none!important;background:transparent!important}
       <!-- LEFT COLUMN: board + map + audit -->
       <div class="col-stack">
 
+        <!-- Dispatcher KPI Row -->
+        <div class="disp-kpi-bar">
+          <div id="dispKpis" class="kpi-row"></div>
+          <div class="disp-actions">
+            <button class="btn btn-default btn-sm" id="btnShiftSummary">📊 Shift Summary</button>
+            <button class="btn btn-default btn-sm" id="btnHistoryBoard">🕐 History</button>
+          </div>
+        </div>
+
         <div class="panel">
           <div class="panel-hd">
             <div class="panel-title"><div class="ptdot" style="background:var(--amber)"></div>Trailer Board</div>
@@ -886,7 +906,7 @@ body{background-image:none!important;background:transparent!important}
 </div>
 
 </main>
-<script src="/app.js?v=3.4.0"></script>
+<script src="/app.js?v=3.5.0"></script>
 <!-- SW registered by app.js initPush() -->
 <!-- STAFF SIGN-IN MODAL (dock/driver pages) -->
 <div class="modal-ov hidden" id="staffLoginOv">
@@ -955,6 +975,40 @@ body{background-image:none!important;background:transparent!important}
 <div class="issue-lightbox" id="issueLightbox">
   <button class="issue-lightbox-close" id="issueLightboxClose" aria-label="Close photo">✕</button>
   <img id="issueLightboxImg" src="" alt="Issue photo"/>
+</div>
+
+
+<!-- Server Logs Modal -->
+<div class="modal-ov hidden" id="serverLogsOv">
+  <div class="modal ss-modal">
+    <div class="m-hd">
+      <span class="m-title">🖥 Server Logs</span>
+      <button class="m-close" onclick="document.getElementById('serverLogsOv').classList.add('hidden')">✕</button>
+    </div>
+    <div class="m-body" id="serverLogsBody" style="padding:0;overflow-y:auto;max-height:70vh;"></div>
+  </div>
+</div>
+
+<!-- Shift Summary Modal -->
+<div class="modal-ov hidden" id="shiftSummaryOv">
+  <div class="modal ss-modal">
+    <div class="m-hd">
+      <span class="m-title">📊 Shift Summary</span>
+      <button class="m-close" onclick="document.getElementById('shiftSummaryOv').classList.add('hidden')">✕</button>
+    </div>
+    <div class="m-body ss-body" id="shiftSummaryBody"></div>
+  </div>
+</div>
+
+<!-- History Board Modal -->
+<div class="modal-ov hidden" id="historyBoardOv">
+  <div class="modal ss-modal">
+    <div class="m-hd">
+      <span class="m-title">🕐 Trailer History</span>
+      <button class="m-close" onclick="document.getElementById('historyBoardOv').classList.add('hidden')">✕</button>
+    </div>
+    <div class="m-body" id="historyBoardBody" style="padding:0;overflow-y:auto;max-height:70vh;"></div>
+  </div>
 </div>
 
 </body>

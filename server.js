@@ -540,7 +540,14 @@ function wsBroadcast(type, payload) {
     try { client.send(msg); } catch {}
   }
 }
-
+async function broadcastTrailers() {
+  try {
+    invalidateTrailers();
+    wsBroadcast("state", await getTrailersCache());
+  } catch (e) {
+    console.error("[WS] broadcastTrailers:", e?.message || e);
+  }
+}
 // ----- Role detection from session cookie or WS path -----
 function wsRoleFromReq(req) {
   // 1) Try session cookie (same as HTTP)

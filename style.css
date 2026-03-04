@@ -1286,8 +1286,8 @@ html { scroll-behavior: smooth; }
 * { -webkit-tap-highlight-color: transparent; }
 
 /* ── Fluid page/view transitions ── */
-#driverView, #dockView, #dispatchView, #managementView {
-  animation: fluentFadeSlide .28s cubic-bezier(.22,1,.36,1) both;
+#driverView.view-fade, #dockView.view-fade, #dispatchView.view-fade, #managementView.view-fade {
+  animation: fluentFadeSlide .28s cubic-bezier(.22,1,.36,1) forwards;
 }
 @keyframes fluentFadeSlide {
   from { opacity:0; transform:translateY(10px); }

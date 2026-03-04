@@ -270,7 +270,12 @@
               <button class="flow-btn" id="flowBtnOmw" data-flow="omw" style="display:none;">
                 <span class="flow-icon">🚛</span>
                 <span class="flow-label">On My Way</span>
-                <span class="flow-desc">Let dispatch know you're coming — get a door</span>
+                <span class="flow-desc">Let dispatch know you're coming — get a door now</span>
+              </button>
+              <button class="flow-btn" id="flowBtnArrive" data-flow="arrive">
+                <span class="flow-icon">📍</span>
+                <span class="flow-label">I've Arrived</span>
+                <span class="flow-desc">Check in on arrival — get your door assignment</span>
               </button>
             </div>
           </div>
@@ -312,6 +317,50 @@
               <div class="ac-meta" id="omwEtaDisplay" style="font-size:11px;color:var(--t2);"></div>
             </div>
             <button class="btn btn-default" id="btnOmwDone">Done</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SCREEN: ARRIVE (QR scan / walk-in) ── -->
+      <div id="arrive-screen" style="display:none;">
+        <div class="driver-panel active-step">
+          <div class="driver-phd">
+            <span class="driver-phd-title"><span style="color:var(--green);">📍</span> Arrival Check-In</span>
+            <button class="btn btn-default btn-sm" id="btnBackToFlow6">← Back</button>
+          </div>
+          <div class="driver-pbody">
+            <div class="field">
+              <label class="fl" for="arr_trailer">Trailer Number</label>
+              <input id="arr_trailer" class="trailer-hero-input" placeholder="e.g. 4821"
+                autocomplete="off" autocorrect="off" autocapitalize="characters"
+                spellcheck="false" inputmode="numeric"/>
+            </div>
+            <div class="field">
+              <label class="fl" for="arr_droptype">Drop Type</label>
+              <select id="arr_droptype">
+                <option value="Loaded">Loaded</option>
+                <option value="Empty">Empty</option>
+              </select>
+            </div>
+            <div id="arr_err" style="display:none;padding:8px 10px;border-radius:6px;background:var(--red-bg);border:1px solid var(--red-bd);color:var(--red);font-size:12px;margin-bottom:10px;"></div>
+            <button class="btn btn-success driver-submit" id="btnArriveSubmit" disabled>📍 Get My Door</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SCREEN: ARRIVE CONFIRMED ── -->
+      <div id="arrive-confirm-screen" style="display:none;">
+        <div class="driver-panel active-step" style="text-align:center;">
+          <div class="driver-pbody" style="padding:28px 16px 24px;">
+            <div style="font-size:48px;margin-bottom:10px;">✅</div>
+            <div style="font-size:22px;font-weight:700;color:var(--t0);margin-bottom:6px;" id="arrConfirmTitle">Door assigned!</div>
+            <div style="font-size:14px;color:var(--t1);margin-bottom:20px;" id="arrConfirmSub">Proceed to your door.</div>
+            <div class="assignment-card" style="margin-bottom:20px;">
+              <div class="ac-label">YOUR DOOR</div>
+              <div class="ac-door" id="arrDoorNum">—</div>
+              <div class="ac-meta" style="font-size:11px;color:var(--t2);">Door held for 30 min until you drop</div>
+            </div>
+            <button class="btn btn-default" id="btnArrDone">Done</button>
           </div>
         </div>
       </div>

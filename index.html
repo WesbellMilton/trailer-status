@@ -67,7 +67,7 @@ body{background-image:none!important;background:transparent!important}
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="/style.css?v=3.5.0"/>
+  <link rel="stylesheet" href="/style.css?v=3.6.0"/>
 </head>
 <body>
 <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -714,24 +714,39 @@ body{background-image:none!important;background:transparent!important}
 <div id="dockView" style="display:none;">
   <div class="dock-shell">
 
+    <!-- Dock Top Bar -->
     <div class="dock-toolbar">
       <div class="dock-toolbar-left">
         <div class="live-dot" id="dockWsDot"></div>
         <span id="dockWsText">Connecting…</span>
       </div>
       <div class="dock-filter-wrap">
-        <button class="dock-filter-btn active" data-dock-filter="active" aria-pressed="true">Active trailers</button>
-        <button class="dock-filter-btn" data-dock-filter="all" aria-pressed="false">All trailers</button>
+        <button class="dock-filter-btn active" data-dock-filter="active" aria-pressed="true">Active</button>
+        <button class="dock-filter-btn" data-dock-filter="all" aria-pressed="false">All</button>
       </div>
       <div class="dock-toolbar-right">
         <span class="badge badge-num" id="dockCount">0</span>
-        <span style="font-family:var(--mono);font-size:10px;color:var(--t2);">trailers</span>
+        <button class="tb-btn" id="btnDockViewToggle" data-view="cards" title="Toggle map view">🗺 Map</button>
+        <button class="tb-btn" id="btnDockBulk" title="Bulk select">☑ Bulk</button>
+        <button class="tb-btn" id="btnDimMode" title="Toggle dim mode">🌙 Dim</button>
         <button class="tb-btn" id="btnDockStaffLogin" style="font-size:10px;padding:4px 9px;" title="Staff sign in">🔑 Staff</button>
       </div>
     </div>
 
+    <!-- Scan / Search Bar -->
     <div class="dock-search-bar">
-      <input id="dockSearch" placeholder="Search trailer or door…" autocomplete="off" aria-label="Search dock trailers" inputmode="search"/>
+      <div class="dock-scan-wrap">
+        <input id="dockScanInput" class="dock-scan-input" placeholder="⚡ Scan or type trailer # — auto-advances status" autocomplete="off" inputmode="text" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go"/>
+        <button class="tb-btn" id="btnVoiceDock" title="Voice input">🎙</button>
+      </div>
+      <input id="dockSearch" placeholder="🔍 Filter cards…" autocomplete="off" aria-label="Search dock trailers" inputmode="search"/>
+    </div>
+
+    <!-- Bulk Actions Bar (shown when bulk mode active) -->
+    <div class="dock-bulk-bar" id="dockBulkBar">
+      <span id="dockBulkCount" style="font-family:var(--mono);font-size:11px;color:var(--t2)">0 selected</span>
+      <button class="btn btn-sm" style="border-color:var(--amber-bd);color:var(--amber);background:rgba(245,166,35,.1);" id="btnBulkLoading">→ Loading</button>
+      <button class="btn btn-sm" style="border-color:rgba(24,212,232,.4);color:var(--cyan);background:rgba(24,212,232,.08);" id="btnBulkDockReady">→ Dock Ready</button>
     </div>
 
     <div id="dockLoginNudge" class="infobox infobox-amber" style="margin:10px 14px 0;display:none;"><div class="ib-title">Not signed in</div>Sign in as <a href="/login">Dock</a> to update trailer statuses.</div>
@@ -906,7 +921,7 @@ body{background-image:none!important;background:transparent!important}
 </div>
 
 </main>
-<script src="/app.js?v=3.5.0"></script>
+<script src="/app.js?v=3.6.0"></script>
 <!-- SW registered by app.js initPush() -->
 <!-- STAFF SIGN-IN MODAL (dock/driver pages) -->
 <div class="modal-ov hidden" id="staffLoginOv">
@@ -977,6 +992,54 @@ body{background-image:none!important;background:transparent!important}
   <img id="issueLightboxImg" src="" alt="Issue photo"/>
 </div>
 
+
+<!-- Quick Issue Modal -->
+<div class="modal-ov hidden" id="quickIssueOv">
+  <div class="modal qi-modal">
+    <div class="m-hd">
+      <div>
+        <span class="m-title">⚠ Report Issue</span>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--t2);margin-top:2px">
+          <span id="qi_trailer" style="color:var(--amber)"></span> · <span id="qi_door"></span>
+        </div>
+      </div>
+      <button class="m-close" onclick="document.getElementById('quickIssueOv').classList.add('hidden')">✕</button>
+    </div>
+    <div class="m-body" style="padding:16px;">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--t3);margin-bottom:10px;letter-spacing:.06em;">SELECT REASON(S)</div>
+      <div class="qi-reasons">
+        <button class="qi-reason-btn" data-reason="Damage">🔨 Damage</button>
+        <button class="qi-reason-btn" data-reason="Wrong trailer">❌ Wrong trailer</button>
+        <button class="qi-reason-btn" data-reason="Blocked door">🚧 Blocked door</button>
+        <button class="qi-reason-btn" data-reason="Load not ready">📦 Load not ready</button>
+        <button class="qi-reason-btn" data-reason="Seal broken">🔓 Seal broken</button>
+        <button class="qi-reason-btn" data-reason="Safety hazard">⚠ Safety hazard</button>
+        <button class="qi-reason-btn" data-reason="No paperwork">📋 No paperwork</button>
+        <button class="qi-reason-btn" data-reason="Mechanical issue">🔧 Mechanical</button>
+      </div>
+      <textarea id="qi_note" placeholder="Additional notes (optional)…" style="width:100%;margin-top:12px;padding:10px;background:var(--s2);border:1px solid var(--b1);border-radius:var(--r);color:var(--t0);font-size:13px;min-height:70px;resize:vertical;box-sizing:border-box;"></textarea>
+      <button class="btn btn-danger btn-full" id="btnQuickIssueSubmit" style="margin-top:12px;min-height:52px;font-size:15px;">Submit Issue Report</button>
+    </div>
+  </div>
+</div>
+
+<!-- Dock Reserve Door Modal -->
+<div class="modal-ov hidden" id="dockReserveOv">
+  <div class="modal qi-modal">
+    <div class="m-hd">
+      <div>
+        <span class="m-title">🚪 Reserve Door</span>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--t2);margin-top:2px">for trailer <span id="dr_trailer" style="color:var(--amber)"></span></div>
+      </div>
+      <button class="m-close" onclick="document.getElementById('dockReserveOv').classList.add('hidden')">✕</button>
+    </div>
+    <div class="m-body" style="padding:16px;">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--t3);margin-bottom:10px;letter-spacing:.06em;">SELECT DOOR</div>
+      <div class="dr-door-grid" id="dr_door_grid"></div>
+      <button class="btn btn-primary btn-full" id="btnDockReserveSubmit" style="margin-top:14px;min-height:52px;font-size:15px;">Reserve Door</button>
+    </div>
+  </div>
+</div>
 
 <!-- Server Logs Modal -->
 <div class="modal-ov hidden" id="serverLogsOv">

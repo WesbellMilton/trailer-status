@@ -2053,3 +2053,204 @@ input, select, textarea {
 .log-ctx{font-size:10px}
 .log-msg{color:var(--t1);font-family:var(--sans);word-break:break-word}
 .log-detail{grid-column:2/-1;font-size:10px;color:var(--t3);word-break:break-all;padding-top:2px}
+
+/* ══════════════════════════════════════════
+   DOCK MODE — COMPREHENSIVE UPGRADE v3.5
+══════════════════════════════════════════ */
+
+/* ── Dim Mode ──────────────────────────────────────────────────────────── */
+body.dim-mode { filter: brightness(0.55) contrast(1.1); }
+body.dim-mode .dock-toolbar,
+body.dim-mode .dock-search-bar { filter: brightness(1.4); }
+
+/* ── Scan Input ────────────────────────────────────────────────────────── */
+.dock-scan-wrap { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+.dock-scan-input {
+  flex:1; padding:13px 16px; border-radius:var(--r); border:2px solid var(--amber-bd);
+  background:rgba(245,166,35,.06); color:var(--t0); font-family:var(--mono);
+  font-size:15px; letter-spacing:.04em; transition:border-color .2s, box-shadow .2s;
+}
+.dock-scan-input:focus {
+  outline:none; border-color:var(--amber);
+  box-shadow:0 0 0 3px rgba(245,166,35,.18);
+}
+.dock-scan-input.scan-flash {
+  border-color:var(--green); background:rgba(25,224,154,.1);
+  box-shadow:0 0 0 3px rgba(25,224,154,.2);
+  transition:all .1s;
+}
+.dock-scan-input::placeholder { color:var(--t3); font-size:13px; }
+
+/* ── Voice button ──────────────────────────────────────────────────────── */
+.voice-active { background:rgba(240,74,74,.2) !important; color:var(--red) !important; animation:voice-pulse 1s ease infinite; }
+@keyframes voice-pulse { 0%,100%{box-shadow:0 0 0 0 rgba(240,74,74,.4)} 50%{box-shadow:0 0 0 6px rgba(240,74,74,0)} }
+
+/* ── Bulk bar ──────────────────────────────────────────────────────────── */
+.dock-bulk-bar {
+  display:none; align-items:center; gap:10px; padding:10px 16px;
+  background:rgba(24,212,232,.06); border-bottom:1px solid rgba(24,212,232,.2);
+  flex-wrap:wrap;
+}
+
+/* ── Card selection ────────────────────────────────────────────────────── */
+.dock-card { position:relative; }
+.dc-selected { border-color:var(--cyan) !important; background:rgba(24,212,232,.08) !important; }
+.dc-select-btn {
+  position:absolute; top:10px; left:10px; width:32px; height:32px;
+  border-radius:50%; border:2px solid var(--b1); background:var(--s2);
+  color:var(--t2); font-size:14px; cursor:pointer; display:flex;
+  align-items:center; justify-content:center; z-index:2; touch-action:manipulation;
+  transition:background .15s, border-color .15s;
+}
+.dc-sel-active { border-color:var(--cyan) !important; background:var(--cyan) !important; color:#000 !important; }
+
+
+
+/* ── ETA badge ─────────────────────────────────────────────────────────── */
+.dc-eta-badge {
+  font-family:var(--mono); font-size:10px; color:var(--cyan);
+  background:rgba(24,212,232,.1); border:1px solid rgba(24,212,232,.25);
+  border-radius:3px; padding:2px 7px; text-align:center; white-space:nowrap;
+}
+.dc-eta-now { color:var(--green) !important; background:rgba(25,224,154,.12) !important; border-color:rgba(25,224,154,.3) !important; animation:eta-flash .8s ease infinite; }
+@keyframes eta-flash { 0%,100%{opacity:1} 50%{opacity:.6} }
+
+/* ── Bottom row (issue + reserve buttons) ──────────────────────────────── */
+.dc-bottom-row { display:flex; gap:8px; margin-top:8px; }
+.dc-issue-btn {
+  flex:1; padding:12px; border-radius:var(--r); border:1px solid rgba(240,74,74,.3);
+  background:rgba(240,74,74,.07); color:var(--red); font-size:13px; font-weight:500;
+  cursor:pointer; touch-action:manipulation; transition:background .15s;
+  min-height:48px;
+}
+.dc-issue-btn:hover { background:rgba(240,74,74,.14); }
+.dc-reserve-btn {
+  flex:1; padding:12px; border-radius:var(--r); border:1px solid var(--b1);
+  background:var(--s1); color:var(--t1); font-size:13px; font-weight:500;
+  cursor:pointer; touch-action:manipulation; transition:background .15s;
+  min-height:48px;
+}
+.dc-reserve-btn:hover { background:var(--s2); border-color:var(--cyan); color:var(--cyan); }
+
+/* ── Swipe hint ────────────────────────────────────────────────────────── */
+.dc-swipe-hint {
+  font-family:var(--mono); font-size:9px; color:var(--t3); text-align:center;
+  letter-spacing:.06em; margin-top:6px; opacity:.6;
+}
+@media(pointer:fine) { .dc-swipe-hint { display:none; } }
+
+/* ── Door Map Full View ────────────────────────────────────────────────── */
+.dock-map-full { padding:12px 16px; }
+.dmf-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.dmf-title { font-family:var(--mono); font-size:11px; color:var(--t2); letter-spacing:.08em; text-transform:uppercase; }
+.dmf-free { font-family:var(--mono); font-size:11px; color:var(--green); }
+.dmf-grid {
+  display:grid; gap:8px;
+  grid-template-columns:repeat(auto-fill, minmax(90px,1fr));
+}
+.dmf-cell {
+  border-radius:var(--r); border:1px solid var(--b0); padding:10px 8px;
+  text-align:center; cursor:pointer; touch-action:manipulation;
+  transition:transform .12s, border-color .15s; min-height:80px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+}
+.dmf-cell:active { transform:scale(.96); }
+.dmf-free { border-color:rgba(25,224,154,.2); background:rgba(25,224,154,.04); }
+.dmf-blocked { border-color:rgba(240,74,74,.3); background:rgba(240,74,74,.05); cursor:default; }
+.dmf-occupied { border-color:var(--b1); background:var(--s1); }
+.dmf-urgent { border-color:rgba(240,74,74,.5) !important; }
+.dmf-door { font-family:var(--mono); font-size:11px; color:var(--t3); font-weight:500; }
+.dmf-trailer-num { font-family:var(--mono); font-size:14px; color:var(--t0); font-weight:600; }
+.dmf-status-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.dmf-status-lbl { font-family:var(--mono); font-size:9px; color:var(--t2); letter-spacing:.04em; }
+.dmf-status { font-family:var(--mono); font-size:10px; }
+.dmf-age { font-family:var(--mono); font-size:9px; color:var(--t3); }
+
+/* ── Quick Issue Modal ─────────────────────────────────────────────────── */
+.qi-modal { max-width:480px; width:95vw; }
+.m-hd { display:flex; align-items:flex-start; justify-content:space-between; padding:16px 18px 12px; border-bottom:1px solid var(--b0); }
+.m-title { font-size:15px; font-weight:600; color:var(--t0); }
+.m-close { background:none; border:none; color:var(--t2); font-size:18px; cursor:pointer; padding:4px 8px; border-radius:6px; line-height:1; }
+.m-close:hover { background:var(--s2); color:var(--t0); }
+.qi-reasons {
+  display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:4px;
+}
+.qi-reason-btn {
+  padding:14px 10px; border-radius:var(--r); border:1px solid var(--b1);
+  background:var(--s1); color:var(--t1); font-size:13px; cursor:pointer;
+  touch-action:manipulation; transition:background .15s, border-color .15s;
+  text-align:center; min-height:52px; line-height:1.3;
+}
+.qi-reason-btn:hover { background:var(--s2); }
+.qi-sel { border-color:var(--amber) !important; background:rgba(245,166,35,.12) !important; color:var(--amber) !important; }
+
+/* ── Reserve Door Modal ────────────────────────────────────────────────── */
+.dr-door-grid {
+  display:grid; grid-template-columns:repeat(5,1fr); gap:8px;
+}
+.dr-door-btn {
+  padding:14px 6px; border-radius:var(--r); border:1px solid var(--b1);
+  background:var(--s1); color:var(--t0); font-family:var(--mono); font-size:15px;
+  font-weight:600; cursor:pointer; touch-action:manipulation; min-height:56px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  transition:background .12s, border-color .12s;
+}
+.dr-door-btn:hover:not(:disabled) { background:rgba(245,166,35,.1); border-color:var(--amber); color:var(--amber); }
+.dr-door-btn:disabled { opacity:.35; cursor:not-allowed; }
+.dr-door-occ { opacity:.4 !important; }
+.dr-sel { border-color:var(--cyan) !important; background:rgba(24,212,232,.12) !important; color:var(--cyan) !important; }
+.dr-occ-lbl { font-size:8px; color:var(--t3); font-family:var(--mono); white-space:nowrap; overflow:hidden; max-width:100%; }
+
+/* ── Computer / wide screen dock layout ─────────────────────────────────── */
+@media(min-width:900px) {
+  .dock-shell { max-width:100%; padding-bottom:20px; }
+  .dock-cards {
+    display:grid !important;
+    grid-template-columns:repeat(auto-fill, minmax(320px,1fr));
+    gap:14px; padding:14px 20px;
+  }
+  .dock-card { margin:0; }
+  .dock-toolbar { padding:10px 20px; }
+  .dock-search-bar { padding:10px 20px 6px; }
+  .dc-action-btn { min-height:54px !important; font-size:15px !important; }
+  .dmf-grid { grid-template-columns:repeat(auto-fill, minmax(110px,1fr)); gap:10px; }
+  .dmf-cell { min-height:100px; padding:14px 10px; }
+  .dmf-trailer-num { font-size:17px; }
+}
+
+/* ── Tablet (iPad) ──────────────────────────────────────────────────────── */
+@media(min-width:600px) and (max-width:899px) {
+  .dock-cards {
+    display:grid !important;
+    grid-template-columns:repeat(2,1fr);
+    gap:10px; padding:10px 14px;
+  }
+  .dc-action-btn { min-height:58px !important; font-size:16px !important; }
+  .qi-reasons { grid-template-columns:1fr 1fr 1fr; }
+}
+
+/* ── iPhone / small mobile ──────────────────────────────────────────────── */
+@media(max-width:390px) {
+  .dc-action-btn { min-height:64px !important; font-size:17px !important; }
+  .dc-trailer { font-size:32px !important; }
+  .dc-door-badge { font-size:20px !important; padding:6px 12px !important; }
+  .dr-door-grid { grid-template-columns:repeat(3,1fr); }
+  .qi-reasons { grid-template-columns:1fr; }
+}
+
+/* ── Samsung Galaxy large phones ────────────────────────────────────────── */
+@media(min-width:391px) and (max-width:430px) {
+  .dc-action-btn { min-height:62px !important; font-size:16px !important; }
+  .dc-trailer { font-size:30px !important; }
+  .dr-door-grid { grid-template-columns:repeat(4,1fr); }
+}
+
+/* ── Glove-friendly: all touch devices get bigger targets ───────────────── */
+@media(pointer:coarse) {
+  .dc-action-btn { min-height:60px !important; padding:16px !important; }
+  .dc-issue-btn, .dc-reserve-btn { min-height:52px !important; }
+  .qi-reason-btn { min-height:58px !important; padding:16px 10px !important; }
+  .dr-door-btn { min-height:60px !important; }
+  .tb-btn { min-height:40px !important; padding:8px 12px !important; }
+  .dock-filter-btn { min-height:40px !important; padding:8px 14px !important; }
+}

@@ -1,6 +1,12 @@
 <!doctype html>
 <html lang="en">
 <head>
+<style>
+/* GRADIENT KILL - prevents cyan blobs */
+body{background-image:none!important;background:transparent!important}
+#driverView,#dockView,#managementView{background-image:none!important}
+.driver-shell{background-image:none!important}
+</style>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
   <title>Wesbell Dispatch</title>
@@ -61,7 +67,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="/style.css?v=3.3.0"/>
+  <link rel="stylesheet" href="/style.css?v=3.4.0"/>
 </head>
 <body>
 <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -880,7 +886,7 @@
 </div>
 
 </main>
-<script src="/app.js?v=3.3.0"></script>
+<script src="/app.js?v=3.4.0"></script>
 <!-- SW registered by app.js initPush() -->
 <!-- STAFF SIGN-IN MODAL (dock/driver pages) -->
 <div class="modal-ov hidden" id="staffLoginOv">

@@ -567,7 +567,7 @@ const _indexHtmlCache = {};
 const sendIndex = (_, res) => {
   try {
     let html = require("fs").readFileSync(INDEX_FILE, "utf8");
-    html = html.replace("</head>", '<style>body{background-image:none!important}*{--fix:1}</style></head>');
+    html = html.replace("</head>", '<style>body,body::before,body::after{background-image:none!important;background:var(--bg)!important}#dispatchView,#dockView,#managementView,#driverView{background-image:none!important}</style></head>');
     res.setHeader("Content-Type","text/html; charset=utf-8");
     res.setHeader("Cache-Control","no-cache, no-store, must-revalidate");
     res.send(html);

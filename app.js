@@ -632,7 +632,7 @@
       </div>`).join("");
   }
 
-  const ALL_SCREENS=["who-screen","flow-screen","omw-screen","omw-confirm-screen","shunt-screen","drop-screen","xdock-pickup-screen","xdock-offload-screen","safety-screen","done-screen"];
+  const ALL_SCREENS=["who-screen","flow-screen","omw-screen","omw-confirm-screen","arrive-screen","arrive-confirm-screen","shunt-screen","drop-screen","xdock-pickup-screen","xdock-offload-screen","safety-screen","done-screen"];
   let _currentScreen="who-screen";
   const _screenExitTimers={};
 
@@ -712,6 +712,7 @@
     else if(flowType==="xdock_pickup"){ resetPickupScreen(); showScreen("xdock-pickup-screen"); setTimeout(()=>el("xp_trailer")?.focus(),100); }
     else if(flowType==="xdock_offload"){ resetOffloadScreen(); showScreen("xdock-offload-screen"); setTimeout(()=>el("xo_trailer")?.focus(),100); }
     else if(flowType==="omw"){ resetOmwScreen(); showScreen("omw-screen"); setTimeout(()=>el("omw_trailer")?.focus(),100); }
+    else if(flowType==="arrive"){ resetArriveScreen(); showScreen("arrive-screen"); setTimeout(()=>el("arr_trailer")?.focus(),100); }
   }
 
   /* ── ON MY WAY ── */
@@ -739,16 +740,65 @@
     try{
       const res=await apiJson("/api/driver/omw",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,eta})});
       const door=res?.door||"";
-      el("omwDoorNum").textContent=door||"TBD";
-      el("omwConfirmTitle").textContent=res?.alreadyActive?`Already on board — Door ${door}`:`Door ${door} assigned!`;
+      el("omwDoorNum").textContent=door||"—";
+      el("omwConfirmTitle").textContent=res?.alreadyActive
+        ?`Already on board${door?" — Door "+door:""}`
+        :`Door ${door} assigned!`;
       el("omwConfirmSub").textContent=res?.alreadyActive
-        ?`Trailer ${trailer} is already ${res.status}. Your door is ${door}.`
-        :`Dispatch has been notified. Head to door ${door}.`;
+        ?`Trailer ${trailer} is already ${res.status}${door?" at door "+door:""}.`
+        :`Head to door ${door} when you arrive. Door is held for 30 minutes.`;
       el("omwEtaDisplay").textContent=eta?`ETA ~${eta} minutes`:"";
       showScreen("omw-confirm-screen");
     }catch(e){
       if(errEl){errEl.textContent=e.message||"Submission failed.";errEl.style.display="";}
       btn.disabled=false; btn.textContent="📍 Notify Dispatch";
+    }
+  }
+
+  /* ── ARRIVE (QR / Walk-in) ── */
+  function resetArriveScreen() {
+    if(el("arr_trailer")) el("arr_trailer").value = "";
+    if(el("arr_droptype")) el("arr_droptype").value = "Loaded";
+    const err = el("arr_err");
+    if(err){ err.style.display="none"; err.textContent=""; }
+    const btn = el("btnArriveSubmit");
+    if(btn){ btn.disabled=true; }
+  }
+
+  function updateArriveSubmitState() {
+    const trailer = (el("arr_trailer")?.value || "").trim();
+    const btn = el("btnArriveSubmit");
+    if(btn) btn.disabled = !trailer;
+  }
+
+  async function submitArrive() {
+    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
+    const trailer = (el("arr_trailer")?.value || "").trim().toUpperCase();
+    const dropType = el("arr_droptype")?.value || "Loaded";
+    const errEl = el("arr_err");
+    if(!trailer){ if(errEl){errEl.textContent="Enter your trailer number.";errEl.style.display="";} return; }
+    if(errEl) errEl.style.display = "none";
+    const btn = el("btnArriveSubmit");
+    btn.disabled = true; btn.textContent = "Assigning…";
+    try {
+      const carrierType = driverState.whoType === "outside" ? "Outside" : "Wesbell";
+      const res = await apiJson("/api/driver/arrive", {
+        method:"POST", headers:CSRF,
+        body: JSON.stringify({ trailer, dropType, carrierType, direction:"Inbound" })
+      });
+      const door = res?.door || "";
+      el("arrDoorNum").textContent = door || "—";
+      el("arrConfirmTitle").textContent = res?.alreadyActive
+        ? `Already checked in${door?" — Door "+door:""}`
+        : `Door ${door} assigned!`;
+      el("arrConfirmSub").textContent = res?.alreadyActive
+        ? `Trailer ${trailer} is already ${res.status}${door?" at door "+door:""}.`
+        : `Proceed to door ${door}. Your spot is held for 30 minutes.`;
+      haptic("success");
+      showScreen("arrive-confirm-screen");
+    } catch(e) {
+      if(errEl){errEl.textContent=e.message||"Check-in failed. Please ask dispatch.";errEl.style.display="";}
+      btn.disabled=false; btn.textContent="📍 Get My Door";
     }
   }
 
@@ -1669,7 +1719,10 @@
     }
     if(id==="btnBackToFlow2"||direct?.dataset?.flowBack){ showScreen("flow-screen",true); return; }
     if(id==="btnBackToFlow5"){ showScreen("flow-screen",true); return; }
+    if(id==="btnBackToFlow6"){ showScreen("flow-screen",true); return; }
     if(id==="btnOmwSubmit")   return submitOmw();
+    if(id==="btnArriveSubmit") return submitArrive();
+    if(id==="btnArrDone")      return driverRestart();
     if(id==="btnOmwDone")     return driverRestart();
     if(id==="btnBackToFlow"){
       const isOutside=driverState.whoType==="outside";
@@ -1811,6 +1864,8 @@
   el("v_trailer")?.addEventListener("input",onTrailerInput);
   el("v_trailer")?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!el("btnDriverDrop")?.disabled)driverDrop(); });
   el("omw_trailer")?.addEventListener("input", updateOmwSubmitState);
+  el("arr_trailer")?.addEventListener("input", updateArriveSubmitState);
+  el("arr_trailer")?.addEventListener("keydown", e=>{ if(e.key==="Enter"&&!el("btnArriveSubmit")?.disabled)submitArrive(); });
   el("omw_trailer")?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!el("btnOmwSubmit")?.disabled)submitOmw(); });
   // Set inputmode on trailer inputs for numeric keypad on mobile
   ["v_trailer","xp_trailer","xo_trailer","sh_trailer"].forEach(id=>{

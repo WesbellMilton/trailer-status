@@ -764,30 +764,39 @@ async function broadcastConfirmations() {
   catch(e) { console.error("[WS] broadcastConfirmations:", e.message); }
 }
 
-/* ══════════════════════════════════════════
+/* =========================
    STATIC / VIEWS
-══════════════════════════════════════════ */
+========================= */
+
 // Safe static file serving — allowlist regex, never exposes server.js/sqlite/vapid
 const SAFE_FILES =
-  /^\/(app\.js|style\.css|sw\.js|sw2\.js|manifest\.json|manifest\.webmanifest|icons\/[a-z0-9._-]+\.(png|ico)|splash\/[a-z0-9._-]+\.png)$/i;
+  /^\/(app\.js|style\.css|sw\.js|sw2\.js|manifest\.json|manifest\.webmanifest|icons\/[a-z0-9._-]+\.(png|ico|webp)|splash\/[a-z0-9._-]+\.png)$/i;
+
 app.use((req, res, next) => {
+  // Service workers need correct headers + must be at scope "/"
   if (req.path === "/sw.js" || req.path === "/sw2.js") {
-  const file = req.path === "/sw2.js" ? "sw2.js" : "sw.js";
-  res.setHeader("Service-Worker-Allowed", "/");
-  res.setHeader("Content-Type", "application/javascript");
-  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-  return res.sendFile(path.join(__dirname, file), err => { if (err && !res.headersSent) res.status(404).end(); });
-}
-  }
-  if (req.path === "/manifest.json") {
+    const file = req.path === "/sw2.js" ? "sw2.js" : "sw.js";
+    res.setHeader("Service-Worker-Allowed", "/");
+    res.type("application/javascript");
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    return res.sendFile(path.join(__dirname, file), err => {
+      if (err && !res.headersSent) res.status(404).end();
+    });
   }
-  if (!SAFE_FILES.test(req.path)) return next();
-  if (/\.(png|ico)$/.test(req.path)) res.setHeader("Cache-Control", "public, max-age=604800, immutable");
-  if (/\.(js|css)$/.test(req.path)) res.setHeader("Cache-Control", "no-cache, must-revalidate");
-  const safePath = path.join(__dirname, req.path.replace(/\/\.\./g, ""));
-  res.sendFile(safePath, err => { if (err && !res.headersSent) res.status(404).end(); });
+
+  // Allowlist everything else
+  if (SAFE_FILES.test(req.path)) return next();
+
+  // Block any other direct file access
+  return res.status(404).end();
 });
+
+// Only after the allowlist gate:
+app.use(express.static(__dirname, {
+  etag: true,
+  lastModified: true,
+  maxAge: "0", // keep fresh while you iterate
+}));
 const INDEX_FILE = path.join(__dirname, "index.html");
 const _indexHtmlCache = {};
 const sendIndex = (_, res) => {

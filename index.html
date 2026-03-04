@@ -1,15 +1,20 @@
 <!doctype html>
 <html lang="en">
 <head>
-<style>
-/* GRADIENT KILL - prevents cyan blobs */
-body{background-image:none!important;background:transparent!important}
-#driverView,#dockView,#managementView{background-image:none!important}
-.driver-shell{background-image:none!important}
-</style>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
   <title>Wesbell Dispatch</title>
+
+  <!-- Gradient kill (fixed): keep a solid dark background instead of transparent -->
+  <style>
+    body{
+      background-image:none !important;
+      background:var(--bg,#070a0f) !important; /* was transparent -> could cause white/odd backgrounds */
+    }
+    #driverView,#dockView,#managementView{background-image:none!important}
+    .driver-shell{background-image:none!important}
+  </style>
+
   <link rel="manifest" href="/manifest.json"/>
 
   <!-- Favicons -->
@@ -21,45 +26,19 @@ body{background-image:none!important;background:transparent!important}
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
   <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png"/>
 
-  <!-- iOS PWA meta -->
+  <!-- PWA meta -->
   <meta name="mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="Dispatch"/>
-
-  <!-- ═══ iOS Splash Screens — Full Coverage 2025 ═══ -->
-
-  <!-- iPhone 17 Pro Max / 16 Pro Max (440x956 @3x) -->
-  <!-- iPhone 16 Plus / 15 Pro Max / 15 Plus / 14 Pro Max (430x932 @3x) -->
-  <!-- iPhone 17 Air (402x874 @3x) -->
-  <!-- iPhone 17 / 17 Pro / 16 Pro / 15 Pro (393x852 @3x) -->
-  <!-- iPhone 16 / 15 / 14 / 13 Pro / 13 / 12 Pro / 12 (390x844 @3x) -->
-  <!-- iPhone 13 Pro Max / 12 Pro Max (428x926 @3x) -->
-  <!-- iPhone SE 3rd / 2nd gen / 8 (375x667 @2x) -->
-  <!-- iPhone X / XS / 11 Pro (375x812 @3x) -->
-  <!-- iPhone XS Max / 11 Pro Max (414x896 @3x) -->
-  <!-- iPhone XR / 11 (414x896 @2x) -->
-  <!-- iPhone 8 Plus / 7 Plus / 6s Plus (414x736 @3x) -->
-  <!-- iPhone SE 1st gen (320x568 @2x) -->
-
-  <!-- iPad Pro 12.9" M4 (1032x1376 @2x) -->
-  <!-- iPad Pro 12.9" (1024x1366 @2x) -->
-  <!-- iPad Pro 11" M4 (834x1210 @2x) -->
-  <!-- iPad Pro 11" / Air 11" (834x1194 @2x) -->
-  <!-- iPad Air 13" (1024x1366 @2x) -->
-  <!-- iPad mini 6/7 (744x1133 @2x) -->
-  <!-- iPad 10th gen (820x1180 @2x) -->
-  <!-- iPad 9th gen and older (768x1024 @2x) -->
+  <meta name="application-name" content="Dispatch"/>
 
   <!-- Theme / tile colours -->
   <meta name="theme-color" content="#070a0f" media="(prefers-color-scheme: dark)"/>
   <meta name="theme-color" content="#070a0f"/>
   <meta name="msapplication-TileColor" content="#070a0f"/>
-  <meta name="msapplication-TileImage" content="/icon-192.png"/>
-
-  <!-- Android / Samsung PWA -->
-  <meta name="mobile-web-app-capable" content="yes"/>
-  <meta name="application-name" content="Dispatch"/>
+  <!-- BUGFIX: was /icon-192.png (wrong path compared to your /icons folder) -->
+  <meta name="msapplication-TileImage" content="/icons/icon-192.png"/>
 
   <!-- Prevent text size adjust on orientation change (iOS + Android) -->
   <meta name="format-detection" content="telephone=no"/>
@@ -69,6 +48,7 @@ body{background-image:none!important;background:transparent!important}
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="/style.css?v=3.6.0"/>
 </head>
+
 <body>
 <a class="skip-link" href="#main-content">Skip to main content</a>
 
@@ -185,7 +165,7 @@ body{background-image:none!important;background:transparent!important}
         <button data-dismiss="readyNotifBanner" class="rnb-close" aria-label="Dismiss notification">✕</button>
       </div>
 
-      <!-- Compact topbar: brand + status + actions in one row -->
+      <!-- Compact topbar -->
       <div class="driver-topbar">
         <div class="dtb-brand">
           <div class="dtb-mark">W</div>
@@ -202,7 +182,6 @@ body{background-image:none!important;background:transparent!important}
         </div>
       </div>
 
-      <!-- ── SCREEN: WHO ARE YOU ── -->
       <!-- Quick Drop Mode -->
       <div id="quickDropPanel" class="quick-drop-panel" style="display:none;">
         <div class="qdp-label">⚡ Quick Drop</div>
@@ -234,7 +213,7 @@ body{background-image:none!important;background:transparent!important}
         </div>
       </div>
 
-      <!-- ── SCREEN: FLOW SELECTION ── -->
+      <!-- FLOW SCREEN -->
       <div id="flow-screen" style="display:none;">
         <div class="driver-panel active-step">
           <div class="driver-phd">
@@ -279,7 +258,7 @@ body{background-image:none!important;background:transparent!important}
         </div>
       </div>
 
-      <!-- ── SCREEN: ON MY WAY ── -->
+      <!-- OMW -->
       <div id="omw-screen" style="display:none;">
         <div class="driver-panel active-step">
           <div class="driver-phd">
@@ -301,7 +280,7 @@ body{background-image:none!important;background:transparent!important}
         </div>
       </div>
 
-      <!-- ── SCREEN: OMW CONFIRMED ── -->
+      <!-- OMW CONFIRM -->
       <div id="omw-confirm-screen" style="display:none;">
         <div class="driver-panel active-step" style="text-align:center;">
           <div class="driver-pbody" style="padding:28px 16px 24px;">
@@ -318,7 +297,7 @@ body{background-image:none!important;background:transparent!important}
         </div>
       </div>
 
-      <!-- ── SCREEN: ARRIVE (QR scan / walk-in) ── -->
+      <!-- ARRIVE -->
       <div id="arrive-screen" style="display:none;">
         <div class="driver-panel active-step">
           <div class="driver-phd">
@@ -345,7 +324,7 @@ body{background-image:none!important;background:transparent!important}
         </div>
       </div>
 
-      <!-- ── SCREEN: ARRIVE CONFIRMED ── -->
+      <!-- ARRIVE CONFIRM -->
       <div id="arrive-confirm-screen" style="display:none;">
         <div class="driver-panel active-step" style="text-align:center;">
           <div class="driver-pbody" style="padding:28px 16px 24px;">
@@ -362,7 +341,7 @@ body{background-image:none!important;background:transparent!important}
         </div>
       </div>
 
-      <!-- ── SCREEN: SHUNT ── -->
+      <!-- SHUNT -->
       <div id="shunt-screen" style="display:none;">
         <div class="driver-panel active-step">
           <div class="driver-phd">
@@ -391,7 +370,7 @@ body{background-image:none!important;background:transparent!important}
         </div>
       </div>
 
-      <!-- ── SCREEN: DRIVER DROP ── -->
+      <!-- DROP -->
       <div id="drop-screen" style="display:none;">
         <div class="driver-panel active-step">
           <div class="driver-phd">
@@ -436,7 +415,7 @@ body{background-image:none!important;background:transparent!important}
         </div>
       </div>
 
-      <!-- ── SCREEN: CROSS DOCK PICKUP ── -->
+      <!-- CROSS DOCK PICKUP -->
       <div id="xdock-pickup-screen" style="display:none;">
         <div class="driver-panel active-step">
           <div class="driver-phd">
@@ -474,7 +453,7 @@ body{background-image:none!important;background:transparent!important}
         </div>
       </div>
 
-      <!-- ── SCREEN: CROSS DOCK OFFLOAD ── -->
+      <!-- CROSS DOCK OFFLOAD -->
       <div id="xdock-offload-screen" style="display:none;">
         <div class="driver-panel active-step">
           <div class="driver-phd">
@@ -509,7 +488,7 @@ body{background-image:none!important;background:transparent!important}
         </div>
       </div>
 
-      <!-- ── SCREEN: SAFETY ── -->
+      <!-- SAFETY -->
       <div id="safety-screen" style="display:none;">
         <div class="driver-panel active-step" style="border-color:rgba(32,208,144,.25);">
           <div class="driver-phd">
@@ -532,7 +511,7 @@ body{background-image:none!important;background:transparent!important}
               </div>
             </label>
 
-            <!-- ── ISSUE REPORT (optional) ── -->
+            <!-- Issue Report -->
             <div class="issue-toggle-wrap">
               <label class="issue-toggle-label" for="c_hasIssue">
                 <input id="c_hasIssue" type="checkbox"/>
@@ -544,7 +523,6 @@ body{background-image:none!important;background:transparent!important}
             </div>
 
             <div class="issue-report-body" id="issueReportBody" style="display:none;">
-              <!-- Camera / file input -->
               <input type="file" id="issuePhotoInput" accept="image/*" capture="environment" style="display:none;" aria-label="Take photo"/>
               <div class="issue-photo-zone" id="issuePhotoZone">
                 <div class="ipz-empty" id="ipzEmpty">
@@ -567,7 +545,7 @@ body{background-image:none!important;background:transparent!important}
         </div>
       </div>
 
-      <!-- ── SCREEN: DONE ── -->
+      <!-- DONE -->
       <div id="done-screen" style="display:none;">
         <div class="driver-panel">
           <div class="driver-done">
@@ -593,7 +571,7 @@ body{background-image:none!important;background:transparent!important}
         </div>
       </div>
 
-      <!-- Always-visible reset — lets any driver start completely over -->
+      <!-- Full reset -->
       <button id="btnDriverFullReset" style="
         width:100%;padding:12px;border-radius:9px;
         border:1px solid var(--b1);background:transparent;
@@ -714,7 +692,6 @@ body{background-image:none!important;background:transparent!important}
 <div id="dockView" style="display:none;">
   <div class="dock-shell">
 
-    <!-- Dock Top Bar -->
     <div class="dock-toolbar">
       <div class="dock-toolbar-left">
         <div class="live-dot" id="dockWsDot"></div>
@@ -733,7 +710,6 @@ body{background-image:none!important;background:transparent!important}
       </div>
     </div>
 
-    <!-- Scan / Search Bar -->
     <div class="dock-search-bar">
       <div class="dock-scan-wrap">
         <input id="dockScanInput" class="dock-scan-input" placeholder="⚡ Scan or type trailer # — auto-advances status" autocomplete="off" inputmode="text" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go"/>
@@ -742,7 +718,6 @@ body{background-image:none!important;background:transparent!important}
       <input id="dockSearch" placeholder="🔍 Filter cards…" autocomplete="off" aria-label="Search dock trailers" inputmode="search"/>
     </div>
 
-    <!-- Bulk Actions Bar (shown when bulk mode active) -->
     <div class="dock-bulk-bar" id="dockBulkBar">
       <span id="dockBulkCount" style="font-family:var(--mono);font-size:11px;color:var(--t2)">0 selected</span>
       <button class="btn btn-sm" style="border-color:var(--amber-bd);color:var(--amber);background:rgba(245,166,35,.1);" id="btnBulkLoading">→ Loading</button>
@@ -775,10 +750,8 @@ body{background-image:none!important;background:transparent!important}
   <div class="page">
     <div class="grid-main">
 
-      <!-- LEFT COLUMN: board + map + audit -->
       <div class="col-stack">
 
-        <!-- Dispatcher KPI Row -->
         <div class="disp-kpi-bar">
           <div id="dispKpis" class="kpi-row"></div>
           <div class="disp-actions">
@@ -835,7 +808,6 @@ body{background-image:none!important;background:transparent!important}
           </div>
         </div>
 
-        <!-- Dock plates — center/left column -->
         <div class="panel" id="dockPlatesCard">
           <button class="acc-head" id="dockPlatesToggle" aria-expanded="false">
             <span style="display:flex;align-items:center;gap:9px;">Dock Plates (28–42) <span class="badge" id="platesMini">—</span></span>
@@ -848,12 +820,9 @@ body{background-image:none!important;background:transparent!important}
         </div>
 
       </div>
-      <!-- end col-stack -->
 
-      <!-- RIGHT COLUMN: admin controls + dispatcher controls -->
       <div style="display:flex;flex-direction:column;gap:14px;">
 
-        <!-- Admin-only panel (hidden for non-admins) -->
         <div id="adminPanel" class="panel" style="display:none;">
           <div class="panel-hd">
             <div class="panel-title"><span class="ptdot" style="background:var(--amber)"></span>⚡ Admin Controls</div>
@@ -897,7 +866,6 @@ body{background-image:none!important;background:transparent!important}
           </div>
         </div>
 
-        <!-- Dispatcher / dock controls injected by app.js -->
         <div class="panel side-sticky">
           <div class="panel-hd">
             <div class="panel-title" id="panelTitle">Controls</div>
@@ -907,7 +875,6 @@ body{background-image:none!important;background:transparent!important}
         </div>
 
       </div>
-      <!-- end right column -->
 
     </div>
   </div>
@@ -921,9 +888,8 @@ body{background-image:none!important;background:transparent!important}
 </div>
 
 </main>
-<script src="/app.js?v=3.6.0"></script>
-<!-- SW registered by app.js initPush() -->
-<!-- STAFF SIGN-IN MODAL (dock/driver pages) -->
+
+<!-- STAFF SIGN-IN MODAL -->
 <div class="modal-ov hidden" id="staffLoginOv">
   <div class="modal" style="max-width:340px;">
     <h4>Staff Sign In</h4>
@@ -945,7 +911,6 @@ body{background-image:none!important;background:transparent!important}
       <button class="btn btn-default" id="staffLoginCancel">Cancel</button>
       <button class="btn btn-primary" id="staffLoginGo">Sign In →</button>
     </div>
-    <!-- Show when already signed in -->
     <div id="staffLogoutRow" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--b0);">
       <div style="font-family:var(--mono);font-size:11px;color:var(--t1);margin-bottom:8px;">Signed in as <strong id="staffCurrentRole" style="color:var(--amber);"></strong></div>
       <button class="btn btn-danger btn-sm btn-full" id="staffLogoutBtn">Sign Out</button>
@@ -953,15 +918,14 @@ body{background-image:none!important;background:transparent!important}
   </div>
 </div>
 
-<!-- ── Dock Issue Report Modal ── -->
+<!-- Dock Issue Report Modal -->
 <div class="modal-ov hidden" id="dockIssueOv">
   <div class="modal" style="max-width:420px;">
     <h4>⚠ Report Trailer Issue</h4>
     <div class="m-sub" id="dockIssueCtx" style="margin-bottom:14px;font-family:var(--mono);font-size:11px;color:var(--t2);letter-spacing:.04em;"></div>
 
-    <!-- Photo zone — label wraps input for iOS tap compatibility -->
     <label for="dockIssuePhotoInput" class="issue-photo-zone" id="dockIssuePhotoZone" style="cursor:pointer;">
-    <input type="file" id="dockIssuePhotoInput" accept="image/*" capture="environment" style="display:none;position:absolute;width:0;height:0;opacity:0;" aria-label="Take photo"/>
+      <input type="file" id="dockIssuePhotoInput" accept="image/*" capture="environment" style="display:none;position:absolute;width:0;height:0;opacity:0;" aria-label="Take photo"/>
       <div id="dockIssueEmpty" class="ipz-empty">
         <span class="ipz-icon">📷</span>
         <span class="ipz-label">Tap to take photo</span>
@@ -971,7 +935,6 @@ body{background-image:none!important;background:transparent!important}
       <button class="ipz-remove" id="dockIssueRemovePhoto" style="display:none;" aria-label="Remove photo">✕</button>
     </label>
 
-    <!-- Note -->
     <div class="field" style="margin-top:14px;">
       <label class="fl" for="dockIssueNote">Describe the issue</label>
       <textarea id="dockIssueNote" rows="3" placeholder="e.g. Rear door damaged, missing load bar, spill in bay 3…" style="resize:none;font-size:16px;line-height:1.5;"></textarea>
@@ -986,12 +949,11 @@ body{background-image:none!important;background:transparent!important}
   </div>
 </div>
 
-<!-- ── Issue photo lightbox ── -->
+<!-- Issue photo lightbox -->
 <div class="issue-lightbox" id="issueLightbox">
   <button class="issue-lightbox-close" id="issueLightboxClose" aria-label="Close photo">✕</button>
   <img id="issueLightboxImg" src="" alt="Issue photo"/>
 </div>
-
 
 <!-- Quick Issue Modal -->
 <div class="modal-ov hidden" id="quickIssueOv">
@@ -1073,6 +1035,10 @@ body{background-image:none!important;background:transparent!important}
     <div class="m-body" id="historyBoardBody" style="padding:0;overflow-y:auto;max-height:70vh;"></div>
   </div>
 </div>
+
+<!-- BUGFIX: app.js moved to bottom so it can bind to ALL elements (modals included) -->
+<script defer src="/app.js?v=3.6.0"></script>
+<!-- SW registered by app.js initPush() -->
 
 </body>
 </html>

@@ -1,30 +1,16 @@
 <!doctype html>
 <html lang="en">
 <head>
-
 <style>
-/* Keep dark background but remove gradient blobs */
-html,body{
-  background:#050814!important;
-  background-color:#050814!important;
-}
-
-#driverView,#dockView,#managementView,#dispatchView{
-  background:transparent!important;
-}
-
-.driver-shell{
-  background:transparent!important;
-}
+/* GRADIENT KILL - prevents cyan blobs */
+body{background-image:none!important;background:transparent!important}
+#driverView,#dockView,#managementView{background-image:none!important}
+.driver-shell{background-image:none!important}
 </style>
-
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-
-<title>Wesbell Dispatch</title>
-
-<link rel="manifest" href="/manifest.webmanifest">
-<meta name="theme-color" content="#050814">
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+  <title>Wesbell Dispatch</title>
+  <link rel="manifest" href="/manifest.json"/>
 
   <!-- Favicons -->
   <link rel="icon" type="image/x-icon" href="/icons/favicon.ico"/>
@@ -81,6 +67,7 @@ html,body{
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/style.css?v=3.6.0"/>
 </head>
 <body>
 <a class="skip-link" href="#main-content">Skip to main content</a>

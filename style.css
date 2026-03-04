@@ -30,9 +30,6 @@ body{
   font-family:var(--sans);
   line-height:1.5;
   min-height:100vh;
-  background-image:
-    radial-gradient(ellipse 1200px 600px at 60% -100px, rgba(245,166,35,.04) 0%, transparent 70%),
-    radial-gradient(ellipse 800px 500px at -10% 80%, rgba(24,212,232,.03) 0%, transparent 60%);
 }
 a{color:var(--cyan);text-decoration:none}
 

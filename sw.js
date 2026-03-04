@@ -1,73 +1,33 @@
 // sw.js — Wesbell Dispatch Service Worker
-// Cache-first for app shell assets, network-first for API/WS
-const CACHE_NAME = "wb-dispatch-v5";
-const CACHE_VERSION_KEY = "wb-cache-ver";
+// Clears all caches and unregisters on load to force fresh assets
 
-// Assets to cache immediately on install (app shell)
-const PRECACHE = [
-  "/",
-  "/dock",
-  "/driver",
-  "/management",
-  "/app.js",
-  "/style.css",
-  "/manifest.json",
-  "/icon-192.png",
-  "/apple-touch-icon.png",
-];
-
-// Patterns that should always go to network (never serve stale)
-const NETWORK_ONLY = [
-  /^\/api\//,
-  /^\/login/,
-];
-
-// ── Install: precache app shell ──
 self.addEventListener("install", evt => {
   self.skipWaiting();
-  evt.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE).catch(() => {}))
-  );
 });
 
-// ── Activate: evict old caches ──
 self.addEventListener("activate", evt => {
   evt.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches.keys()
+      .then(keys => Promise.all(keys.map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
+      .then(() => {
+        // Tell all clients to reload
+        return self.clients.matchAll({ type: "window" }).then(clients => {
+          clients.forEach(client => client.postMessage({ type: "SW_UPDATED" }));
+        });
+      })
   );
 });
 
-// ── Fetch: stale-while-revalidate for shell, network-only for API ──
+// Network-only — never serve from cache
 self.addEventListener("fetch", evt => {
-  const { request } = evt;
-  const url = new URL(request.url);
-
-  // Non-GET or cross-origin — let it pass through
-  if (request.method !== "GET" || url.origin !== self.location.origin) return;
-
-  // Network-only patterns (API, login page)
-  if (NETWORK_ONLY.some(p => p.test(url.pathname))) return;
-
-  // App shell: cache-first with background revalidation
-  evt.respondWith(
-    caches.open(CACHE_NAME).then(async cache => {
-      const cached = await cache.match(request);
-      const fetchPromise = fetch(request).then(res => {
-        if (res && res.status === 200 && res.type !== "opaque") {
-          cache.put(request, res.clone());
-        }
-        return res;
-      }).catch(() => null);
-
-      // Return cached immediately if available, else wait for network
-      return cached || fetchPromise;
-    })
-  );
+  const url = new URL(evt.request.url);
+  if (evt.request.method !== "GET" || url.origin !== self.location.origin) return;
+  // Let everything go straight to network
+  evt.respondWith(fetch(evt.request));
 });
 
-// ── Push notifications ──
+// Keep push notifications working
 self.addEventListener("push", evt => {
   if (!evt.data) return;
   let data = {};

@@ -3,10 +3,19 @@
 <head>
 
 <style>
-  /* keep blobs off, but stay dark */
-  html,body{background:#050814!important}
-  body{background-image:none!important}
-  #driverView,#dockView,#managementView,#dispatchView{background:transparent!important}
+/* Keep dark background but remove gradient blobs */
+html,body{
+  background:#050814!important;
+  background-color:#050814!important;
+}
+
+#driverView,#dockView,#managementView,#dispatchView{
+  background:transparent!important;
+}
+
+.driver-shell{
+  background:transparent!important;
+}
 </style>
 
 <meta charset="utf-8"/>

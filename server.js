@@ -24,7 +24,7 @@ const DB_FILE = process.env.DB_FILE || (() => {
   }
   return p.join(__dirname, "wesbell.sqlite");
 })();
-const APP_VERSION = process.env.APP_VERSION || "3.2.0";
+const APP_VERSION = process.env.APP_VERSION || "3.3.0";
 const PIN_MIN_LEN = 4;
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
 const COOKIE_NAME = "wb_session";

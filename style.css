@@ -924,7 +924,6 @@ button,.btn,.nav-item,.who-btn,.flow-btn,.door-btn,.drop-type-btn,
   main{padding-bottom:64px}
   .dock-shell{padding-bottom:calc(80px + 64px)}
   .driver-shell{padding-bottom:calc(48px + 64px)}
-  .sup-shell{padding-bottom:80px}
   #btnDockStaffLogin,#btnDriverStaffLogin{font-size:10px;padding:4px 8px}
   #staffLoginOv{align-items:flex-end;padding:0}
   #staffLoginOv .modal{max-width:100%;width:100%;border-radius:var(--r2) var(--r2) 0 0;padding:20px 16px 32px;max-height:90vh;overflow-y:auto}
@@ -976,7 +975,6 @@ button,.btn,.nav-item,.who-btn,.flow-btn,.door-btn,.drop-type-btn,
 @supports(padding-bottom:env(safe-area-inset-bottom)){
   .driver-shell{padding-bottom:calc(48px + env(safe-area-inset-bottom))}
   .dock-shell{padding-bottom:calc(144px + env(safe-area-inset-bottom))}
-  .sup-shell{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
   .toast{bottom:calc(72px + env(safe-area-inset-bottom))}
   .modal-ov:not(#staffLoginOv){padding-bottom:env(safe-area-inset-bottom)}
   #staffLoginOv .modal{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
@@ -2238,4 +2236,273 @@ input, select, textarea {
   .topbar-right { gap:5px; }
   .tb-btn { padding:5px 9px; font-size:10px; min-height:36px; }
   #btnLogout { display:flex !important; }
+}
+
+/* ═══════════════════════════════════════════
+   MANAGEMENT VIEW — FULL MOBILE REWRITE
+   Compatible: iPhone SE → 17 Pro Max
+               Samsung Galaxy A → S25 Ultra
+═══════════════════════════════════════════ */
+
+/* ── Base shell ── */
+#managementView .sup-shell {
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+/* ── Mobile (all phones up to 768px) ── */
+@media screen and (max-width: 768px) {
+
+  #managementView .sup-shell {
+    padding: 8px 10px calc(80px + env(safe-area-inset-bottom));
+    overflow-x: hidden;
+  }
+
+  /* Single column grid */
+  #managementView .sup-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px;
+    width: 100%;
+  }
+
+  /* All panels full width */
+  #managementView .panel {
+    width: 100% !important;
+    box-sizing: border-box;
+    grid-column: unset !important;
+    overflow: hidden;
+    border-radius: 10px;
+  }
+
+  /* ── KPI row — 3 across, wrap to 2 on tiny screens ── */
+  #managementView .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-bottom: 10px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  #managementView .kpi {
+    padding: 10px 8px;
+    text-align: center;
+    min-width: 0;
+    border-radius: 8px;
+  }
+  #managementView .kpi .k-val { font-size: 22px !important; }
+  #managementView .kpi .k-lbl { font-size: 8px; }
+
+  /* ── Panel headers ── */
+  #managementView .panel-hd {
+    padding: 10px 12px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  #managementView .panel-title { font-size: 11px; }
+
+  /* ── Trailer board ── */
+  #managementView .tbl-hd { display: none !important; }
+  #managementView #supTbody { width: 100%; overflow-x: hidden; }
+
+  /* Management trailer rows — card layout */
+  #managementView .tbl-row {
+    display: grid !important;
+    grid-template-columns: 1fr auto !important;
+    gap: 0 !important;
+    padding: 11px 12px !important;
+    border-left-width: 3px !important;
+    border-bottom: 1px solid var(--b0);
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  #managementView .tbl-row > span,
+  #managementView .tbl-row > div {
+    padding: 0 !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+  }
+  #managementView .tbl-row .t-num {
+    grid-column: 1; grid-row: 1;
+    font-size: 18px !important;
+    font-weight: 700; font-family: var(--mono);
+    color: var(--t0); line-height: 1.1;
+    margin-bottom: 3px;
+  }
+  #managementView .tbl-row .t-status {
+    grid-column: 2; grid-row: 1;
+    display: flex; align-items: flex-start; justify-content: flex-end;
+  }
+  #managementView .tbl-row .stag {
+    font-size: 9px !important; padding: 2px 6px !important;
+  }
+  #managementView .tbl-row .t-dir  { font-size: 10px; color: var(--t2); margin-right: 7px; }
+  #managementView .tbl-row .t-door { font-size: 12px; font-family: var(--mono); font-weight: 600; color: var(--cyan); margin-right: 7px; }
+  #managementView .tbl-row .t-type { font-size: 9px; color: var(--t3); margin-right: 6px; }
+  #managementView .tbl-row .t-time { font-size: 9px; color: var(--t3); font-family: var(--mono); }
+  #managementView .tbl-row .t-note { font-size: 10px; color: var(--t2); margin-top: 2px; white-space: normal !important; }
+  #managementView .tbl-row .t-acts {
+    grid-column: 1 / -1; grid-row: 3;
+    display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px;
+  }
+  #managementView .tbl-row .t-acts .btn {
+    flex: 1 1 auto; min-height: 38px; padding: 7px 10px; font-size: 11px;
+  }
+  #managementView .qs-btn {
+    flex: 1; min-width: 52px; min-height: 38px !important;
+    padding: 7px 8px !important; font-size: 10px !important;
+  }
+
+  /* ── Filter bar ── */
+  #managementView .filter-bar {
+    flex-direction: column !important;
+    gap: 7px; padding: 10px 12px;
+    position: sticky; top: 48px; z-index: 10;
+    background: var(--s0);
+    border-bottom: 1px solid var(--b0);
+    width: 100%; box-sizing: border-box;
+  }
+  #managementView .filter-bar .field {
+    min-width: 0 !important; flex: 1 1 100% !important; width: 100%;
+  }
+  #managementView .filter-bar input,
+  #managementView .filter-bar select {
+    font-size: 16px !important; padding: 10px 12px;
+    width: 100%; box-sizing: border-box;
+  }
+  #managementView .filter-bar .tight { margin-top: 0 !important; }
+  #managementView .filter-bar .btn { width: 100%; min-height: 42px; }
+
+  /* ── Board footer ── */
+  #managementView .board-footer {
+    flex-direction: column; gap: 2px;
+    font-size: 9px; padding: 7px 12px;
+    align-items: flex-start;
+  }
+
+  /* ── Recent Activity feed ── */
+  #managementView #supFeed { padding: 10px 12px !important; }
+  #managementView .feed-item { padding: 8px 0; gap: 8px; }
+  #managementView .feed-time { font-size: 9px; white-space: nowrap; }
+  #managementView .feed-content { font-size: 11px; }
+
+  /* ── Safety confirmations table ── */
+  #managementView .panel:has(#supConfBody) .panel-body-flush { padding: 0; }
+  #managementView .data-tbl-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+  }
+  #managementView .data-tbl-wrap table { min-width: 420px; }
+  #managementView .data-tbl-wrap th,
+  #managementView .data-tbl-wrap td {
+    padding: 8px 10px; font-size: 10px;
+  }
+  #managementView .data-tbl-wrap th { font-size: 8px; }
+
+  /* ── Issue reports ── */
+  #managementView #supIssueBody { width: 100%; }
+  #managementView .issue-row {
+    flex-direction: column !important;
+    gap: 8px; padding: 12px !important;
+  }
+  #managementView .issue-thumb {
+    width: 100% !important; max-height: 160px;
+    border-radius: 8px; object-fit: cover;
+  }
+  #managementView .issue-body { width: 100%; }
+  #managementView .issue-meta { flex-wrap: wrap; gap: 4px; }
+  #managementView .issue-time,
+  #managementView .issue-trailer { font-size: 10px; }
+  #managementView .issue-note { font-size: 12px; margin-top: 4px; }
+
+  /* ── PIN Management accordion ── */
+  #managementView #pinMgmtToggle {
+    padding: 12px 14px;
+    font-size: 13px;
+    min-height: 48px;
+  }
+  #managementView .pin-row {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px;
+    padding: 10px;
+    margin-bottom: 8px;
+  }
+  #managementView .pin-row > div { width: 100%; }
+  #managementView .pin-row input {
+    width: 100%; box-sizing: border-box;
+    font-size: 16px !important; padding: 10px 12px;
+    min-height: 44px;
+  }
+  #managementView .pin-row .btn {
+    width: 100%; min-height: 46px;
+    font-size: 14px; padding: 10px;
+  }
+  #managementView .infobox {
+    font-size: 11px; line-height: 1.5;
+  }
+  #managementView .panel-body { padding: 12px !important; }
+
+  /* ── Accordion smooth open ── */
+  #managementView .acc-body {
+    transition: max-height .35s cubic-bezier(.22,1,.36,1);
+  }
+}
+
+/* ── Extra small (360px and below) — Samsung S24/S25 base ── */
+@media screen and (max-width: 360px) {
+  #managementView .kpi-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 5px;
+  }
+  #managementView .kpi .k-val { font-size: 18px !important; }
+  #managementView .kpi .k-lbl { font-size: 7px; }
+  #managementView .sup-shell { padding: 6px 8px calc(80px + env(safe-area-inset-bottom)); }
+  #managementView .tbl-row .t-num { font-size: 16px !important; }
+  #managementView .panel-hd { padding: 8px 10px; }
+  #managementView .data-tbl-wrap table { min-width: 380px; }
+}
+
+/* ── Medium phones 390–430px — iPhone 14–17, Samsung S24+/Ultra ── */
+@media screen and (min-width: 390px) and (max-width: 430px) {
+  #managementView .kpi-row { grid-template-columns: repeat(3, 1fr); gap: 7px; }
+  #managementView .kpi .k-val { font-size: 24px !important; }
+  #managementView .tbl-row .t-num { font-size: 19px !important; }
+}
+
+/* ── Large phones 430px+ — iPhone Pro Max, Samsung Ultra ── */
+@media screen and (min-width: 430px) and (max-width: 768px) {
+  #managementView .kpi-row { grid-template-columns: repeat(5, 1fr); gap: 7px; }
+  #managementView .kpi .k-val { font-size: 26px !important; }
+  #managementView .tbl-row .t-num { font-size: 20px !important; }
+  #managementView .tbl-row .stag { font-size: 10px !important; padding: 3px 7px !important; }
+  #managementView .data-tbl-wrap table { min-width: 460px; }
+}
+
+/* ── Safe areas (notch / Dynamic Island / punch hole) ── */
+@supports (padding: env(safe-area-inset-bottom)) {
+  #managementView .sup-shell {
+    padding-left: max(10px, env(safe-area-inset-left));
+    padding-right: max(10px, env(safe-area-inset-right));
+  }
+}
+
+/* ── Management tbl-row semantic classes ── */
+@media screen and (max-width: 768px) {
+  #managementView .tbl-row .t-status { grid-column:2; grid-row:1; display:flex; align-items:flex-start; justify-content:flex-end; }
+  #managementView .tbl-row .t-door-cell { display:inline; }
+  #managementView .tbl-row .t-door-cell .t-door { font-size:12px; font-family:var(--mono); font-weight:600; color:var(--cyan); }
+  #managementView .tbl-row .t-note-cell { display:block; font-size:10px; color:var(--t2); margin-top:2px; }
+  #managementView .tbl-row .t-acts-wrap { grid-column:1/-1; display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }
+  #managementView .tbl-row .t-acts-wrap .t-acts { display:contents; }
+  #managementView .tbl-row .t-acts-wrap .btn { flex:1 1 auto; min-height:38px; padding:7px 10px; font-size:11px; }
+  #managementView .tbl-row .t-acts-wrap .qs-btn { flex:1; min-width:52px; min-height:38px !important; padding:7px 8px !important; font-size:10px !important; }
+  /* Shunt picker inside rows */
+  #managementView .shunt-picker { padding:10px 0 4px; width:100%; }
+  #managementView .shunt-doors { display:flex; flex-wrap:wrap; gap:5px; margin:6px 0; }
+  #managementView .shunt-door-btn { min-width:42px; min-height:38px; font-size:12px; }
 }

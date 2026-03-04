@@ -9,7 +9,8 @@ const crypto  = require("crypto");
 const zlib    = require("zlib");
 
 const app = express();
-
+// Serve static files (index.html, app.js, style.css, manifest, icons, sw.js)
+app.use(express.static(__dirname));
 // Prevent uncaught errors from crashing the whole server
 process.on('uncaughtException',  err  => { console.error('[CRASH] uncaughtException:', err); logEvent('error','crash','uncaughtException', String(err?.stack||err)).catch(()=>{}); });
 process.on('unhandledRejection', reason => { console.error('[CRASH] unhandledRejection:', reason); logEvent('error','crash','unhandledRejection', String(reason?.stack||reason)).catch(()=>{}); });

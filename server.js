@@ -207,7 +207,8 @@ async function broadcastPush(title, body, data) {
 async function initDb() {
   await run(`CREATE TABLE IF NOT EXISTS trailers (
     trailer TEXT PRIMARY KEY, direction TEXT, status TEXT, door TEXT,
-    note TEXT, dropType TEXT, carrierType TEXT DEFAULT '', updatedAt INTEGER
+    note TEXT, dropType TEXT, carrierType TEXT DEFAULT '', updatedAt INTEGER,
+    omwAt INTEGER DEFAULT NULL, omwEta INTEGER DEFAULT NULL, doorAt INTEGER DEFAULT NULL
   )`);
   await run(`CREATE TABLE IF NOT EXISTS doorblocks (
     door      TEXT PRIMARY KEY,
@@ -243,6 +244,12 @@ async function initDb() {
     reservedAt INTEGER NOT NULL,
     expiresAt  INTEGER NOT NULL
   )`);
+
+// Safe column migrations (no-op if column exists)
+db.run('ALTER TABLE trailers ADD COLUMN omwAt INTEGER DEFAULT NULL', ()=>{});
+db.run('ALTER TABLE trailers ADD COLUMN omwEta INTEGER DEFAULT NULL', ()=>{});
+db.run('ALTER TABLE trailers ADD COLUMN doorAt INTEGER DEFAULT NULL', ()=>{});
+
 
   // Migrations (safe to re-run)
   await run(`DELETE FROM dockplates WHERE CAST(door AS INTEGER) < 28`);
@@ -360,9 +367,7 @@ function requireRole(roles) {
 // be submitting driver actions)
 function requireDriverAccess(req, res, next) {
   const s = getSession(req);
-  if (s && ["dock","dispatcher","management","admin"].includes(s.role)) {
-    return res.status(403).send("Driver endpoint — not accessible from this role");
-  }
+  if (s?.role === "dock") return res.status(403).send("Not accessible from dock role");
   next();
 }
 
@@ -419,6 +424,9 @@ async function loadTrailersObject() {
       dropType:    r.dropType    || "",
       carrierType: r.carrierType || "",
       updatedAt:   r.updatedAt   || 0,
+      omwAt:       r.omwAt       || null,
+      omwEta:      r.omwEta      || null,
+      doorAt:      r.doorAt      || null,
     };
   }
   return obj;
@@ -969,14 +977,15 @@ app.post("/api/upsert", requireXHR, requireDockStatusAllowed, async (req, res) =
     const allowed = ["Incoming","Dropped","Loading","Dock Ready","Ready","Departed",""];
     if (!allowed.includes(finalStatus)) return res.status(400).send("Invalid status");
 
+    const doorAt = (door && door !== existing?.door) ? now : (existing?.doorAt || null);
     await run(
-      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt)
-       VALUES(?,?,?,?,?,?,?,?)
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt,doorAt)
+       VALUES(?,?,?,?,?,?,?,?,?)
        ON CONFLICT(trailer) DO UPDATE SET
          direction=excluded.direction, status=excluded.status, door=excluded.door,
          note=excluded.note, dropType=excluded.dropType, carrierType=excluded.carrierType,
-         updatedAt=excluded.updatedAt`,
-      [trailer, direction, finalStatus, door, note, dropType, carrierType, now]
+         updatedAt=excluded.updatedAt, doorAt=COALESCE(trailers.doorAt,excluded.doorAt)`,
+      [trailer, direction, finalStatus, door, note, dropType, carrierType, now, doorAt]
     );
 
     await audit(req, actor, existing ? "trailer_update" : "trailer_create", "trailer", trailer, { direction, status: finalStatus, door, dropType, note });
@@ -1098,16 +1107,20 @@ app.post("/api/driver/omw", requireXHR, async (req, res) => {
     const now  = Date.now();
 
     await run(
-      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt)
-       VALUES(?,?,?,?,?,?,?,?)
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt,omwAt,omwEta)
+       VALUES(?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(trailer) DO UPDATE SET
          direction=excluded.direction, status=excluded.status, door=excluded.door,
-         note=excluded.note, dropType=excluded.dropType, carrierType=excluded.carrierType, updatedAt=excluded.updatedAt`,
-      [trailer, "Inbound", "Incoming", assignedDoor, note, "Loaded", "Wesbell", now]
+         note=excluded.note, dropType=excluded.dropType, carrierType=excluded.carrierType,
+         updatedAt=excluded.updatedAt, omwAt=excluded.omwAt, omwEta=excluded.omwEta`,
+      [trailer, "Inbound", "Incoming", assignedDoor, note, "Loaded", "Wesbell", now, now, eta]
     );
 
     await audit(req, "driver", "omw", "trailer", trailer, { door: assignedDoor, eta });
     await broadcastTrailers();
+    // Push notification to dispatcher
+    broadcastPush("🚛 Driver On My Way", `Trailer ${trailer} → Door ${assignedDoor}${eta ? ` · ETA ~${eta} min` : ""}`, { type: "omw", trailer, door: assignedDoor });
+    wsBroadcast("omw", { trailer, door: assignedDoor, eta, at: now });
     res.json({ ok: true, door: assignedDoor, alreadyActive: false });
   } catch (e) { console.error("[omw]", e); res.status(500).send("OMW failed"); }
 });
@@ -1176,15 +1189,18 @@ app.post("/api/driver/arrive", requireXHR, async (req, res) => {
 
     const now = Date.now();
     await run(
-      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt)
-       VALUES(?,?,?,?,?,?,?,?)
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt,doorAt)
+       VALUES(?,?,?,?,?,?,?,?,?)
        ON CONFLICT(trailer) DO UPDATE SET
          direction=excluded.direction, status=excluded.status, door=excluded.door,
-         dropType=excluded.dropType, carrierType=excluded.carrierType, updatedAt=excluded.updatedAt`,
-      [trailer, direction, "Incoming", assignedDoor, "", dropType, carrierType, now]
+         dropType=excluded.dropType, carrierType=excluded.carrierType, updatedAt=excluded.updatedAt,
+         doorAt=excluded.doorAt`,
+      [trailer, direction, "Incoming", assignedDoor, "", dropType, carrierType, now, now]
     );
 
     await audit(req, "driver", "arrive", "trailer", trailer, { door: assignedDoor, carrierType });
+    broadcastPush("✅ Driver Arrived", `Trailer ${trailer} at Door ${assignedDoor}`, { type: "arrive", trailer, door: assignedDoor });
+    wsBroadcast("arrive", { trailer, door: assignedDoor, at: now });
     await broadcastTrailers();
     res.json({ ok: true, door: assignedDoor, alreadyActive: false });
   } catch (e) { console.error("[arrive]", e); res.status(500).send("Arrival failed"); }
@@ -1359,6 +1375,37 @@ app.post("/api/push/unsubscribe", requireXHR, async (req, res) => {
 /* ══════════════════════════════════════════
    API — AUDIT
 ══════════════════════════════════════════ */
+
+app.get("/api/shift-summary", requireRole(["dispatcher","management","admin"]), async (req, res) => {
+  try {
+    const hours = parseInt(req.query.hours) || 12;
+    const since = Date.now() - hours * 3600 * 1000;
+    const events = await all(`SELECT * FROM audit WHERE at > ? ORDER BY at DESC LIMIT 500`, [since]);
+    const trailerRows = await all(`SELECT * FROM trailers`);
+    const active = trailerRows.filter(r => !["Departed",""].includes(r.status||""));
+    const departed = trailerRows.filter(r => r.status === "Departed");
+    const byStatus = {};
+    events.filter(e => e.action === "trailer_status_set").forEach(e => {
+      try { const dd = JSON.parse(e.details||"{}"); byStatus[dd.status] = (byStatus[dd.status]||0)+1; } catch{}
+    });
+    const issues = await all(`SELECT id,at,trailer,door,note FROM issue_reports WHERE at > ? ORDER BY at DESC`, [since]);
+    res.json({
+      hours, since,
+      active: active.length, departed: departed.length, total: trailerRows.length,
+      byStatus,
+      issues: issues.length,
+      confirmations: events.filter(e=>e.action==="confirm_safety").length,
+      omw: events.filter(e=>e.action==="omw").length,
+      arrivals: events.filter(e=>e.action==="arrive").length,
+      issueList: issues,
+      recentEvents: events.slice(0,60).map(e=>({
+        at:e.at, action:e.action, actor:e.actorRole, entity:e.entityId,
+        details: (()=>{try{return JSON.parse(e.details||"{}");}catch{return {};}})()
+      }))
+    });
+  } catch(e){ console.error("[shift-summary]",e); res.status(500).send("Failed"); }
+});
+
 app.get("/api/audit", requireRole(["dispatcher","management","admin"]), async (req, res) => {
   try {
     const limit = Math.max(1, Math.min(500, Number(req.query.limit || 200)));

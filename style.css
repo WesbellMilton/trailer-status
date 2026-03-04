@@ -1361,14 +1361,14 @@ input, select, textarea {
 
 /* ── Assignment card — fluid reveal ── */
 .assignment-card {
-  transition: all .25s cubic-bezier(.22,1,.36,1);
+  transition: opacity .25s cubic-bezier(.22,1,.36,1), transform .25s cubic-bezier(.22,1,.36,1);
   transform-origin: top center;
 }
 .assignment-card:not(.visible) {
-  transform: scaleY(.95) translateY(-4px);
-  opacity: 0;
+  display: none !important;
 }
 .assignment-card.visible {
+  display: flex;
   transform: none;
   opacity: 1;
 }

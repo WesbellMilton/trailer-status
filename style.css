@@ -320,9 +320,6 @@ textarea{min-height:60px;resize:vertical}
 .driver-shell{
   min-height:calc(100vh - 48px);
   background:var(--bg);
-  background-image:
-    radial-gradient(ellipse 900px 500px at 50% -80px,rgba(245,166,35,.08) 0%,transparent 65%),
-    radial-gradient(ellipse 600px 400px at 90% 100%,rgba(24,212,232,.05) 0%,transparent 65%);
   display:flex;align-items:flex-start;justify-content:center;padding:28px 16px 48px;
 }
 .driver-wrap{width:100%;max-width:440px;display:flex;flex-direction:column;gap:14px}
@@ -1013,30 +1010,16 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
 @keyframes submitGlowGreen{0%,100%{box-shadow:0 0 0 0 rgba(25,224,154,0),0 0 24px rgba(25,224,154,.06)}50%{box-shadow:0 0 0 7px rgba(25,224,154,.10),0 0 32px rgba(25,224,154,.10)}}
 
 @keyframes rowIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
-.tbl-row{animation:rowIn .18s var(--ease-out-quart) both}
-.tbl-row:nth-child(1){animation-delay:.02s}.tbl-row:nth-child(2){animation-delay:.04s}
-.tbl-row:nth-child(3){animation-delay:.06s}.tbl-row:nth-child(4){animation-delay:.08s}
-.tbl-row:nth-child(5){animation-delay:.10s}.tbl-row:nth-child(6){animation-delay:.12s}
-.tbl-row:nth-child(7){animation-delay:.14s}.tbl-row:nth-child(8){animation-delay:.15s}
-.tbl-row:nth-child(9){animation-delay:.16s}.tbl-row:nth-child(n+10){animation-delay:.17s}
+/* tbl-row entry animation removed */
 
 @keyframes dockCardIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-.dock-card{animation:dockCardIn .22s var(--ease-out-quart) both}
-.dock-card:nth-child(1){animation-delay:.03s}.dock-card:nth-child(2){animation-delay:.07s}
-.dock-card:nth-child(3){animation-delay:.11s}.dock-card:nth-child(4){animation-delay:.14s}
-.dock-card:nth-child(5){animation-delay:.17s}.dock-card:nth-child(n+6){animation-delay:.19s}
+/* dock-card entry animation removed */
 
 @keyframes kpiIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-.kpi{animation:kpiIn .28s var(--ease-out-quart) both}
-.kpi:nth-child(1){animation-delay:.05s}.kpi:nth-child(2){animation-delay:.10s}
-.kpi:nth-child(3){animation-delay:.15s}.kpi:nth-child(4){animation-delay:.20s}
-.kpi:nth-child(5){animation-delay:.25s}
+/* kpi entry animation removed */
 
 @keyframes feedIn{from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:none}}
-.feed-item{animation:feedIn .2s var(--ease-out-quart) both}
-.feed-item:nth-child(1){animation-delay:.03s}.feed-item:nth-child(2){animation-delay:.07s}
-.feed-item:nth-child(3){animation-delay:.10s}.feed-item:nth-child(4){animation-delay:.13s}
-.feed-item:nth-child(5){animation-delay:.15s}.feed-item:nth-child(n+6){animation-delay:.17s}
+/* feed-item entry animation removed */
 
 @keyframes modalIn{from{opacity:0;transform:scale(.94) translateY(8px)}to{opacity:1;transform:none}}
 @keyframes overlayIn{from{opacity:0}to{opacity:1}}
@@ -1059,7 +1042,7 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
 .live-dot.ok{animation:liveBeat 2.4s ease-in-out infinite}
 
 @keyframes panelIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-.panel{animation:panelIn .24s var(--ease-out-quart) both}
+/* panel entry animation removed - view handles fade */
 .col-stack .panel:nth-child(1){animation-delay:.04s}
 .col-stack .panel:nth-child(2){animation-delay:.09s}
 .col-stack .panel:nth-child(3){animation-delay:.13s}
@@ -1077,7 +1060,7 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 
 @keyframes rnbBounce{0%{opacity:0;transform:translateY(-10px) scale(.96)}60%{transform:translateY(2px) scale(1.01)}100%{opacity:1;transform:none}}
-.ready-notif-banner{animation:rnbBounce .35s var(--ease-spring) both}
+.ready-notif-banner{animation:rnbBounce .35s var(--ease-spring) forwards}
 
 @keyframes offlineShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(2px)}}
 .offline-banner{animation:offlineShake .4s ease both}

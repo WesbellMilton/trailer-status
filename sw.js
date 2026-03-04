@@ -35,8 +35,8 @@ self.addEventListener("push", evt => {
   evt.waitUntil(
     self.registration.showNotification(data.title || "Wesbell Dispatch", {
       body: data.body || "",
-      icon: "/icon-192.png",
-      badge: "/icon-192.png",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
       tag: "wb-dispatch",
       renotify: true,
       data: data.data || {},

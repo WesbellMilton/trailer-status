@@ -545,7 +545,7 @@ async function broadcastConfirmations() {
    STATIC / VIEWS
 ══════════════════════════════════════════ */
 // Safe static file serving — allowlist regex, never exposes server.js/sqlite/vapid
-const SAFE_FILES = /^\/(app\.js|style\.css|sw2\.js|manifest\.json|favicon\.ico|favicon-\d+\.png|icon-\d+\.png|icon-[\w-]+\.png|apple-touch-icon\.png|splash\/splash-[\w-]+\.png)$/;
+const SAFE_FILES = /^\/(app\.js|style\.css|sw2\.js|manifest\.json|favicon\.ico|favicon-\d+\.png|icon-\d+\.png|icon-[\w-]+\.png|apple-touch-icon\.png|icons\/icon-[\w-]+\.png|splash\/splash-[\w-]+\.png)$/;
 app.use((req, res, next) => {
   if (req.path === "/sw.js" || req.path === "/sw2.js") {
     res.setHeader("Service-Worker-Allowed", "/");

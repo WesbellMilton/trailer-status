@@ -1,2054 +1,1518 @@
-(() => {
-  const CSRF = {"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"};
-  let ROLE = null, VERSION = "", trailers = {}, dockPlates = {}, doorBlocks = {}, confirmations = [];
-  const plateEditOpen = {};
-  let shuntOpen = {};
-  const el = id => document.getElementById(id);
-  const path = () => location.pathname.toLowerCase();
-  const isDriver = () => path().startsWith("/driver");
-  const isSuper  = () => path().startsWith("/management");
-  const isDock   = () => path().startsWith("/dock");
-  const isAdmin  = () => ROLE === "admin";
-
-  const fmtTime = ms => {
-    if (!ms) return "";
-    try { return new Date(ms).toLocaleString(undefined,{month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"}); }
-    catch { return String(ms); }
-  };
-  const timeAgo = ms => {
-    if (!ms) return "";
-    const s = Math.floor((Date.now()-ms)/1000);
-    if (s<60) return `${s}s ago`;
-    if (s<3600) return `${Math.floor(s/60)}m ago`;
-    if (s<86400) return `${Math.floor(s/3600)}h ago`;
-    return `${Math.floor(s/86400)}d ago`;
-  };
-  const esc = s => String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
-
-  async function apiJson(url, opts) {
-    const res = await fetch(url, opts);
-    if (res.status===401) { location.href="/login?expired=1&from="+encodeURIComponent(location.pathname); throw new Error("401"); }
-    if (res.status===403) { console.warn("Forbidden:", url); throw new Error("403"); }
-    // 409 Conflict = structured duplicate warning — return the JSON body, don't throw
-    if (res.status===409) { const ct=res.headers.get("content-type")||""; return ct.includes("application/json") ? res.json() : {}; }
-    if (!res.ok) { const t=await res.text().catch(()=>""); throw new Error(t||"HTTP "+res.status); }
-    const ct = res.headers.get("content-type")||"";
-    return ct.includes("application/json") ? res.json() : {};
-  }
-
-  function toast(title, body, type, duration) {
-    el("toastTitle").textContent = title;
-    el("toastBody").textContent = body||"";
-    const t=el("toast");
-    t.className = "toast "+(type==="ok"?"t-ok":type==="warn"?"t-warn":"t-err");
-    t.style.display="block";
-    t.style.transform="";
-    t.classList.remove("swipe-out");
-    if (type==="ok") haptic("success");
-    else if (type==="err") haptic("error");
-    else haptic("light");
-    clearTimeout(toast._t);
-    toast._t = setTimeout(()=>t.style.display="none", duration||4500);
-  }
-
-  let _mr=null;
-  function showModal(title,body) {
-    return new Promise(r=>{
-      _mr=r;
-      el("modalTitle").textContent=title;
-      el("modalBody").textContent=body;
-      el("modalOv").classList.remove("hidden");
-      el("modalConfirm").focus();
-    });
-  }
-  el("modalCancel")?.addEventListener("click",  ()=>{ el("modalOv").classList.add("hidden"); if(_mr){_mr(false);_mr=null;} });
-  el("modalConfirm")?.addEventListener("click", ()=>{ el("modalOv").classList.add("hidden"); if(_mr){_mr(true);_mr=null;} });
-  el("modalOv")?.addEventListener("click", e=>{ if(e.target===el("modalOv")){ el("modalOv").classList.add("hidden"); if(_mr){_mr(false);_mr=null;} } });
-  el("dmModalCancel")?.addEventListener("click", () => el("dmModalOv")?.classList.add("hidden"));
-  el("dmModalOv")?.addEventListener("click", e => { if(e.target===el("dmModalOv")) el("dmModalOv").classList.add("hidden"); });
-
-  function setPlatesOpen(open) {
-    const t=el("dockPlatesToggle"), b=el("dockPlatesBody"); if(!t||!b) return;
-    t.setAttribute("aria-expanded", open?"true":"false");
-    b.style.maxHeight = open ? (b.scrollHeight+40)+"px" : "0px";
-    try{localStorage.setItem("platesOpen",open?"1":"0");}catch{}
-  }
-  function setPlatesOpen2(open) {
-    const t=el("dockPlatesToggle2"), b=el("dockPlatesBody2"); if(!t||!b) return;
-    t.setAttribute("aria-expanded", open?"true":"false");
-    b.style.maxHeight = open ? (b.scrollHeight+40)+"px" : "0px";
-  }
-
-  const STATUS_ROW = {Loading:"r-loading",Ready:"r-ready","Dock Ready":"r-dockready",Dropped:"r-dropped",Incoming:"r-incoming",Departed:"r-departed"};
-  const STATUS_TAG = {Loading:"stag-loading",Ready:"stag-ready","Dock Ready":"stag-dockready",Dropped:"stag-dropped",Incoming:"stag-incoming",Departed:"stag-departed"};
-
-  function statusTag(s) {
-    return `<span class="stag ${STATUS_TAG[s]||"stag-unknown"}"><span class="sp"></span>${esc(s||"—")}</span>`;
-  }
-  function carrierTag(c) {
-    if(!c) return "";
-    const isWesbell = c==="Wesbell";
-    const cls = isWesbell ? "stag-ready" : "stag-dropped";
-    const icon = isWesbell ? "🚛" : "🏢";
-    return `<span class="stag ${cls}" style="font-size:9px;padding:1px 5px;" title="Carrier: ${esc(c)}">${icon} ${esc(c)}</span>`;
-  }
-  function plateStatusTag(s) {
-    const cls = s==="OK"?"stag-ready":s==="Service"?"stag-service":s==="Out of Order"?"stag-error":"stag-unknown";
-    return `<span class="stag ${cls}" style="font-size:9px;padding:1px 5px;"><span class="sp"></span>${esc(s||"Unknown")}</span>`;
-  }
-
-  function highlightNav() {
-    ["navDispatch","navDock","navDriver","navManagement"].forEach(id=>el(id)?.classList.remove("active"));
-    const p=path();
-    if(p.startsWith("/management")) el("navManagement")?.classList.add("active");
-    else if(p.startsWith("/driver")) el("navDriver")?.classList.add("active");
-    else if(p.startsWith("/dock")) el("navDock")?.classList.add("active");
-    else el("navDispatch")?.classList.add("active");
-    const rb=el("roleBadge");
-    if(ROLE){ rb.style.display=""; rb.textContent=ROLE==="admin"?"⚡ ADMIN":ROLE.toUpperCase(); rb.style.color=ROLE==="admin"?"var(--amber)":""; }
-    else { rb.style.display="none"; }
-  }
-
-  /* ── DOOR OCCUPANCY ── */
-  function getOccupiedDoors() {
-    const map = {};
-    Object.entries(trailers).forEach(([t,r]) => {
-      if (r.door && !["Departed",""].includes(r.status)) {
-        map[r.door] = { trailer: t, status: r.status };
-      }
-    });
-    Object.entries(doorBlocks).forEach(([door, b]) => {
-      if (!map[door]) map[door] = { trailer: null, status: "Blocked", note: b.note };
-    });
-    return map;
-  }
-
-  function renderDockMap() {
-    const mapEl = el("dockMapGrid"); if (!mapEl) return;
-    const occupied = getOccupiedDoors();
-    const canEdit = ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin"||ROLE==="dock";
-    let html = "";
-    for (let d=28; d<=42; d++) {
-      const ds = String(d);
-      const occ = occupied[ds];
-      const isBlock = occ && occ.status === "Blocked";
-      const cls = occ
-        ? (isBlock ? "dm-occupied dm-blocked" : `dm-occupied dm-${(STATUS_ROW[occ.status]||"r-incoming").replace("r-","")}`)
-        : "dm-free";
-      const clickable = canEdit ? " dm-clickable" : "";
-      const attrs = canEdit ? `tabindex="0" role="button"` : "";
-      html += `<div class="dm-cell ${cls}${clickable}" data-dm-door="${ds}" ${attrs}>
-        <span class="dm-door" data-dm-door="${ds}">D${ds}</span>
-        ${occ
-          ? (isBlock
-              ? `<span class="dm-trailer" data-dm-door="${ds}" style="font-size:9px;opacity:.75">Blocked</span><span class="dm-status" data-dm-door="${ds}" style="font-size:8px">${esc(occ.note||"")}</span>`
-              : `<span class="dm-trailer" data-dm-door="${ds}">${esc(occ.trailer)}</span><span class="dm-status" data-dm-door="${ds}">${esc(occ.status)}</span>`)
-          : `<span class="dm-free-label" data-dm-door="${ds}">Free</span>`
-        }
-      </div>`;
-    }
-    mapEl.innerHTML = html;
-  }
-
-  /* ── BOARD ── */
-  const prevStatuses={};
-  function renderBoardInto(tbodyEl,countEl,countStrEl,sq,dq,stq,readOnly) {
-    if(!tbodyEl)return;
-    const q=(sq?.value||"").trim().toLowerCase(), df=(dq?.value||"").trim(), sf=(stq?.value||"").trim();
-    const rows=Object.entries(trailers).map(([t,r])=>({trailer:t,...r})).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
-    const filt=rows.filter(r=>{
-      if(df&&r.direction!==df)return false;
-      if(sf&&r.status!==sf)return false;
-      if(q&&!`${r.trailer} ${r.door||""} ${r.note||""} ${r.direction||""} ${r.status||""} ${r.dropType||""}`.toLowerCase().includes(q))return false;
-      return true;
-    });
-    if(countEl) countEl.textContent=filt.length;
-    if(countStrEl) countStrEl.textContent=`${filt.length} trailer${filt.length===1?"":"s"} shown`;
-    if(!filt.length){ tbodyEl.innerHTML=`<div class="tbl-empty">No trailers match filters</div>`; return; }
-    const canEdit=!readOnly&&(ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin");
-    const canDock=!readOnly&&(ROLE==="dock"||ROLE==="admin");
-    const occupied = getOccupiedDoors();
-
-    tbodyEl.innerHTML=filt.map(r=>{
-      const rowCls=STATUS_ROW[r.status]||"";
-      const flash=(r.trailer in prevStatuses && prevStatuses[r.trailer]!==r.status)?" flashing":"";
-      prevStatuses[r.trailer]=r.status;
-      const readyFlash=((ROLE==="dispatcher"||ROLE==="management")&&!readOnly&&r.status==="Ready")?" ready-flash":"";
-      const door = r.door ? `<span class="t-door">${esc(r.door)}</span>` : `<span style="color:var(--t3)">—</span>`;
-      const note=r.note?`<span class="t-note" title="${esc(r.note)}">${esc(r.note)}</span>`:`<span style="color:var(--t3)">—</span>`;
-      const dtype=r.dropType?`<span style="font-size:10px;color:var(--t2);font-family:var(--mono);">${esc(r.dropType)}</span>`:`<span style="color:var(--t3)">—</span>`;
-      const ctag=carrierTag(r.carrierType);
-      const ago=r.updatedAt?timeAgo(r.updatedAt):"";
-
-      let acts=`<span style="color:var(--t3)">—</span>`;
-      if(canEdit){
-        const nextStatuses = {
-          "Incoming":  ["Dropped","Departed"],
-          "Dropped":   ["Loading","Departed"],
-          "Loading":   ["Dock Ready","Departed"],
-          "Dock Ready":["Ready","Departed"],
-          "Ready":     ["Departed"],
-          "Departed":  ["Incoming"],
-        };
-        const nexts = nextStatuses[r.status] || [];
-        const quickBtns = nexts.map((s,i) => {
-          if(i===0){
-            const btnCls = s==="Ready"?"btn-success":"btn-primary";
-            return `<button class="btn ${btnCls} btn-sm qs-btn" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}" aria-label="${esc(s)} trailer ${esc(r.trailer)}">${esc(s)}</button>`;
-          }
-          return `<button class="btn btn-default btn-sm qs-btn qs-secondary" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}" aria-label="${esc(s)} trailer ${esc(r.trailer)}">${esc(s)}</button>`;
-        }).join("");
-        acts = `<div class="t-acts">
-          ${quickBtns}
-          ${r.status==="Dock Ready"?`<button class="btn btn-success btn-sm" data-act="markReady" data-trailer-id="${esc(r.trailer)}" style="font-weight:800;" aria-label="Mark trailer ${esc(r.trailer)} ready">✓ Ready</button>`:""}
-          <button class="btn btn-default btn-sm" data-act="shuntToggle" data-trailer-id="${esc(r.trailer)}" aria-label="Move trailer ${esc(r.trailer)} to new door">Move</button>
-          <button class="btn btn-default btn-sm" data-act="edit" data-trailer-id="${esc(r.trailer)}" aria-label="Edit trailer ${esc(r.trailer)}">Edit</button>
-          <button class="btn btn-danger btn-sm" data-act="delete" data-trailer-id="${esc(r.trailer)}" aria-label="Delete trailer ${esc(r.trailer)}">Del</button>
-        </div>`;
-      } else if(canDock){
-        if(r.status==="Dropped"||r.status==="Incoming")
-          acts=`<div class="t-acts"><button class="btn btn-default btn-sm" data-act="dockSet" data-to="Loading" data-trailer-id="${esc(r.trailer)}">Loading</button></div>`;
-        else if(r.status==="Loading")
-          acts=`<div class="t-acts"><button class="btn btn-cyan btn-sm" data-act="dockSet" data-to="Dock Ready" data-trailer-id="${esc(r.trailer)}">Dock Ready</button></div>`;
-        else
-          acts=`<span style="color:var(--t3);font-size:10px;font-family:var(--mono);">${esc(r.status==="Dock Ready"?"Awaiting dispatch":r.status==="Ready"?"Ready":"—")}</span>`;
-      }
-
-      const shuntPickerHtml = (shuntOpen[r.trailer] && canEdit) ? `
-        <div class="shunt-picker" data-shunt-trailer="${esc(r.trailer)}">
-          <span class="shunt-label">Move to door:</span>
-          <div class="shunt-doors">${Array.from({length:15},(_,i)=>i+28).map(d=>{
-            const ds=String(d);
-            const isCurrent=ds===(r.door||"");
-            const isOcc=!!occupied[ds]&&!isCurrent;
-            return `<button class="shunt-door-btn${isCurrent?" current":""}${isOcc?" occ":""}" data-act="shuntDoor" data-door="${ds}" data-trailer-id="${esc(r.trailer)}" ${isCurrent?"disabled":""} aria-label="Move to door ${ds}${isOcc?" (occupied)":""}">${ds}${isOcc?`<span class="shunt-occ-dot"></span>`:""}</button>`;
-          }).join("")}</div>
-          <button class="btn btn-default btn-sm" data-act="shuntToggle" data-trailer-id="${esc(r.trailer)}" style="margin-top:4px;">Cancel</button>
-        </div>` : "";
-
-      const carrierCls=r.carrierType==="Outside"?" carrier-outside":"";
-      return `<div class="tbl-row ${rowCls}${flash}${readyFlash}${carrierCls}" data-trailer="${esc(r.trailer)}">
-        <span class="t-num">${esc(r.trailer)}</span>
-        <span class="t-dir">${esc(r.direction||"—")}</span>
-        <span class="t-status">${statusTag(r.status)}</span>
-        <span class="t-door-cell">${door}</span>
-        <span class="t-type">${ctag||dtype}</span>
-        <span class="t-note-cell">${note}</span>
-        <span class="t-time" title="${esc(fmtTime(r.updatedAt))}">${esc(ago)}</span>
-        <div class="t-acts-wrap">${acts}</div>
-      </div>${shuntPickerHtml}`;
-    }).join("");
-  }
-
-  function renderBoard() {
-    renderBoardInto(el("tbody"),el("countsPill"),el("boardCountStr"),el("search"),el("filterDir"),el("filterStatus"),false);
-    const lu=el("lastUpdated"); if(lu) lu.textContent="Updated "+fmtTime(Date.now());
-    renderDockMap();
-    const occupied = getOccupiedDoors();
-    const occupiedInRange = Object.keys(occupied).filter(d=>{ const n=parseInt(d); return n>=28&&n<=42; }).length;
-    const freeCount = 15 - occupiedInRange;
-    const badge = el("dockMapFreeCount");
-    if (badge) badge.textContent = `${freeCount} free`;
-  }
-  function renderSupBoard() {
-    renderBoardInto(el("supTbody"),el("supCountsPill"),el("supCountStr"),el("supSearch"),el("supFilterDir"),el("supFilterStatus"),true);
-    const slu=el("supLastUpdated"); if(slu) slu.textContent="Updated "+fmtTime(Date.now());
-    renderKpis();
-  }
-
-  function renderKpis() {
-    const v=Object.values(trailers);
-    const kpis=[
-      {val:v.length,lbl:"Total Trailers",cls:"kpi-total"},
-      {val:v.filter(r=>r.status==="Loading").length,lbl:"Loading",cls:"kpi-loading"},
-      {val:v.filter(r=>["Ready","Dock Ready"].includes(r.status)).length,lbl:"Ready",cls:"kpi-ready"},
-      {val:v.filter(r=>r.status==="Departed").length,lbl:"Departed",cls:"kpi-departed"},
-      {val:confirmations.length,lbl:"Safety Confirms",cls:"kpi-conf"},
-    ];
-    el("supKpis").innerHTML=kpis.map(k=>`<div class="kpi ${k.cls}"><div class="k-val" data-target="${k.val}">0</div><div class="k-lbl">${k.lbl}</div></div>`).join("");
-    // Count-up animation
-    el("supKpis").querySelectorAll(".k-val[data-target]").forEach(kpiEl=>{
-      const target=parseInt(kpiEl.dataset.target)||0;
-      if(target===0){ kpiEl.textContent="0"; return; }
-      const dur=Math.min(600, target*80);
-      const start=performance.now();
-      const tick=now=>{
-        const t=Math.min(1,(now-start)/dur);
-        const eased=1-Math.pow(1-t,3);
-        kpiEl.textContent=Math.round(eased*target);
-        if(t<1) requestAnimationFrame(tick);
-      };
-      requestAnimationFrame(tick);
-    });
-  }
-
-  function renderPlates() {
-    if(isDriver())return;
-    const canEdit=ROLE==="dispatcher"||ROLE==="dock"||ROLE==="management"||ROLE==="admin";
-    const doors=[]; for(let d=28;d<=42;d++) doors.push(String(d));
-    const v=Object.values(dockPlates||{});
-    const summary=`${v.filter(p=>p?.status==="OK").length} OK · ${v.filter(p=>p?.status==="Service").length} Svc · ${v.filter(p=>p?.status==="Out of Order").length} OOO`;
-    ["platesMini","platesMini2"].forEach(id=>{ const e=el(id); if(e)e.textContent=summary; });
-    const plateHtml=doors.map(door=>{
-      const p=dockPlates[door]||{status:"Unknown",note:""};
-      const open=!!plateEditOpen[door]&&canEdit;
-      const cls=p.status==="OK"?"p-ok":p.status==="Service"?"p-service":p.status==="Out of Order"?"p-out-of-order":"";
-      return `<div class="plate ${cls}">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:3px;"><span class="p-door">D${esc(door)}</span>${plateStatusTag(p.status)}</div>
-        <div class="p-note">${p.note?esc(p.note):`<span style="color:var(--t3)">—</span>`}</div>
-        ${open?`<select data-plate-status="${esc(door)}" style="margin-top:3px;"><option ${p.status==="OK"?"selected":""}>OK</option><option ${p.status==="Service"?"selected":""}>Service</option><option ${p.status==="Out of Order"?"selected":""}>Out of Order</option></select><input data-plate-note="${esc(door)}" placeholder="Note" value="${esc(p.note||"")}" style="margin-top:3px;"/>`:""}
-        <div class="p-btns" style="margin-top:3px;">${canEdit?`<button class="p-btn" data-plate-toggle="${esc(door)}">${open?"Close":"Edit"}</button>${open?`<button class="p-btn" data-plate-save="${esc(door)}">Save</button>`:""}`:" "}</div>
-      </div>`;
-    }).join("");
-    ["platesGrid","platesGrid2"].forEach(id=>{ const e=el(id); if(e)e.innerHTML=plateHtml; });
-    if(el("dockPlatesToggle")?.getAttribute("aria-expanded")==="true") setPlatesOpen(true);
-    if(el("dockPlatesToggle2")?.getAttribute("aria-expanded")==="true") setPlatesOpen2(true);
-  }
-
-  function renderSupConf() {
-    const sb=el("supConfBody"),sc=el("supConfCount"); if(!sb)return;
-    sc.textContent=confirmations.length;
-    sb.innerHTML=!confirmations.length
-      ?`<tr><td colspan="5" style="padding:16px;color:var(--t2);">No confirmations yet.</td></tr>`
-      :confirmations.map(c=>`<tr><td class="muted">${esc(fmtTime(c.at))}</td><td class="mono" style="font-weight:500;color:var(--t0);">${esc(c.trailer||"—")}</td><td class="mono">${esc(c.door||"—")}</td><td style="color:var(--t1);font-size:11px;">${esc(c.action||"—")}</td><td class="muted">${esc((c.ip||"—").split(",")[0])}</td></tr>`).join("");
-  }
-
-  const FEED_COLORS={trailer_create:"var(--green)",trailer_update:"var(--cyan)",trailer_delete:"var(--red)",trailer_status_set:"var(--amber)",driver_drop:"var(--violet)",crossdock_pickup:"var(--cyan)",crossdock_offload:"var(--amber)",safety_confirmed:"var(--green)",plate_set:"var(--t2)",pin_changed:"var(--amber)",trailer_clear_all:"var(--red)"};
-  function renderFeed(rows) {
-    const feed=el("supFeed"); if(!feed)return;
-    el("supAuditCount").textContent=rows.length;
-    if(!rows.length){ feed.innerHTML=`<div style="color:var(--t2);font-size:11px;font-family:var(--mono);">No activity yet.</div>`; return; }
-    feed.innerHTML=rows.slice(0,15).map(r=>{
-      const color=FEED_COLORS[r.action]||"var(--t2)";
-      let txt=`<strong>${esc(r.actorRole||"—")}</strong> — ${esc(r.action||"—")}`;
-      if(r.entityId&&r.entityId!=="*") txt+=` · <strong>${esc(r.entityId)}</strong>`;
-      return `<div class="feed-item"><div class="feed-pip" style="background:${color};"></div><div class="feed-content"><div class="feed-action">${txt}</div><div class="feed-time">${esc(timeAgo(r.at))}</div></div></div>`;
-    }).join("");
-  }
-
-  async function loadAuditInto(bodyEl,countEl,cols) {
-    try {
-      const rows=await apiJson("/api/audit?limit=200"); if(!rows)return;
-      if(countEl) countEl.textContent=rows.length;
-      if(cols===0){ renderFeed(rows); return; }
-      if(!bodyEl)return;
-      if(!rows.length){ bodyEl.innerHTML=`<tr><td colspan="${cols}" style="padding:16px;color:var(--t2);">No entries.</td></tr>`; return; }
-      bodyEl.innerHTML=rows.map(r=>{
-        let d=""; try{ d=JSON.stringify(r.details||{}); }catch{}
-        return `<tr><td class="muted">${esc(fmtTime(r.at))}</td><td style="color:var(--t1);">${esc(r.actorRole||"—")}</td><td style="color:var(--t1);">${esc(r.action||"—")}</td><td class="muted">${esc(r.entityType||"—")}</td><td class="mono">${esc(r.entityId||"—")}</td><td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;color:var(--t2);" title="${esc(d)}">${esc(d)}</td><td class="muted">${esc(r.ip||"—")}</td></tr>`;
-      }).join("");
-    } catch(e){ toast("Audit error",e.message,"err"); }
-  }
-
-  function dispPanelHtml(){ return `
-    <div class="infobox infobox-amber"><div class="ib-title">Dispatcher Controls</div>Add and manage trailers. Use inline buttons on each row for quick status changes.</div>
-    <div class="field"><label class="fl" for="d_trailer">Trailer Number</label><input id="d_trailer" placeholder="e.g. 5312" autocomplete="off" inputmode="numeric" autocorrect="off" autocapitalize="none" spellcheck="false" style="font-family:var(--mono);font-weight:500;"/></div>
-    <div class="field-row">
-      <div class="field"><label class="fl" for="d_direction">Direction</label><select id="d_direction"><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select></div>
-      <div class="field"><label class="fl" for="d_status">Status</label><select id="d_status"><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select></div>
-    </div>
-    <div class="field-row">
-      <div class="field"><label class="fl" for="d_door">Door (28–42)</label><input id="d_door" placeholder="e.g. 32" inputmode="numeric" autocomplete="off" style="font-family:var(--mono);"/></div>
-      <div class="field"><label class="fl" for="d_dropType">Drop Type</label><select id="d_dropType"><option value="">—</option><option>Empty</option><option>Loaded</option></select></div>
-    </div>
-    <div class="field"><label class="fl" for="d_carrierType">Carrier</label><select id="d_carrierType"><option value="">—</option><option>Wesbell</option><option>Outside</option></select></div>
-    <div class="field"><label class="fl" for="d_note">Note</label><textarea id="d_note" placeholder="Optional note…"></textarea></div>
-    <button class="btn btn-primary btn-full" id="btnSaveTrailer" style="min-height:48px;">Save Trailer Record</button>`; }
-
-  function dockPanelHtml(){ return `
-    <div class="infobox infobox-cyan"><div class="ib-title">Dock Workflow</div>1. Trailer arrives → tap <strong>Loading</strong><br/>2. Loading done → tap <strong>Dock Ready</strong><br/>3. Dispatcher confirms → driver notified.</div>
-    <div style="font-size:11px;color:var(--t2);">No dispatch controls on Dock role.</div>`; }
-
-  /* ── DOCK VIEW ── */
-  let dockFilter = "active";
-
-  const DOCK_STATUS_NEXT = {
-    "Incoming":  { label:"Mark Loading",    to:"Loading",    cls:"dc-btn-default" },
-    "Dropped":   { label:"Mark Loading",    to:"Loading",    cls:"dc-btn-default" },
-    "Loading":   { label:"Mark Dock Ready", to:"Dock Ready", cls:"dc-btn-cyan"    },
-    "Dock Ready":{ label:"Awaiting dispatcher", to:null,     cls:"" },
-    "Ready":     { label:"Ready for pickup",    to:null,     cls:"" },
-    "Departed":  { label:"Departed",            to:null,     cls:"" },
-  };
-
-  const DOCK_STATUS_COLOR = {
-    "Incoming":"dc-incoming","Dropped":"dc-dropped","Loading":"dc-loading",
-    "Dock Ready":"dc-dockready","Ready":"dc-ready","Departed":"dc-departed",
-  };
-
-  function renderDockView() {
-    const cards = el("dockCards");
-    const countEl = el("dockCount");
-    if (!cards) return;
-    const q = (el("dockSearch")?.value || "").trim().toLowerCase();
-    const rows = Object.entries(trailers)
-      .map(([t,r]) => ({trailer:t,...r}))
-      .filter(r => {
-        if (dockFilter==="active" && r.status==="Departed") return false;
-        if (q && !`${r.trailer} ${r.door||""} ${r.note||""} ${r.status||""}`.toLowerCase().includes(q)) return false;
-        return true;
-      })
-      .sort((a,b) => {
-        const order = {"Loading":0,"Dropped":1,"Incoming":2,"Dock Ready":3,"Ready":4,"Departed":5};
-        return (order[a.status]??9)-(order[b.status]??9)||(b.updatedAt||0)-(a.updatedAt||0);
-      });
-    if (countEl) countEl.textContent = rows.length;
-    const canAct = ROLE==="dock"||ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin";
-    const loginNudge = el("dockLoginNudge");
-    if (loginNudge) loginNudge.style.display = canAct ? "none" : "";
-    if (!rows.length) {
-      cards.innerHTML = `<div class="dock-empty">${q?"No trailers match search.":dockFilter==="active"?"No active trailers.":"No trailers on board."}</div>`;
-      return;
-    }
-    cards.innerHTML = rows.map(r => {
-      const colorCls = DOCK_STATUS_COLOR[r.status]||"";
-      const next = DOCK_STATUS_NEXT[r.status];
-      const hasAction = next?.to && canAct;
-      const statusDot = {"Loading":"var(--amber)","Dock Ready":"var(--cyan)","Ready":"var(--green)","Dropped":"var(--violet)","Incoming":"var(--t2)","Departed":"var(--t3)"}[r.status]||"var(--t3)";
-      return `<div class="dock-card ${colorCls}">
-        <div class="dc-top">
-          <div class="dc-trailer-block">
-            <div class="dc-trailer">${esc(r.trailer)}</div>
-            ${r.note?`<div class="dc-note">${esc(r.note)}</div>`:""}
-          </div>
-          <div class="dc-right-block">
-            ${r.door?`<div class="dc-door-badge">D${esc(r.door)}</div>`:`<div class="dc-door-empty">No door</div>`}
-            <div class="dc-status-pill" style="--dot:${statusDot}">${esc(r.status)}</div>
-          </div>
-        </div>
-        <div class="dc-meta-row">
-          ${r.carrierType?carrierTag(r.carrierType):""}
-          ${r.updatedAt?`<span class="dc-ago">${esc(timeAgo(r.updatedAt))}</span>`:""}
-        </div>
-        ${hasAction
-          ?`<button class="dc-action-btn ${next.cls}" data-act="dockSet" data-to="${esc(next.to)}" data-trailer-id="${esc(r.trailer)}">${esc(next.label)}</button>`
-          :next?.to
-            ?`<button class="dc-action-btn dc-btn-signin" data-act="openStaffLogin">🔑 Sign in to update</button>`
-            :`<div class="dc-no-action">${esc(next?.label||"—")}</div>`
-        }
-        ${canAct?`<button class="dc-issue-btn" data-act="dockReportIssue" data-trailer-id="${esc(r.trailer)}" data-door="${esc(r.door||"")}">⚠ Report Issue</button>`:""}
-      </div>`;
-    }).join("");
-  }
-
-  function syncDockWsDot(state) {
-    const dot=el("dockWsDot"),txt=el("dockWsText"); if(!dot||!txt)return;
-    dot.className="live-dot "+state;
-    txt.textContent=state==="ok"?"Live":state==="bad"?"Offline":"Connecting…";
-  }
-
-  function renderRolePanel() {
-    if(ROLE==="admin"){ el("panelTitle").textContent="Admin"; el("panelSub").textContent="Master access"; el("panelBody").innerHTML=dispPanelHtml(); el("btnLogout").style.display=""; el("btnAudit").style.display=""; renderPlates(); return; }
-    if(ROLE==="dispatcher"||ROLE==="management"){ el("panelTitle").textContent=ROLE==="management"?"Management":"Dispatcher"; el("panelSub").textContent="Full control"; el("panelBody").innerHTML=dispPanelHtml(); el("btnLogout").style.display=""; el("btnAudit").style.display=""; renderPlates(); return; }
-    if(ROLE==="dock"){ el("panelTitle").textContent="Dock"; el("panelSub").textContent="Loading / Dock Ready"; el("panelBody").innerHTML=dockPanelHtml(); el("btnLogout").style.display=""; el("btnAudit").style.display="none"; renderPlates(); return; }
-    el("panelTitle").textContent="Not Authenticated"; el("panelSub").textContent="—";
-    el("panelBody").innerHTML=`<div style="color:var(--t2);font-size:12px;line-height:1.6;">Please <a href="/login">sign in</a> to access controls.</div>`;
-    el("btnLogout").style.display="none"; el("btnAudit").style.display="none";
-  }
-
-  async function doLogout(){
-    if (isDriver()) {
-      // Drivers have no session — just clear their local state and restart
-      try { sessionStorage.removeItem("wb_driver_session"); sessionStorage.removeItem("wb_whoType"); } catch {}
-      driverRestart();
-      return;
-    }
-    try{ await apiJson("/api/logout",{method:"POST",headers:CSRF}); }catch{}
-    location.href="/login";
-  }
-  async function dispSave(){
-    const trailer=(el("d_trailer")?.value||"").trim();
-    if(!trailer) return toast("Validation error","Trailer number is required.","err");
-    try{
-      await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({
-        trailer,
-        direction:(el("d_direction")?.value||"").trim(),
-        status:(el("d_status")?.value||"").trim(),
-        door:(el("d_door")?.value||"").trim(),
-        note:(el("d_note")?.value||"").trim(),
-        dropType:(el("d_dropType")?.value||"").trim(),
-        carrierType:(el("d_carrierType")?.value||"").trim(),
-      })});
-      toast("Saved",`Trailer ${trailer} updated.`,"ok");
-      ["d_trailer","d_door","d_note"].forEach(id=>{if(el(id))el(id).value="";});
-      el("d_direction").value="Inbound"; el("d_status").value="Incoming"; el("d_dropType").value=""; if(el("d_carrierType"))el("d_carrierType").value="";
-      setTimeout(()=>el("d_trailer")?.focus(),50);
-    }
-    catch(e){ toast("Save failed",e.message,"err"); }
-  }
-  async function dispDelete(trailer){
-    if(!await showModal("Delete Trailer",`Permanently delete trailer ${trailer}? Cannot be undone.`))return;
-    try{ await apiJson("/api/delete",{method:"POST",headers:CSRF,body:JSON.stringify({trailer})}); toast("Deleted",`Trailer ${trailer} removed.`,"warn"); }
-    catch(e){ toast("Delete failed",e.message,"err"); }
-  }
-  async function dispClear(){
-    if(!await showModal("Clear All Records","Permanently remove ALL trailer records? Cannot be undone."))return;
-    try{ await apiJson("/api/clear",{method:"POST",headers:CSRF}); toast("Board cleared","All records removed.","warn"); }
-    catch(e){ toast("Clear failed",e.message,"err"); }
-  }
-  async function shuntTrailer(trailer, door){
-    try{
-      await apiJson("/api/shunt",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door})});
-      shuntOpen[trailer]=false;
-      toast("Moved",`Trailer ${trailer} → Door ${door} (Dropped)`,"ok");
-    }catch(e){ toast("Shunt failed",e.message,"err"); }
-  }
-  async function quickStatus(trailer, status){
-    haptic("medium");
-    try{ await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})}); toast("Updated",`${trailer} → ${status}`,"ok"); }
-    catch(e){ toast("Update failed",e.message,"err"); }
-  }
-  async function dockSet(trailer,status){
-    haptic("medium");
-    try{ await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})}); toast("Updated",`${trailer} → ${status}`,"ok"); }
-    catch(e){ toast("Update failed",e.message,"err"); }
-  }
-  async function markReady(trailer){
-    haptic("success");
-    try{ await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status:"Ready"})}); toast("Trailer Ready",`${trailer} marked Ready.`,"ok"); }
-    catch(e){ toast("Update failed",e.message,"err"); }
-  }
-  async function plateSave(door){
-    const status=(document.querySelector(`[data-plate-status="${CSS.escape(door)}"]`)?.value||"").trim();
-    const note=(document.querySelector(`[data-plate-note="${CSS.escape(door)}"]`)?.value||"").trim();
-    try{ await apiJson("/api/dockplates/set",{method:"POST",headers:CSRF,body:JSON.stringify({door,status,note})}); toast("Plate updated",`Door ${door} → ${status}`,"ok"); plateEditOpen[door]=false; renderPlates(); }
-    catch(e){ toast("Update failed",e.message,"err"); }
-  }
-  async function setPin(role,inputId,confirmId){
-    const pin=(el(inputId)?.value||"").trim(), conf=(el(confirmId)?.value||"").trim();
-    if(pin.length<4) return toast("PIN too short","Minimum 4 characters.","err");
-    if(pin!==conf) return toast("PINs do not match","Enter matching PINs.","err");
-    if(!await showModal("Update PIN",`Change the ${role} PIN? Active sessions will be invalidated.`))return;
-    try{ await apiJson("/api/management/set-pin",{method:"POST",headers:CSRF,body:JSON.stringify({role,pin})}); toast("PIN updated",`${role} PIN changed.`,"ok"); el(inputId).value=""; el(confirmId).value=""; }
-    catch(e){ toast("Update failed",e.message,"err"); }
-  }
-
-  /* ── DRIVER PORTAL ── */
-  let _wsOnline = false;
-
-  function setDriverOnline(online) {
-    _wsOnline = online;
-    const banner = el("offlineBanner");
-    if (!banner) return;
-    banner.style.display = online ? "none" : "flex";
-    ["btnDriverDrop","btnXdockPickup","btnXdockOffload","btnConfirmSafety"].forEach(id => {
-      const btn = el(id); if (!btn) return;
-      if (!online) { btn.dataset.offlineDisabled="1"; btn.disabled=true; }
-      else {
-        if (btn.dataset.offlineDisabled) {
-          delete btn.dataset.offlineDisabled;
-          updateDropSubmitState(); updateOffloadSubmitState(); updateSafetySubmitState();
-        }
-      }
-    });
-  }
-
-  /* ── PUSH ── */
-  let _pushSub = null;
-
-  async function initPush() {
-    if (!("serviceWorker" in navigator)) return;
-    try {
-      const reg = await navigator.serviceWorker.register("/sw.js",{scope:"/"});
-      // Detect SW update and notify user
-      reg.addEventListener("updatefound", () => {
-        const nw = reg.installing;
-        if (!nw) return;
-        nw.addEventListener("statechange", () => {
-          if (nw.state === "installed" && navigator.serviceWorker.controller) {
-            toast("Update available", "Reload to get the latest version.", "warn", 10000);
-          }
-        });
-      });
-      await navigator.serviceWorker.ready;
-      if (!("PushManager" in window)) return;
-      _pushSub = await reg.pushManager.getSubscription();
-      updatePushBtn();
-      // Driver mode — auto-request notifications if not already subscribed
-      if (isDriver() && !_pushSub) {
-        await subscribePush();
-      }
-    } catch(e){ console.warn("SW registration failed:",e); }
-  }
-
-  async function subscribePush() {
-    if (!("serviceWorker" in navigator)) return toast("Not supported","Push not supported in this browser.","err");
-    try {
-      const reg = await navigator.serviceWorker.ready;
-      const {publicKey} = await apiJson("/api/push/vapid-public-key");
-      _pushSub = await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(publicKey)});
-      await apiJson("/api/push/subscribe",{method:"POST",headers:CSRF,body:JSON.stringify(_pushSub)});
-      updatePushBtn();
-      toast("Notifications on","You'll be notified when your trailer is ready.","ok");
-    } catch(e){ toast("Notifications blocked","Enable notifications in browser settings.","err"); }
-  }
-
-  async function unsubscribePush() {
-    if (!_pushSub) return;
-    try {
-      await apiJson("/api/push/unsubscribe",{method:"POST",headers:CSRF,body:JSON.stringify({endpoint:_pushSub.endpoint})});
-      await _pushSub.unsubscribe();
-      _pushSub = null;
-      updatePushBtn();
-      toast("Notifications off","Push notifications disabled.","warn");
-    } catch(e){ toast("Error",e.message,"err"); }
-  }
-
-  function updatePushBtn() {
-    const btn=el("btnPushToggle"); if(!btn)return;
-    if(isDriver()){ btn.style.display="none"; return; }
-    if(!("PushManager" in window)){ btn.style.display="none"; return; }
-    btn.style.display="";
-    if(_pushSub){ btn.textContent="🔔 Notifications On"; btn.classList.add("push-on"); }
-    else { btn.textContent="🔕 Enable Notifications"; btn.classList.remove("push-on"); }
-  }
-
-  function urlBase64ToUint8Array(base64String) {
-    const padding="=".repeat((4-base64String.length%4)%4);
-    const base64=(base64String+padding).replace(/-/g,"+").replace(/_/g,"/");
-    const raw=atob(base64);
-    return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
-  }
-
-  /* ── DRIVER STATE ── */
-  const driverState = {
-    whoType:null, flowType:null, trailer:"", assignedDoor:"",
-    selectedDoor:"", dropType:"Empty", overrideMode:false,
-    sessionDrops:[], shuntDoor:"",
-  };
-  try { const s=sessionStorage.getItem("wb_driver_session"); if(s) driverState.sessionDrops=JSON.parse(s); } catch {}
-  function saveSessionHistory(){ try{ sessionStorage.setItem("wb_driver_session",JSON.stringify(driverState.sessionDrops)); }catch{} }
-
-  function renderSessionHistory(){
-    const count=el("shCount"),body=el("shBody"); if(!count||!body)return;
-    const drops=driverState.sessionDrops;
-    count.textContent=`${drops.length} submission${drops.length===1?"":"s"}`;
-    if(!drops.length){ body.innerHTML=`<div class="sh-empty">No submissions yet this session.</div>`; return; }
-    const typeLabel={drop:"Drop",xdock_pickup:"XD Pickup",xdock_offload:"XD Offload",shunt:"Shunt"};
-    body.innerHTML=drops.slice().reverse().map(d=>`
-      <div class="sh-row">
-        <div><span class="sh-trailer">${esc(d.trailer)}</span><span class="sh-meta"> · D${esc(d.door)} · ${esc(typeLabel[d.flowType]||d.flowType)}</span></div>
-        <div>${d.flowType==="drop"?"":(d.safetyDone?`<span class="sh-status-ok">✓ Safety</span>`:`<span class="sh-status-err">⚠ Safety</span>`)}<span class="sh-meta" style="margin-left:6px;">${esc(timeAgo(d.at))}</span></div>
-      </div>`).join("");
-  }
-
-  const ALL_SCREENS=["who-screen","flow-screen","omw-screen","omw-confirm-screen","arrive-screen","arrive-confirm-screen","shunt-screen","drop-screen","xdock-pickup-screen","xdock-offload-screen","safety-screen","done-screen"];
-  let _currentScreen="who-screen";
-  const _screenExitTimers={};
-
-  function showScreen(id, forceBack=false){
-    const prev=_currentScreen;
-    const prevEl=el(prev);
-    const nextEl=el(id);
-    if(!nextEl) return;
-
-    // Cancel any in-flight exit timer for the previous screen
-    if(_screenExitTimers[prev]){ clearTimeout(_screenExitTimers[prev]); delete _screenExitTimers[prev]; }
-
-    // Determine slide direction based on screen order
-    const prevIdx=ALL_SCREENS.indexOf(prev);
-    const nextIdx=ALL_SCREENS.indexOf(id);
-    const goingBack=forceBack||nextIdx<prevIdx;
-
-    // Animate out current
-    if(prevEl&&prev!==id){
-      prevEl.classList.remove("screen-enter","screen-enter-back","screen-exit");
-      void prevEl.offsetWidth;
-      prevEl.classList.add("screen-exit");
-      _screenExitTimers[prev]=setTimeout(()=>{ prevEl.style.display="none"; prevEl.classList.remove("screen-exit"); delete _screenExitTimers[prev]; },180);
-    }
-
-    // Hide all others immediately
-    ALL_SCREENS.forEach(s=>{ if(s!==prev&&s!==id){ const e=el(s); if(e)e.style.display="none"; } });
-
-    // Show and animate in
-    nextEl.style.display="";
-    nextEl.classList.remove("screen-enter","screen-enter-back","screen-exit","done-screen-active");
-    void nextEl.offsetWidth;
-    nextEl.classList.add(goingBack?"screen-enter-back":"screen-enter");
-
-    // Done screen stagger celebration
-    if(id==="done-screen") setTimeout(()=>nextEl.classList.add("done-screen-active"),20);
-
-    _currentScreen=id;
-    if(id==="who-screen"||id==="flow-screen") setTimeout(()=>nextEl.querySelector("button")?.focus(),80);
-  }
-
-  function selectWho(whoType){
-    driverState.whoType=whoType;
-    try{ sessionStorage.setItem("wb_whoType",whoType); }catch{}
-    const dropBtn=el("flowBtnDrop");
-    const shuntBtn=document.querySelector("[data-flow='shunt']");
-    const omwBtn=el("flowBtnOmw");
-    const isOutside=whoType==="outside";
-    if(dropBtn) dropBtn.style.display=isOutside?"none":"";
-    if(shuntBtn) shuntBtn.style.display=isOutside?"none":"";
-    if(omwBtn) omwBtn.style.display=isOutside?"none":"";  // Only Wesbell drivers can mark OMW
-    const sub=el("flowScreenSub");
-    if(sub) sub.textContent=isOutside?"Select your cross dock activity:":"What are you here to do?";
-    showScreen("flow-screen");
-  }
-
-  async function driverShunt(){
-    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
-    const trailer=(el("sh_trailer")?.value||"").trim();
-    const door=driverState.shuntDoor||"";
-    if(!trailer) return toast("Required","Enter your trailer number.","err");
-    if(!door) return toast("Required","Select the new door.","err");
-    try{
-      await apiJson("/api/shunt",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door})});
-      driverState.sessionDrops.push({trailer,door,flowType:"shunt",at:Date.now(),safetyDone:false});
-      saveSessionHistory(); renderSessionHistory();
-      showDoneScreen("shunt");
-    }catch(e){ toast("Submission failed",e.message,"err"); }
-  }
-
-  function selectFlow(flowType){
-    driverState.flowType=flowType;
-    driverState.trailer=""; driverState.assignedDoor=""; driverState.selectedDoor="";
-    driverState.dropType="Empty"; driverState.overrideMode=false;
-    if(flowType==="shunt"){ resetShuntScreen(); showScreen("shunt-screen"); setTimeout(()=>el("sh_trailer")?.focus(),100); }
-    else if(flowType==="drop"){ resetDropScreen(); showScreen("drop-screen"); setTimeout(()=>el("v_trailer")?.focus(),100); }
-    else if(flowType==="xdock_pickup"){ resetPickupScreen(); showScreen("xdock-pickup-screen"); setTimeout(()=>el("xp_trailer")?.focus(),100); }
-    else if(flowType==="xdock_offload"){ resetOffloadScreen(); showScreen("xdock-offload-screen"); setTimeout(()=>el("xo_trailer")?.focus(),100); }
-    else if(flowType==="omw"){ resetOmwScreen(); showScreen("omw-screen"); setTimeout(()=>el("omw_trailer")?.focus(),100); }
-    else if(flowType==="arrive"){ resetArriveScreen(); showScreen("arrive-screen"); setTimeout(()=>el("arr_trailer")?.focus(),100); }
-  }
-
-  /* ── ON MY WAY ── */
-  function resetOmwScreen(){
-    if(el("omw_trailer")) el("omw_trailer").value="";
-    if(el("omw_eta")) el("omw_eta").value="";
-    if(el("omw_err")) el("omw_err").style.display="none";
-    updateOmwSubmitState();
-  }
-  function updateOmwSubmitState(){
-    const btn=el("btnOmwSubmit");
-    if(!btn)return;
-    const trailer=(el("omw_trailer")?.value||"").trim();
-    btn.disabled=!trailer;
-  }
-  async function submitOmw(){
-    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
-    const trailer=(el("omw_trailer")?.value||"").trim().toUpperCase();
-    const eta=parseInt(el("omw_eta")?.value)||null;
-    const errEl=el("omw_err");
-    if(!trailer){ if(errEl){errEl.textContent="Enter your trailer number.";errEl.style.display="";} return; }
-    if(errEl) errEl.style.display="none";
-    const btn=el("btnOmwSubmit");
-    btn.disabled=true; btn.textContent="Notifying…";
-    try{
-      const res=await apiJson("/api/driver/omw",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,eta})});
-      const door=res?.door||"";
-      el("omwDoorNum").textContent=door||"—";
-      el("omwConfirmTitle").textContent=res?.alreadyActive
-        ?`Already on board${door?" — Door "+door:""}`
-        :`Door ${door} assigned!`;
-      el("omwConfirmSub").textContent=res?.alreadyActive
-        ?`Trailer ${trailer} is already ${res.status}${door?" at door "+door:""}.`
-        :`Head to door ${door} when you arrive. Door is held for 30 minutes.`;
-      el("omwEtaDisplay").textContent=eta?`ETA ~${eta} minutes`:"";
-      showScreen("omw-confirm-screen");
-    }catch(e){
-      if(errEl){errEl.textContent=e.message||"Submission failed.";errEl.style.display="";}
-      btn.disabled=false; btn.textContent="📍 Notify Dispatch";
-    }
-  }
-
-  /* ── ARRIVE (QR / Walk-in) ── */
-  function resetArriveScreen() {
-    if(el("arr_trailer")) el("arr_trailer").value = "";
-    if(el("arr_droptype")) el("arr_droptype").value = "Loaded";
-    const err = el("arr_err");
-    if(err){ err.style.display="none"; err.textContent=""; }
-    const btn = el("btnArriveSubmit");
-    if(btn){ btn.disabled=true; }
-  }
-
-  function updateArriveSubmitState() {
-    const trailer = (el("arr_trailer")?.value || "").trim();
-    const btn = el("btnArriveSubmit");
-    if(btn) btn.disabled = !trailer;
-  }
-
-  async function submitArrive() {
-    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
-    const trailer = (el("arr_trailer")?.value || "").trim().toUpperCase();
-    const dropType = el("arr_droptype")?.value || "Loaded";
-    const errEl = el("arr_err");
-    if(!trailer){ if(errEl){errEl.textContent="Enter your trailer number.";errEl.style.display="";} return; }
-    if(errEl) errEl.style.display = "none";
-    const btn = el("btnArriveSubmit");
-    btn.disabled = true; btn.textContent = "Assigning…";
-    try {
-      const carrierType = driverState.whoType === "outside" ? "Outside" : "Wesbell";
-      const res = await apiJson("/api/driver/arrive", {
-        method:"POST", headers:CSRF,
-        body: JSON.stringify({ trailer, dropType, carrierType, direction:"Inbound" })
-      });
-      const door = res?.door || "";
-      el("arrDoorNum").textContent = door || "—";
-      el("arrConfirmTitle").textContent = res?.alreadyActive
-        ? `Already checked in${door?" — Door "+door:""}`
-        : `Door ${door} assigned!`;
-      el("arrConfirmSub").textContent = res?.alreadyActive
-        ? `Trailer ${trailer} is already ${res.status}${door?" at door "+door:""}.`
-        : `Proceed to door ${door}. Your spot is held for 30 minutes.`;
-      haptic("success");
-      showScreen("arrive-confirm-screen");
-    } catch(e) {
-      if(errEl){errEl.textContent=e.message||"Check-in failed. Please ask dispatch.";errEl.style.display="";}
-      btn.disabled=false; btn.textContent="📍 Get My Door";
-    }
-  }
-
-  /* ── SHUNT ── */
-  function resetShuntScreen(){
-    if(el("sh_trailer")) el("sh_trailer").value="";
-    driverState.shuntDoor="";
-    if(el("sh_door_display")) el("sh_door_display").textContent="Select a door below";
-    buildShuntDoorPicker();
-    updateShuntSubmitState();
-  }
-  function buildShuntDoorPicker(){
-    const grid=el("shuntDoorGrid"); if(!grid)return;
-    const occupied=getOccupiedDoors();
-    const shTrailer=(el("sh_trailer")?.value||"").trim();
-    let html="";
-    for(let d=28;d<=42;d++){
-      const ds=String(d);
-      const occ=occupied[ds]&&occupied[ds].trailer!==shTrailer;
-      const sel=driverState.shuntDoor===ds;
-      html+=`<button class="door-btn${occ?" occupied":""}${sel?" selected":""}" data-act="shuntPickDoor" data-door="${ds}">${ds}${occ?`<span class="door-btn-sub">In use</span>`:""}</button>`;
-    }
-    grid.innerHTML=html;
-  }
-  function updateShuntSubmitState(){
-    const btn=el("btnDriverShunt"); if(!btn)return;
-    btn.disabled=!((el("sh_trailer")?.value||"").trim()&&driverState.shuntDoor)||!_wsOnline;
-  }
-
-  /* ── DRIVER DROP ── */
-  function resetDropScreen(){
-    if(el("v_trailer")){ el("v_trailer").value=""; el("v_trailer").classList.remove("has-value"); }
-    el("assignmentCard")?.classList.remove("visible");
-    hideDoorPicker("doorPickerWrap");
-    el("dtbEmpty")?.classList.add("selected"); el("dtbLoaded")?.classList.remove("selected");
-    driverState.dropType="Empty"; updateDropSubmitState();
-  }
-  function updateDropSubmitState(){
-    const btn=el("btnDriverDrop"); if(!btn)return;
-    btn.disabled=!driverState.trailer.trim()||!_wsOnline;
-  }
-
-  async function driverDrop(force=false){
-    if(!_wsOnline) return toast("Offline","Cannot submit while offline. Please wait for reconnection.","err");
-    const {trailer,selectedDoor:door,dropType}=driverState;
-    if(!trailer) return toast("Required","Enter your trailer number.","err");
-    try{
-      const carrierType=driverState.whoType==="outside"?"Outside":"Wesbell";
-      const res=await apiJson("/api/driver/drop",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door,dropType,carrierType,force})});
-      // Handle duplicate trailer warning (409)
-      if(res?.duplicate){
-        const confirmed=await showModal("Trailer Already on Board",res.message+" Overwrite the existing record?");
-        if(!confirmed) return;
-        return driverDrop(true); // retry with force=true
-      }
-      const assignedDoor=res?.door||door;
-      driverState.selectedDoor=assignedDoor;
-      driverState.sessionDrops.push({trailer,door:assignedDoor,dropType,flowType:"drop",at:Date.now(),safetyDone:false});
-      saveSessionHistory(); renderSessionHistory();
-      showDoneScreen("drop");
-    }catch(e){ if(e.message!=="409") toast("Submission failed",e.message,"err"); }
-  }
-
-  /* ── XDOCK PICKUP ── */
-  function resetPickupScreen(){
-    if(el("xp_trailer")){ el("xp_trailer").value=""; el("xp_trailer").classList.remove("has-value"); }
-    el("pickupAssignmentCard")?.classList.remove("visible");
-    el("pickupNoAssignment")?.classList.remove("visible");
-    const btn=el("btnXdockPickup"); if(btn)btn.disabled=true;
-  }
-  async function onPickupTrailerInput(){
-    const val=(el("xp_trailer")?.value||"").trim();
-    driverState.trailer=val;
-    el("xp_trailer")?.classList.toggle("has-value",val.length>0);
-    el("pickupAssignmentCard")?.classList.remove("visible");
-    el("pickupNoAssignment")?.classList.remove("visible");
-    const btn=el("btnXdockPickup"); if(btn)btn.disabled=true;
-    if(!val)return;
-    clearTimeout(onPickupTrailerInput._t);
-    onPickupTrailerInput._t=setTimeout(()=>lookupAssignment(val,"pickup"),500);
-  }
-  async function xdockPickup(){
-    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
-    const {trailer,selectedDoor:door}=driverState;
-    if(!trailer) return toast("Required","Enter trailer number.","err");
-    if(!door) return toast("No assignment","This trailer has no door assignment. Contact your dispatcher.","warn");
-    try{
-      await apiJson("/api/crossdock/pickup",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door})});
-      driverState.sessionDrops.push({trailer,door,flowType:"xdock_pickup",at:Date.now(),safetyDone:false});
-      saveSessionHistory(); renderSessionHistory();
-      showSafetyScreen();
-    }catch(e){ toast("Submission failed",e.message,"err"); }
-  }
-
-  /* ── XDOCK OFFLOAD ── */
-  function resetOffloadScreen(){
-    if(el("xo_trailer")){ el("xo_trailer").value=""; el("xo_trailer").classList.remove("has-value"); }
-    el("offloadAssignmentCard")?.classList.remove("visible");
-    hideDoorPicker("offloadDoorPickerWrap");
-    driverState.selectedDoor=""; updateOffloadSubmitState();
-  }
-  function updateOffloadSubmitState(){
-    const btn=el("btnXdockOffload"); if(!btn)return;
-    btn.disabled=!(driverState.trailer.trim()&&driverState.selectedDoor)||!_wsOnline;
-  }
-  async function onOffloadTrailerInput(){
-    const val=(el("xo_trailer")?.value||"").trim();
-    driverState.trailer=val;
-    el("xo_trailer")?.classList.toggle("has-value",val.length>0);
-    driverState.selectedDoor=""; driverState.overrideMode=false;
-    el("offloadAssignmentCard")?.classList.remove("visible");
-    hideDoorPicker("offloadDoorPickerWrap");
-    updateOffloadSubmitState();
-    if(!val)return;
-    clearTimeout(onOffloadTrailerInput._t);
-    onOffloadTrailerInput._t=setTimeout(()=>lookupAssignment(val,"offload"),500);
-  }
-  async function xdockOffload(force=false){
-    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
-    const {trailer,selectedDoor:door}=driverState;
-    if(!trailer) return toast("Required","Enter trailer number.","err");
-    if(!door) return toast("Required","Select a door.","err");
-    try{
-      const res=await apiJson("/api/crossdock/offload",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door,force})});
-      if(res?.duplicate){
-        const confirmed=await showModal("Trailer Already Active",res.message+" Overwrite the existing record?");
-        if(!confirmed) return;
-        return xdockOffload(true);
-      }
-      driverState.sessionDrops.push({trailer,door,flowType:"xdock_offload",at:Date.now(),safetyDone:false});
-      saveSessionHistory(); renderSessionHistory();
-      showSafetyScreen();
-    }catch(e){ if(e.message!=="409") toast("Submission failed",e.message,"err"); }
-  }
-
-  /* ── LOOKUP ── */
-  async function lookupAssignment(trailer,context){
-    const spinner=el("lookupSpinner"); if(spinner)spinner.classList.add("visible");
-    try{
-      const res=await fetch(`/api/driver/assignment?trailer=${encodeURIComponent(trailer)}`,{headers:{"X-Requested-With":"XMLHttpRequest"}});
-      if(!res.ok)throw new Error();
-      const data=await res.json();
-      const meta=[data.direction,data.status].filter(Boolean).join(" · ")||"Assigned by dispatcher";
-      if(context==="pickup"){
-        if(data.found&&data.door){
-          driverState.selectedDoor=data.door;
-          el("pac_door").textContent="Door "+data.door;
-          el("pac_meta").textContent=meta;
-          el("pickupAssignmentCard")?.classList.add("visible");
-          el("pickupNoAssignment")?.classList.remove("visible");
-          const btn=el("btnXdockPickup"); if(btn)btn.disabled=!_wsOnline;
-        } else {
-          driverState.selectedDoor="";
-          el("pickupNoAssignment")?.classList.add("visible");
-          const btn=el("btnXdockPickup"); if(btn)btn.disabled=true;
-        }
-      } else if(context==="offload"){
-        if(data.found&&data.door){
-          driverState.assignedDoor=data.door; driverState.selectedDoor=data.door; driverState.overrideMode=false;
-          el("oac_door").textContent="Door "+data.door;
-          el("oac_meta").textContent=meta;
-          el("offloadAssignmentCard")?.classList.add("visible");
-          hideDoorPicker("offloadDoorPickerWrap");
-        } else {
-          driverState.assignedDoor="";
-          if(!driverState.overrideMode){ driverState.selectedDoor=""; showDoorPicker("offloadDoorPickerWrap","offloadDoorPickerGrid"); }
-        }
-        updateOffloadSubmitState();
-      }
-    }catch{
-      if(context==="offload"&&!driverState.overrideMode) showDoorPicker("offloadDoorPickerWrap","offloadDoorPickerGrid");
-    }finally{
-      if(spinner)spinner.classList.remove("visible");
-    }
-  }
-
-  let _lookupTimer=null;
-  function onTrailerInput(){
-    const val=(el("v_trailer")?.value||"").trim();
-    driverState.trailer=val;
-    el("v_trailer")?.classList.toggle("has-value",val.length>0);
-    if(!driverState.overrideMode){ driverState.assignedDoor=""; driverState.selectedDoor=""; el("assignmentCard")?.classList.remove("visible"); hideDoorPicker("doorPickerWrap"); }
-    updateDropSubmitState();
-    if(!val){ driverState.overrideMode=false; return; }
-    clearTimeout(_lookupTimer);
-    _lookupTimer=setTimeout(()=>lookupDropAssignment(val),500);
-  }
-  async function lookupDropAssignment(trailer){
-    const spinner=el("lookupSpinner"); if(spinner)spinner.classList.add("visible");
-    try{
-      const res=await fetch(`/api/driver/assignment?trailer=${encodeURIComponent(trailer)}`,{headers:{"X-Requested-With":"XMLHttpRequest"}});
-      if(!res.ok)throw new Error();
-      const data=await res.json();
-      if(data.found&&data.door){
-        driverState.assignedDoor=data.door; driverState.selectedDoor=data.door; driverState.overrideMode=false;
-        el("ac_door").textContent="Door "+data.door;
-        el("ac_meta").textContent=[data.direction,data.status].filter(Boolean).join(" · ")||"Assigned by dispatcher";
-        el("assignmentCard")?.classList.add("visible");
-        hideDoorPicker("doorPickerWrap");
-      } else {
-        driverState.assignedDoor="";
-        if(!driverState.overrideMode){ driverState.selectedDoor=""; showDoorPicker("doorPickerWrap","doorPickerGrid"); }
-      }
-    }catch{ if(!driverState.overrideMode) showDoorPicker("doorPickerWrap","doorPickerGrid"); }
-    finally{ if(spinner)spinner.classList.remove("visible"); }
-    updateDropSubmitState();
-  }
-
-  function buildDoorPicker(gridId){
-    const grid=el(gridId||"doorPickerGrid"); if(!grid)return;
-    const occupied=getOccupiedDoors();
-    let html="";
-    for(let d=28;d<=42;d++){
-      const ds=String(d), occ=!!occupied[ds], sel=driverState.selectedDoor===ds;
-      html+=`<button class="door-btn${occ?" occupied":""}${sel?" selected":""}" data-door="${ds}" data-picker="${gridId||"doorPickerGrid"}">${ds}${occ?`<span class="door-btn-sub">In use</span>`:""}</button>`;
-    }
-    grid.innerHTML=html;
-  }
-  function showDoorPicker(wrapId,gridId){ buildDoorPicker(gridId); el(wrapId||"doorPickerWrap")?.classList.add("visible"); el("assignmentCard")?.classList.remove("visible"); }
-  function hideDoorPicker(wrapId){ el(wrapId||"doorPickerWrap")?.classList.remove("visible"); }
-
-  /* ── ISSUE REPORT STATE & CAMERA ── */
-  const issueState = { photoData: null, photoMime: null };
-
-  function resetIssueReport() {
-    issueState.photoData = null;
-    issueState.photoMime = null;
-    const chk = el("c_hasIssue");
-    if (chk) chk.checked = false;
-    const irb = el("issueReportBody"); if(irb) irb.style.display = "none";
-    el("issueNote") && (el("issueNote").value = "");
-    if (el("issuePhotoInput")) el("issuePhotoInput").value = "";
-    setIssuePhotoPreview(null);
-  }
-
-  function setIssuePhotoPreview(dataUrl) {
-    const zone   = el("issuePhotoZone");
-    const empty  = el("ipzEmpty");
-    const prev   = el("ipzPreview");
-    const remove = el("btnRemovePhoto");
-    if (!zone || !empty || !prev || !remove) return;
-    if (dataUrl) {
-      prev.src = dataUrl;
-      prev.style.display = "";
-      empty.style.display = "none";
-      remove.style.display = "";
-      zone.classList.add("has-photo");
-    } else {
-      prev.src = "";
-      prev.style.display = "none";
-      empty.style.display = "";
-      remove.style.display = "none";
-      zone.classList.remove("has-photo");
-    }
-  }
-
-  /* ── DOCK ISSUE REPORT MODAL ── */
-  const dockIssueState = { trailer: "", door: "" };
-
-  function openDockIssueModal(trailer, door) {
-    dockIssueState.trailer = trailer;
-    dockIssueState.door    = door;
-    issueState.photoData = null;
-    issueState.photoMime = null;
-    const ni    = el("dockIssueNote");
-    const pi    = el("dockIssuePhotoInput");
-    const prev  = el("dockIssuePrev");
-    const rem   = el("dockIssueRemovePhoto");
-    const empty = el("dockIssueEmpty");
-    const pz    = el("dockIssuePhotoZone");
-    const ctx   = el("dockIssueCtx");
-    const errEl = el("dockIssueErr");
-    if (ni)    ni.value = "";
-    if (pi)    pi.value = "";
-    if (prev)  { prev.style.display = "none"; prev.src = ""; }
-    if (rem)   rem.style.display = "none";
-    if (empty) empty.style.display = "";
-    if (pz)    pz.classList.remove("has-photo");
-    if (ctx)   ctx.textContent = `Trailer ${trailer}${door ? " · Door " + door : ""}`;
-    if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
-    el("dockIssueOv")?.classList.remove("hidden");
-    document.body.style.overflow = "hidden";
-    setTimeout(() => ni?.focus(), 120);
-  }
-
-  function closeDockIssueModal() {
-    el("dockIssueOv")?.classList.add("hidden");
-    document.body.style.overflow = "";
-  }
-
-  function initDockIssueModal() {
-    const input = el("dockIssuePhotoInput");
-    const zone  = el("dockIssuePhotoZone");
-    const prev  = el("dockIssuePrev");
-    const rem   = el("dockIssueRemovePhoto");
-    const empty = el("dockIssueEmpty");
-    if (!input || !zone) return;
-
-    // Photo zone is now a <label> — tapping it natively triggers the input on iOS
-    // Only block the click if there's already a photo (to prevent re-opening)
-    zone.addEventListener("click", (e) => {
-      if (issueState.photoData) e.preventDefault();
-    });
-
-    rem?.addEventListener("click", e => {
-      e.stopPropagation();
-      issueState.photoData = null; issueState.photoMime = null; input.value = "";
-      if (prev)  { prev.style.display = "none"; prev.src = ""; }
-      if (rem)   rem.style.display = "none";
-      if (empty) empty.style.display = "";
-      zone.classList.remove("has-photo");
-    });
-
-    input.addEventListener("change", () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      if (!file.type.startsWith("image/")) return toast("Invalid file", "Please select an image.", "err");
-      if (file.size > 8 * 1024 * 1024) return toast("Too large", "Photo must be under 8 MB.", "err");
-      const reader = new FileReader();
-      reader.onload = ev => {
-        const result = ev.target.result;
-        issueState.photoMime = file.type;
-        issueState.photoData = result.slice(result.indexOf(",") + 1);
-        if (prev)  { prev.src = result; prev.style.display = ""; }
-        if (empty) empty.style.display = "none";
-        if (rem)   rem.style.display = "";
-        zone.classList.add("has-photo");
-        haptic("light");
-      };
-      reader.onerror = () => toast("Photo error", "Could not read the photo. Try again.", "err");
-      reader.readAsDataURL(file);
-    });
-
-    el("dockIssueCancelBtn")?.addEventListener("click", closeDockIssueModal);
-    el("dockIssueOv")?.addEventListener("click", e => { if (e.target === el("dockIssueOv")) closeDockIssueModal(); });
-    document.addEventListener("keydown", e => {
-      if (e.key === "Escape" && !el("dockIssueOv")?.classList.contains("hidden")) closeDockIssueModal();
-    });
-
-    el("dockIssueSubmitBtn")?.addEventListener("click", async () => {
-      const note  = (el("dockIssueNote")?.value || "").trim();
-      const errEl = el("dockIssueErr");
-      if (!note && !issueState.photoData) {
-        if (errEl) { errEl.textContent = "Add a note or photo before submitting."; errEl.style.display = ""; }
-        return;
-      }
-      const btn = el("dockIssueSubmitBtn");
-      if (btn) { btn.disabled = true; btn.textContent = "Submitting…"; }
-      if (errEl) errEl.style.display = "none";
-      try {
-        await apiJson("/api/report-issue", {
-          method: "POST", headers: CSRF,
-          body: JSON.stringify({
-            trailer:    dockIssueState.trailer,
-            door:       dockIssueState.door,
-            note,
-            photo_data: issueState.photoData || null,
-            photo_mime: issueState.photoMime || null,
-          })
-        });
-        closeDockIssueModal();
-        toast("Issue reported", `Report filed for trailer ${dockIssueState.trailer}.`, "ok");
-        haptic("success");
-      } catch(e) {
-        if (errEl) { errEl.textContent = e.message || "Submit failed."; errEl.style.display = ""; }
-      } finally {
-        if (btn) { btn.disabled = false; btn.textContent = "Submit Report"; }
-      }
-    });
-  }
-
-  function initIssueCamera() {
-    const zone  = el("issuePhotoZone");
-    const input = el("issuePhotoInput");
-    const chk   = el("c_hasIssue");
-    const body  = el("issueReportBody");
-    if (!zone || !input || !chk || !body) return;
-
-    // Toggle issue panel open/close
-    chk.addEventListener("change", () => {
-      body.style.display = chk.checked ? "" : "none";
-      if (!chk.checked) resetIssueReport();
-    });
-
-    // Tap photo zone → open camera
-    zone.addEventListener("click", () => {
-      if (issueState.photoData) return; // already has photo — let remove button handle it
-      input.click();
-    });
-
-    // Remove photo button
-    el("btnRemovePhoto")?.addEventListener("click", e => {
-      e.stopPropagation();
-      issueState.photoData = null;
-      issueState.photoMime = null;
-      if (input) input.value = "";
-      setIssuePhotoPreview(null);
-    });
-
-    // Process selected/captured photo
-    input.addEventListener("change", () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      if (!file.type.startsWith("image/")) return toast("Invalid file", "Please select an image.", "err");
-      if (file.size > 8 * 1024 * 1024) return toast("Too large", "Photo must be under 8 MB.", "err");
-
-      const reader = new FileReader();
-      reader.onload = e => {
-        const result = e.target.result; // data:image/jpeg;base64,...
-        const commaIdx = result.indexOf(",");
-        issueState.photoMime = file.type;
-        issueState.photoData = result.slice(commaIdx + 1); // strip data URL prefix
-        setIssuePhotoPreview(result);
-        haptic("light");
-      };
-      reader.onerror = () => toast("Photo error", "Could not read the photo. Try again.", "err");
-      reader.readAsDataURL(file);
-    });
-  }
-
-  /* ── ISSUE REPORTS MANAGEMENT PANEL ── */
-  async function loadIssueReports() {
-    const body     = el("supIssueBody");
-    const countEl  = el("supIssueCount");
-    if (!body) return;
-    try {
-      const rows = await apiJson("/api/issue-reports?limit=50");
-      if (countEl) countEl.textContent = rows.length;
-      if (!rows.length) {
-        body.innerHTML = `<div style="padding:24px;text-align:center;color:var(--t3);font-family:var(--mono);font-size:11px;">No issue reports yet.</div>`;
-        return;
-      }
-      body.innerHTML = rows.map(r => {
-        const hasPhoto = !!r.photo_data;
-        const thumb = hasPhoto
-          ? `<div class="issue-thumb-wrap" data-issue-id="${r.id}" data-issue-mime="${esc(r.photo_mime||'image/jpeg')}">
-               <img src="/api/issue-reports/${r.id}/photo" alt="Issue photo" loading="lazy"/>
-             </div>`
-          : `<div class="issue-thumb-wrap"><div class="issue-thumb-empty">📷</div></div>`;
-        const noteHtml = r.note
-          ? `<div class="issue-note">${esc(r.note)}</div>`
-          : `<div class="issue-no-note">No description provided</div>`;
-        return `<div class="issue-card">
-          ${thumb}
-          <div class="issue-body">
-            <div class="issue-meta">
-              <span class="issue-trailer">${esc(r.trailer||"—")}</span>
-              ${r.door?`<span class="issue-door">D${esc(r.door)}</span>`:""}
-              <span class="issue-badge">⚠ Issue</span>
-              <span class="issue-time">${esc(timeAgo(r.at))}</span>
-            </div>
-            ${noteHtml}
-          </div>
-        </div>`;
-      }).join("");
-    } catch(e) { body.innerHTML = `<div style="padding:16px;color:var(--red);font-size:12px;">${esc(e.message)}</div>`; }
-  }
-
-  /* ── LIGHTBOX ── */
-  function initIssueLightbox() {
-    const lb    = el("issueLightbox");
-    const img   = el("issueLightboxImg");
-    const close = el("issueLightboxClose");
-    if (!lb || !img || !close) return;
-    function openLb(src) { img.src = src; lb.classList.add("open"); document.body.style.overflow = "hidden"; }
-    function closeLb()   { lb.classList.remove("open"); img.src = ""; document.body.style.overflow = ""; }
-    close.addEventListener("click", e => { e.stopPropagation(); closeLb(); });
-    lb.addEventListener("click", closeLb);
-    img.addEventListener("click", e => e.stopPropagation());
-    document.addEventListener("keydown", e => { if(e.key==="Escape" && lb.classList.contains("open")) closeLb(); });
-    // Delegate thumb clicks from management panel
-    document.addEventListener("click", ev => {
-      const thumb = ev.target.closest?.("[data-issue-id]");
-      if (thumb) { openLb(`/api/issue-reports/${thumb.dataset.issueId}/photo`); }
-    });
-  }
-
-  function showSafetyScreen(){
-    const ctx=el("safetyContext");
-    if(ctx){
-      const icon=driverState.flowType==="xdock_pickup"?"🔄 Pickup":"📥 Offload";
-      ctx.innerHTML=[
-        driverState.trailer?`<span class="context-chip">🚛 <strong>${esc(driverState.trailer)}</strong></span>`:"",
-        driverState.selectedDoor?`<span class="context-chip">🚪 Door <strong>${esc(driverState.selectedDoor)}</strong></span>`:"",
-        `<span class="context-chip">${icon}</span>`,
-      ].join("");
-    }
-    if(el("c_loadSecured"))el("c_loadSecured").checked=false;
-    if(el("c_dockPlateUp"))el("c_dockPlateUp").checked=false;
-    resetIssueReport();
-    updateSafetySubmitState();
-    showScreen("safety-screen");
-  }
-  function updateSafetySubmitState(){ const btn=el("btnConfirmSafety"); if(btn) btn.disabled=!(el("c_loadSecured")?.checked&&el("c_dockPlateUp")?.checked)||!_wsOnline; }
-  async function confSafety(){
-    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
-    if(!el("c_loadSecured")?.checked||!el("c_dockPlateUp")?.checked) return toast("Incomplete","Both safety items must be confirmed.","err");
-    const hasIssue = el("c_hasIssue")?.checked;
-    const issueNote = (el("issueNote")?.value||"").trim();
-    // Require at least a note or photo if issue is checked
-    if(hasIssue && !issueNote && !issueState.photoData) return toast("Describe the issue","Add a note or photo before submitting.","warn");
-    const btn = el("btnConfirmSafety");
-    const btnSpan = btn?.querySelector("span");
-    if(btn){ btn.disabled=true; if(btnSpan) btnSpan.textContent="Submitting…"; }
-    try{
-      await apiJson("/api/confirm-safety",{method:"POST",headers:CSRF,body:JSON.stringify({trailer:driverState.trailer,door:driverState.selectedDoor,loadSecured:true,dockPlateUp:true,action:driverState.flowType})});
-      // Submit issue report if flagged (fire-and-forget after safety succeeds)
-      if(hasIssue){
-        try{
-          await apiJson("/api/report-issue",{method:"POST",headers:CSRF,body:JSON.stringify({
-            trailer: driverState.trailer,
-            door: driverState.selectedDoor||driverState.shuntDoor||"",
-            note: issueNote,
-            photo_data: issueState.photoData||null,
-            photo_mime: issueState.photoMime||null,
-          })});
-          toast("Issue reported","Your report has been sent to management.","ok");
-        }catch(ie){ toast("Issue report failed",ie.message,"warn"); }
-      }
-      const last=driverState.sessionDrops[driverState.sessionDrops.length-1];
-      if(last&&last.trailer===driverState.trailer) last.safetyDone=true;
-      saveSessionHistory(); renderSessionHistory();
-      showDoneScreen(driverState.flowType);
-    }catch(e){
-      toast("Submission failed",e.message,"err");
-      if(btn){ btn.disabled=false; if(btnSpan) btnSpan.textContent="Confirm & Complete"; }
-    }
-  }
-
-  function showDoneScreen(flowType){
-    const labels={drop:"Drop recorded — no safety check required.",xdock_pickup:"Pickup recorded + safety confirmed.",xdock_offload:"Offload recorded + safety confirmed.",shunt:"Shunt recorded — trailer moved to new door."};
-    const detail=el("driverDoneDetail");
-    const _displayDoor = driverState.shuntDoor || driverState.selectedDoor || "—";
-    if(detail) detail.innerHTML=`Trailer <strong>${esc(driverState.trailer)}</strong> · Door <strong>${esc(_displayDoor)}</strong><br><span style="color:var(--t1);">${labels[flowType]||"Submitted."}</span>`;
-    showScreen("done-screen");
-  }
-
-  function driverRestart(){
-    driverState.whoType=null; driverState.flowType=null;
-    driverState.trailer=""; driverState.assignedDoor=""; driverState.selectedDoor="";
-    driverState.dropType="Empty"; driverState.overrideMode=false; driverState.shuntDoor="";
-    try{ sessionStorage.removeItem("wb_whoType"); }catch{}
-    showScreen("who-screen",true);
-  }
-
-  function syncDriverWsDot(state){
-    const dot=el("driverWsDot"),txt=el("driverWsText"); if(!dot||!txt)return;
-    dot.className="live-dot "+state;
-    txt.textContent=state==="ok"?"Live":state==="bad"?"Offline":"Connecting…";
-    setDriverOnline(state==="ok");
-  }
-
-  /* ── HAPTIC FEEDBACK ── */
-  function haptic(type) {
-    if (!navigator.vibrate) return;
-    if (type === "light") navigator.vibrate(8);
-    else if (type === "medium") navigator.vibrate(18);
-    else if (type === "success") navigator.vibrate([8,50,8]);
-    else if (type === "error") navigator.vibrate([30,60,30]);
-  }
-
-  /* ── SWIPE TO DISMISS TOAST ── */
-  function initToastSwipe() {
-    const t = el("toast");
-    if (!t) return;
-    let startX = 0, startY = 0, dx = 0;
-    t.addEventListener("touchstart", e => {
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
-      dx = 0;
-      t.classList.add("swiping");
-    }, {passive:true});
-    t.addEventListener("touchmove", e => {
-      dx = e.touches[0].clientX - startX;
-      const dy = Math.abs(e.touches[0].clientY - startY);
-      if (Math.abs(dx) < dy) return; // vertical swipe — ignore
-      if (dx > 0) t.style.transform = `translateX(${dx}px)`;
-    }, {passive:true});
-    t.addEventListener("touchend", () => {
-      t.classList.remove("swiping");
-      if (dx > 80) {
-        t.classList.add("swipe-out");
-        setTimeout(() => { t.style.display="none"; t.classList.remove("swipe-out"); t.style.transform=""; }, 200);
-      } else {
-        t.style.transform = "";
-      }
-      dx = 0;
-    }, {passive:true});
-  }
-
-  /* ── PULL TO REFRESH ── */
-  function initPullToRefresh() {
-    let startY = 0, pulling = false, triggered = false;
-    const ind = el("ptrIndicator");
-    const txt = el("ptrText");
-    const spin = el("ptrSpinner");
-    if (!ind) return;
-
-    document.addEventListener("touchstart", e => {
-      if (window.scrollY === 0) { startY = e.touches[0].clientY; pulling = true; triggered = false; }
-    }, {passive:true});
-
-    document.addEventListener("touchmove", e => {
-      if (!pulling) return;
-      const dy = e.touches[0].clientY - startY;
-      if (dy > 10 && window.scrollY === 0) {
-        ind.classList.add("ptr-visible");
-        if (dy > 70 && !triggered) {
-          txt.textContent = "↑ Release to refresh";
-        } else if (dy <= 70) {
-          txt.textContent = "↓ Pull to refresh";
-        }
-      }
-    }, {passive:true});
-
-    document.addEventListener("touchend", async e => {
-      if (!pulling) return;
-      pulling = false;
-      const dy = e.changedTouches[0].clientY - startY;
-      if (dy > 70 && window.scrollY === 0 && !triggered) {
-        triggered = true;
-        ind.classList.add("ptr-loading");
-        spin.style.display = "block";
-        txt.textContent = "Refreshing…";
-        haptic("light");
-        try {
-          const [t, p] = await Promise.all([
-            apiJson("/api/state").catch(()=>null),
-            apiJson("/api/dockplates").catch(()=>null),
-          ]);
-          if(t) trailers = t;
-          if(p) dockPlates = p;
-          renderBoard(); renderDockView(); renderPlates(); renderSupBoard();
-          haptic("success");
-        } catch {}
-        await new Promise(r => setTimeout(r, 600));
-      }
-      ind.classList.remove("ptr-visible","ptr-loading");
-      spin.style.display = "none";
-      txt.textContent = "↓ Pull to refresh";
-    }, {passive:true});
-  }
-
-  /* ── BOTTOM NAV SYNC ── */
-  function syncBottomNav() {
-    const p = path();
-    ["bnDispatch","bnDock","bnDriver","bnManagement"].forEach(id => el(id)?.classList.remove("active"));
-
-    if (p.startsWith("/management")) {
-      el("bnManagement")?.classList.add("active");
-      // Management — hide driver tab
-      if(el("bnDriver")) el("bnDriver").style.display="none";
-    } else if (p.startsWith("/driver")) {
-      el("bnDriver")?.classList.add("active");
-      // Driver page — hide all other tabs, driver has no access elsewhere
-      ["bnDispatch","bnDock","bnManagement"].forEach(id=>{ if(el(id)) el(id).style.display="none"; });
-    } else if (p.startsWith("/dock")) {
-      el("bnDock")?.classList.add("active");
-      // Dock page — hide driver and management tabs
-      ["bnDriver","bnManagement"].forEach(id=>{ if(el(id)) el(id).style.display="none"; });
-    } else {
-      el("bnDispatch")?.classList.add("active");
-      // Dispatch — hide driver tab
-      if(el("bnDriver")) el("bnDriver").style.display="none";
-    }
-  }
-
-  /* ── SWIPE BETWEEN VIEWS ── */
-  function initSwipeViews() {
-    const p = path();
-    // Driver and dock are locked — no swipe navigation allowed
-    if (p.startsWith("/driver") || p.startsWith("/dock")) return;
-
-    const VIEWS = ["/", "/management"];
-    // Dispatchers/admin can swipe between / and /management
-    const currentIdx = () => p.startsWith("/management") ? 1 : 0;
-
-    let touchStartX = 0, touchStartY = 0, touchStartTime = 0;
-    const MIN_SWIPE_DISTANCE = 60;
-    const MAX_VERTICAL_RATIO = 0.6; // ignore if mostly vertical
-    const MAX_SWIPE_TIME = 350;     // ms
-
-    // Don't swipe when interacting with scrollable content or inputs
-    const isSwipable = (target) => {
-      const blocked = ["INPUT","TEXTAREA","SELECT"];
-      if (blocked.includes(target.tagName)) return false;
-      // Don't swipe on horizontally scrollable containers
-      let el = target;
-      while (el && el !== document.body) {
-        const style = getComputedStyle(el);
-        const overflowX = style.overflowX;
-        if ((overflowX === "auto" || overflowX === "scroll") && el.scrollWidth > el.clientWidth) return false;
-        el = el.parentElement;
-      }
-      return true;
-    };
-
-    document.addEventListener("touchstart", e => {
-      if (!isSwipable(e.target)) return;
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
-      touchStartTime = Date.now();
-    }, {passive:true});
-
-    document.addEventListener("touchend", e => {
-      if (!touchStartX) return;
-      const dx = e.changedTouches[0].clientX - touchStartX;
-      const dy = e.changedTouches[0].clientY - touchStartY;
-      const dt = Date.now() - touchStartTime;
-      touchStartX = 0;
-
-      if (Math.abs(dx) < MIN_SWIPE_DISTANCE) return;
-      if (Math.abs(dy) / Math.abs(dx) > MAX_VERTICAL_RATIO) return;
-      if (dt > MAX_SWIPE_TIME) return;
-      if (!isSwipable(e.target)) return;
-
-      const idx = currentIdx();
-      if (dx < 0 && idx < VIEWS.length - 1) {
-        // swipe left → next view
-        haptic("light");
-        location.href = VIEWS[idx + 1];
-      } else if (dx > 0 && idx > 0) {
-        // swipe right → previous view
-        haptic("light");
-        location.href = VIEWS[idx - 1];
-      }
-    }, {passive:true});
-  }
-
-  /* ── PWA INSTALL PROMPT ── */
-  let _deferredInstallPrompt = null;
-  function initPwaInstall() {
-    window.addEventListener("beforeinstallprompt", e => {
-      e.preventDefault();
-      _deferredInstallPrompt = e;
-      // Show install button if we have one in the topbar
-      const btn = el("btnInstallPwa");
-      if (btn) btn.style.display = "";
-    });
-    window.addEventListener("appinstalled", () => {
-      _deferredInstallPrompt = null;
-      const btn = el("btnInstallPwa");
-      if (btn) btn.style.display = "none";
-      toast("App installed", "Wesbell Dispatch added to home screen.", "ok");
-    });
-    const btn = el("btnInstallPwa");
-    if (btn) {
-      btn.addEventListener("click", async () => {
-        if (!_deferredInstallPrompt) return;
-        _deferredInstallPrompt.prompt();
-        const { outcome } = await _deferredInstallPrompt.userChoice;
-        if (outcome === "accepted") haptic("success");
-        _deferredInstallPrompt = null;
-        btn.style.display = "none";
-      });
-    }
-  }
-
-  /* ── KEYBOARD AVOIDANCE ── */
-  function initKeyboardAvoidance() {
-    const inputs = ["v_trailer","xp_trailer","xo_trailer","sh_trailer","d_trailer","d_door"];
-    inputs.forEach(id => {
-      el(id)?.addEventListener("focus", () => {
-        setTimeout(() => el(id)?.scrollIntoView({behavior:"smooth",block:"center"}), 300);
-      }, {passive:true});
-    });
-    // Visual Viewport API — push bottom nav up when keyboard opens
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener("resize", () => {
-        const offset = window.innerHeight - window.visualViewport.height;
-        const bn = document.querySelector(".bottom-nav");
-        if (bn) bn.style.transform = offset > 100 ? `translateY(-${offset}px)` : "";
-      });
-    }
-  }
-
-  async function loadInitial(){
-    try{ const w=await apiJson("/api/whoami"); ROLE=w?.role; VERSION=w?.version||"";
-      // Only enforce redirect for logged-in users on the wrong page.
-      // Unauthenticated users (drivers) can navigate freely — the server
-      // already guards pages; we just let the server handle it via guardPage.
-      if (w?.redirectTo && ROLE && w.redirectTo !== location.pathname) {
-        location.replace(w.redirectTo);
-        return;
-      }
-    }
-    catch{ ROLE=null; VERSION=""; }
-    el("verText").textContent=VERSION||"—";
-
-    el("driverView").style.display="none";
-    el("managementView").style.display="none";
-    el("dockView").style.display="none";
-    el("dispatchView").style.display="none";
-
-    const p=path();
-    if(p.startsWith("/driver")){
-      el("driverView").style.display="";
-      // Driver has no login session — show a "Start Over" button that resets
-      // local state only, never calls /api/logout
-      const logoutBtn = el("btnLogout");
-      if(logoutBtn){
-        logoutBtn.style.display="";
-        logoutBtn.textContent="↩ Start Over";
-        // Replace click handler so it resets driver state instead of logging out
-        logoutBtn.onclick = (e) => {
-          e.stopImmediatePropagation();
-          try{ sessionStorage.removeItem("wb_whoType"); }catch{}
-          driverRestart();
-        };
-      }
-      el("btnAudit").style.display="none";
-      try{
-        const savedWho=sessionStorage.getItem("wb_whoType");
-        if(savedWho){
-          driverState.whoType=savedWho;
-          const isOutside=savedWho==="outside";
-          const dropBtn=el("flowBtnDrop"); if(dropBtn)dropBtn.style.display=isOutside?"none":"";
-          const shuntBtn=document.querySelector("[data-flow='shunt']"); if(shuntBtn)shuntBtn.style.display=isOutside?"none":"";
-          showScreen("flow-screen");
-        } else showScreen("who-screen");
-      }catch{ showScreen("who-screen"); }
-      renderSessionHistory();
-      initPush();
-    } else if(p.startsWith("/management")){
-      el("managementView").style.display=""; el("managementView").classList.add("view-fade");
-      el("btnLogout").style.display=""; 
-      el("btnAudit").style.display=(ROLE==="management"||ROLE==="admin")?"":"none";
-    } else if(p.startsWith("/dock")){
-      el("dockView").style.display=""; el("dockView").classList.add("view-fade");
-      el("btnLogout").style.display=ROLE?"":"none"; el("btnAudit").style.display="none";
-    } else {
-      el("dispatchView").style.display=""; el("dispatchView").classList.add("view-fade");
-      el("btnLogout").style.display=ROLE?"":"none";
-      el("btnAudit").style.display=(ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin")?"":"none";
-      const adminPanel=el("adminPanel");
-      if(adminPanel) adminPanel.style.display=ROLE==="admin"?"":"none";
-    }
-    highlightNav();
-    try{ const t=await apiJson("/api/state"); trailers=t||{}; }catch{ trailers={}; }
-    if(!isDriver()){
-      try{ const p=await apiJson("/api/dockplates"); dockPlates=p||{}; }catch{ dockPlates={}; }
-      try{ const b=await apiJson("/api/doorblocks"); doorBlocks=b||{}; }catch{ doorBlocks={}; }
-    }
-    if(isSuper()){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0); loadIssueReports(); renderPlates();
-      // Admin PIN row — only visible to admin
-      const adminPinRow = el("adminPinRow");
-      if(adminPinRow) adminPinRow.style.display = ROLE==="admin" ? "" : "none";
-    }
-    if(ROLE==="admin" && !isSuper()){ renderBoard(); renderRolePanel(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
-    else if(ROLE==="management" && !isSuper()){ renderRolePanel(); renderBoard(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
-    else if(isDock()){ renderDockView(); renderPlates(); }
-    else if(!isDriver()&&!isSuper()){ renderRolePanel(); renderBoard(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
-  }
-
-  /* ── GLOBAL CLICK HANDLER ── */
-  document.addEventListener("click", async ev => {
-    const direct = ev.target;
-    const id = direct?.id;
-    const act = direct?.dataset?.act || direct?.closest?.("[data-act]")?.dataset?.act;
-    const trId = direct?.dataset?.trailerId || direct?.closest?.("[data-trailer-id]")?.dataset?.trailerId;
-
-    if(direct?.closest?.("#dockPlatesToggle")){ setPlatesOpen(el("dockPlatesToggle").getAttribute("aria-expanded")!=="true"); return; }
-    if(direct?.closest?.("#dockPlatesToggle2")){ setPlatesOpen2(el("dockPlatesToggle2").getAttribute("aria-expanded")!=="true"); return; }
-    // PIN management accordions
-    if(direct?.closest?.("#pinMgmtToggle")){
-      const tog=el("pinMgmtToggle"), body=el("pinMgmtBody"); if(!tog||!body)return;
-      const open=tog.getAttribute("aria-expanded")==="true";
-      tog.setAttribute("aria-expanded",open?"false":"true");
-      body.style.maxHeight=open?"0px":(body.scrollHeight+40)+"px";
-      return;
-    }
-    if(direct?.closest?.("#adminPinToggle")){
-      const tog=el("adminPinToggle"), body=el("adminPinBody"); if(!tog||!body)return;
-      const open=tog.getAttribute("aria-expanded")==="true";
-      tog.setAttribute("aria-expanded",open?"false":"true");
-      body.style.maxHeight=open?"0px":(body.scrollHeight+40)+"px";
-      return;
-    }
-    // Dock card "sign in to update" quick button
-    if(act==="openStaffLogin"){ el("btnDockStaffLogin")?.click(); return; }
-    if(id==="btnLogout") return doLogout();
-    if(id==="btnAudit"){ const s=el("auditCard").style.display!=="none"; el("auditCard").style.display=s?"none":""; if(!s)loadAuditInto(el("auditBody"),el("auditCount"),7); return; }
-    if(id==="btnClearFilters"||id==="btnSupClearFilters"){ ["search","filterDir","filterStatus","supSearch","supFilterDir","supFilterStatus"].forEach(i=>{if(el(i))el(i).value="";}); renderBoard(); renderSupBoard(); return; }
-    if(id==="btnSaveTrailer") return dispSave();
-    if(id==="btnClearAll") return dispClear();
-    if(id==="btnSetDispatcherPin") return setPin("dispatcher","pin_dispatcher","pin_dispatcher_confirm");
-    if(id==="btnSetDockPin")       return setPin("dock","pin_dock","pin_dock_confirm");
-    if(id==="btnSetManagementPin") return setPin("management","pin_management","pin_management_confirm");
-    if(id==="btnSetAdminPinSup")   return setPin("admin","pin_admin_sup","pin_admin_sup_confirm");
-    // Admin panel PIN buttons (dispatch view)
-    if(id==="btnSetDispatcherPinA") return setPin("dispatcher","pin_dispatcher_a","pin_dispatcher_a_confirm");
-    if(id==="btnSetDockPinA")       return setPin("dock","pin_dock_a","pin_dock_a_confirm");
-    if(id==="btnSetManagementPinA") return setPin("management","pin_management_a","pin_management_a_confirm");
-    if(id==="btnSetAdminPinA")      return setPin("admin","pin_admin_a","pin_admin_a_confirm");
-
-    const dockFilterBtn=direct?.closest?.("[data-dock-filter]");
-    if(dockFilterBtn){
-      dockFilter=dockFilterBtn.dataset.dockFilter;
-      document.querySelectorAll(".dock-filter-btn").forEach(b=>{
-        const active=b.dataset.dockFilter===dockFilter;
-        b.classList.toggle("active",active);
-        b.setAttribute("aria-pressed",active?"true":"false");
-      });
-      renderDockView(); return;
-    }
-
-    // Generic dismiss handler (replaces inline onclick)
-    const dismissId=direct?.dataset?.dismiss||direct?.closest?.("[data-dismiss]")?.dataset?.dismiss;
-    if(dismissId){ const d=el(dismissId); if(d)d.style.display="none"; return; }
-
-    const whoBtn=direct?.closest?.("[data-who]"); if(whoBtn){ selectWho(whoBtn.dataset.who); return; }
-    const flowBtn=direct?.closest?.("[data-flow]"); if(flowBtn){ selectFlow(flowBtn.dataset.flow); return; }
-    if(id==="btnBackToWho"){
-      try{ sessionStorage.removeItem("wb_whoType"); }catch{}
-      driverState.whoType=null;
-      showScreen("who-screen",true);
-      return;
-    }
-    if(id==="btnBackToFlow2"||direct?.dataset?.flowBack){ showScreen("flow-screen",true); return; }
-    if(id==="btnBackToFlow5"){ showScreen("flow-screen",true); return; }
-    if(id==="btnBackToFlow6"){ showScreen("flow-screen",true); return; }
-    if(id==="btnOmwSubmit")   return submitOmw();
-    if(id==="btnArriveSubmit") return submitArrive();
-    if(id==="btnArrDone")      return driverRestart();
-    if(id==="btnOmwDone")     return driverRestart();
-    if(id==="btnBackToFlow"){
-      const isOutside=driverState.whoType==="outside";
-      const dropBtn=el("flowBtnDrop"); if(dropBtn)dropBtn.style.display=isOutside?"none":"";
-      const shuntBtn=document.querySelector("[data-flow='shunt']"); if(shuntBtn)shuntBtn.style.display=isOutside?"none":"";
-      const omwBtn=el("flowBtnOmw"); if(omwBtn)omwBtn.style.display=isOutside?"none":"";
-      showScreen("flow-screen",true); return;
-    }
-    if(id==="btnDriverDrop")    return driverDrop();
-    if(id==="btnXdockPickup")   return xdockPickup();
-    if(id==="btnXdockOffload")  return xdockOffload();
-    if(id==="btnConfirmSafety") return confSafety();
-    if(id==="btnDriverShunt")   return driverShunt();
-    if(id==="btnDriverRestart"||id==="btnDriverFullReset") return driverRestart();
-    if(id==="btnPushToggle")    return _pushSub ? unsubscribePush() : subscribePush();
-
-    if(act==="shuntPickDoor"){
-      const d=direct?.dataset?.door||direct?.closest?.("[data-door]")?.dataset?.door;
-      if(d){ driverState.shuntDoor=d; buildShuntDoorPicker(); if(el("sh_door_display"))el("sh_door_display").textContent="Door "+d; updateShuntSubmitState(); }
-      return;
-    }
-
-    if(id==="ac_override"){ driverState.overrideMode=true; driverState.assignedDoor=""; driverState.selectedDoor=""; showDoorPicker("doorPickerWrap","doorPickerGrid"); updateDropSubmitState(); return; }
-    if(id==="oac_override"){ driverState.overrideMode=true; driverState.assignedDoor=""; driverState.selectedDoor=""; showDoorPicker("offloadDoorPickerWrap","offloadDoorPickerGrid"); updateOffloadSubmitState(); return; }
-
-    const doorBtn=direct?.closest?.("[data-door]");
-    if(doorBtn&&doorBtn.dataset.door&&!doorBtn.dataset.dmDoor&&!doorBtn.dataset.act){
-      driverState.selectedDoor=doorBtn.dataset.door; driverState.overrideMode=true;
-      buildDoorPicker(doorBtn.dataset.picker||"doorPickerGrid");
-      updateDropSubmitState(); updateOffloadSubmitState(); return;
-    }
-
-    const dtBtn=direct?.closest?.("[data-type]");
-    if(dtBtn&&dtBtn.dataset.type){ driverState.dropType=dtBtn.dataset.type; el("dtbEmpty")?.classList.toggle("selected",driverState.dropType==="Empty"); el("dtbLoaded")?.classList.toggle("selected",driverState.dropType==="Loaded"); return; }
-
-    if(act==="shuntToggle"&&trId){ shuntOpen[trId]=!shuntOpen[trId]; renderBoard(); return; }
-    if(act==="shuntDoor"&&trId){ const door=direct?.dataset?.door||direct?.closest?.("[data-door]")?.dataset?.door; if(door)return shuntTrailer(trId,door); }
-    if(act==="delete"&&trId) return dispDelete(trId);
-    if(act==="quickStatus"){ const to=direct?.dataset?.to||direct?.closest?.("[data-to]")?.dataset?.to; if(trId&&to)return quickStatus(trId,to); }
-    if(act==="edit"&&trId){
-      const r=trailers[trId]; if(!r)return;
-      el("d_trailer").value=trId; el("d_direction").value=r.direction||"Inbound"; el("d_status").value=r.status||"Incoming";
-      el("d_door").value=r.door||""; el("d_note").value=r.note||""; el("d_dropType").value=r.dropType||"";
-      if(el("d_carrierType"))el("d_carrierType").value=r.carrierType||"";
-      toast("Record loaded",`Editing trailer ${trId}`,"ok"); return;
-    }
-    if(act==="dockSet"){ const to=direct?.dataset?.to; if(trId&&to)return dockSet(trId,to); }
-    if(act==="dockReportIssue"){ const door=direct?.dataset?.door||direct?.closest?.("[data-door]")?.dataset?.door||""; if(trId) return openDockIssueModal(trId,door); }
-    if(act==="markReady"&&trId) return markReady(trId);
-
-    // Dock map cell click — open status modal for any door (occupied or empty)
-    const dmCell = direct?.closest?.("[data-dm-door]");
-    if (dmCell && (ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin")) {
-      const door = dmCell.dataset.dmDoor;
-      const occupied = getOccupiedDoors();
-      const occ = occupied[door];
-      const nextStatuses = {
-        "Incoming":   ["Dropped","Loading","Dock Ready","Ready","Departed"],
-        "Dropped":    ["Loading","Dock Ready","Ready","Departed"],
-        "Loading":    ["Dock Ready","Ready","Departed"],
-        "Dock Ready": ["Ready","Departed"],
-        "Ready":      ["Departed"],
-        "Departed":   ["Incoming","Dropped"],
-      };
-      const isBlock = occ?.status === "Blocked";
-      el("dmModalTitle").textContent = isBlock ? `Door ${door} — Blocked` : occ ? `Trailer ${occ.trailer} — D${door}` : `Door ${door} — Free`;
-      el("dmModalSub").textContent = isBlock ? (occ.note ? `Note: ${occ.note}` : "Manually marked occupied") : occ ? `Status: ${occ.status}` : "No trailer assigned";
-      const btns = el("dmStatusBtns");
-      btns.innerHTML = "";
-      if (isBlock) {
-        const clrBtn = document.createElement("button");
-        clrBtn.className = "btn btn-success btn-full";
-        clrBtn.dataset.dmAction = "clearBlock";
-        clrBtn.dataset.dmDoor = door;
-        clrBtn.textContent = "✓ Mark Free";
-        btns.appendChild(clrBtn);
-      } else if (occ) {
-        (nextStatuses[occ.status] || []).forEach(s => {
-          const cls = s==="Ready"?"btn-success":s==="Departed"?"btn-default":s==="Loading"?"btn-primary":"btn-cyan";
-          const b = document.createElement("button");
-          b.className = `btn ${cls} btn-full`;
-          b.dataset.dmStatus = s;
-          b.dataset.dmTrailer = occ.trailer;
-          b.textContent = s;
-          btns.appendChild(b);
-        });
-      } else {
-        const blockBtn = document.createElement("button");
-        blockBtn.className = "btn btn-default btn-full";
-        blockBtn.dataset.dmAction = "setBlock";
-        blockBtn.dataset.dmDoor = door;
-        blockBtn.textContent = "🚫 Mark Occupied";
-        btns.appendChild(blockBtn);
-      }
-      el("dmModalOv").classList.remove("hidden"); lockScroll();
-      return;
-    }
-
-    // Dock map block/clear
-    const dmActionBtn = direct?.closest?.("[data-dm-action]");
-    if (dmActionBtn) {
-      const action = dmActionBtn.dataset.dmAction;
-      const door2  = dmActionBtn.dataset.dmDoor;
-      el("dmModalOv").classList.add("hidden"); unlockScroll();
-      if (action === "setBlock") {
-        try { await apiJson("/api/doorblock/set", { method:"POST", headers:CSRF, body:JSON.stringify({ door:door2, note:"" }) }); doorBlocks[door2]={note:"",setAt:Date.now()}; renderDockMap(); toast("Door blocked",`D${door2} marked occupied`,"ok"); }
-        catch(e) { toast("Error",e.message,"err"); }
-      } else if (action === "clearBlock") {
-        try { await apiJson("/api/doorblock/clear", { method:"POST", headers:CSRF, body:JSON.stringify({ door:door2 }) }); delete doorBlocks[door2]; renderDockMap(); toast("Door freed",`D${door2} marked free`,"ok"); }
-        catch(e) { toast("Error",e.message,"err"); }
-      }
-      return;
-    }
-
-    // Dock map status button
-    const dmStatusBtn = direct?.closest?.("[data-dm-status]");
-    if (dmStatusBtn) {
-      const status  = dmStatusBtn.dataset.dmStatus;
-      const trailer = dmStatusBtn.dataset.dmTrailer;
-      el("dmModalOv").classList.add("hidden"); unlockScroll();
-      if (!trailer) { toast("No trailer","Add a trailer from the dispatch panel first.","warn"); return; }
-      try {
-        await apiJson("/api/upsert", { method:"POST", headers:CSRF, body:JSON.stringify({ trailer, status }) });
-        toast("Updated", `${trailer} → ${status}`, "ok");
-      } catch(e) { toast("Update failed", e.message, "err"); }
-      return;
-    }
-
-        const tog=direct?.dataset?.plateToggle; if(tog){ plateEditOpen[tog]=!plateEditOpen[tog]; renderPlates(); return; }
-    const psv=direct?.dataset?.plateSave; if(psv)return plateSave(psv);
-  });
-
-  document.addEventListener("change",ev=>{
-    const t=ev.target;
-    if(t?.dataset?.act==="rowStatus"){ const trailer=t.dataset.trailerId,status=t.value; apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})}).catch(e=>toast("Update failed",e.message,"err")); }
-    if(t?.id==="c_loadSecured"||t?.id==="c_dockPlateUp") updateSafetySubmitState();
-  });
-
-  el("v_trailer")?.addEventListener("input",onTrailerInput);
-  el("v_trailer")?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!el("btnDriverDrop")?.disabled)driverDrop(); });
-  el("omw_trailer")?.addEventListener("input", updateOmwSubmitState);
-  el("arr_trailer")?.addEventListener("input", updateArriveSubmitState);
-  el("arr_trailer")?.addEventListener("keydown", e=>{ if(e.key==="Enter"&&!el("btnArriveSubmit")?.disabled)submitArrive(); });
-  el("omw_trailer")?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!el("btnOmwSubmit")?.disabled)submitOmw(); });
-  // Set inputmode on trailer inputs for numeric keypad on mobile
-  ["v_trailer","xp_trailer","xo_trailer","sh_trailer"].forEach(id=>{
-    const inp=el(id); if(!inp)return;
-    inp.setAttribute("inputmode","numeric");
-    inp.setAttribute("autocomplete","off");
-    inp.setAttribute("autocorrect","off");
-    inp.setAttribute("autocapitalize","none");
-    inp.setAttribute("spellcheck","false");
-  });
-  el("xp_trailer")?.addEventListener("input",onPickupTrailerInput);
-  el("xo_trailer")?.addEventListener("input",onOffloadTrailerInput);
-  el("xo_trailer")?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!el("btnXdockOffload")?.disabled)xdockOffload(); });
-  el("sh_trailer")?.addEventListener("input",()=>{ buildShuntDoorPicker(); updateShuntSubmitState(); });
-  el("dockSearch")?.addEventListener("input",renderDockView);
-  ["d_trailer","d_door","d_note","d_direction","d_status","d_dropType","d_carrierType"].forEach(id=>{
-    el(id)?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); dispSave(); } });
-  });
-  ["search","filterDir","filterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderBoard)));
-  ["supSearch","supFilterDir","supFilterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderSupBoard)));
-
-  /* ── WEBSOCKET ── */
-  let wsRetry=0;
-  function wsStatus(s){
-    el("wsDot").className="live-dot "+(s==="ok"?"ok":s==="bad"?"bad":"warn");
-    el("wsText").textContent=s==="ok"?"Live":s==="bad"?"Offline":"Connecting";
-    syncDriverWsDot(s);
-    syncDockWsDot(s);
-  }
-  function connectWs(){
-    wsStatus("warn");
-    const ws=new WebSocket(`${location.protocol==="https:"?"wss":"ws"}://${location.host}`);
-    let lastMsg=Date.now();
-    const watchdog=setInterval(()=>{ if(Date.now()-lastMsg>35000){ try{ws.close();}catch{} } },5000);
-    ws.onopen=()=>{ wsRetry=0; wsStatus("ok"); };
-    ws.onclose=()=>{
-      clearInterval(watchdog); wsStatus("bad");
-      // Exponential backoff with ±30% jitter to spread reconnect storms
-      const base = Math.min(8000, 500 + wsRetry++ * 650);
-      const jitter = base * 0.3 * (Math.random() * 2 - 1); // ±30%
-      setTimeout(connectWs, Math.round(base + jitter));
-    };
-    ws.onmessage=evt=>{
-      lastMsg=Date.now();
-      let msg; try{msg=JSON.parse(evt.data);}catch{return;}
-      const {type,payload}=msg||{};
-      if(type==="state"){ trailers=payload||{}; renderBoard(); if(isSuper())renderSupBoard(); if(isDock())renderDockView(); if(isAdmin()&&!isSuper())renderBoard(); }
-      else if(type==="dockplates"){ dockPlates=payload||{}; if(!isDriver()) renderPlates(); }
-      else if(type==="doorblocks"){ doorBlocks=payload||{}; renderDockMap(); renderBoard(); }
-      else if(type==="confirmations"){ confirmations=Array.isArray(payload)?payload:[]; if(isSuper())renderSupConf(); }
-      else if(type==="ping"){/* keepalive — lastMsg already updated above */}
-      else if(type==="version"){ VERSION=payload?.version||VERSION; el("verText").textContent=VERSION||"—"; }
-      else if(type==="notify"&&payload?.kind==="ready"){
-        toast("🟢 Trailer Ready",`${payload.trailer} is READY${payload.door?" at door "+payload.door:""}.`,"ok",8000);
-        if(isDriver()){
-          const banner=el("readyNotifBanner");
-          if(banner){
-            el("readyNotifText").textContent=`Trailer ${payload.trailer} is READY${payload.door?" at door "+payload.door:""}`;
-            banner.style.display="flex";
-            clearTimeout(banner._t);
-            banner._t=setTimeout(()=>banner.style.display="none",12000);
-          }
-        }
-      }
-    };
-  }
-  /* ── STAFF SIGN-IN MODAL (dock / driver pages) ── */
-  function initStaffLogin() {
-    const ov      = el("staffLoginOv");
-    const roleEl  = el("staffLoginRole");
-    const pinEl   = el("staffLoginPin");
-    const errEl   = el("staffLoginErr");
-    const goBtn   = el("staffLoginGo");
-    const cancel  = el("staffLoginCancel");
-    const logoutRow = el("staffLogoutRow");
-    const curRole   = el("staffCurrentRole");
-    const logoutBtn = el("staffLogoutBtn");
-    if (!ov) return;
-
-    function openModal() {
-      errEl.style.display = "none";
-      pinEl.value = "";
-      if (ROLE && ["admin","management","dispatcher","dock"].includes(ROLE)) {
-        // Already signed in — show sign-out view
-        if(curRole) curRole.textContent = ROLE.charAt(0).toUpperCase() + ROLE.slice(1);
-        if(logoutRow) logoutRow.style.display = "";
-        if(roleEl?.closest(".field")) roleEl.closest(".field").style.display = "none";
-        if(pinEl?.closest(".field")) pinEl.closest(".field").style.display = "none";
-        if(goBtn) goBtn.style.display = "none";
-      } else {
-        if(logoutRow) logoutRow.style.display = "none";
-        if(roleEl?.closest(".field")) roleEl.closest(".field").style.display = "";
-        if(pinEl?.closest(".field")) pinEl.closest(".field").style.display = "";
-        if(goBtn) goBtn.style.display = "";
-      }
-      ov.classList.remove("hidden");
-      setTimeout(() => (ROLE ? null : pinEl?.focus()), 100);
-    }
-
-    function closeModal() { ov.classList.add("hidden"); }
-
-    // Open triggers
-    el("btnDockStaffLogin")?.addEventListener("click", openModal);
-    el("btnDriverStaffLogin")?.addEventListener("click", openModal);
-    cancel?.addEventListener("click", closeModal);
-    ov.addEventListener("click", e => { if (e.target === ov) closeModal(); });
-
-    // Sign in
-    async function doStaffLogin() {
-      const role = roleEl?.value;
-      const pin  = pinEl?.value || "";
-      if (!pin) { errEl.textContent = "Enter your PIN."; errEl.style.display = ""; return; }
-      goBtn.disabled = true; goBtn.textContent = "Signing in…";
-      errEl.style.display = "none";
-      try {
-        const r = await fetch("/api/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
-          body: JSON.stringify({ role, pin })
-        });
-        const errText = await r.text();
-        if (!r.ok) {
-          errEl.textContent = r.status === 429
-            ? `🔒 ${errText}` // rate limit message already includes retry info
-            : errText;
-          errEl.style.display = "";
-          return;
-        }
-        haptic("success");
-        closeModal();
-        // Reload current page so the new session takes effect cleanly
-        location.reload();
-      } catch(e) {
-        errEl.textContent = "Connection error."; errEl.style.display = "";
-      } finally {
-        goBtn.disabled = false; goBtn.textContent = "Sign In →";
-      }
-    }
-
-    goBtn?.addEventListener("click", doStaffLogin);
-    pinEl?.addEventListener("keydown", e => { if (e.key === "Enter") doStaffLogin(); });
-
-    // Sign out
-    logoutBtn?.addEventListener("click", async () => {
-      try { await apiJson("/api/logout", { method: "POST", headers: CSRF }); } catch {}
-      haptic("light");
-      closeModal();
-      location.href = "/login";
-    });
-
-    // Update staff button appearance based on auth state
-    function syncStaffButtons() {
-      const signedIn = ROLE && ROLE !== "driver";
-      ["btnDockStaffLogin","btnDriverStaffLogin"].forEach(id => {
-        const b = el(id); if (!b) return;
-        if (signedIn) {
-          b.textContent = `👤 ${ROLE.charAt(0).toUpperCase() + ROLE.slice(1)}`;
-          b.style.borderColor = "var(--amber-bd)";
-          b.style.color = "var(--amber)";
-        } else {
-          b.textContent = "🔑 Staff";
-          b.style.borderColor = "";
-          b.style.color = "";
-        }
-      });
-    }
-    syncStaffButtons();
-    // Expose so it can be called after load
-    initStaffLogin._sync = syncStaffButtons;
-  }
-
-  loadInitial().then(() => {
-    syncBottomNav();
-    initToastSwipe();
-    initPullToRefresh();
-    initKeyboardAvoidance();
-    initSwipeViews();
-    initPwaInstall();
-    initStaffLogin();
-    initStaffLogin._sync?.();
-    initIssueCamera();
-    initIssueLightbox();
-    initDockIssueModal();
-    connectWs();
-  });
+// server.js — Wesbell Dispatch v3.2.0
+const express = require("express");
+const http = require("http");
+const path = require("path");
+const WebSocket = require("ws");
+const sqlite3 = require("sqlite3").verbose();
+const crypto = require("crypto");
+
+const app = express();
+
+// Prevent uncaught errors from crashing the whole server
+process.on('uncaughtException',  err  => console.error('[CRASH] uncaughtException:', err));
+process.on('unhandledRejection', reason => console.error('[CRASH] unhandledRejection:', reason));
+
+app.use(express.json({ limit: "6mb" }));
+app.use(express.urlencoded({ extended: true }));
+
+const PORT = process.env.PORT || 3000;
+// Use persistent disk if available (Render mounts at /var/data), then /tmp, never ephemeral app dir
+const DB_FILE = process.env.DB_FILE || (() => {
+  const fs = require("fs"), p = require("path");
+  for (const candidate of ["/var/data/wesbell.sqlite", "/tmp/wesbell.sqlite"]) {
+    try { fs.mkdirSync(p.dirname(candidate), { recursive: true }); return candidate; } catch {}
+  }
+  return p.join(__dirname, "wesbell.sqlite");
 })();
+const APP_VERSION = process.env.APP_VERSION || "3.3.0";
+const PIN_MIN_LEN = 4;
+const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
+const COOKIE_NAME = "wb_session";
+
+const ENV_PINS = {
+  dispatcher: process.env.DISPATCHER_PIN || "",
+  dock:       process.env.DOCK_PIN       || "",
+  management: process.env.MANAGEMENT_PIN || "",
+  admin:      process.env.ADMIN_PIN      || "",
+};
+
+function requireXHR(req, res, next) {
+  if ((req.get("X-Requested-With") || "").toLowerCase() !== "xmlhttprequest")
+    return res.status(400).send("Bad request");
+  next();
+}
+
+/* ══════════════════════════════════════════
+   DB
+══════════════════════════════════════════ */
+console.log("[DB] Using database at:", DB_FILE);
+const db = new sqlite3.Database(DB_FILE);
+const run = (sql, p = []) => new Promise((res, rej) => db.run(sql, p, function (e) { e ? rej(e) : res(this); }));
+const get = (sql, p = []) => new Promise((res, rej) => db.get(sql, p, (e, r) => { e ? rej(e) : res(r); }));
+const all = (sql, p = []) => new Promise((res, rej) => db.all(sql, p, (e, r) => { e ? rej(e) : res(r); }));
+
+/* ══════════════════════════════════════════
+   CACHES
+══════════════════════════════════════════ */
+let _trailersCache = null;
+let _platesCache   = null;
+let _blocksCache   = null;
+function invalidateTrailers() { _trailersCache = null; }
+function invalidatePlates()   { _platesCache   = null; }
+function invalidateBlocks()   { _blocksCache   = null; }
+async function getTrailersCache() { if (!_trailersCache) _trailersCache = await loadTrailersObject(); return _trailersCache; }
+async function getPlatesCache()   { if (!_platesCache)   _platesCache   = await loadDockPlatesObject(); return _platesCache; }
+async function loadDoorBlocksObject() { const rows = await all(`SELECT * FROM doorblocks`); const o = {}; rows.forEach(r => o[r.door] = { note: r.note, setAt: r.setAt }); return o; }
+async function getBlocksCache()   { if (!_blocksCache)   _blocksCache   = await loadDoorBlocksObject(); return _blocksCache; }
+
+/* ══════════════════════════════════════════
+   VAPID / PUSH
+══════════════════════════════════════════ */
+const VAPID_FILE = process.env.VAPID_FILE || path.join(__dirname, "vapid.json");
+let VAPID_KEYS = null;
+const pushSubs = new Map();
+
+function loadOrGenVapid() {
+  const fs = require("fs");
+  try {
+    if (fs.existsSync(VAPID_FILE)) {
+      VAPID_KEYS = JSON.parse(fs.readFileSync(VAPID_FILE, "utf8"));
+      console.log("[VAPID] Loaded existing keys");
+      return;
+    }
+  } catch {}
+  try {
+    const { publicKey, privateKey } = crypto.generateKeyPairSync("ec", {
+      namedCurve: "P-256",
+      publicKeyEncoding:  { type: "spki",  format: "der" },
+      privateKeyEncoding: { type: "pkcs8", format: "der" },
+    });
+    const pubRaw = publicKey.slice(26);
+    let privRaw;
+    for (let i = 0; i < privateKey.length - 34; i++) {
+      if (privateKey[i] === 0x04 && privateKey[i + 1] === 0x20) {
+        privRaw = privateKey.slice(i + 2, i + 34);
+        break;
+      }
+    }
+    if (!privRaw) throw new Error("Could not extract private key bytes");
+    VAPID_KEYS = {
+      publicKey:  pubRaw.toString("base64url"),
+      privateKey: privRaw.toString("base64url"),
+    };
+    fs.writeFileSync(VAPID_FILE, JSON.stringify(VAPID_KEYS));
+    console.log("[VAPID] Generated new key pair");
+  } catch (e) {
+    console.error("[VAPID] Key generation failed:", e.message);
+  }
+}
+
+const b64url    = buf => Buffer.isBuffer(buf) ? buf.toString("base64url") : Buffer.from(buf).toString("base64url");
+const fromb64url = s  => Buffer.from(s, "base64url");
+
+async function hkdf(salt, ikm, info, len) {
+  const prk = crypto.createHmac("sha256", salt).update(ikm).digest();
+  const t   = crypto.createHmac("sha256", prk).update(Buffer.concat([info, Buffer.alloc(1, 1)])).digest();
+  return t.slice(0, len);
+}
+
+async function buildVapidJWT(audience) {
+  const header  = b64url(JSON.stringify({ typ: "JWT", alg: "ES256" }));
+  const now     = Math.floor(Date.now() / 1000);
+  const payload = b64url(JSON.stringify({ aud: audience, exp: now + 12 * 3600, sub: "mailto:dispatch@wesbell.com" }));
+  const sigInput = `${header}.${payload}`;
+  const privBytes = fromb64url(VAPID_KEYS.privateKey);
+  const privKey = crypto.createPrivateKey({
+    key: Buffer.concat([
+      Buffer.from("308187020100301306072a8648ce3d020106082a8648ce3d030107046d306b0201010420", "hex"),
+      privBytes,
+      Buffer.from("a144034200", "hex"),
+      fromb64url(VAPID_KEYS.publicKey),
+    ]),
+    format: "der", type: "pkcs8",
+  });
+  const sig = crypto.sign(null, Buffer.from(sigInput), { key: privKey, dsaEncoding: "ieee-p1363" });
+  return `${sigInput}.${b64url(sig)}`;
+}
+
+async function encryptPushPayload(plaintext, keys) {
+  const serverKeys   = crypto.generateKeyPairSync("ec", { namedCurve: "P-256" });
+  const serverPubRaw = serverKeys.publicKey.export({ type: "spki", format: "der" }).slice(26);
+  const clientPubRaw = fromb64url(keys.p256dh);
+  const authSecret   = fromb64url(keys.auth);
+  const clientPub = crypto.createPublicKey({
+    key: Buffer.concat([
+      Buffer.from("3059301306072a8648ce3d020106082a8648ce3d030107034200", "hex"),
+      clientPubRaw,
+    ]),
+    format: "der", type: "spki",
+  });
+  const sharedSecret = crypto.diffieHellman({ privateKey: serverKeys.privateKey, publicKey: clientPub });
+  const prk  = await hkdf(authSecret, sharedSecret, Buffer.concat([Buffer.from("WebPush: info\x00"), clientPubRaw, serverPubRaw]), 32);
+  const salt = crypto.randomBytes(16);
+  const cek  = await hkdf(salt, prk, Buffer.concat([Buffer.from("Content-Encoding: aes128gcm\x00"), Buffer.alloc(1, 1)]), 16);
+  const nonce= await hkdf(salt, prk, Buffer.concat([Buffer.from("Content-Encoding: nonce\x00"),    Buffer.alloc(1, 1)]), 12);
+  const cipher    = crypto.createCipheriv("aes-128-gcm", cek, nonce);
+  const msg       = Buffer.concat([Buffer.from(plaintext), Buffer.alloc(1, 2)]);
+  const encrypted = Buffer.concat([cipher.update(msg), cipher.final(), cipher.getAuthTag()]);
+  const rs = Buffer.alloc(4); rs.writeUInt32BE(4096);
+  return Buffer.concat([salt, rs, Buffer.alloc(1, serverPubRaw.length), serverPubRaw, encrypted]);
+}
+
+async function sendPush(subscription, payload) {
+  const { endpoint, keys } = subscription;
+  const url       = new URL(endpoint);
+  const audience  = `${url.protocol}//${url.host}`;
+  const jwt       = await buildVapidJWT(audience);
+  const authHeader = `vapid t=${jwt},k=${VAPID_KEYS.publicKey}`;
+  const encrypted  = await encryptPushPayload(payload, keys);
+  const https = require("https");
+  return new Promise((resolve, reject) => {
+    const req = https.request(endpoint, {
+      method: "POST",
+      headers: {
+        "Authorization":    authHeader,
+        "Content-Type":     "application/octet-stream",
+        "Content-Encoding": "aes128gcm",
+        "TTL":              "86400",
+        "Content-Length":   encrypted.length,
+      },
+    }, res => { res.resume(); resolve(res.statusCode); });
+    req.on("error", reject);
+    req.write(encrypted);
+    req.end();
+  });
+}
+
+async function broadcastPush(title, body, data) {
+  if (!VAPID_KEYS || pushSubs.size === 0) return;
+  const payload = JSON.stringify({ title, body, data: data || {} });
+  const dead = [];
+  for (const [endpoint, sub] of pushSubs) {
+    try {
+      const status = await sendPush(sub, payload);
+      if (status === 410 || status === 404) dead.push(endpoint);
+    } catch {}
+  }
+  if (dead.length) {
+    dead.forEach(ep => pushSubs.delete(ep));
+    const ph = dead.map(() => "?").join(",");
+    await run(`DELETE FROM push_subscriptions WHERE endpoint IN (${ph})`, dead).catch(() => {});
+  }
+}
+
+/* ══════════════════════════════════════════
+   DB INIT
+══════════════════════════════════════════ */
+async function initDb() {
+  await run(`CREATE TABLE IF NOT EXISTS trailers (
+    trailer TEXT PRIMARY KEY, direction TEXT, status TEXT, door TEXT,
+    note TEXT, dropType TEXT, carrierType TEXT DEFAULT '', updatedAt INTEGER
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS doorblocks (
+    door      TEXT PRIMARY KEY,
+    note      TEXT NOT NULL DEFAULT '',
+    setAt     INTEGER NOT NULL DEFAULT 0
+  )`);
+
+  await run(`CREATE TABLE IF NOT EXISTS dockplates (
+    door TEXT PRIMARY KEY, status TEXT, note TEXT, updatedAt INTEGER
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS confirmations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, trailer TEXT,
+    door TEXT, action TEXT, ip TEXT, userAgent TEXT
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, actorRole TEXT,
+    action TEXT, entityType TEXT, entityId TEXT, details TEXT, ip TEXT, userAgent TEXT
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS push_subscriptions (
+    endpoint TEXT PRIMARY KEY, subscription TEXT, createdAt INTEGER
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS issue_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, trailer TEXT,
+    door TEXT, note TEXT, photo_data TEXT, photo_mime TEXT, ip TEXT, userAgent TEXT
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS pins (
+    role TEXT PRIMARY KEY, salt BLOB, hash BLOB, iter INTEGER
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS door_reservations (
+    door       TEXT PRIMARY KEY,
+    trailer    TEXT NOT NULL,
+    carrierType TEXT NOT NULL DEFAULT 'Outside',
+    reservedAt INTEGER NOT NULL,
+    expiresAt  INTEGER NOT NULL
+  )`);
+
+  // Migrations (safe to re-run)
+  await run(`DELETE FROM dockplates WHERE CAST(door AS INTEGER) < 28`);
+  try { await run(`ALTER TABLE confirmations ADD COLUMN action TEXT`); }      catch {}
+  try { await run(`ALTER TABLE trailers ADD COLUMN carrierType TEXT DEFAULT ''`); } catch {}
+
+  // Seed dock plate doors 28–42
+  const existingPlates = new Set((await all(`SELECT door FROM dockplates`)).map(r => r.door));
+  for (let d = 28; d <= 42; d++) {
+    const door = String(d);
+    if (!existingPlates.has(door))
+      await run(`INSERT INTO dockplates(door,status,note,updatedAt) VALUES(?,?,?,?)`, [door, "Unknown", "", Date.now()]);
+  }
+
+  // Seed PINs — env vars always win so Render config takes effect on every deploy
+  for (const role of ["dispatcher", "dock", "management", "admin"]) {
+    const row = await get(`SELECT role FROM pins WHERE role=?`, [role]);
+    const envPin = ENV_PINS[role] && ENV_PINS[role].length >= PIN_MIN_LEN ? ENV_PINS[role] : null;
+    if (!row) {
+      // First boot: use env var or generate a random PIN
+      const pin = envPin || genTempPin();
+      await setPin(role, pin);
+      console.log(`[SECURITY] ${role} PIN initialised`);
+    } else if (envPin) {
+      // Env var is set — always sync to DB so redeploys apply it immediately
+      await setPin(role, envPin);
+      console.log(`[SECURITY] ${role} PIN synced from environment`);
+    }
+  }
+}
+
+function genTempPin() { return String(crypto.randomInt(100000, 1000000)); }
+
+function pbkdf2Hash(pin, salt, iter = 140000) {
+  return new Promise((res, rej) =>
+    crypto.pbkdf2(pin, salt, iter, 32, "sha256", (e, d) => e ? rej(e) : res(d))
+  );
+}
+
+async function setPin(role, pin) {
+  const salt = crypto.randomBytes(16), iter = 140000;
+  const hash = await pbkdf2Hash(pin, salt, iter);
+  await run(
+    `INSERT INTO pins(role,salt,hash,iter) VALUES(?,?,?,?)
+     ON CONFLICT(role) DO UPDATE SET salt=excluded.salt,hash=excluded.hash,iter=excluded.iter`,
+    [role, salt, hash, iter]
+  );
+}
+
+async function verifyPin(role, pin) {
+  const row = await get(`SELECT salt,hash,iter FROM pins WHERE role=?`, [role]);
+  if (!row) return false;
+  const candidate = await pbkdf2Hash(pin, row.salt, row.iter || 140000);
+  if (candidate.length !== row.hash.length) return false;
+  return crypto.timingSafeEqual(candidate, row.hash);
+}
+
+/* ══════════════════════════════════════════
+   SESSIONS
+══════════════════════════════════════════ */
+const sessions = new Map();
+// Prune expired sessions every 30 minutes to prevent memory leak
+setInterval(() => {
+  const now = Date.now();
+  for (const [sid, s] of sessions.entries()) if (s.exp < now) sessions.delete(sid);
+}, 30 * 60 * 1000).unref();
+
+function newSession(role) {
+  const sid = crypto.randomBytes(24).toString("hex");
+  sessions.set(sid, { role, exp: Date.now() + SESSION_TTL_MS });
+  return sid;
+}
+
+function parseCookies(req) {
+  const out = {};
+  (req.headers.cookie || "").split(";").forEach(p => {
+    const i = p.indexOf("=");
+    if (i > -1) out[p.slice(0, i).trim()] = decodeURIComponent(p.slice(i + 1).trim());
+  });
+  return out;
+}
+
+function getSession(req) {
+  const sid = parseCookies(req)[COOKIE_NAME];
+  if (!sid) return null;
+  const s = sessions.get(sid);
+  if (!s) return null;
+  if (Date.now() > s.exp) { sessions.delete(sid); return null; }
+  return { sid, ...s };
+}
+
+function setSessionCookie(res, sid) {
+  const secure = process.env.NODE_ENV === "production";
+  res.setHeader("Set-Cookie",
+    `${COOKIE_NAME}=${encodeURIComponent(sid)}; Path=/; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`
+  );
+}
+
+function clearSessionCookie(res) {
+  res.setHeader("Set-Cookie", `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+}
+
+function requireRole(roles) {
+  return (req, res, next) => {
+    const s = getSession(req);
+    if (!s) return res.status(401).send("Unauthorized");
+    if (s.role !== "admin" && !roles.includes(s.role)) return res.status(401).send("Unauthorized");
+    req.user = { role: s.role };
+    next();
+  };
+}
+
+// Driver endpoints — accessible without any session (personal phones, no login)
+// But if a session IS present it must NOT be a dock or dispatcher (they shouldn't
+// be submitting driver actions)
+function requireDriverAccess(req, res, next) {
+  const s = getSession(req);
+  if (s && ["dock","dispatcher","management","admin"].includes(s.role)) {
+    return res.status(403).send("Driver endpoint — not accessible from this role");
+  }
+  next();
+}
+
+// Issue reports can come from drivers (no session) OR dock/dispatcher/management/admin
+function requireIssueAccess(req, res, next) {
+  next();
+}
+
+// Dock workers can only advance status through dock-appropriate transitions.
+// Dispatchers/admin can do anything. This prevents a dock worker from e.g.
+// marking a trailer Ready or Departed by hitting the API directly.
+function requireDockStatusAllowed(req, res, next) {
+  const s = getSession(req);
+  if (!s) return res.status(401).send("Unauthorized");
+  req.user = { role: s.role }; // populate req.user so handlers can read actor role
+  // Admin, dispatcher, and management have full status control
+  if (["admin","dispatcher","management"].includes(s.role)) return next();
+  if (s.role === "dock") {
+    const status = req.body?.status;
+    const DOCK_ALLOWED = ["Loading", "Dock Ready"]; // dock workers may only set these
+    if (status && !DOCK_ALLOWED.includes(status)) {
+      return res.status(403).send(`Dock role cannot set status: ${status}`);
+    }
+    return next();
+  }
+  return res.status(403).send("Unauthorized");
+}
+
+/* ══════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════ */
+function ipOf(req) {
+  const xf = req.headers["x-forwarded-for"];
+  return xf ? String(xf).split(",")[0].trim() : req.socket.remoteAddress || "";
+}
+
+async function audit(req, actorRole, action, entityType, entityId, details) {
+  let d = ""; try { d = JSON.stringify(details || {}); } catch {}
+  await run(
+    `INSERT INTO audit(at,actorRole,action,entityType,entityId,details,ip,userAgent) VALUES(?,?,?,?,?,?,?,?)`,
+    [Date.now(), actorRole || "unknown", action, entityType, entityId, d, ipOf(req), req.headers["user-agent"] || ""]
+  );
+}
+
+async function loadTrailersObject() {
+  const rows = await all(`SELECT * FROM trailers`);
+  const obj = {};
+  for (const r of rows) {
+    obj[r.trailer] = {
+      direction:   r.direction   || "",
+      status:      r.status      || "",
+      door:        r.door        || "",
+      note:        r.note        || "",
+      dropType:    r.dropType    || "",
+      carrierType: r.carrierType || "",
+      updatedAt:   r.updatedAt   || 0,
+    };
+  }
+  return obj;
+}
+
+async function loadDockPlatesObject() {
+  const rows = await all(`SELECT * FROM dockplates ORDER BY CAST(door AS INTEGER) ASC`);
+  const obj = {};
+  for (const r of rows) obj[r.door] = { status: r.status || "Unknown", note: r.note || "", updatedAt: r.updatedAt || 0 };
+  return obj;
+}
+
+async function loadConfirmations(limit = 250) {
+  return all(`SELECT at,trailer,door,action,ip,userAgent FROM confirmations ORDER BY at DESC LIMIT ?`, [limit]);
+}
+
+/* ══════════════════════════════════════════
+   WEBSOCKET
+══════════════════════════════════════════ */
+const server = http.createServer(app);
+const wss    = new WebSocket.Server({ server });
+
+function wsBroadcast(type, payload) {
+  const msg = JSON.stringify({ type, payload });
+  for (const client of wss.clients) {
+    if (client.readyState === WebSocket.OPEN) {
+      try { client.send(msg); } catch { /* stale socket */ }
+    }
+  }
+}
+
+async function broadcastTrailers() {
+  try { invalidateTrailers(); wsBroadcast("state",         await getTrailersCache()); }
+  catch(e) { console.error("[WS] broadcastTrailers:", e.message); }
+}
+
+/* ══════════════════════════════════════════
+   DOOR RESERVATION HELPERS
+══════════════════════════════════════════ */
+const RESERVATION_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+// Get all currently occupied/reserved/blocked doors as a Set
+async function getOccupiedDoorSet(excludeTrailer = null) {
+  const occupied = await all(
+    `SELECT door FROM trailers WHERE door IS NOT NULL AND door != ''
+     AND status NOT IN ('Departed','')${excludeTrailer ? " AND trailer != ?" : ""}`,
+    excludeTrailer ? [excludeTrailer] : []
+  );
+  const blocks   = await all(`SELECT door FROM doorblocks`);
+  const reserved = await all(
+    `SELECT door FROM door_reservations WHERE expiresAt > ?`, [Date.now()]
+  );
+  return new Set([
+    ...occupied.map(r => String(r.door)),
+    ...blocks.map(r => String(r.door)),
+    ...reserved.map(r => String(r.door)),
+  ]);
+}
+
+// Pick the best available door (28–42), respecting dockplates status
+async function pickBestDoor(excludeTrailer = null) {
+  const occupiedSet = await getOccupiedDoorSet(excludeTrailer);
+  // Prefer doors whose dockplate is OK (not Service / Out of Order)
+  const plates = await all(`SELECT door, status FROM dockplates`);
+  const plateMap = {};
+  plates.forEach(p => { plateMap[String(p.door)] = p.status; });
+  // Sort: OK plates first, then Unknown, skip Service/OOO
+  const candidates = [];
+  for (let d = 28; d <= 42; d++) {
+    const ds = String(d);
+    if (occupiedSet.has(ds)) continue;
+    const plateStatus = plateMap[ds] || 'Unknown';
+    if (plateStatus === 'Out of Order') continue; // never assign
+    candidates.push({ door: ds, priority: plateStatus === 'OK' ? 0 : plateStatus === 'Unknown' ? 1 : 2 });
+  }
+  candidates.sort((a, b) => a.priority - b.priority);
+  return candidates[0]?.door || null;
+}
+
+// Reserve a door for a trailer (overwrites any existing reservation for that door)
+async function reserveDoor(door, trailer, carrierType) {
+  const now = Date.now();
+  await run(
+    `INSERT INTO door_reservations(door, trailer, carrierType, reservedAt, expiresAt)
+     VALUES(?,?,?,?,?)
+     ON CONFLICT(door) DO UPDATE SET
+       trailer=excluded.trailer, carrierType=excluded.carrierType,
+       reservedAt=excluded.reservedAt, expiresAt=excluded.expiresAt`,
+    [door, trailer, carrierType, now, now + RESERVATION_TTL_MS]
+  );
+}
+
+// Release reservation for a door (call when trailer is Dropped or departed)
+async function releaseReservation(trailer) {
+  await run(`DELETE FROM door_reservations WHERE trailer=?`, [trailer]);
+}
+
+// Cleanup expired reservations and broadcast if anything changed
+async function cleanupExpiredReservations() {
+  const result = await run(`DELETE FROM door_reservations WHERE expiresAt <= ?`, [Date.now()]);
+  if (result.changes > 0) {
+    console.log(`[reservations] Cleaned up ${result.changes} expired reservation(s)`);
+    await broadcastTrailers();
+  }
+}
+
+// Run cleanup every 2 minutes
+setInterval(cleanupExpiredReservations, 2 * 60 * 1000);
+
+async function broadcastPlates() {
+  try { invalidatePlates();   wsBroadcast("dockplates",    await getPlatesCache()); }
+  catch(e) { console.error("[WS] broadcastPlates:", e.message); }
+}
+async function broadcastBlocks() {
+  try { invalidateBlocks();   wsBroadcast("doorblocks",    await getBlocksCache()); }
+  catch(e) { console.error("[WS] broadcastBlocks:", e.message); }
+}
+async function broadcastConfirmations() {
+  try {                       wsBroadcast("confirmations", await loadConfirmations(250)); }
+  catch(e) { console.error("[WS] broadcastConfirmations:", e.message); }
+}
+
+/* ══════════════════════════════════════════
+   STATIC / VIEWS
+══════════════════════════════════════════ */
+// Safe static file serving — allowlist regex, never exposes server.js/sqlite/vapid
+const SAFE_FILES = /^\/(app\.js|style\.css|manifest\.json|favicon\.ico|favicon-\d+\.png|icon-\d+\.png|icon-[\w-]+\.png|apple-touch-icon\.png|splash\/splash-[\w-]+\.png)$/;
+app.use((req, res, next) => {
+  if (req.path === "/sw.js") {
+    res.setHeader("Service-Worker-Allowed", "/");
+    res.setHeader("Content-Type", "application/javascript");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    return res.sendFile(path.join(__dirname, "sw.js"), err => { if (err && !res.headersSent) res.status(404).end(); });
+  }
+  if (req.path === "/manifest.json") {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  }
+  if (!SAFE_FILES.test(req.path)) return next();
+  if (/\.(png|ico)$/.test(req.path)) res.setHeader("Cache-Control", "public, max-age=604800, immutable");
+  if (/\.(js|css)$/.test(req.path)) res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  const safePath = path.join(__dirname, req.path.replace(/\/\.\./g, ""));
+  res.sendFile(safePath, err => { if (err && !res.headersSent) res.status(404).end(); });
+});
+const INDEX_FILE = path.join(__dirname, "index.html");
+const sendIndex  = (_, res) => res.sendFile(INDEX_FILE);
+
+/* ── ROLE → ALLOWED PATHS ── */
+const ROLE_HOME = {
+  dispatcher: "/",
+  admin:      "/",
+  dock:       "/dock",
+  management: "/management",
+  // drivers have no session — they always land on /driver
+};
+
+// Returns the canonical home path for a role (or null for unauthenticated driver)
+function roleHome(role) { return ROLE_HOME[role] || null; }
+
+// Middleware: enforce that a logged-in role can only view their own page.
+// Drivers (no session) are always allowed on /driver only.
+function guardPage(allowedRoles) {
+  return (req, res, next) => {
+    const s = getSession(req);
+    const role = s?.role || null;
+
+    // No session — allow if page accepts unauthenticated (__driver__), otherwise login
+    if (!role) {
+      if (allowedRoles.includes("__driver__")) return next();
+      return res.redirect(302, `/login?from=${encodeURIComponent(req.path)}`);
+    }
+
+    // Admin goes anywhere, no questions asked
+    if (role === "admin") return next();
+
+    // Management can go anywhere authenticated pages exist
+    if (role === "management") return next();
+
+    // Dispatcher can view board, dock, and driver pages
+    if (role === "dispatcher") return next();
+
+    // Dock workers locked to /dock and /driver only
+    if (role === "dock") {
+      if (allowedRoles.includes("dock")) return next();
+      return res.redirect(302, "/dock");
+    }
+
+    // Any other authenticated role — send home
+    const home = roleHome(role);
+    return res.redirect(302, home || "/");
+  };
+}
+
+app.get("/login", (req, res) => {
+  const expired  = req.query.expired === "1";
+  const fromPath = req.query.from || "";
+
+  if (fromPath.includes("/driver")) return res.redirect(302, "/driver");
+
+  if (!expired) {
+    const s = getSession(req);
+    if (s?.role) return res.redirect(302, ROLE_HOME[s.role] || "/");
+  }
+
+  const isDock = fromPath.includes("/dock");
+  const isSup  = fromPath.includes("/management");
+
+  // ── DOCK: simple friendly login ──────────────────────────────────────────
+  if (isDock) {
+    res.setHeader("content-type", "text/html; charset=utf-8");
+    const expiredHtml = expired ? '<div class="exp-banner">Session expired — sign in again</div>' : "";
+    return res.end(`<!doctype html><html lang="en"><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<title>Wesbell Dock</title>
+<script>if("serviceWorker"in navigator){navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister()));}</script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#060b10;--card:#0d1620;--border:#1a2535;--amber:#f0a030;--cyan:#20c0d0;--red:#e84848;--t0:#e8eef8;--t1:#8a9db8;--t2:#4a5e78;--mono:"DM Mono",monospace;--sans:"DM Sans",system-ui,sans-serif}
+html,body{height:100%;-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--t0);font-family:var(--sans);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;min-height:100vh;gap:0}
+.logo{font-family:var(--mono);font-size:11px;letter-spacing:.15em;color:var(--t2);text-transform:uppercase;margin-bottom:32px;display:flex;align-items:center;gap:10px}
+.logo-mark{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--amber),#c07020);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#000}
+.heading{font-family:var(--mono);font-size:clamp(28px,8vw,42px);font-weight:700;color:var(--t0);letter-spacing:.04em;text-align:center;margin-bottom:6px}
+.sub{font-family:var(--mono);font-size:12px;color:var(--t2);letter-spacing:.08em;text-align:center;margin-bottom:36px}
+.exp-banner{background:rgba(232,72,72,.1);border:1px solid rgba(232,72,72,.25);color:var(--red);font-family:var(--mono);font-size:12px;letter-spacing:.04em;padding:10px 16px;border-radius:8px;margin-bottom:20px;text-align:center;width:100%;max-width:340px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px 24px;width:100%;max-width:340px}
+.pin-label{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--t2);margin-bottom:10px;display:block}
+.pin-input{width:100%;padding:18px 16px;border-radius:10px;border:2px solid var(--border);background:#080f18;color:var(--t0);font-family:var(--mono);font-size:28px;font-weight:700;letter-spacing:.2em;text-align:center;outline:none;-webkit-appearance:none;transition:border-color .15s;margin-bottom:20px}
+.pin-input:focus{border-color:var(--cyan)}
+.pin-input::placeholder{color:var(--t2);letter-spacing:.1em;font-size:20px}
+.sign-btn{width:100%;padding:18px;border-radius:12px;border:none;background:linear-gradient(135deg,var(--cyan),#18a0ae);color:#000;font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:.08em;cursor:pointer;touch-action:manipulation;transition:opacity .15s,transform .1s;-webkit-tap-highlight-color:transparent}
+.sign-btn:active{opacity:.85;transform:scale(.98)}
+.sign-btn:disabled{opacity:.4;cursor:not-allowed}
+.err-msg{display:none;margin-top:14px;color:var(--red);font-family:var(--mono);font-size:12px;letter-spacing:.04em;text-align:center}
+.err-msg.show{display:block}
+.hint{font-family:var(--mono);font-size:10px;color:var(--t2);text-align:center;margin-top:20px;letter-spacing:.04em}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.logo{animation:fadeUp .3s ease both}
+.heading{animation:fadeUp .3s .06s ease both}
+.sub{animation:fadeUp .3s .1s ease both}
+.card{animation:fadeUp .3s .14s ease both}
+</style></head><body>
+<div class="logo"><div class="logo-mark">W</div>WESBELL DISPATCH</div>
+<div class="heading">DOCK LOGIN</div>
+<div class="sub">ENTER YOUR DOCK PIN</div>
+${expiredHtml}
+<div class="card">
+  <label class="pin-label" for="pin">PIN</label>
+  <input id="pin" class="pin-input" type="password" inputmode="numeric" placeholder="- - - -" autocomplete="current-password" maxlength="12"/>
+  <button class="sign-btn" id="go">SIGN IN</button>
+  <div class="err-msg" id="em"></div>
+</div>
+<div class="hint">Contact management if you need a PIN.</div>
+<script>
+(function(){
+  var btn=document.getElementById("go"),pin=document.getElementById("pin"),em=document.getElementById("em");
+  function doLogin(){
+    var p=pin.value.trim();
+    if(!p){em.textContent="Enter your PIN.";em.classList.add("show");return;}
+    btn.disabled=true;btn.textContent="SIGNING IN...";em.classList.remove("show");
+    fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},body:JSON.stringify({role:"dock",pin:p})})
+    .then(function(r){if(!r.ok){r.text().then(function(t){em.textContent=t;em.classList.add("show");});return;}location.href="/dock";})
+    .catch(function(){em.textContent="Connection error.";em.classList.add("show");})
+    .finally(function(){btn.disabled=false;btn.textContent="SIGN IN";});
+  }
+  btn.addEventListener("click",doLogin);
+  pin.addEventListener("keydown",function(e){if(e.key==="Enter")doLogin();});
+  pin.focus();
+})();
+</script></body></html>`);
+  }
+
+  // ── DISPATCHER / MANAGEMENT / ADMIN: full dashboard login ────────────────
+  const roleOptions = isSup
+    ? '<option value="management" selected>Management</option><option value="admin">&#9889; Admin</option>'
+    : '<option value="dispatcher" selected>Dispatcher</option><option value="dock">Dock</option><option value="management">Management</option><option value="admin">&#9889; Admin</option>';
+
+  const expiredBanner = expired
+    ? '<div class="ctx-badge ctx-err">&#9888; Session expired &#8212; please sign in again.</div>'
+    : "";
+
+  res.setHeader("content-type", "text/html; charset=utf-8");
+  res.end(`<!doctype html><html lang="en"><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<title>Wesbell Dispatch</title>
+<script>if("serviceWorker"in navigator){navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister()));}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#070a0f;--s0:#0c1018;--s1:#101620;
+  --b0:#1a2535;--b1:#1f2e42;
+  --t0:#e8eef8;--t1:#8a9db8;--t2:#4a5e78;--t3:#293848;
+  --amber:#f0a030;--amber-d:#c07020;
+  --cyan:#20c0d0;--green:#20d090;--red:#e84848;
+  --mono:"DM Mono",monospace;--sans:"DM Sans",system-ui,sans-serif;--display:"Bebas Neue",sans-serif;
+}
+html{height:100%;-webkit-font-smoothing:antialiased}
+body{min-height:100vh;background:var(--bg);color:var(--t0);font-family:var(--sans);display:grid;grid-template-columns:1fr 380px;overflow:hidden}
+/* ── Dashboard ── */
+.dashboard{position:relative;z-index:1;display:flex;flex-direction:column;padding:44px 52px 36px;background:linear-gradient(135deg,#070c14 0%,#0a1020 60%,#08111c 100%);border-right:1px solid var(--b0);overflow:hidden}
+.dashboard::after{content:"";position:absolute;top:-80px;left:-80px;width:600px;height:600px;background:radial-gradient(ellipse at center,rgba(240,160,48,.055) 0%,transparent 70%);pointer-events:none}
+.db-brand{display:flex;align-items:center;gap:12px;margin-bottom:44px;position:relative;z-index:1}
+.db-mark{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--amber) 0%,var(--amber-d) 100%);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:15px;font-weight:700;color:#000;box-shadow:0 4px 16px rgba(240,120,0,.3);flex-shrink:0}
+.db-name{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.1em;color:var(--t0)}
+.db-sub{font-size:10px;color:var(--t2);letter-spacing:.08em;margin-top:1px}
+.clock-wrap{position:relative;z-index:1;margin-bottom:8px}
+.clock-time{font-family:var(--display);font-size:clamp(80px,9vw,130px);line-height:.9;color:var(--t0);letter-spacing:.01em;text-shadow:0 0 60px rgba(240,160,48,.12)}
+.colon{color:var(--amber);animation:blink 1s step-start infinite}
+@keyframes blink{0%,49%{opacity:1}50%,100%{opacity:.2}}
+.clock-secs{font-size:.52em;color:var(--t2);margin-left:4px;vertical-align:baseline}
+.clock-ampm{font-family:var(--mono);font-size:clamp(13px,1.5vw,20px);color:var(--amber);letter-spacing:.1em;margin-left:6px;vertical-align:super}
+.date-row{display:flex;align-items:baseline;gap:12px;margin-bottom:36px;position:relative;z-index:1}
+.date-day{font-family:var(--display);font-size:clamp(26px,3.5vw,42px);color:var(--t1);letter-spacing:.04em}
+.date-full{font-family:var(--mono);font-size:clamp(11px,1vw,13px);color:var(--t2);letter-spacing:.06em;text-transform:uppercase}
+.divider{height:1px;background:linear-gradient(90deg,var(--b1) 0%,transparent 100%);margin-bottom:32px;position:relative;z-index:1}
+.wm span{color:var(--t1)}
+.cal-wrap{flex:1;position:relative;z-index:1}
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.cal-month{font-family:var(--display);font-size:clamp(20px,2.5vw,30px);color:var(--t1);letter-spacing:.06em}
+.cal-year{font-family:var(--mono);font-size:12px;color:var(--t2);letter-spacing:.08em}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-dow{font-family:var(--mono);font-size:9px;letter-spacing:.08em;color:var(--t3);text-align:center;padding:3px 0 7px;text-transform:uppercase}
+.cal-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:clamp(10px,1.1vw,12px);color:var(--t2);border-radius:5px}
+.cal-cell.other{color:var(--t3)}
+.cal-cell.today{background:var(--amber);color:#000;font-weight:700;box-shadow:0 2px 10px rgba(240,160,48,.35)}
+.db-footer{position:relative;z-index:1;display:flex;align-items:center;gap:8px;margin-top:20px;padding-top:14px;border-top:1px solid var(--b0)}
+.live-dot{width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:beat 2.4s ease-in-out infinite}
+@keyframes beat{0%,100%{box-shadow:0 0 0 0 rgba(32,208,144,.6)}50%{box-shadow:0 0 0 5px rgba(32,208,144,0)}}
+.footer-txt{font-family:var(--mono);font-size:10px;color:var(--t2);letter-spacing:.06em}
+/* ── Login Panel ── */
+.login-panel{position:relative;z-index:1;display:flex;flex-direction:column;justify-content:flex-start;padding:40px 40px 36px;padding-top:max(40px,env(safe-area-inset-top,40px));background:var(--s0);overflow-y:auto}
+.lp-brand{display:flex;align-items:center;gap:10px;margin-bottom:32px}
+.lp-mark{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,var(--amber),var(--amber-d));display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px;font-weight:700;color:#000;box-shadow:0 3px 12px rgba(240,120,0,.25);flex-shrink:0}
+.lp-name{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.1em;color:var(--t1)}
+.lp-sub2{font-size:9px;color:var(--t2);letter-spacing:.08em;margin-top:1px}
+.lp-heading{font-family:var(--display);font-size:36px;color:var(--t0);letter-spacing:.04em;margin-bottom:4px}
+.lp-tagline{font-family:var(--mono);font-size:11px;color:var(--t2);letter-spacing:.06em;margin-bottom:28px}
+.ctx-badge{padding:8px 12px;border-radius:6px;font-family:var(--mono);font-size:11px;letter-spacing:.04em;margin-bottom:14px}
+.ctx-err{background:rgba(232,72,72,.08);border:1px solid rgba(232,72,72,.2);color:var(--red)}
+.fl{display:block;font-family:var(--mono);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);margin:0 0 7px}
+.fi{width:100%;padding:14px 16px;border-radius:8px;border:1px solid var(--b1);background:var(--s1);color:var(--t0);font-family:var(--mono);font-size:16px;outline:none;-webkit-appearance:none;transition:border-color .15s,box-shadow .15s;margin-bottom:16px}
+.fi:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(240,160,48,.1)}
+.fi::placeholder{color:var(--t3)}
+.sign-btn{width:100%;padding:15px;border-radius:10px;border:1px solid rgba(240,160,48,.3);background:rgba(240,160,48,.1);color:var(--amber);font-family:var(--mono);font-size:14px;font-weight:500;letter-spacing:.08em;cursor:pointer;touch-action:manipulation;transition:all .15s;margin-top:4px;display:flex;align-items:center;justify-content:center;gap:10px}
+.sign-btn:hover{background:rgba(240,160,48,.18);border-color:rgba(240,160,48,.5)}
+.sign-btn:active{transform:scale(.99)}
+.sign-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.arrow{transition:transform .15s}
+.sign-btn:hover .arrow{transform:translateX(3px)}
+.err-msg{display:none;padding:10px 12px;border-radius:6px;background:rgba(232,72,72,.08);border:1px solid rgba(232,72,72,.2);color:var(--red);font-family:var(--mono);font-size:12px;letter-spacing:.03em;margin-top:12px}
+.err-msg.show{display:block}
+.lp-hint{font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:.04em;text-align:center;margin-top:20px;line-height:1.6}
+/* ── Mobile ── */
+@media(max-width:768px){
+  body{grid-template-columns:1fr;grid-template-rows:auto 1fr;overflow-y:auto;height:auto;min-height:100vh}
+  .dashboard{padding:20px 20px 16px;border-right:none;border-bottom:1px solid var(--b0);flex-direction:row;flex-wrap:wrap;align-items:center;gap:12px 20px}
+  .db-brand{margin-bottom:0;flex:1 0 auto}
+  .clock-wrap{order:-1;flex:0 0 100%;margin-bottom:0}
+  .clock-time{font-size:clamp(48px,14vw,72px)}
+  .clock-secs{display:none}
+  .date-row{flex:0 0 100%;margin-bottom:0}
+  .divider{display:none}
+              .cal-wrap{display:none}
+  .db-footer{flex:0 0 100%;margin-top:8px;padding-top:8px}
+  .login-panel{padding:28px 20px max(28px,env(safe-area-inset-bottom,28px));justify-content:flex-start}
+  .lp-brand{margin-bottom:20px}
+}
+@media(max-width:480px){
+  .dashboard{padding:14px 16px 12px;gap:8px 16px}
+  .clock-time{font-size:clamp(40px,16vw,60px)}
+    .login-panel{padding:20px 16px max(24px,env(safe-area-inset-bottom,24px))}
+  .lp-brand{margin-bottom:16px}
+  .lp-heading{font-size:28px}
+  .lp-tagline{font-size:10px;margin-bottom:20px}
+  .fi{font-size:16px!important;padding:13px 14px}
+  .sign-btn{padding:14px;font-size:13px}
+}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.db-brand,.clock-wrap,.date-row,.cal-wrap,.db-footer{animation:fadeUp .3s ease both}
+.login-panel{animation:fadeUp .3s .06s ease both}
+</style></head><body>
+<div class="dashboard">
+  <div class="db-brand">
+    <div class="db-mark">W</div>
+    <div><div class="db-name">WESBELL</div><div class="db-sub">DISPATCH SYSTEM</div></div>
+  </div>
+  <div class="clock-wrap">
+    <span class="clock-time"><span id="ch">--</span><span class="colon">:</span><span id="cm">--</span><span class="clock-secs" id="cs">--</span></span><span class="clock-ampm" id="ca"></span>
+  </div>
+  <div class="date-row">
+    <span class="date-day" id="dd"></span>
+    <span class="date-full" id="df"></span>
+  </div>
+  <div class="divider"></div>
+
+  <div class="cal-wrap" id="cal"></div>
+  <div class="db-footer"><div class="live-dot"></div><div class="footer-txt" id="ft">WESBELL DISPATCH</div></div>
+</div>
+<div class="login-panel">
+  <div class="lp-brand">
+    <div class="lp-mark">W</div>
+    <div><div class="lp-name">WESBELL</div><div class="lp-sub2">DISPATCH</div></div>
+  </div>
+  <div class="lp-heading">SIGN IN</div>
+  <div class="lp-tagline">ENTER YOUR ROLE &amp; PIN TO CONTINUE</div>
+  ${expiredBanner}
+  <label class="fl" for="role">Role</label>
+  <select id="role" class="fi">${roleOptions}</select>
+  <label class="fl" for="pin">PIN</label>
+  <input id="pin" class="fi" type="password" inputmode="numeric" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="current-password"/>
+  <div class="err-msg" id="em"></div>
+  <button class="sign-btn" id="go"><span id="btn-lbl">SIGN IN</span><span class="arrow">&rarr;</span></button>
+  <div class="lp-hint">Contact management if you need a PIN.</div>
+</div>
+<script>
+(function(){
+  var DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  var MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  var now=new Date();
+  function tick(){var n=new Date(),h=n.getHours(),m=n.getMinutes(),s=n.getSeconds(),ap=h>=12?"PM":"AM";h=h%12||12;document.getElementById("ch").textContent=String(h).padStart(2,"0");document.getElementById("cm").textContent=String(m).padStart(2,"0");document.getElementById("cs").textContent=String(s).padStart(2,"0");document.getElementById("ca").textContent=ap;}
+  tick();setInterval(tick,1000);
+  document.getElementById("dd").textContent=DAYS[now.getDay()];
+  document.getElementById("df").textContent=MONTHS[now.getMonth()]+" "+now.getDate()+", "+now.getFullYear();
+  document.getElementById("ft").textContent="WESBELL DISPATCH \u00b7 "+DAYS[now.getDay()].toUpperCase();
+  (function(){var y=now.getFullYear(),mo=now.getMonth(),first=new Date(y,mo,1).getDay(),dim=new Date(y,mo+1,0).getDate(),dipm=new Date(y,mo,0).getDate(),c="",i,d;
+  c+='<div class="cal-head"><span class="cal-month">'+MONTHS[mo].toUpperCase()+'</span><span class="cal-year">'+y+'</span></div><div class="cal-grid">';
+  ["SU","MO","TU","WE","TH","FR","SA"].forEach(function(x){c+='<div class="cal-dow">'+x+'</div>';});
+  for(i=first-1;i>=0;i--)c+='<div class="cal-cell other">'+(dipm-i)+'</div>';
+  for(d=1;d<=dim;d++)c+='<div class="cal-cell'+(d===now.getDate()?" today":"")+'" >'+d+'</div>';
+  var rem=(first+dim)%7===0?0:7-(first+dim)%7;for(d=1;d<=rem;d++)c+='<div class="cal-cell other">'+d+'</div>';
+  c+='</div>';document.getElementById("cal").innerHTML=c;})();
+      var ROLE_HOME={dispatcher:"/",admin:"/",dock:"/dock",management:"/management"};
+  var btn=document.getElementById("go"),lbl=document.getElementById("btn-lbl"),em=document.getElementById("em");
+  function doLogin(){
+    var role=document.getElementById("role").value,pin=document.getElementById("pin").value;
+    if(!pin){em.textContent="Enter your PIN.";em.classList.add("show");return;}
+    btn.disabled=true;lbl.textContent="SIGNING IN...";em.classList.remove("show");
+    fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},body:JSON.stringify({role:role,pin:pin})})
+    .then(function(r){if(!r.ok){r.text().then(function(t){em.textContent=t;em.classList.add("show");});return;}location.href=ROLE_HOME[role]||"/";})
+    .catch(function(){em.textContent="Connection error. Try again.";em.classList.add("show");})
+    .finally(function(){btn.disabled=false;lbl.textContent="SIGN IN";});
+  }
+  btn.addEventListener("click",doLogin);
+  document.getElementById("pin").addEventListener("keydown",function(e){if(e.key==="Enter")doLogin();});
+  document.getElementById("pin").focus();
+})();
+</script></body></html>`);
+});
+
+
+app.get("/",           guardPage(["dispatcher","management","admin"]),              sendIndex);
+app.get("/dock",       guardPage(["dock","dispatcher","management","admin","__driver__"]), sendIndex);
+app.get("/driver",     guardPage(["__driver__","dock","dispatcher","management","admin"]), sendIndex);
+app.get("/management", guardPage(["management","admin"]),                              sendIndex);
+
+/* ══════════════════════════════════════════
+   API — AUTH
+══════════════════════════════════════════ */
+app.get("/api/whoami", (req, res) => {
+  const s = getSession(req);
+  const role = s?.role || null;
+  // Admin and management can visit any page freely — no redirect hint
+  // Other roles get redirected to their home if they land on the wrong page
+  const freeRoam = !role || role === "admin" || role === "management";
+  const redirectTo = freeRoam ? null : (ROLE_HOME[role] || "/");
+  res.json({ role, version: APP_VERSION, redirectTo });
+});
+
+/* ══════════════════════════════════════════
+   RATE LIMITING — LOGIN
+══════════════════════════════════════════ */
+// Rate limiting removed — no lockout
+
+app.post("/api/login", requireXHR, async (req, res) => {
+  try {
+    const role = String(req.body.role || "").toLowerCase();
+    const pin  = String(req.body.pin  || "");
+    if (!["dispatcher","dock","management","admin"].includes(role)) return res.status(400).send("Invalid role");
+    if (pin.length < PIN_MIN_LEN) return res.status(400).send("PIN too short");
+    const ok = await verifyPin(role, pin);
+    await audit(req, role, ok ? "login_success" : "login_failed", "auth", role, {});
+    if (!ok) return res.status(401).send("Invalid PIN");
+    const existing = getSession(req);
+    if (existing?.sid) sessions.delete(existing.sid);
+    const sid = newSession(role);
+    setSessionCookie(res, sid);
+    res.json({ ok: true, role, version: APP_VERSION });
+  } catch (e) { res.status(500).send("Login error"); }
+});
+
+app.post("/api/logout", requireXHR, (req, res) => {
+  const s = getSession(req);
+  if (s?.sid) sessions.delete(s.sid);
+  clearSessionCookie(res);
+  res.json({ ok: true });
+});
+
+/* ══════════════════════════════════════════
+   API — TRAILERS
+══════════════════════════════════════════ */
+app.get("/api/state", async (req, res) => { try { res.json(await loadTrailersObject()); } catch(e) { res.status(500).send("State error"); } });
+
+app.post("/api/upsert", requireXHR, requireDockStatusAllowed, async (req, res) => {
+  const actor = req.user?.role || req.session?.role || "unknown";
+  try {
+    const trailer = String(req.body.trailer || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    const now = Date.now();
+
+    const direction   = req.body.direction   !== undefined ? String(req.body.direction   || "").trim() : (existing?.direction   || "");
+    const status      = req.body.status      !== undefined ? String(req.body.status      || "").trim() : (existing?.status      || "");
+    const door        = req.body.door        !== undefined ? String(req.body.door        || "").trim() : (existing?.door        || "");
+    const note        = req.body.note        !== undefined ? String(req.body.note        || "").trim() : (existing?.note        || "");
+    const dropType    = req.body.dropType    !== undefined ? String(req.body.dropType    || "").trim() : (existing?.dropType    || "");
+    const carrierType = req.body.carrierType !== undefined ? String(req.body.carrierType || "").trim() : (existing?.carrierType || "");
+
+    if (actor === "dock") {
+      const onlyStatus =
+        req.body.status    !== undefined &&
+        req.body.direction === undefined &&
+        req.body.door      === undefined &&
+        req.body.note      === undefined &&
+        req.body.dropType  === undefined;
+      if (!onlyStatus) return res.status(403).send("Dock can only update trailer status");
+      if (!["Loading","Dock Ready"].includes(status)) return res.status(403).send("Dock can only set Loading or Dock Ready");
+    }
+
+    // Auto-set Incoming for Wesbell drops from driver portal
+    const isDriverDrop = req.body.flow === "drop" && carrierType.toLowerCase() === "wesbell";
+    const finalStatus  = isDriverDrop ? "Incoming" : status;
+
+    const allowed = ["Incoming","Dropped","Loading","Dock Ready","Ready","Departed",""];
+    if (!allowed.includes(finalStatus)) return res.status(400).send("Invalid status");
+
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt)
+       VALUES(?,?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET
+         direction=excluded.direction, status=excluded.status, door=excluded.door,
+         note=excluded.note, dropType=excluded.dropType, carrierType=excluded.carrierType,
+         updatedAt=excluded.updatedAt`,
+      [trailer, direction, finalStatus, door, note, dropType, carrierType, now]
+    );
+
+    await audit(req, actor, existing ? "trailer_update" : "trailer_create", "trailer", trailer, { direction, status: finalStatus, door, dropType, note });
+    if (req.body.status !== undefined || isDriverDrop) await audit(req, actor, "trailer_status_set", "trailer", trailer, { status: finalStatus });
+
+    if (finalStatus === "Ready" && ["dispatcher","management","admin"].includes(actor)) {
+      wsBroadcast("notify", { kind: "ready", trailer, door: door || "" });
+      broadcastPush("🟢 Trailer Ready", `Trailer ${trailer} is ready${door ? " at door " + door : ""}`, { trailer, door }).catch(() => {});
+    }
+
+    await broadcastTrailers();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).send("Upsert failed"); }
+});
+
+app.post("/api/delete", requireXHR, requireRole(["dispatcher","management","admin"]), async (req, res) => {
+  const actor = req.user?.role || req.session?.role || "unknown";
+  try {
+    const trailer = String(req.body.trailer || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+    await run(`DELETE FROM trailers WHERE trailer=?`, [trailer]);
+    await audit(req, actor, "trailer_delete", "trailer", trailer, {});
+    await broadcastTrailers();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).send("Delete failed"); }
+});
+
+app.post("/api/clear", requireXHR, requireRole(["dispatcher","management","admin"]), async (req, res) => {
+  const actor = req.user?.role || req.session?.role || "unknown";
+  try {
+    await run(`DELETE FROM trailers`);
+    await audit(req, actor, "trailer_clear_all", "trailer", "*", {});
+    await broadcastTrailers();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).send("Clear failed"); }
+});
+
+/* ══════════════════════════════════════════
+   API — DOCK PLATES
+══════════════════════════════════════════ */
+// Door occupancy block — mark a door occupied without a trailer
+app.get("/api/doorblocks", async (req, res) => { try { res.json(await loadDoorBlocksObject()); } catch(e) { res.status(500).send("Doorblocks error"); } });
+
+app.post("/api/doorblock/set", requireXHR, requireRole(["dock","dispatcher","management","admin"]), async (req, res) => {
+  try {
+    const door = String(req.body.door || "");
+    const note = String(req.body.note || "").slice(0, 120);
+    if (!door || isNaN(parseInt(door)) || parseInt(door)<28 || parseInt(door)>42) return res.status(400).send("Invalid door");
+    await run(`INSERT INTO doorblocks(door,note,setAt) VALUES(?,?,?) ON CONFLICT(door) DO UPDATE SET note=excluded.note,setAt=excluded.setAt`,
+      [door, note, Date.now()]);
+    const actor = req.session?.role || "unknown";
+    await audit(req, actor, "doorblock_set", "doorblock", door, { note });
+    await broadcastBlocks();
+    res.json({ ok: true });
+  } catch(e) { res.status(500).send("Doorblock set failed"); }
+});
+
+app.post("/api/doorblock/clear", requireXHR, requireRole(["dock","dispatcher","management","admin"]), async (req, res) => {
+  try {
+    const door = String(req.body.door || "");
+    if (!door) return res.status(400).send("Missing door");
+    await run(`DELETE FROM doorblocks WHERE door=?`, [door]);
+    const actor = req.session?.role || "unknown";
+    await audit(req, actor, "doorblock_clear", "doorblock", door, {});
+    await broadcastBlocks();
+    res.json({ ok: true });
+  } catch(e) { res.status(500).send("Doorblock clear failed"); }
+});
+
+app.get("/api/dockplates", async (req, res) => { try { res.json(await loadDockPlatesObject()); } catch(e) { res.status(500).send("Plates error"); } });
+
+app.post("/api/dockplates/set", requireXHR, requireRole(["dock","dispatcher","management","admin"]), async (req, res) => {
+  try {
+    const actor  = req.user?.role || req.session?.role || "unknown";
+    const door   = String(req.body.door   || "").trim();
+    const status = String(req.body.status || "Unknown").trim();
+    const note   = String(req.body.note   || "").trim();
+    const dNum = Number(door);
+    if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send("Invalid door");
+    if (!["OK","Service","Out of Order","Unknown"].includes(status)) return res.status(400).send("Invalid plate status");
+    await run(
+      `INSERT INTO dockplates(door,status,note,updatedAt) VALUES(?,?,?,?)
+       ON CONFLICT(door) DO UPDATE SET status=excluded.status,note=excluded.note,updatedAt=excluded.updatedAt`,
+      [door, status, note, Date.now()]
+    );
+    await audit(req, actor, "plate_set", "dockplate", door, { status, note });
+    await broadcastPlates();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).send("Dock plate set failed"); }
+});
+
+/* ══════════════════════════════════════════
+   API — DRIVER
+══════════════════════════════════════════ */
+// ── On My Way — Wesbell driver notifies they're inbound, gets a door immediately ──
+app.post("/api/driver/omw", requireXHR, async (req, res) => {
+  try {
+    const trailer = String(req.body.trailer || "").trim().toUpperCase();
+    const eta     = parseInt(req.body.eta) || null;
+    if (!trailer) return res.status(400).send("Missing trailer number");
+    if (trailer.length > 20) return res.status(400).send("Trailer number too long");
+
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    const ACTIVE   = ["Incoming","Dropped","Loading","Dock Ready","Ready"];
+
+    // Already active — return current assignment
+    if (existing && ACTIVE.includes(existing.status)) {
+      return res.json({ ok: true, door: existing.door || "", alreadyActive: true, status: existing.status });
+    }
+
+    // Pick best available door respecting blocks, dockplates, existing reservations
+    const assignedDoor = await pickBestDoor(trailer);
+    if (!assignedDoor) return res.status(409).send("No doors available right now. Please ask dispatch.");
+
+    // Reserve the door — auto-expires in 30 min if driver never drops
+    await reserveDoor(assignedDoor, trailer, "Wesbell");
+
+    const note = eta ? `ETA ~${eta} min` : "On my way";
+    const now  = Date.now();
+
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt)
+       VALUES(?,?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET
+         direction=excluded.direction, status=excluded.status, door=excluded.door,
+         note=excluded.note, dropType=excluded.dropType, carrierType=excluded.carrierType, updatedAt=excluded.updatedAt`,
+      [trailer, "Inbound", "Incoming", assignedDoor, note, "Loaded", "Wesbell", now]
+    );
+
+    await audit(req, "driver", "omw", "trailer", trailer, { door: assignedDoor, eta });
+    await broadcastTrailers();
+    res.json({ ok: true, door: assignedDoor, alreadyActive: false });
+  } catch (e) { console.error("[omw]", e); res.status(500).send("OMW failed"); }
+});
+
+app.get("/api/driver/assignment", async (req, res) => {
+  try {
+    const trailer = String(req.query.trailer || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+    const row = await get(`SELECT door,direction,status,dropType FROM trailers WHERE trailer=?`, [trailer]);
+    if (!row) return res.json({ found: false });
+    if (!["Incoming","Dropped","Loading","Dock Ready","Ready"].includes(row.status)) return res.json({ found: false });
+    res.json({ found: true, door: row.door || "", direction: row.direction || "", status: row.status || "", dropType: row.dropType || "" });
+  } catch (e) { res.status(500).send("Lookup failed"); }
+});
+
+// ── QR Scan Arrival — any driver scans QR on arrival, gets a door ──
+// ── Available doors — for driver door picker ──
+app.get("/api/available-doors", async (req, res) => {
+  try {
+    const excludeTrailer = String(req.query.trailer || "").trim().toUpperCase() || null;
+    const occupiedSet = await getOccupiedDoorSet(excludeTrailer);
+    const plates = await all(`SELECT door, status FROM dockplates`);
+    const plateMap = {};
+    plates.forEach(p => { plateMap[String(p.door)] = p.status; });
+    const doors = [];
+    for (let d = 28; d <= 42; d++) {
+      const ds = String(d);
+      const plateStatus = plateMap[ds] || "Unknown";
+      if (plateStatus === "Out of Order") continue;
+      doors.push({
+        door: ds,
+        available: !occupiedSet.has(ds),
+        plateStatus,
+      });
+    }
+    res.json({ doors });
+  } catch (e) { res.status(500).send("Available doors error"); }
+});
+
+app.post("/api/driver/arrive", requireXHR, async (req, res) => {
+  try {
+    const trailer     = String(req.body.trailer     || "").trim().toUpperCase();
+    const carrierType = String(req.body.carrierType || "Outside").trim();
+    const dropType    = String(req.body.dropType    || "Loaded").trim();
+    const direction   = String(req.body.direction   || "Inbound").trim();
+
+    if (!trailer) return res.status(400).send("Missing trailer number");
+    if (trailer.length > 20) return res.status(400).send("Trailer number too long");
+
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    const ACTIVE   = ["Incoming","Dropped","Loading","Dock Ready","Ready"];
+
+    // If Wesbell driver already has OMW reservation, confirm that door
+    if (existing && ACTIVE.includes(existing.status) && existing.door) {
+      // Release the reservation since they've arrived
+      await releaseReservation(trailer);
+      return res.json({ ok: true, door: existing.door, alreadyActive: true, status: existing.status });
+    }
+
+    // Pick best available door
+    const assignedDoor = await pickBestDoor(trailer);
+    if (!assignedDoor) return res.status(409).send("No doors available. Please ask dispatch.");
+
+    // Reserve with 30-min TTL in case they never drop
+    await reserveDoor(assignedDoor, trailer, carrierType);
+
+    const now = Date.now();
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt)
+       VALUES(?,?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET
+         direction=excluded.direction, status=excluded.status, door=excluded.door,
+         dropType=excluded.dropType, carrierType=excluded.carrierType, updatedAt=excluded.updatedAt`,
+      [trailer, direction, "Incoming", assignedDoor, "", dropType, carrierType, now]
+    );
+
+    await audit(req, "driver", "arrive", "trailer", trailer, { door: assignedDoor, carrierType });
+    await broadcastTrailers();
+    res.json({ ok: true, door: assignedDoor, alreadyActive: false });
+  } catch (e) { console.error("[arrive]", e); res.status(500).send("Arrival failed"); }
+});
+
+app.post("/api/driver/drop",       requireXHR, requireDriverAccess, async (req, res) => {
+  try {
+    const trailer     = String(req.body.trailer     || "").trim();
+    const door        = String(req.body.door        || "").trim();
+    const dropType    = String(req.body.dropType    || "Empty").trim();
+    const carrierType = String(req.body.carrierType || "Wesbell").trim();
+
+    if (!trailer) return res.status(400).send("Missing trailer");
+    if (door) {
+      const dNum = Number(door);
+      if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send("Invalid door (28–42)");
+    }
+    if (!["Empty","Loaded"].includes(dropType)) return res.status(400).send("Invalid drop type");
+
+    const existing  = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    const now       = Date.now();
+    const direction = existing?.direction || "Inbound";
+
+    // Duplicate guard: warn if trailer is already active on the board
+    // Allow force=true to bypass (set by client after user confirms)
+    const ACTIVE_STATUSES = ["Incoming","Dropped","Loading","Dock Ready","Ready"];
+    if (existing && ACTIVE_STATUSES.includes(existing.status) && !req.body.force) {
+      return res.status(409).json({
+        duplicate: true,
+        trailer,
+        currentStatus: existing.status,
+        currentDoor:   existing.door || null,
+        message: `Trailer ${trailer} is already on the board (${existing.status}${existing.door ? " at door " + existing.door : ""}). Submit again to overwrite.`,
+      });
+    }
+
+    // No auto-assign — dispatcher assigns door manually
+    let assignedDoor = door || "";
+
+    // Driver drops always land as Incoming
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt)
+       VALUES(?,?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET
+         direction=excluded.direction, status=excluded.status, door=excluded.door,
+         dropType=excluded.dropType, carrierType=excluded.carrierType, updatedAt=excluded.updatedAt`,
+      [trailer, direction, "Incoming", assignedDoor || "", existing?.note || "", dropType, carrierType, now]
+    );
+
+    // Release door reservation — driver has physically arrived and dropped
+    await releaseReservation(trailer);
+    await audit(req, "driver", "driver_drop", "trailer", trailer, { door: assignedDoor || "", dropType, carrierType });
+    await broadcastTrailers();
+    res.json({ ok: true, door: assignedDoor || null });
+  } catch (e) { res.status(500).send("Drop failed"); }
+});
+
+app.post("/api/crossdock/pickup",  requireXHR, requireDriverAccess, async (req, res) => {
+  try {
+    const trailer = String(req.body.trailer || "").trim();
+    const door    = String(req.body.door    || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+    const dNum = Number(door);
+    if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send("Invalid door (28–42)");
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    // Status is intentionally preserved here — Departed is set by /api/confirm-safety
+    // after the driver completes the safety checklist. This two-step design means
+    // if the driver drops connection after pickup but before safety, the trailer
+    // stays visible on the board rather than disappearing silently.
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
+       VALUES(?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET door=excluded.door,updatedAt=excluded.updatedAt`,
+      [trailer, existing?.direction || "Cross Dock", existing?.status || "Ready", door, existing?.note || "", existing?.dropType || "", Date.now()]
+    );
+    await audit(req, "driver", "crossdock_pickup", "trailer", trailer, { door });
+    await broadcastTrailers();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).send("Cross dock pickup failed"); }
+});
+
+app.post("/api/crossdock/offload", requireXHR, requireDriverAccess, async (req, res) => {
+  try {
+    const trailer = String(req.body.trailer || "").trim();
+    const door    = String(req.body.door    || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+    const dNum = Number(door);
+    if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send("Invalid door (28–42)");
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    // Duplicate guard: warn if trailer is already active (not Departed) with a different door
+    const ACTIVE_STATUSES = ["Incoming","Dropped","Loading","Dock Ready","Ready"];
+    if (existing && ACTIVE_STATUSES.includes(existing.status) && existing.door && existing.door !== door && !req.body.force) {
+      return res.status(409).json({
+        duplicate: true,
+        trailer,
+        currentStatus: existing.status,
+        currentDoor:   existing.door,
+        message: `Trailer ${trailer} is already active at door ${existing.door} (${existing.status}). Submit again to overwrite.`,
+      });
+    }
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
+       VALUES(?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET door=excluded.door,status=excluded.status,dropType=excluded.dropType,updatedAt=excluded.updatedAt`,
+      [trailer, existing?.direction || "Cross Dock", "Dropped", door, existing?.note || "", "Loaded", Date.now()]
+    );
+    await audit(req, "driver", "crossdock_offload", "trailer", trailer, { door });
+    await broadcastTrailers();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).send("Cross dock offload failed"); }
+});
+
+app.post("/api/shunt", requireXHR, async (req, res) => {
+  try {
+    const session = getSession(req);
+    const actor   = session?.role || "driver";
+
+    if (session && !["dispatcher","dock","management","admin"].includes(session.role))
+      return res.status(403).send("Unauthorized");
+
+    const trailer = String(req.body.trailer || "").trim();
+    const door    = String(req.body.door    || "").trim();
+    if (!trailer) return res.status(400).send("Missing trailer");
+    if (!door)    return res.status(400).send("Missing door");
+    const dNum = Number(door);
+    if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send("Invalid door (28–42)");
+
+    const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
+    if (!existing) return res.status(404).send("Trailer not found");
+
+    const now = Date.now();
+    await run(`UPDATE trailers SET door=?,status='Dropped',updatedAt=? WHERE trailer=?`, [door, now, trailer]);
+    await audit(req, actor, "trailer_shunt", "trailer", trailer, { fromDoor: existing.door || "—", toDoor: door });
+    await broadcastTrailers();
+    res.json({ ok: true, door });
+  } catch (e) { res.status(500).send("Shunt failed"); }
+});
+
+/* ══════════════════════════════════════════
+   API — PUSH
+══════════════════════════════════════════ */
+app.get("/api/push/vapid-public-key", (req, res) => {
+  if (!VAPID_KEYS) return res.status(503).send("VAPID not ready");
+  res.json({ publicKey: VAPID_KEYS.publicKey });
+});
+
+app.post("/api/push/subscribe", requireXHR, async (req, res) => {
+  try {
+    const sub = req.body;
+    if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) return res.status(400).send("Invalid subscription");
+    pushSubs.set(sub.endpoint, sub);
+    await run(
+      `INSERT INTO push_subscriptions(endpoint,subscription,createdAt) VALUES(?,?,?)
+       ON CONFLICT(endpoint) DO UPDATE SET subscription=excluded.subscription`,
+      [sub.endpoint, JSON.stringify(sub), Date.now()]
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).send("Subscribe failed"); }
+});
+
+app.post("/api/push/unsubscribe", requireXHR, async (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    if (endpoint) {
+      pushSubs.delete(endpoint);
+      await run(`DELETE FROM push_subscriptions WHERE endpoint=?`, [endpoint]);
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).send("Unsubscribe failed"); }
+});
+
+/* ══════════════════════════════════════════
+   API — AUDIT
+══════════════════════════════════════════ */
+app.get("/api/audit", requireRole(["dispatcher","management","admin"]), async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(500, Number(req.query.limit || 200)));
+    const rows = await all(
+      `SELECT at,actorRole,action,entityType,entityId,details,ip,userAgent FROM audit ORDER BY at DESC LIMIT ?`,
+      [limit]
+    );
+    res.json(rows.map(r => {
+      let details = {}; try { details = r.details ? JSON.parse(r.details) : {}; } catch {}
+      return { ...r, details };
+    }));
+  } catch (e) { res.status(500).send("Audit failed"); }
+});
+
+/* ══════════════════════════════════════════
+   API — MANAGEMENT PIN MANAGEMENT
+══════════════════════════════════════════ */
+app.post("/api/management/set-pin", requireXHR, requireRole(["management","admin"]), async (req, res) => {
+  const actor = req.user?.role || req.session?.role || "unknown";
+  try {
+    const role = String(req.body.role || "").toLowerCase();
+    const pin  = String(req.body.pin  || "");
+    if (!["dispatcher","dock","management","admin"].includes(role)) return res.status(400).send("Invalid role");
+    // Only admin can change the admin PIN
+    if (role === "admin" && actor !== "admin") return res.status(403).send("Only admin can change the admin PIN");
+    if (pin.length < PIN_MIN_LEN) return res.status(400).send("PIN too short");
+    await setPin(role, pin);
+    for (const [sid, s] of sessions.entries()) if (s.role === role) sessions.delete(sid);
+    await audit(req, actor, "pin_changed", "auth", role, {});
+    res.json({ ok: true });
+  } catch (e) { res.status(500).send("Set PIN failed"); }
+});
+
+/* ══════════════════════════════════════════
+   API — SAFETY CONFIRM
+══════════════════════════════════════════ */
+app.post("/api/confirm-safety", requireXHR, requireDriverAccess, async (req, res) => {
+  try {
+    const trailer    = String(req.body.trailer    || "").trim();
+    const door       = String(req.body.door       || "").trim();
+    const loadSecured = !!req.body.loadSecured;
+    const dockPlateUp = !!req.body.dockPlateUp;
+    if (!loadSecured || !dockPlateUp) return res.status(400).send("Both confirmations required");
+    const action = String(req.body.action || "safety").trim();
+    const at = Date.now();
+    if (action === "xdock_pickup" && trailer)
+      await run(`UPDATE trailers SET status='Departed',updatedAt=? WHERE trailer=?`, [at, trailer]);
+      await releaseReservation(trailer); // free the door reservation on departure
+    await run(
+      `INSERT INTO confirmations(at,trailer,door,action,ip,userAgent) VALUES(?,?,?,?,?,?)`,
+      [at, trailer || "", door || "", action, ipOf(req), req.headers["user-agent"] || ""]
+    );
+    await audit(req, "driver", "safety_confirmed", "safety", trailer || "-", { trailer, door, action, loadSecured, dockPlateUp });
+    await broadcastTrailers();
+    await broadcastConfirmations();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).send("Confirm failed"); }
+});
+
+/* ══════════════════════════════════════════
+   API — ISSUE REPORTS
+══════════════════════════════════════════ */
+
+// Max ~4 MB base64 image
+const MAX_PHOTO_BYTES = 4 * 1024 * 1024;
+
+app.post("/api/report-issue", requireXHR, requireIssueAccess, async (req, res) => {
+  // Allow drivers (no session) and all authenticated roles to file issue reports
+  const s = getSession(req);
+  const actorRole = s?.role || "driver";
+  try {
+    const trailer  = String(req.body.trailer  || "").trim();
+    const door     = String(req.body.door     || "").trim();
+    const note     = String(req.body.note     || "").trim().slice(0, 1000);
+    const photoData = req.body.photo_data ? String(req.body.photo_data) : null;
+    const photoMime = req.body.photo_mime ? String(req.body.photo_mime).slice(0, 32) : null;
+
+    if (!trailer) return res.status(400).send("Missing trailer");
+
+    // Validate image data if provided
+    if (photoData) {
+      if (!photoMime || !photoMime.startsWith("image/"))
+        return res.status(400).send("Invalid photo MIME type");
+      // Check base64 size (each char ≈ 0.75 bytes)
+      if (photoData.length * 0.75 > MAX_PHOTO_BYTES)
+        return res.status(413).send("Photo too large (max 4 MB)");
+    }
+
+    const at = Date.now();
+    const result = await run(
+      `INSERT INTO issue_reports(at,trailer,door,note,photo_data,photo_mime,ip,userAgent)
+       VALUES(?,?,?,?,?,?,?,?)`,
+      [at, trailer, door, note, photoData || null, photoMime || null,
+       ipOf(req), req.headers["user-agent"] || ""]
+    );
+    await audit(req, actorRole, "issue_reported", "trailer", trailer, { door, hasPhoto: !!photoData, note: note.slice(0, 80) });
+    broadcastPush("⚠️ Issue Report", `Trailer ${trailer}${door ? " at door " + door : ""}${note ? ": " + note.slice(0, 60) : ""}`, { trailer, door }).catch(() => {});
+    res.json({ ok: true, id: result.lastID });
+  } catch (e) { res.status(500).send("Report failed"); }
+});
+
+app.get("/api/issue-reports", requireRole(["dispatcher","management","admin"]), async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(200, Number(req.query.limit || 50)));
+    const rows = await all(
+      `SELECT id,at,trailer,door,note,photo_data,photo_mime,ip FROM issue_reports ORDER BY at DESC LIMIT ?`,
+      [limit]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).send("Fetch failed"); }
+});
+
+app.get("/api/issue-reports/:id/photo", requireRole(["dispatcher","management","admin"]), async (req, res) => {
+  try {
+    const row = await get(`SELECT photo_data,photo_mime FROM issue_reports WHERE id=?`, [req.params.id]);
+    if (!row || !row.photo_data) return res.status(404).send("No photo");
+    const buf = Buffer.from(row.photo_data, "base64");
+    res.setHeader("Content-Type", row.photo_mime || "image/jpeg");
+    res.setHeader("Cache-Control", "private, max-age=86400");
+    res.send(buf);
+  } catch (e) { res.status(500).send("Fetch failed"); }
+});
+
+
+wss.on("connection", async ws => {
+  ws.on("error", () => {}); // absorb socket errors, prevent crash
+  const safeSend = msg => { try { if (ws.readyState === WebSocket.OPEN) ws.send(msg); } catch {} };
+
+  // Heartbeat — ping every 20s to keep connection alive through Render / reverse-proxy idle timeouts
+  ws.isAlive = true;
+  ws.on("pong", () => { ws.isAlive = true; });
+  ws.on("message", () => { ws.isAlive = true; });
+  const heartbeat = setInterval(() => {
+    if (!ws.isAlive) { clearInterval(heartbeat); try { ws.terminate(); } catch {} return; }
+    ws.isAlive = false;
+    try { ws.ping(); } catch {}
+    safeSend(JSON.stringify({ type: "ping" })); // JSON keepalive so client watchdog resets
+  }, 20000);
+  ws.on("close", () => clearInterval(heartbeat));
+
+  try { safeSend(JSON.stringify({ type: "version",       payload: { version: APP_VERSION } })); } catch {}
+  try { safeSend(JSON.stringify({ type: "state",         payload: await loadTrailersObject() })); } catch {}
+  try { safeSend(JSON.stringify({ type: "dockplates",    payload: await loadDockPlatesObject() })); } catch {}
+  try { safeSend(JSON.stringify({ type: "doorblocks",    payload: await loadDoorBlocksObject() })); } catch {}
+  try { safeSend(JSON.stringify({ type: "confirmations", payload: await loadConfirmations(250) })); } catch {}
+});
+
+/* ══════════════════════════════════════════
+   START
+══════════════════════════════════════════ */
+initDb()
+  .then(async () => {
+    loadOrGenVapid();
+    const subs = await all(`SELECT endpoint,subscription FROM push_subscriptions`);
+    for (const s of subs) {
+      try { pushSubs.set(s.endpoint, JSON.parse(s.subscription)); } catch {}
+    }
+    console.log(`[PUSH] Loaded ${pushSubs.size} push subscriptions`);
+  })
+  .then(() => {
+    server.listen(PORT, () => {
+      console.log(`Wesbell Dispatch v${APP_VERSION} running on http://localhost:${PORT}`);
+      console.log(`DB: ${DB_FILE}`);
+    });
+  })
+  .catch(e => { console.error("DB init failed:", e); process.exit(1); });

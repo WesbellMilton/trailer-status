@@ -230,12 +230,12 @@
       return `<div class="tbl-row ${rowCls}${flash}${readyFlash}${carrierCls}" data-trailer="${esc(r.trailer)}">
         <span class="t-num">${esc(r.trailer)}</span>
         <span class="t-dir">${esc(r.direction||"—")}</span>
-        <span>${statusTag(r.status)}</span>
-        <span>${door}</span>
-        <span>${ctag||dtype}</span>
-        <span>${note}</span>
+        <span class="t-status">${statusTag(r.status)}</span>
+        <span class="t-door-cell">${door}</span>
+        <span class="t-type">${ctag||dtype}</span>
+        <span class="t-note-cell">${note}</span>
         <span class="t-time" title="${esc(fmtTime(r.updatedAt))}">${esc(ago)}</span>
-        <span>${acts}</span>
+        <div class="t-acts-wrap">${acts}</div>
       </div>${shuntPickerHtml}`;
     }).join("");
   }

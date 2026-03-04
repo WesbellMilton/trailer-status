@@ -545,9 +545,9 @@ async function broadcastConfirmations() {
    STATIC / VIEWS
 ══════════════════════════════════════════ */
 // Safe static file serving — allowlist regex, never exposes server.js/sqlite/vapid
-const SAFE_FILES = /^\/(app\.js|style\.css|manifest\.json|favicon\.ico|favicon-\d+\.png|icon-\d+\.png|icon-[\w-]+\.png|apple-touch-icon\.png|splash\/splash-[\w-]+\.png)$/;
+const SAFE_FILES = /^\/(app\.js|style\.css|sw2\.js|manifest\.json|favicon\.ico|favicon-\d+\.png|icon-\d+\.png|icon-[\w-]+\.png|apple-touch-icon\.png|splash\/splash-[\w-]+\.png)$/;
 app.use((req, res, next) => {
-  if (req.path === "/sw.js") {
+  if (req.path === "/sw.js" || req.path === "/sw2.js") {
     res.setHeader("Service-Worker-Allowed", "/");
     res.setHeader("Content-Type", "application/javascript");
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -563,7 +563,16 @@ app.use((req, res, next) => {
   res.sendFile(safePath, err => { if (err && !res.headersSent) res.status(404).end(); });
 });
 const INDEX_FILE = path.join(__dirname, "index.html");
-const sendIndex  = (_, res) => res.sendFile(INDEX_FILE);
+const _indexHtmlCache = {};
+const sendIndex = (_, res) => {
+  try {
+    let html = require("fs").readFileSync(INDEX_FILE, "utf8");
+    html = html.replace("</head>", '<style>body{background-image:none!important}*{--fix:1}</style></head>');
+    res.setHeader("Content-Type","text/html; charset=utf-8");
+    res.setHeader("Cache-Control","no-cache, no-store, must-revalidate");
+    res.send(html);
+  } catch(e) { res.sendFile(INDEX_FILE); }
+};
 
 /* ── ROLE → ALLOWED PATHS ── */
 const ROLE_HOME = {

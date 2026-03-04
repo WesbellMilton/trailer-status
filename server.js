@@ -1221,7 +1221,13 @@ app.post("/api/upsert", requireXHR, requireDockStatusAllowed, async (req, res) =
     await logEvent("info", "upsert", `${actor} set ${trailer} → ${finalStatus}`, `door=${door||"—"}`);
     await broadcastTrailers();
     res.json({ ok: true });
-  } catch (e) { res.status(500).send("Upsert failed"); }
+  } catch (e) {
+  console.error("[/api/upsert] failed:", e);
+  return res.status(500).json({
+    ok: false,
+    error: String(e && (e.message || e) || "unknown error")
+  });
+}
 });
 
 app.post("/api/delete", requireXHR, requireRole(["dispatcher","management","admin"]), async (req, res) => {

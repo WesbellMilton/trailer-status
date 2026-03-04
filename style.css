@@ -1063,13 +1063,13 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
 .ready-notif-banner{animation:rnbBounce .35s var(--ease-spring) forwards}
 
 @keyframes offlineShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(2px)}}
-.offline-banner{animation:offlineShake .4s ease both}
+.offline-banner{animation:offlineShake .4s ease forwards}
 
 @keyframes shRowIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
-.sh-row:first-child{animation:shRowIn .2s var(--ease-out-quart) both}
+.sh-row:first-child{animation:shRowIn .2s var(--ease-out-quart) forwards}
 
 @keyframes plateIn{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:none}}
-.plate{animation:plateIn .18s var(--ease-spring) both}
+.plate{animation:plateIn .18s var(--ease-spring) forwards}
 .plate:nth-child(1){animation-delay:.01s}.plate:nth-child(2){animation-delay:.03s}
 .plate:nth-child(3){animation-delay:.05s}.plate:nth-child(4){animation-delay:.07s}
 .plate:nth-child(5){animation-delay:.09s}.plate:nth-child(6){animation-delay:.11s}
@@ -1087,7 +1087,7 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
 .itl-sub{font-size:11px;color:var(--t2);margin-top:2px}
 .issue-toggle-wrap:has(input:checked) .itl-main{color:var(--red)}
 
-.issue-report-body{padding:0 14px 14px;border-top:1px solid var(--b0);background:rgba(240,74,74,.03);animation:issueBodyIn .2s ease both}
+.issue-report-body{padding:0 14px 14px;border-top:1px solid var(--b0);background:rgba(240,74,74,.03);animation:issueBodyIn .2s ease forwards}
 @keyframes issueBodyIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 
 .issue-photo-zone{position:relative;border-radius:var(--r);border:2px dashed var(--b2);background:rgba(7,10,15,.4);min-height:130px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;transition:border-color .2s;margin-top:12px;-webkit-tap-highlight-color:transparent}
@@ -1371,19 +1371,7 @@ input, select, textarea {
 .door-btn:nth-child(9)  { animation-delay:.14s }
 .door-btn:nth-child(n+10){ animation-delay:.15s }
 
-/* ── Dock cards — smoother stagger ── */
-@keyframes dockCardFluent {
-  from { opacity:0; transform:translateY(16px) scale(.98); }
-  to   { opacity:1; transform:none; }
-}
-.dock-card {
-  animation: dockCardFluent .3s cubic-bezier(.22,1,.36,1) both;
-}
-.dock-card:nth-child(1) { animation-delay:.04s }
-.dock-card:nth-child(2) { animation-delay:.09s }
-.dock-card:nth-child(3) { animation-delay:.13s }
-.dock-card:nth-child(4) { animation-delay:.17s }
-.dock-card:nth-child(n+5){ animation-delay:.20s }
+/* dock-card entry animation removed — prevents bleed on hidden views */
 
 /* ── Dock card hover — lift effect ── */
 .dock-card:hover {
@@ -1450,42 +1438,11 @@ input, select, textarea {
   }
 }
 
-/* ── Panels — fluid stagger ── */
-@keyframes panelFluent {
-  from { opacity:0; transform:translateY(12px) scale(.99); }
-  to   { opacity:1; transform:none; }
-}
-.panel { animation: panelFluent .3s cubic-bezier(.22,1,.36,1) both; }
-.col-stack .panel:nth-child(1) { animation-delay:.05s }
-.col-stack .panel:nth-child(2) { animation-delay:.11s }
-.col-stack .panel:nth-child(3) { animation-delay:.16s }
-.col-stack .panel:nth-child(4) { animation-delay:.20s }
+/* entry animation removed — prevents bleed on hidden views */
 
-/* ── KPI cards — fluid pop-up ── */
-@keyframes kpiFluent {
-  from { opacity:0; transform:translateY(10px) scale(.97); }
-  to   { opacity:1; transform:none; }
-}
-.kpi { animation: kpiFluent .32s cubic-bezier(.22,1,.36,1) both; }
-.kpi:nth-child(1){ animation-delay:.04s }
-.kpi:nth-child(2){ animation-delay:.09s }
-.kpi:nth-child(3){ animation-delay:.14s }
-.kpi:nth-child(4){ animation-delay:.18s }
-.kpi:nth-child(5){ animation-delay:.22s }
+/* entry animation removed — prevents bleed on hidden views */
 
-/* ── Table rows — smooth slide-in ── */
-@keyframes rowFluent {
-  from { opacity:0; transform:translateX(-8px); }
-  to   { opacity:1; transform:none; }
-}
-.tbl-row { animation: rowFluent .2s cubic-bezier(.22,1,.36,1) both; }
-.tbl-row:nth-child(1)  { animation-delay:.02s }
-.tbl-row:nth-child(2)  { animation-delay:.05s }
-.tbl-row:nth-child(3)  { animation-delay:.07s }
-.tbl-row:nth-child(4)  { animation-delay:.09s }
-.tbl-row:nth-child(5)  { animation-delay:.11s }
-.tbl-row:nth-child(6)  { animation-delay:.13s }
-.tbl-row:nth-child(n+7){ animation-delay:.14s }
+/* entry animation removed — prevents bleed on hidden views */
 
 /* ── Done screen — celebratory entrance ── */
 @keyframes doneRingFluent {
@@ -1555,7 +1512,7 @@ input, select, textarea {
   from { opacity:0; transform:scale(.85) translateY(4px); }
   to   { opacity:1; transform:none; }
 }
-.plate { animation: plateFluent .2s cubic-bezier(.22,1,.36,1) both; }
+/* fluent duplicate removed */
 .plate:nth-child(1)  { animation-delay:.00s }
 .plate:nth-child(2)  { animation-delay:.02s }
 .plate:nth-child(3)  { animation-delay:.04s }
@@ -1577,7 +1534,7 @@ input, select, textarea {
   from { opacity:0; transform:translateY(-12px) scale(.96); }
   to   { opacity:1; transform:none; }
 }
-.ready-notif-banner { animation: rnbFluent .38s cubic-bezier(.22,1,.36,1) both; }
+/* fluent duplicate removed */
 
 /* ── Offline shake ── */
 @keyframes offlineFluent {
@@ -1588,7 +1545,7 @@ input, select, textarea {
   60%  { transform:translateX(3px); }
   75%  { transform:translateX(-2px); }
 }
-.offline-banner { animation: offlineFluent .5s cubic-bezier(.22,1,.36,1) both; }
+/* fluent duplicate removed */
 
 /* ── Shunt door buttons ── */
 .shunt-door-btn {

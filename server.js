@@ -558,6 +558,7 @@ app.use((req, res, next) => {
   }
   if (!SAFE_FILES.test(req.path)) return next();
   if (/\.(png|ico)$/.test(req.path)) res.setHeader("Cache-Control", "public, max-age=604800, immutable");
+  if (/\.(js|css)$/.test(req.path)) res.setHeader("Cache-Control", "no-cache, must-revalidate");
   const safePath = path.join(__dirname, req.path.replace(/\/\.\./g, ""));
   res.sendFile(safePath, err => { if (err && !res.headersSent) res.status(404).end(); });
 });

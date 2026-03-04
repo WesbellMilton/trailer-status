@@ -1047,7 +1047,11 @@
     const empty = el("dockIssueEmpty");
     if (!input || !zone) return;
 
-    zone.addEventListener("click", () => { if (!issueState.photoData) input.click(); });
+    // Photo zone is now a <label> — tapping it natively triggers the input on iOS
+    // Only block the click if there's already a photo (to prevent re-opening)
+    zone.addEventListener("click", (e) => {
+      if (issueState.photoData) e.preventDefault();
+    });
 
     rem?.addEventListener("click", e => {
       e.stopPropagation();
@@ -1692,7 +1696,7 @@
     if(id==="oac_override"){ driverState.overrideMode=true; driverState.assignedDoor=""; driverState.selectedDoor=""; showDoorPicker("offloadDoorPickerWrap","offloadDoorPickerGrid"); updateOffloadSubmitState(); return; }
 
     const doorBtn=direct?.closest?.("[data-door]");
-    if(doorBtn&&doorBtn.dataset.door&&!doorBtn.dataset.dmDoor){
+    if(doorBtn&&doorBtn.dataset.door&&!doorBtn.dataset.dmDoor&&!doorBtn.dataset.act){
       driverState.selectedDoor=doorBtn.dataset.door; driverState.overrideMode=true;
       buildDoorPicker(doorBtn.dataset.picker||"doorPickerGrid");
       updateDropSubmitState(); updateOffloadSubmitState(); return;
@@ -1713,7 +1717,7 @@
       toast("Record loaded",`Editing trailer ${trId}`,"ok"); return;
     }
     if(act==="dockSet"){ const to=direct?.dataset?.to; if(trId&&to)return dockSet(trId,to); }
-    if(act==="dockReportIssue"){ const door=direct?.dataset?.door||""; if(trId) return openDockIssueModal(trId,door); }
+    if(act==="dockReportIssue"){ const door=direct?.dataset?.door||direct?.closest?.("[data-door]")?.dataset?.door||""; if(trId) return openDockIssueModal(trId,door); }
     if(act==="markReady"&&trId) return markReady(trId);
 
     // Dock map cell click — open status modal for any door (occupied or empty)

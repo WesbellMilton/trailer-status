@@ -985,7 +985,6 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
 .screen-exit{animation:screenOut .18s ease-in both;pointer-events:none}
 
 @keyframes cardReveal{from{opacity:0;transform:translateY(-8px) scale(.97)}to{opacity:1;transform:none}}
-.assignment-card.visible{animation:cardReveal .22s var(--ease-spring) both}
 .door-picker-wrap.visible{animation:cardReveal .2s var(--ease-out-quart) both}
 .no-assignment-msg.visible{animation:cardReveal .2s var(--ease-out-quart) both}
 
@@ -1359,18 +1358,15 @@ input, select, textarea {
     background .2s ease;
 }
 
-/* ── Assignment card — fluid reveal ── */
+/* ── Assignment card — visibility controlled purely by display, no transitions ── */
 .assignment-card {
-  transition: opacity .25s cubic-bezier(.22,1,.36,1), transform .25s cubic-bezier(.22,1,.36,1);
   transform-origin: top center;
 }
 .assignment-card:not(.visible) {
   display: none !important;
 }
 .assignment-card.visible {
-  display: flex;
-  transform: none;
-  opacity: 1;
+  display: flex !important;
 }
 
 /* ── Door picker — staggered fluid appear ── */

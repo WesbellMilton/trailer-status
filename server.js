@@ -512,25 +512,140 @@ async function loadConfirmations(limit = 250) {
   return all(`SELECT at,trailer,door,action,ip,userAgent FROM confirmations ORDER BY at DESC LIMIT ?`, [limit]);
 }
 
-/* ══════════════════════════════════════════
-   WEBSOCKET
-══════════════════════════════════════════ */
+/* =========================
+   WEBSOCKET (AUTH + STREAMS + HEARTBEAT)
+========================= */
+
 const server = http.createServer(app);
-const wss    = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ server });
 
 function wsBroadcast(type, payload) {
+  // Backward-safe: sockets without _streams will still receive everything.
   const msg = JSON.stringify({ type, payload });
+
   for (const client of wss.clients) {
-    if (client.readyState === WebSocket.OPEN) {
-      try { client.send(msg); } catch { /* stale socket */ }
-    }
+    if (client.readyState !== WebSocket.OPEN) continue;
+
+    const streams = client._streams; // Set<string> | undefined
+    if (streams && !streams.has(type)) continue;
+
+    try { client.send(msg); } catch {}
   }
 }
 
-async function broadcastTrailers() {
-  try { invalidateTrailers(); wsBroadcast("state",         await getTrailersCache()); }
-  catch(e) { console.error("[WS] broadcastTrailers:", e.message); }
+// ----- Role detection from session cookie or WS path -----
+function wsRoleFromReq(req) {
+  // 1) Try session cookie (same as HTTP)
+  try {
+    const s = getSession(req);
+    if (s?.role) return s.role;
+  } catch {}
+
+  // 2) Allow drivers WITHOUT login only if they connect to /ws/driver
+  // (This is important: plain ws://host/ will NOT equal /driver)
+  const url = String(req?.url || "").toLowerCase();
+  if (url.startsWith("/ws/driver")) return "driver";
+
+  return null;
 }
+
+// ----- Stream permissions by role -----
+function streamsForRole(role) {
+  // IMPORTANT: include all possible role strings you use in your login
+  if (role === "driver") return new Set(["state", "doorblocks"]);
+
+  if (role === "dock") return new Set(["state", "dockplates", "doorblocks"]);
+
+  if (
+    role === "dispatch" ||
+    role === "dispatcher" ||
+    role === "supervisor" ||
+    role === "management" ||
+    role === "admin"
+  ) {
+    return new Set(["state", "dockplates", "doorblocks", "confirmations"]);
+  }
+
+  // Safe minimum
+  return new Set(["state"]);
+}
+
+// ----- Initial snapshot sender (never throws) -----
+async function wsSendInitial(ws) {
+  const streams = ws._streams || new Set();
+
+  // Hello (optional)
+  try {
+    ws.send(JSON.stringify({ type: "hello", payload: { role: ws._role } }));
+  } catch {}
+
+  // State snapshot
+  try {
+    if (streams.has("state") && typeof getTrailersCache === "function") {
+      ws.send(JSON.stringify({ type: "state", payload: await getTrailersCache() }));
+    }
+  } catch {}
+
+  // Dock plates snapshot
+  try {
+    if (streams.has("dockplates") && typeof getPlatesCache === "function") {
+      ws.send(JSON.stringify({ type: "dockplates", payload: await getPlatesCache() }));
+    }
+  } catch {}
+
+  // Door blocks snapshot
+  try {
+    if (streams.has("doorblocks") && typeof getBlocksCache === "function") {
+      ws.send(JSON.stringify({ type: "doorblocks", payload: await getBlocksCache() }));
+    }
+  } catch {}
+
+  // Confirmations snapshot (optional; only if your function exists)
+  try {
+    if (streams.has("confirmations") && typeof loadConfirmations === "function") {
+      ws.send(JSON.stringify({ type: "confirmations", payload: await loadConfirmations(250) }));
+    }
+  } catch {}
+}
+
+// ----- Connection handler (AUTH + SUBSCRIBE) -----
+wss.on("connection", async (ws, req) => {
+  try {
+    const role = wsRoleFromReq(req);
+
+    // Block unknown users (prevents outside connections from receiving your board)
+    if (!role) {
+      try { ws.close(1008, "Unauthorized"); } catch {}
+      return;
+    }
+
+    ws._role = role;
+    ws._streams = streamsForRole(role);
+
+    // Heartbeat tracking
+    ws.isAlive = true;
+    ws.on("pong", () => { ws.isAlive = true; });
+
+    ws.on("error", () => {});
+    ws.on("close", () => {});
+
+    await wsSendInitial(ws);
+  } catch (e) {
+    try { ws.close(1011, "Server error"); } catch {}
+  }
+});
+
+// ----- Heartbeat cleanup (prevents zombie sockets) -----
+setInterval(() => {
+  for (const ws of wss.clients) {
+    if (ws.isAlive === false) {
+      try { ws.terminate(); } catch {}
+      continue;
+    }
+    ws.isAlive = false;
+    try { ws.ping(); } catch {}
+  }
+}, 30000).unref?.();
 
 /* ══════════════════════════════════════════
    DOOR RESERVATION HELPERS

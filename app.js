@@ -252,15 +252,16 @@
   }
 
   function renderKpis(){
+    const kpiEl=el("supKpis");if(!kpiEl)return;
     const v=Object.values(trailers);
-    el("supKpis").innerHTML=[
+    kpiEl.innerHTML=[
       {val:v.length,lbl:"Total Trailers",cls:"kpi-total"},
       {val:v.filter(r=>r.status==="Loading").length,lbl:"Loading",cls:"kpi-loading"},
       {val:v.filter(r=>["Ready","Dock Ready"].includes(r.status)).length,lbl:"Ready",cls:"kpi-ready"},
       {val:v.filter(r=>r.status==="Departed").length,lbl:"Departed",cls:"kpi-departed"},
       {val:confirmations.length,lbl:"Safety Confirms",cls:"kpi-conf"},
     ].map(k=>`<div class="kpi ${k.cls}"><div class="k-val" data-target="${k.val}">0</div><div class="k-lbl">${k.lbl}</div></div>`).join("");
-    el("supKpis").querySelectorAll(".k-val[data-target]").forEach(kEl=>{
+    kpiEl.querySelectorAll(".k-val[data-target]").forEach(kEl=>{
       const target=parseInt(kEl.dataset.target)||0;
       if(!target){kEl.textContent="0";return;}
       const dur=Math.min(600,target*80),start=performance.now();
@@ -903,7 +904,7 @@
       driverState.selectedDoor=res?.door||door;
       driverState.sessionDrops.push({trailer,door:driverState.selectedDoor,dropType,flowType:"drop",at:Date.now(),safetyDone:false});
       saveSessionHistory();renderSessionHistory();showDoneScreen("drop");
-    }catch(e){if(e.message!=="409")toast("Submission failed",e.message,"err");}
+    }catch(e){toast("Submission failed",e.message,"err");}
   }
 
   function resetPickupScreen(){
@@ -955,7 +956,7 @@
       if(res?.duplicate){const confirmed=await showModal("Trailer Already Active",res.message+" Overwrite the existing record?");if(!confirmed)return;return xdockOffload(true);}
       driverState.sessionDrops.push({trailer,door,flowType:"xdock_offload",at:Date.now(),safetyDone:false});
       saveSessionHistory();renderSessionHistory();showSafetyScreen();
-    }catch(e){if(e.message!=="409")toast("Submission failed",e.message,"err");}
+    }catch(e){toast("Submission failed",e.message,"err");}
   }
 
   async function lookupAssignment(trailer,context){
@@ -1154,7 +1155,7 @@
     const hasIssue=el("c_hasIssue")?.checked,issueNote=(el("issueNote")?.value||"").trim();
     if(hasIssue&&!issueNote&&!issueState.photoData)return toast("Describe the issue","Add a note or photo before submitting.","warn");
     const btn=el("btnConfirmSafety"),btnSpan=btn?.querySelector("span");
-    if(btn){btn.disabled=true;if(btnSpan)btnSpan.textContent="Submitting…";}
+    if(btn){btn.disabled=true;if(btnSpan)btnSpan.textContent="Submitting…";else if(btn)btn.textContent="Submitting…";}
     try{
       await apiJson("/api/confirm-safety",{method:"POST",headers:CSRF,body:JSON.stringify({trailer:driverState.trailer,door:driverState.selectedDoor,loadSecured:true,dockPlateUp:true,action:driverState.flowType})});
       if(hasIssue){
@@ -1164,7 +1165,7 @@
       const last=driverState.sessionDrops[driverState.sessionDrops.length-1];
       if(last&&last.trailer===driverState.trailer)last.safetyDone=true;
       saveSessionHistory();renderSessionHistory();showDoneScreen(driverState.flowType);
-    }catch(e){toast("Submission failed",e.message,"err");if(btn){btn.disabled=false;if(btnSpan)btnSpan.textContent="Confirm & Complete";}}
+    }catch(e){toast("Submission failed",e.message,"err");if(btn){btn.disabled=false;if(btnSpan)btnSpan.textContent="Confirm & Complete";else btn.textContent="Confirm & Complete";}}
   }
 
   function showDoneScreen(flowType){
@@ -1518,8 +1519,8 @@
       else if(type==="doorblocks"){doorBlocks=payload||{};renderDockMap();renderBoard();}
       else if(type==="confirmations"){confirmations=Array.isArray(payload)?payload:[];if(isSuper())renderSupConf();}
       else if(type==="ping"){/* keepalive */}
-      else if(type==="omw"){showToast(`🚛 ${payload.trailer} on way → Door ${payload.door}${payload.eta?` · ETA ~${payload.eta}min`:""}`, "ok",6000);renderBoard();}
-      else if(type==="arrive"){showToast(`✅ ${payload.trailer} arrived at Door ${payload.door}`,"ok",6000);renderBoard();}
+      else if(type==="omw"){showToast(`🚛 ${payload.trailer} on way → Door ${payload.door}${payload.eta?` · ETA ~${payload.eta}min`:""}`, "ok",6000);renderBoard();if(isDock())renderDockView();}
+      else if(type==="arrive"){showToast(`✅ ${payload.trailer} arrived at Door ${payload.door}`,"ok",6000);renderBoard();if(isDock())renderDockView();}
       else if(type==="version"){VERSION=payload?.version||VERSION;el("verText").textContent=VERSION||"—";}
       else if(type==="notify"&&payload?.kind==="ready"){
         toast("🟢 Trailer Ready",`${payload.trailer} is READY${payload.door?" at door "+payload.door:""}.`,"ok",8000);
@@ -1617,7 +1618,7 @@
       try{
         // BUG FIX: was calling undefined apiFetch — now uses apiJson, and data is already parsed
         const data=await apiJson("/api/audit?limit=200");
-        const events=(data.rows||data||[]).filter(e=>["trailer_update","trailer_create","trailer_status_set","upsert"].includes(e.action));
+        const events=(data||[]).filter(e=>["trailer_update","trailer_create","trailer_status_set","upsert"].includes(e.action));
         const fmt=ts=>new Date(ts).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
         const statusColors={Incoming:"var(--t2)",Dropped:"var(--amber)",Loading:"var(--amber)","Dock Ready":"var(--cyan)",Ready:"var(--green)",Departed:"var(--t3)"};
         if(!events.length){el("historyBoardBody").innerHTML='<div style="color:var(--t3);padding:20px">No trailer history found</div>';return;}

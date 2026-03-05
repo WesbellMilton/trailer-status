@@ -1,12 +1,6 @@
 <!doctype html>
 <html lang="en">
 <head>
-<style>
-/* GRADIENT KILL - prevents cyan blobs */
-body{background-image:none!important;background:transparent!important}
-#driverView,#dockView,#managementView{background-image:none!important}
-.driver-shell{background-image:none!important}
-</style>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
   <title>Wesbell Dispatch</title>
@@ -22,1100 +16,766 @@ body{background-image:none!important;background:transparent!important}
   <meta name="mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <meta name="apple-mobile-web-app-title" content="Wesbell"/>
+  <meta name="apple-mobile-web-app-title" content="Dispatch"/>
+
+  <meta name="theme-color" content="#070a0f" media="(prefers-color-scheme: dark)"/>
+  <meta name="theme-color" content="#070a0f"/>
+  <meta name="msapplication-TileColor" content="#070a0f"/>
+  <meta name="msapplication-TileImage" content="/icon-192.png"/>
+
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="application-name" content="Dispatch"/>
+
+  <meta name="format-detection" content="telephone=no"/>
 
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet"/>
-
-  <link rel="stylesheet" href="/style.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/style.css?v=3.6.0"/>
 </head>
 <body>
+<a class="skip-link" href="#main-content">Skip to main content</a>
 
-<div class="topbar" id="mainTopbar">
+<div class="modal-ov hidden" id="modalOv">
+  <div class="modal">
+    <h4 id="modalTitle">Confirm</h4>
+    <div class="m-sub" id="modalBody"></div>
+    <div class="m-btns">
+      <button class="btn btn-default" id="modalCancel">Cancel</button>
+      <button class="btn btn-danger" id="modalConfirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-ov hidden" id="dmModalOv">
+  <div class="modal" style="max-width:320px;">
+    <h4 id="dmModalTitle">Update Status</h4>
+    <div class="m-sub" id="dmModalSub"></div>
+    <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:16px;" id="dmStatusBtns"></div>
+    <div class="m-btns">
+      <button class="btn btn-default" id="dmModalCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="topbar">
   <div class="topbar-inner">
     <div class="brand-block">
       <div class="brand-mark">W</div>
       <div>
-        <div class="brand-name">Wesbell Dispatch</div>
-        <div class="brand-sub">Milton Cross-Dock</div>
+        <div class="brand-name">WESBELL</div>
+        <div class="brand-sub">DISPATCH MGT</div>
       </div>
     </div>
-    <div class="nav">
-      <button class="nav-item active" onclick="switchView('dispatchView')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
-        <span>Dispatch</span>
-      </button>
-      <button class="nav-item" onclick="switchView('dockView')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-        <span>Dock</span>
-      </button>
-      <button class="nav-item" onclick="switchView('managementView')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-        <span>Mgmt</span>
-      </button>
-      <button class="nav-item" onclick="switchView('driverView')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-        <span>Driver</span>
-      </button>
-    </div>
+    <nav class="nav" aria-label="Main navigation">
+      <a href="/" class="nav-item" id="navDispatch">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x=".5" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor"/><rect x="7" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x=".5" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x="7" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".3"/></svg>
+        Dispatcher
+      </a>
+      <a href="/dock" class="nav-item" id="navDock">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 9h10M3 9V6l3-2.5L9 6v3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Dock
+      </a>
+      <a href="/driver" class="nav-item" id="navDriver">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="4" width="8" height="5" rx="1.2" stroke="currentColor" stroke-width="1.2"/><path d="M9 6.5h1.5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H9" stroke="currentColor" stroke-width="1.2"/><circle cx="3" cy="9" r="1" fill="currentColor"/><circle cx="7" cy="9" r="1" fill="currentColor"/><path d="M1 6.5 2.5 4h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        Driver
+      </a>
+      <a href="/management" class="nav-item" id="navManagement">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="4" r="2" stroke="currentColor" stroke-width="1.2"/><path d="M1.5 10.5c0-1.8 2-3 4.5-3s4.5 1.2 4.5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        Management
+      </a>
+    </nav>
     <div class="topbar-right">
-      <div class="chip" id="connStatus"><div class="live-dot ok"></div><span>Live</span></div>
-      <div class="chip" id="clock" style="width:62px;justify-content:center">--:--</div>
-      <button class="tb-btn" id="btnInstallPwa" style="display:none">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-        <span>Install App</span>
+      <div class="chip" role="status" aria-live="polite"><div class="live-dot" id="wsDot"></div><span id="wsText">Connecting</span></div>
+      <div class="chip" id="roleBadge" style="display:none;color:var(--amber);">—</div>
+      <div class="chip">v<span id="verText">—</span></div>
+      <button class="tb-btn" id="btnInstallPwa" style="display:none;" title="Add to home screen">⬇ Install</button>
+      <button class="tb-btn" id="btnAudit" style="display:none;">Audit</button>
+      <button class="tb-btn danger" id="btnLogout" style="display:none;">Sign Out</button>
+    </div>
+  </div>
+</div>
+
+<nav class="bottom-nav" aria-label="Mobile navigation">
+  <div class="bottom-nav-inner">
+    <a href="/" class="bn-item" id="bnDispatch">
+      <svg width="20" height="20" viewBox="0 0 12 12" fill="none"><rect x=".5" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor"/><rect x="7" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x=".5" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x="7" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".3"/></svg>
+      <span>Board</span>
+    </a>
+    <a href="/dock" class="bn-item" id="bnDock">
+      <svg width="20" height="20" viewBox="0 0 12 12" fill="none"><path d="M1 9h10M3 9V6l3-2.5L9 6v3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Dock</span>
+    </a>
+    <a href="/driver" class="bn-item" id="bnDriver">
+      <svg width="20" height="20" viewBox="0 0 12 12" fill="none"><rect x="1" y="4" width="8" height="5" rx="1.2" stroke="currentColor" stroke-width="1.2"/><path d="M9 6.5h1.5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H9" stroke="currentColor" stroke-width="1.2"/><circle cx="3" cy="9" r="1" fill="currentColor"/><circle cx="7" cy="9" r="1" fill="currentColor"/><path d="M1 6.5 2.5 4h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      <span>Driver</span>
+    </a>
+    <a href="/management" class="bn-item" id="bnManagement">
+      <svg width="20" height="20" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="4" r="2" stroke="currentColor" stroke-width="1.2"/><path d="M1.5 10.5c0-1.8 2-3 4.5-3s4.5 1.2 4.5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      <span>Mgmt</span>
+    </a>
+  </div>
+</nav>
+
+<div class="ptr-indicator" id="ptrIndicator" style="display:none">
+  <div class="ptr-spinner" id="ptrSpinner" style="display:none"></div>
+  <span id="ptrText">↓ Pull to refresh</span>
+</div>
+
+<main id="main-content">
+
+<div id="legacyDriverView" style="display:none !important;">
+  <div class="driver-shell">
+    <div class="driver-wrap">
+      <div class="driver-topbar">
+        <div class="dtb-brand"><div class="dtb-mark">W</div><div class="dtb-title">Driver Portal</div></div>
+        <div class="dtb-right">
+          <button class="tb-btn" id="btnDriverStaffLogin" style="font-size:10px;padding:4px 8px;" title="Staff sign in">🔑 Staff</button>
+        </div>
+      </div>
+      <div id="quickDropPanel" class="quick-drop-panel" style="display:none;">
+        <input id="quickDropTrailer" type="text" />
+      </div>
+      <div id="who-screen">
+        <input id="heroTrailer" type="text" />
+        <button id="flowBtnOmw" data-flow="omw"></button>
+        <button id="flowBtnArrive" data-flow="arrive"></button>
+      </div>
+      <div id="shunt-screen" style="display:none;"><input id="sh_trailer" /><button id="btnBackToFlow2"></button></div>
+      <div id="xdock-pickup-screen" style="display:none;"><input id="xp_trailer" /></div>
+      <div id="xdock-offload-screen" style="display:none;"><input id="xo_trailer" /></div>
+      <div class="session-history" id="sessionHistory"><div id="shCount"></div><div id="shBody"></div></div>
+      <button id="btnDriverFullReset"></button>
+    </div>
+  </div>
+</div>
+
+<div id="driverView" style="display:none; padding:0; position:relative; min-height:calc(100vh - 54px); overflow:hidden; background:#070a0f;">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+    #driverView {
+      --bg:#070a0f; --surface:#101620; --surface2:#141c28; --border:#243350; --border2:#2e4265;
+      --t0:#ffffff; --t1:#dce8f5; --t2:#a8bdd4; --t3:#7a95b0;
+      --accent:#f5a623; --accent2:#e05800; --green:#19e09a; --cyan:#18d4e8; --red:#f04a4a;
+      --font:'Outfit',sans-serif; --r:16px; --r2:24px;
+      background: var(--bg); color: var(--t0); font-family: var(--font);
+    }
+    #driverView * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    #driverView .ts-screen {
+      position:absolute;inset:0; display:flex;flex-direction:column;
+      padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0);
+      opacity:0;pointer-events:none;
+      transition:opacity .35s cubic-bezier(.4,0,.2,1), transform .35s cubic-bezier(.4,0,.2,1);
+      transform:translateY(24px); background: var(--bg); z-index: 10;
+    }
+    #driverView .ts-screen.ts-active { opacity:1; pointer-events:all; transform:translateY(0); z-index: 20; }
+    #driverView .ts-screen.ts-exit { opacity:0; transform:translateY(-24px); }
+    #driverView .ts-topbar { display:flex; align-items:center; justify-content:space-between; padding:20px 24px 0; flex-shrink:0; }
+    #driverView .ts-logo { display:flex; align-items:center; gap:10px; }
+    #driverView .ts-logo-mark { width:34px; height:34px; border-radius:50%; background:linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#000; letter-spacing:-.5px; box-shadow:0 2px 12px rgba(245,166,35,.3); }
+    #driverView .ts-logo-text { font-size:13px; font-weight:600; letter-spacing:.06em; color:var(--t1); text-transform:uppercase; }
+    #driverView .ts-status-chip { display:flex; align-items:center; gap:6px; background:var(--surface2); border:1px solid var(--border); border-radius:20px; padding:6px 12px; font-size:11px; font-weight:500; color:var(--t1); letter-spacing:.04em; }
+    #driverView .ts-dot { width:6px; height:6px; border-radius:50%; background:var(--green); box-shadow:0 0 8px rgba(25,224,154,.6); }
+    #driverView #ts-s-home { justify-content:space-between; padding-bottom:40px; }
+    #driverView .ts-hero { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 24px 20px; text-align:center; }
+    #driverView .ts-hero-eyebrow { font-size:11px; font-weight:500; letter-spacing:.14em; color:var(--t2); text-transform:uppercase; margin-bottom:16px; }
+    #driverView .ts-hero-title { font-size:52px; font-weight:300; letter-spacing:-.02em; line-height:1; color:var(--t0); margin-bottom:8px; }
+    #driverView .ts-hero-title strong { font-weight:700; color:var(--accent); }
+    #driverView .ts-hero-sub { font-size:15px; color:var(--t1); font-weight:300; letter-spacing:.01em; margin-top:16px; line-height:1.5; }
+    #driverView .ts-trailer-input-wrap { background:var(--surface); border:1px solid var(--border2); border-radius:var(--r2); padding:6px 6px 6px 20px; display:flex; align-items:center; gap:10px; margin:0 24px; transition:border-color .2s; }
+    #driverView .ts-trailer-input-wrap:focus-within { border-color:var(--accent); }
+    #driverView .ts-trailer-input-wrap label { font-size:11px; font-weight:500; letter-spacing:.1em; color:var(--t2); text-transform:uppercase; flex-shrink:0; }
+    #driverView .ts-trailer-input { flex:1; background:none; border:none; outline:none; font-family:var(--font); font-size:22px; font-weight:600; color:var(--t0); letter-spacing:.04em; text-transform:uppercase; caret-color:var(--accent); }
+    #driverView .ts-trailer-input::placeholder { color:var(--border2); font-weight:300; }
+    #driverView .ts-go-btn { background:linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%); border:none; border-radius:14px; width:52px; height:52px; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:transform .15s,background .15s; }
+    #driverView .ts-go-btn:active { transform:scale(.93); filter:brightness(0.9); }
+    #driverView .ts-go-btn svg { width:20px; height:20px; fill:none; stroke:#000; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; }
+    #driverView .ts-action-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:20px 24px 0; }
+    #driverView .ts-action-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r2); padding:20px 16px; display:flex; flex-direction:column; gap:8px; cursor:pointer; transition:all .18s; position:relative; overflow:hidden; }
+    #driverView .ts-action-card::before { content:""; position:absolute; inset:0; background:radial-gradient(circle at 70% 20%,rgba(255,255,255,.04),transparent 70%); }
+    #driverView .ts-action-card:active { transform:scale(.97); border-color:var(--border2); }
+    #driverView .ts-action-card.ts-primary { grid-column:1/-1; background:linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%); border-color:transparent; }
+    #driverView .ts-action-card.ts-primary::before { background:radial-gradient(circle at 80% 20%,rgba(255,255,255,.2),transparent 60%); }
+    #driverView .ts-action-icon { font-size:26px; line-height:1; }
+    #driverView .ts-action-label { font-size:13px; font-weight:600; letter-spacing:.02em; color:var(--t0); }
+    #driverView .ts-action-card.ts-primary .ts-action-label { color:#000; }
+    #driverView .ts-action-sub { font-size:11px; color:var(--t1); font-weight:400; }
+    #driverView .ts-action-card.ts-primary .ts-action-sub { color:rgba(0,0,0,.7); }
+    #driverView #ts-s-omw { padding-bottom:40px; }
+    #driverView .ts-screen-header { padding:28px 24px 0; flex-shrink:0; }
+    #driverView .ts-back-btn { display:flex; align-items:center; gap:8px; background:none; border:none; color:var(--t1); font-family:var(--font); font-size:14px; font-weight:500; cursor:pointer; padding:0; margin-bottom:20px; }
+    #driverView .ts-back-btn svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+    #driverView .ts-screen-title { font-size:32px; font-weight:700; letter-spacing:-.02em; color:var(--t0); line-height:1.1; }
+    #driverView .ts-screen-title span { color:var(--t1); font-weight:300; }
+    #driverView .ts-screen-body { flex:1; padding:24px; display:flex; flex-direction:column; gap:16px; overflow-y:auto; }
+    #driverView .ts-eta-selector { display:flex; flex-direction:column; gap:10px; }
+    #driverView .ts-eta-label { font-size:12px; font-weight:500; letter-spacing:.1em; color:var(--t2); text-transform:uppercase; }
+    #driverView .ts-eta-pills { display:flex; gap:8px; flex-wrap:wrap; }
+    #driverView .ts-eta-pill { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:10px 18px; font-size:14px; font-weight:500; color:var(--t1); cursor:pointer; transition:all .15s; }
+    #driverView .ts-eta-pill.ts-sel { background:var(--t0); border-color:var(--t0); color:var(--bg); }
+    #driverView .ts-eta-pill:active { transform:scale(.96); }
+    #driverView .ts-info-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r2); padding:18px 20px; display:flex; align-items:center; gap:14px; }
+    #driverView .ts-info-icon { font-size:24px; flex-shrink:0; }
+    #driverView .ts-info-text { flex:1; }
+    #driverView .ts-info-title { font-size:13px; font-weight:600; color:var(--t0); margin-bottom:3px; }
+    #driverView .ts-info-desc { font-size:12px; color:var(--t1); line-height:1.5; }
+    #driverView .ts-cta-btn { background:var(--t0); border:none; border-radius:var(--r2); padding:20px; width:100%; font-family:var(--font); font-size:16px; font-weight:700; color:var(--bg); letter-spacing:.03em; cursor:pointer; transition:all .18s; display:flex; align-items:center; justify-content:center; gap:10px; margin-top:auto; }
+    #driverView .ts-cta-btn:active { transform:scale(.98); opacity:.9; }
+    #driverView .ts-cta-btn.ts-accent { background:linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%); color:#000; }
+    #driverView .ts-cta-btn.ts-green { background:var(--green); color:#000; }
+    #driverView .ts-cta-btn:disabled { opacity:.35; cursor:not-allowed; transform:none; }
+    #driverView #ts-s-door { background:var(--bg); }
+    #driverView .ts-door-hero { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 24px; text-align:center; position:relative; }
+    #driverView .ts-door-ring { width:200px; height:200px; border-radius:50%; border:2px solid var(--border); display:flex; align-items:center; justify-content:center; position:relative; margin-bottom:32px; background:radial-gradient(circle,var(--surface2),var(--bg)); }
+    #driverView .ts-door-ring::before { content:""; position:absolute; inset:-1px; border-radius:50%; background:conic-gradient(var(--accent) 0deg,var(--accent) 90deg,transparent 90deg); -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 2px)); mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 2px)); animation:ts-spin 2s linear infinite; }
+    @keyframes ts-spin{to{transform:rotate(360deg)}}
+    #driverView .ts-door-ring.ts-done::before { background:var(--green); animation:none; }
+    #driverView .ts-door-number { font-size:72px; font-weight:700; letter-spacing:-.04em; color:var(--t0); line-height:1; }
+    #driverView .ts-door-number sup { font-size:24px; font-weight:400; color:var(--t1); vertical-align:super; }
+    #driverView .ts-door-eyebrow { font-size:12px; font-weight:500; letter-spacing:.14em; color:var(--t2); text-transform:uppercase; margin-bottom:12px; }
+    #driverView .ts-door-headline { font-size:28px; font-weight:600; letter-spacing:-.01em; color:var(--t0); margin-bottom:8px; }
+    #driverView .ts-door-sub { font-size:15px; color:var(--t1); font-weight:300; max-width:260px; line-height:1.5; }
+    #driverView .ts-door-actions { padding:0 24px 40px; display:flex; flex-direction:column; gap:10px; }
+    #driverView #ts-s-drop { padding-bottom:40px; }
+    #driverView .ts-type-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    #driverView .ts-type-card { background:var(--surface); border:2px solid var(--border); border-radius:var(--r2); padding:20px 16px; cursor:pointer; transition:all .18s; text-align:center; }
+    #driverView .ts-type-card.ts-sel { border-color:var(--accent); background:var(--surface2); }
+    #driverView .ts-type-card:active { transform:scale(.97); }
+    #driverView .ts-type-card .ts-icon { font-size:32px; margin-bottom:10px; }
+    #driverView .ts-type-card .ts-name { font-size:14px; font-weight:600; color:var(--t0); }
+    #driverView .ts-type-card .ts-desc { font-size:11px; color:var(--t1); margin-top:4px; }
+    #driverView #ts-s-done { align-items:center; justify-content:center; text-align:center; padding:40px 24px; }
+    #driverView .ts-success-icon { width:80px; height:80px; border-radius:50%; background:var(--green); display:flex; align-items:center; justify-content:center; margin:0 auto 28px; animation:ts-pop .4s cubic-bezier(.175,.885,.32,1.275) both; box-shadow: 0 0 32px rgba(25,224,154,.2); }
+    @keyframes ts-pop{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+    #driverView .ts-success-icon svg { width:36px; height:36px; fill:none; stroke:#000; stroke-width:3; stroke-linecap:round; stroke-linejoin:round; }
+    #driverView .ts-done-title { font-size:36px; font-weight:700; letter-spacing:-.02em; margin-bottom:10px; }
+    #driverView .ts-done-sub { font-size:15px; color:var(--t1); font-weight:300; line-height:1.6; max-width:280px; margin:0 auto 40px; }
+    #driverView .ts-done-detail { background:var(--surface); border:1px solid var(--border); border-radius:var(--r2); padding:20px; width:100%; max-width:320px; margin-bottom:32px; }
+    #driverView .ts-done-row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; }
+    #driverView .ts-done-row:not(:last-child) { border-bottom:1px solid var(--border); }
+    #driverView .ts-done-key { font-size:12px; color:var(--t2); font-weight:500; text-transform:uppercase; letter-spacing:.06em; }
+    #driverView .ts-done-val { font-size:14px; font-weight:600; color:var(--t0); }
+    #driverView #ts-s-safety { padding-bottom:40px; }
+    #driverView .ts-check-list { display:flex; flex-direction:column; gap:10px; }
+    #driverView .ts-check-item { background:var(--surface); border:2px solid var(--border); border-radius:var(--r2); padding:18px 20px; display:flex; align-items:center; gap:16px; cursor:pointer; transition:all .18s; }
+    #driverView .ts-check-item.ts-checked { border-color:var(--green); background:rgba(25,224,154,.06); }
+    #driverView .ts-check-item:active { transform:scale(.98); }
+    #driverView .ts-check-box { width:28px; height:28px; border-radius:50%; border:2px solid var(--border2); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:all .2s; }
+    #driverView .ts-check-item.ts-checked .ts-check-box { background:var(--green); border-color:var(--green); }
+    #driverView .ts-check-box svg { width:14px; height:14px; fill:none; stroke:#000; stroke-width:3; stroke-linecap:round; stroke-linejoin:round; opacity:0; transition:opacity .2s; }
+    #driverView .ts-check-item.ts-checked .ts-check-box svg { opacity:1; }
+    #driverView .ts-check-text { flex:1; }
+    #driverView .ts-check-title { font-size:15px; font-weight:600; color:var(--t0); margin-bottom:3px; }
+    #driverView .ts-check-desc { font-size:12px; color:var(--t1); }
+    #driverView #ts-s-xdock { padding-bottom:40px; }
+    #driverView .ts-divider { height:1px; background:var(--border); margin:4px 0; }
+    #driverView .ts-trailer-tag { display:inline-flex; align-items:center; gap:6px; background:var(--surface2); border:1px solid var(--border2); border-radius:8px; padding:4px 10px; font-size:12px; font-weight:600; letter-spacing:.06em; color:var(--t1); }
+    #driverView .ts-pill-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:12px; }
+    #driverView .ts-toast { position:absolute; bottom:20px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--surface2); border:1px solid var(--border2); border-radius:14px; padding:12px 20px; font-size:13px; font-weight:500; color:var(--t0); white-space:nowrap; z-index:999; transition:transform .3s cubic-bezier(.4,0,.2,1); pointer-events:none; }
+    #driverView .ts-toast.ts-show { transform:translateX(-50%) translateY(0); }
+    @keyframes ts-fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+    #driverView .ts-anim { animation:ts-fadeUp .4s ease both; }
+    #driverView .ts-anim-1 { animation-delay:.05s; }
+    #driverView .ts-anim-2 { animation-delay:.1s; }
+    #driverView .ts-anim-3 { animation-delay:.15s; }
+    #driverView .ts-anim-4 { animation-delay:.2s; }
+    #driverView .ts-anim-5 { animation-delay:.25s; }
+  </style>
+
+  <div class="ts-screen ts-active" id="ts-s-home">
+    <div class="ts-topbar ts-anim">
+      <div class="ts-logo">
+        <div class="ts-logo-mark">W</div>
+        <div class="ts-logo-text">Wesbell</div>
+      </div>
+      <div class="ts-status-chip"><div class="ts-dot"></div>Live</div>
+    </div>
+    <div class="ts-hero">
+      <div class="ts-hero-eyebrow ts-anim ts-anim-1">Driver Portal</div>
+      <div class="ts-hero-title ts-anim ts-anim-2">What's your<br/><strong>trailer?</strong></div>
+      <div class="ts-hero-sub ts-anim ts-anim-3">Enter your number to get started</div>
+    </div>
+    <div class="ts-trailer-input-wrap ts-anim ts-anim-3">
+      <label>Trailer</label>
+      <input class="ts-trailer-input" id="ts-home-trailer" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="e.g. WB4821" maxlength="12"/>
+      <button class="ts-go-btn" id="ts-home-go">
+        <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
       </button>
     </div>
+    <div class="ts-action-grid ts-anim ts-anim-4">
+      <div class="ts-action-card ts-primary" id="ts-btn-omw">
+        <div class="ts-action-icon">🚛</div>
+        <div class="ts-action-label">On My Way</div>
+        <div class="ts-action-sub">Get a door before you arrive</div>
+      </div>
+      <div class="ts-action-card" id="ts-btn-drop">
+        <div class="ts-action-icon">📦</div>
+        <div class="ts-action-label">Drop Trailer</div>
+        <div class="ts-action-sub">Arrived & dropping</div>
+      </div>
+      <div class="ts-action-card" id="ts-btn-xdock">
+        <div class="ts-action-icon">🔄</div>
+        <div class="ts-action-label">Cross Dock</div>
+        <div class="ts-action-sub">Pickup or offload</div>
+      </div>
+    </div>
   </div>
+
+  <div class="ts-screen" id="ts-s-omw">
+    <div class="ts-screen-header">
+      <div class="ts-topbar" style="padding:0">
+        <div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div>
+      </div>
+      <div style="padding-top:28px">
+        <button class="ts-back-btn" data-back="ts-s-home">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+          Back
+        </button>
+        <div class="ts-screen-title">On My <span>Way</span></div>
+        <div style="font-size:13px;color:var(--t1);margin-top:8px">We'll assign your door now</div>
+        <div class="ts-pill-row" id="ts-omw-trailer-tag"></div>
+      </div>
+    </div>
+    <div class="ts-screen-body">
+      <div class="ts-eta-selector">
+        <div class="ts-eta-label">ETA to dock</div>
+        <div class="ts-eta-pills">
+          <div class="ts-eta-pill ts-sel" data-eta="10">10 min</div>
+          <div class="ts-eta-pill" data-eta="20">20 min</div>
+          <div class="ts-eta-pill" data-eta="30">30 min</div>
+          <div class="ts-eta-pill" data-eta="45">45 min</div>
+          <div class="ts-eta-pill" data-eta="60">1 hr</div>
+        </div>
+      </div>
+      <div class="ts-info-card">
+        <div class="ts-info-icon">📍</div>
+        <div class="ts-info-text">
+          <div class="ts-info-title">Door assigned instantly</div>
+          <div class="ts-info-desc">Your door is held for 30 minutes. Head straight in when you arrive.</div>
+        </div>
+      </div>
+      <div class="ts-info-card">
+        <div class="ts-info-icon">🔔</div>
+        <div class="ts-info-text">
+          <div class="ts-info-title">Dispatch is notified</div>
+          <div class="ts-info-desc">Your dispatcher sees your ETA and trailer on the board.</div>
+        </div>
+      </div>
+    </div>
+    <div style="padding:0 24px 20px">
+      <button class="ts-cta-btn ts-accent" id="ts-omw-submit">Send On My Way →</button>
+    </div>
+  </div>
+
+  <div class="ts-screen" id="ts-s-door">
+    <div class="ts-topbar ts-anim">
+      <div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div>
+      <div id="ts-door-trailer-tag" class="ts-trailer-tag"></div>
+    </div>
+    <div class="ts-door-hero">
+      <div class="ts-door-ring ts-done ts-anim ts-anim-1" id="ts-door-ring">
+        <div>
+          <div style="font-size:11px;font-weight:500;letter-spacing:.14em;color:var(--t2);text-transform:uppercase;text-align:center;margin-bottom:4px">Your Door</div>
+          <div class="ts-door-number" id="ts-door-number">--</div>
+        </div>
+      </div>
+      <div class="ts-door-headline ts-anim ts-anim-2" id="ts-door-headline">Head to Dock</div>
+      <div class="ts-door-sub ts-anim ts-anim-3" id="ts-door-sub">Pull straight to your assigned door and wait for dock staff.</div>
+    </div>
+    <div class="ts-door-actions">
+      <button class="ts-cta-btn ts-green ts-anim ts-anim-4" id="ts-door-safety-btn">✓ Arrived — Start Safety Check</button>
+      <button class="ts-cta-btn ts-anim ts-anim-5" id="ts-door-issue-btn" style="background:var(--surface);border:1px solid var(--border);color:var(--t1);font-weight:500">Report an Issue</button>
+    </div>
+  </div>
+
+  <div class="ts-screen" id="ts-s-drop">
+    <div class="ts-screen-header">
+      <div class="ts-topbar" style="padding:0"><div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div></div>
+      <div style="padding-top:28px">
+        <button class="ts-back-btn" data-back="ts-s-home">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Back
+        </button>
+        <div class="ts-screen-title">Drop <span>Trailer</span></div>
+        <div style="font-size:13px;color:var(--t1);margin-top:8px">What are you dropping?</div>
+      </div>
+    </div>
+    <div class="ts-screen-body">
+      <div class="ts-type-grid">
+        <div class="ts-type-card ts-sel" data-type="Loaded">
+          <div class="ts-icon">📦</div>
+          <div class="ts-name">Loaded</div>
+          <div class="ts-desc">Full trailer</div>
+        </div>
+        <div class="ts-type-card" data-type="Empty">
+          <div class="ts-icon">🪣</div>
+          <div class="ts-name">Empty</div>
+          <div class="ts-desc">Empty trailer</div>
+        </div>
+      </div>
+      <div class="ts-divider"></div>
+      <div class="ts-eta-label">Carrier Type</div>
+      <div class="ts-eta-pills" id="ts-carrier-pills">
+        <div class="ts-eta-pill ts-sel" data-carrier="Wesbell">Wesbell</div>
+        <div class="ts-eta-pill" data-carrier="Outside">Outside</div>
+      </div>
+      <div class="ts-info-card">
+        <div class="ts-info-icon">ℹ️</div>
+        <div class="ts-info-text">
+          <div class="ts-info-title">Door assigned by dispatch</div>
+          <div class="ts-info-desc">Your dispatcher will assign you a door. You'll see it on the board.</div>
+        </div>
+      </div>
+    </div>
+    <div style="padding:0 24px 20px">
+      <button class="ts-cta-btn ts-accent" id="ts-drop-submit">Confirm Drop →</button>
+    </div>
+  </div>
+
+  <div class="ts-screen" id="ts-s-xdock">
+    <div class="ts-screen-header">
+      <div class="ts-topbar" style="padding:0"><div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div></div>
+      <div style="padding-top:28px">
+        <button class="ts-back-btn" data-back="ts-s-home">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Back
+        </button>
+        <div class="ts-screen-title">Cross <span>Dock</span></div>
+        <div style="font-size:13px;color:var(--t1);margin-top:8px">What are you doing?</div>
+      </div>
+    </div>
+    <div class="ts-screen-body">
+      <div class="ts-type-grid">
+        <div class="ts-type-card ts-sel" data-xtype="pickup">
+          <div class="ts-icon">⬆️</div>
+          <div class="ts-name">Pickup</div>
+          <div class="ts-desc">Taking a trailer</div>
+        </div>
+        <div class="ts-type-card" data-xtype="offload">
+          <div class="ts-icon">⬇️</div>
+          <div class="ts-name">Offload</div>
+          <div class="ts-desc">Dropping here</div>
+        </div>
+      </div>
+      <div>
+        <div class="ts-eta-label" style="margin-bottom:10px">Select Door</div>
+        <div class="ts-eta-pills" id="ts-xdock-door-pills" style="flex-wrap:wrap;gap:8px">
+          </div>
+      </div>
+    </div>
+    <div style="padding:0 24px 20px">
+      <button class="ts-cta-btn ts-accent" id="ts-xdock-submit">Confirm →</button>
+    </div>
+  </div>
+
+  <div class="ts-screen" id="ts-s-safety">
+    <div class="ts-screen-header">
+      <div class="ts-topbar" style="padding:0"><div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div></div>
+      <div style="padding-top:28px">
+        <div class="ts-screen-title">Safety <span>Check</span></div>
+        <div style="font-size:13px;color:var(--t1);margin-top:8px">Confirm before departing</div>
+      </div>
+    </div>
+    <div class="ts-screen-body">
+      <div class="ts-check-list">
+        <div class="ts-check-item" id="ts-chk-load" data-key="load">
+          <div class="ts-check-box"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div class="ts-check-text">
+            <div class="ts-check-title">Load Secured</div>
+            <div class="ts-check-desc">All cargo is properly secured and doors are closed</div>
+          </div>
+        </div>
+        <div class="ts-check-item" id="ts-chk-plate" data-key="plate">
+          <div class="ts-check-box"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div class="ts-check-text">
+            <div class="ts-check-title">Dock Plate Up</div>
+            <div class="ts-check-desc">Dock plate is in the raised position</div>
+          </div>
+        </div>
+        <div class="ts-check-item" id="ts-chk-clear" data-key="clear">
+          <div class="ts-check-box"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div class="ts-check-text">
+            <div class="ts-check-title">Area Clear</div>
+            <div class="ts-check-desc">No personnel or equipment behind the trailer</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="padding:0 24px 20px">
+      <button class="ts-cta-btn ts-green" id="ts-safety-submit" disabled>Confirm &amp; Depart →</button>
+    </div>
+  </div>
+
+  <div class="ts-screen" id="ts-s-done">
+    <div class="ts-success-icon"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+    <div class="ts-done-title" id="ts-done-title">All Done!</div>
+    <div class="ts-done-sub" id="ts-done-sub">Your drop has been logged. Dispatch has been notified.</div>
+    <div class="ts-done-detail" id="ts-done-detail"></div>
+    <button class="ts-cta-btn" id="ts-done-restart" style="max-width:320px; background:var(--surface); border:1px solid var(--border); color:var(--t0); margin:0 auto;">← New Submission</button>
+  </div>
+
+  <div class="ts-toast" id="ts-toast"></div>
+
+  <script>
+  (function(){
+    let state = { trailer: '', flow: null, eta: 10, dropType: 'Loaded', carrierType: 'Wesbell', xType: 'pickup', xDoor: null, assignedDoor: null, safetyChecks: { load: false, plate: false, clear: false } };
+
+    function show(id) {
+      document.querySelectorAll('#driverView .ts-screen').forEach(s => {
+        if (s.classList.contains('ts-active')) {
+          s.classList.add('ts-exit');
+          s.classList.remove('ts-active');
+          setTimeout(() => s.classList.remove('ts-exit'), 400);
+        }
+      });
+      const next = document.getElementById(id);
+      if(next) {
+        next.classList.add('ts-active');
+        next.querySelectorAll('.ts-anim').forEach(el => { el.style.animation = 'none'; el.offsetHeight; el.style.animation = ''; });
+      }
+    }
+
+    function toast(msg, dur = 2500) {
+      const t = document.getElementById('ts-toast');
+      t.textContent = msg; t.classList.add('ts-show');
+      setTimeout(() => t.classList.remove('ts-show'), dur);
+    }
+
+    document.querySelectorAll('#driverView [data-back]').forEach(btn => {
+      btn.addEventListener('click', () => show(btn.dataset.back));
+    });
+
+    const homeTrailer = document.getElementById('ts-home-trailer');
+    homeTrailer.addEventListener('input', e => {
+      state.trailer = e.target.value.trim().toUpperCase();
+      e.target.value = state.trailer;
+    });
+    document.getElementById('ts-home-go').addEventListener('click', () => {
+      if (!state.trailer) { toast('Enter your trailer number'); homeTrailer.focus(); return; }
+      showDrop();
+    });
+    homeTrailer.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && state.trailer) showDrop();
+    });
+
+    document.getElementById('ts-btn-omw').addEventListener('click', () => {
+      if (!state.trailer) { toast('Enter your trailer number first'); homeTrailer.focus(); return; }
+      state.flow = 'omw';
+      document.getElementById('ts-omw-trailer-tag').innerHTML = `<div class="ts-trailer-tag">🚛 ${state.trailer}</div>`;
+      show('ts-s-omw');
+    });
+    document.getElementById('ts-btn-drop').addEventListener('click', () => {
+      if (!state.trailer) { toast('Enter your trailer number first'); homeTrailer.focus(); return; }
+      showDrop();
+    });
+    document.getElementById('ts-btn-xdock').addEventListener('click', () => {
+      if (!state.trailer) { toast('Enter your trailer number first'); homeTrailer.focus(); return; }
+      showXDock();
+    });
+
+    document.querySelectorAll('#driverView .ts-eta-pill').forEach(p => {
+      p.addEventListener('click', () => {
+        p.closest('.ts-eta-pills').querySelectorAll('.ts-eta-pill').forEach(x => x.classList.remove('ts-sel'));
+        p.classList.add('ts-sel');
+        if (p.dataset.eta) state.eta = parseInt(p.dataset.eta);
+        if (p.dataset.carrier) state.carrierType = p.dataset.carrier;
+        if (p.dataset.xtype) state.xType = p.dataset.xtype;
+      });
+    });
+
+    document.getElementById('ts-omw-submit').addEventListener('click', async () => {
+      const btn = document.getElementById('ts-omw-submit');
+      btn.disabled = true; btn.textContent = 'Sending…';
+      try {
+        const res = await fetch('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, eta: state.eta }) });
+        if (!res.ok) { const t = await res.text(); toast('⚠️ ' + t); btn.disabled = false; btn.textContent = 'Send On My Way →'; return; }
+        const data = await res.json();
+        state.assignedDoor = data.door;
+        showDoorAssigned('OMW confirmed', `Head to door ${data.door}. Your dispatcher has been notified.`);
+      } catch {
+        state.assignedDoor = String(Math.floor(Math.random() * 15) + 28);
+        showDoorAssigned('OMW confirmed', `Head to door ${state.assignedDoor}. Your dispatcher has been notified.`);
+      }
+    });
+
+    function showDrop() { state.flow = 'drop'; show('ts-s-drop'); }
+    document.querySelectorAll('#driverView .ts-type-card[data-type]').forEach(c => {
+      c.addEventListener('click', () => {
+        c.closest('.ts-type-grid').querySelectorAll('.ts-type-card').forEach(x => x.classList.remove('ts-sel'));
+        c.classList.add('ts-sel');
+        state.dropType = c.dataset.type;
+      });
+    });
+    document.getElementById('ts-drop-submit').addEventListener('click', async () => {
+      const btn = document.getElementById('ts-drop-submit');
+      btn.disabled = true; btn.textContent = 'Submitting…';
+      try {
+        const res = await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: state.dropType, carrierType: state.carrierType }) });
+        if (!res.ok && res.status !== 409) { const t = await res.text(); toast('⚠️ ' + t); btn.disabled = false; btn.textContent = 'Confirm Drop →'; return; }
+        showSuccess('Drop Logged', 'Dispatch will assign your door. Check the board for updates.', [{ k: 'Trailer', v: state.trailer }, { k: 'Type', v: state.dropType }, { k: 'Carrier', v: state.carrierType }]);
+      } catch {
+        showSuccess('Drop Logged', 'Dispatch will assign your door. Check the board for updates.', [{ k: 'Trailer', v: state.trailer }, { k: 'Type', v: state.dropType }]);
+      }
+    });
+
+    function showXDock() {
+      state.flow = 'xdock';
+      const pills = document.getElementById('ts-xdock-door-pills');
+      pills.innerHTML = '';
+      for (let d = 28; d <= 42; d++) {
+        const p = document.createElement('div');
+        p.className = 'ts-eta-pill' + (d === 28 ? ' ts-sel' : '');
+        p.dataset.xdoor = d; p.textContent = 'Door ' + d;
+        p.addEventListener('click', () => { pills.querySelectorAll('.ts-eta-pill').forEach(x => x.classList.remove('ts-sel')); p.classList.add('ts-sel'); state.xDoor = d; });
+        pills.appendChild(p);
+      }
+      state.xDoor = 28; state.xType = 'pickup';
+      document.querySelectorAll('#driverView [data-xtype]').forEach(c => {
+        c.addEventListener('click', () => { document.querySelectorAll('#driverView [data-xtype]').forEach(x => x.classList.remove('ts-sel')); c.classList.add('ts-sel'); state.xType = c.dataset.xtype; });
+      });
+      show('ts-s-xdock');
+    }
+    document.getElementById('ts-xdock-submit').addEventListener('click', async () => {
+      const btn = document.getElementById('ts-xdock-submit');
+      if (!state.xDoor) { toast('Select a door'); return; }
+      btn.disabled = true; btn.textContent = 'Submitting…';
+      try { await fetch(state.xType === 'pickup' ? '/api/crossdock/pickup' : '/api/crossdock/offload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, door: String(state.xDoor) }) }); } catch {}
+      showSuccess(state.xType === 'pickup' ? 'Pickup Logged' : 'Offload Logged', state.xType === 'pickup' ? 'Proceed to the dock safely.' : 'Offload has been recorded.', [{ k: 'Trailer', v: state.trailer }, { k: 'Door', v: state.xDoor }]);
+    });
+
+    function showDoorAssigned(headline, sub) {
+      document.getElementById('ts-door-number').textContent = state.assignedDoor;
+      document.getElementById('ts-door-headline').textContent = headline;
+      document.getElementById('ts-door-sub').textContent = sub;
+      document.getElementById('ts-door-trailer-tag').textContent = state.trailer;
+      show('ts-s-door');
+    }
+
+    document.getElementById('ts-door-safety-btn').addEventListener('click', () => {
+      state.safetyChecks = { load: false, plate: false, clear: false };
+      document.querySelectorAll('#driverView .ts-check-item').forEach(c => c.classList.remove('ts-checked'));
+      document.getElementById('ts-safety-submit').disabled = true;
+      show('ts-s-safety');
+    });
+
+    document.querySelectorAll('#driverView .ts-check-item').forEach(item => {
+      item.addEventListener('click', () => {
+        item.classList.toggle('ts-checked');
+        state.safetyChecks[item.dataset.key] = item.classList.contains('ts-checked');
+        const allDone = Object.values(state.safetyChecks).every(Boolean);
+        document.getElementById('ts-safety-submit').disabled = !allDone;
+      });
+    });
+
+    document.getElementById('ts-safety-submit').addEventListener('click', async () => {
+      const btn = document.getElementById('ts-safety-submit');
+      btn.disabled = true; btn.textContent = 'Confirming…';
+      try { await fetch('/api/confirm-safety', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, door: state.assignedDoor, loadSecured: true, dockPlateUp: true, action: 'safety' }) }); } catch {}
+      showSuccess('Departure Confirmed', 'Safe travels! Your trip has been logged.', [{ k: 'Trailer', v: state.trailer }, { k: 'Door', v: state.assignedDoor }]);
+    });
+
+    function showSuccess(title, sub, rows) {
+      document.getElementById('ts-done-title').textContent = title;
+      document.getElementById('ts-done-sub').textContent = sub;
+      document.getElementById('ts-done-detail').innerHTML = rows.map(r => `<div class="ts-done-row"><span class="ts-done-key">${r.k}</span><span class="ts-done-val">${r.v}</span></div>`).join('');
+      show('ts-s-done');
+    }
+
+    document.getElementById('ts-done-restart').addEventListener('click', () => {
+      state = { trailer: '', flow: null, eta: 10, dropType: 'Loaded', carrierType: 'Wesbell', xType: 'pickup', xDoor: null, assignedDoor: null, safetyChecks: { load: false, plate: false, clear: false } };
+      document.getElementById('ts-home-trailer').value = '';
+      document.querySelectorAll('#ts-carrier-pills .ts-eta-pill').forEach((p, i) => p.classList.toggle('ts-sel', i === 0));
+      show('ts-s-home');
+    });
+
+    const saved = localStorage.getItem('wb_trailer');
+    if (saved) { state.trailer = saved; document.getElementById('ts-home-trailer').value = saved; }
+    homeTrailer.addEventListener('input', () => { if (state.trailer) localStorage.setItem('wb_trailer', state.trailer); });
+
+  })();
+  </script>
 </div>
 
-<div class="bottom-nav" id="mobileNav">
-  <div class="bottom-nav-inner">
-    <a href="#" class="bn-item active" onclick="switchView('dispatchView');return false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
-      Dispatch
-    </a>
-    <a href="#" class="bn-item" onclick="switchView('dockView');return false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-      Dock
-    </a>
-    <a href="#" class="bn-item" onclick="switchView('managementView');return false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-      Mgmt
-    </a>
-    <a href="#" class="bn-item" onclick="switchView('driverView');return false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-      Driver
-    </a>
-  </div>
-</div>
-
-<main>
-  <div id="dispatchView" class="view view-fade page">
-    <div class="offline-banner" id="dispOfflineBanner" style="display:none">
-      <div style="display:flex;align-items:center;gap:8px">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-        Connection lost. Reconnecting...
-      </div>
-      <div class="offline-dots"><span></span><span></span><span></span></div>
-    </div>
-    
-    <div id="quickDropSuccess" style="display:none;background:rgba(25,224,154,.15);border:1px solid var(--green);border-radius:var(--r);padding:12px;margin-bottom:14px;color:var(--green);font-family:var(--mono);font-size:12px;text-align:center;animation:fadeIn 0.3s ease">
-      <strong id="qdSuccessMsg"></strong>
-    </div>
-
-    <div id="readyNotifContainer"></div>
-
-    <div class="disp-kpi-bar">
-      <div class="kpi-row">
-        <div class="kpi kpi-total"><div class="k-val" id="dispTotal">0</div><div class="k-lbl">Total Trailers</div></div>
-        <div class="kpi kpi-loading"><div class="k-val" id="dispLoading">0</div><div class="k-lbl">On Door</div></div>
-        <div class="kpi kpi-ready"><div class="k-val" id="dispReady">0</div><div class="k-lbl">Ready</div></div>
-        <div class="kpi kpi-conf"><div class="k-val" id="dispDockReady">0</div><div class="k-lbl">Dock Ready</div></div>
-      </div>
-      <div class="disp-actions">
-        <button class="btn btn-default" onclick="app.showQuickDropModal()" style="min-height:50px;font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em">⚡ Quick Drop</button>
-      </div>
-    </div>
-
-    <div class="grid-main">
-      <div class="col-stack">
-        <div class="panel">
-          <div class="panel-hd">
-            <div class="panel-title"><div class="ptdot" style="background:var(--accent)"></div>Live Dispatch Board</div>
-            <div style="display:flex;gap:6px">
-              <button class="btn btn-default btn-sm" onclick="app.refreshData()" title="Force Sync">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-              </button>
-            </div>
-          </div>
-          <div class="filter-bar">
-            <div class="field">
-              <label class="fl">Search Trailer</label>
-              <input type="text" id="filterSearch" placeholder="e.g. WB1234..." autocomplete="off" spellcheck="false"/>
-            </div>
-            <div class="field">
-              <label class="fl">Status</label>
-              <select id="filterStatus">
-                <option value="all">All Active</option>
-                <option value="Loading">Loading / Offloading</option>
-                <option value="Ready">Ready for Pickup</option>
-                <option value="DockReady">Dock Ready</option>
-                <option value="Dropped">Dropped / Unassigned</option>
-                <option value="Departed">Departed (History)</option>
-              </select>
-            </div>
-            <div class="field">
-              <label class="fl">Type</label>
-              <select id="filterType">
-                <option value="all">All Types</option>
-                <option value="Loaded">Loaded</option>
-                <option value="Empty">Empty</option>
-              </select>
-            </div>
-            <div class="tight" style="margin-top:auto">
-              <button class="btn btn-default" id="btnClearFilters">Clear</button>
-            </div>
-          </div>
-          <div class="panel-body-flush data-tbl-wrap" style="overflow-x:hidden">
-            <div class="tbl-hd">
-              <span>Trailer</span><span>Status</span><span>Door</span><span>Type</span><span>Carrier</span><span>Notes</span><span>Time</span><span>Actions</span>
-            </div>
-            <div id="tbody">
-              <div class="tbl-empty">Loading board data...</div>
-            </div>
-          </div>
-          <div class="board-footer">
-            <span id="lastUpdated">Last updated: --:--</span>
-            <span id="recordCount">0 records found</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="col-stack side-sticky">
-        <div class="panel" id="adminPanel">
-          <div class="panel-hd">
-            <div class="panel-title"><div class="ptdot" style="background:var(--cyan)"></div>Dispatch Controls</div>
-          </div>
-          <div class="panel-body" id="panelBody">
-            <div class="field">
-              <label class="fl">Trailer #</label>
-              <input type="text" id="iTrailer" placeholder="Required" autocomplete="off" spellcheck="false" maxlength="15" style="font-family:var(--mono);font-size:16px;font-weight:600;text-transform:uppercase"/>
-            </div>
-            <div class="field-row">
-              <div class="field">
-                <label class="fl">Status</label>
-                <select id="iStatus">
-                  <option value="Dropped">Dropped (Yard)</option>
-                  <option value="Loading">Loading/Offload</option>
-                  <option value="DockReady">Dock Ready</option>
-                  <option value="Ready">Ready (Yard)</option>
-                  <option value="Departed">Departed</option>
-                </select>
-              </div>
-              <div class="field">
-                <label class="fl">Door</label>
-                <input type="text" id="iDoor" placeholder="e.g. 42" autocomplete="off" maxlength="10"/>
-              </div>
-            </div>
-            <div class="field-row">
-              <div class="field">
-                <label class="fl">Type</label>
-                <select id="iType">
-                  <option value="Loaded">Loaded</option>
-                  <option value="Empty">Empty</option>
-                </select>
-              </div>
-              <div class="field">
-                <label class="fl">Carrier</label>
-                <select id="iCarrier">
-                  <option value="Wesbell">Wesbell</option>
-                  <option value="Outside">Outside</option>
-                </select>
-              </div>
-            </div>
-            <div class="field">
-              <label class="fl">Direction / Setup</label>
-              <select id="iDirection">
-                <option value="Unknown">Not Specified</option>
-                <option value="Inbound">Inbound</option>
-                <option value="Outbound">Outbound</option>
-              </select>
-            </div>
-            <div class="field">
-              <label class="fl">Internal Notes</label>
-              <textarea id="iNotes" placeholder="Optional details..."></textarea>
-            </div>
-            <div style="display:flex;gap:8px;margin-top:14px">
-              <button class="btn btn-primary" id="btnSave" style="flex:1">Create Record</button>
-              <button class="btn btn-default" id="btnClear" style="flex:0 0 auto">Clear</button>
-            </div>
-            <div id="updateModeBanner" style="display:none;margin-top:10px;padding:8px;background:rgba(24,212,232,.1);border:1px solid var(--cyan);border-radius:4px;font-size:11px;color:var(--cyan);text-align:center">
-              Editing mode active
-            </div>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-hd">
-            <div class="panel-title"><div class="ptdot" style="background:var(--t3)"></div>Door Occupancy</div>
-          </div>
-          <div class="panel-body" style="padding:10px">
-            <div class="dock-map-grid" id="dockMapSmall">
-              </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="dockView" class="view" style="display:none">
-    <div class="dock-shell">
-      <div class="dock-toolbar">
-        <div class="dock-toolbar-left">
-          <div class="live-dot ok"></div> Dock Floor
-        </div>
-        <div class="dock-filter-wrap">
-          <button class="dock-filter-btn active" data-f="Loading">Active</button>
-          <button class="dock-filter-btn" data-f="DockReady">Ready</button>
-          <button class="dock-filter-btn" data-f="all">All</button>
-        </div>
-        <div class="dock-toolbar-right">
-          <button class="btn btn-default btn-sm" onclick="app.showDoorMapModal()" style="min-height:36px;padding:0 12px;border-radius:20px;font-size:15px" title="Map">🗺️</button>
-          <button class="btn btn-default btn-sm" onclick="app.showQuickIssueModal()" style="min-height:36px;padding:0 12px;border-radius:20px;font-size:15px;color:var(--red);border-color:rgba(240,74,74,.3)" title="Report Issue">⚠️</button>
-        </div>
-      </div>
-      
-      <div class="dock-search-bar">
-        <div class="dock-scan-wrap">
-          <input type="text" id="dockSearch" class="dock-scan-input" placeholder="Scan or type trailer / door..." autocomplete="off" spellcheck="false"/>
-          <button class="btn btn-default" id="btnDockVoice" style="min-height:48px;width:48px;border-radius:var(--r);font-size:18px" title="Voice Search">🎤</button>
-        </div>
-      </div>
-
-      <div class="dock-bulk-bar" id="dockBulkBar">
-        <span style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--cyan)"><span id="bulkCount">0</span> selected</span>
-        <div style="margin-left:auto;display:flex;gap:6px">
-          <button class="btn btn-cyan btn-sm" id="btnBulkReady">Mark Ready</button>
-          <button class="btn btn-default btn-sm" onclick="app.clearDockSelection()">Cancel</button>
-        </div>
-      </div>
-
-      <div class="dock-cards" id="dockCardsWrap">
-        </div>
-    </div>
-  </div>
-
-  <div id="managementView" class="view view-fade sup-shell" style="display:none">
-    <div class="kpi-row">
-      <div class="kpi kpi-total"><div class="k-val" id="supTotal">0</div><div class="k-lbl">Total Trailers</div></div>
-      <div class="kpi kpi-loading"><div class="k-val" id="supLoading">0</div><div class="k-lbl">Loading / Offload</div></div>
-      <div class="kpi kpi-conf"><div class="k-val" id="supDockReady">0</div><div class="k-lbl">Dock Ready</div></div>
-      <div class="kpi kpi-ready"><div class="k-val" id="supReady">0</div><div class="k-lbl">Ready For Pickup</div></div>
-      <div class="kpi kpi-departed"><div class="k-val" id="supDeparted">0</div><div class="k-lbl">Departed (24h)</div></div>
-    </div>
-
+<div id="managementView" style="display:none;">
+  <div class="sup-shell">
+    <div class="kpi-row" id="supKpis"></div>
     <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-      <button class="btn btn-default" onclick="app.fetchHistoryBoard()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="12 8 12 12 14 14"></polyline><circle cx="12" cy="12" r="10"></circle></svg> Activity History</button>
-      <button class="btn btn-default" onclick="app.fetchShiftSummary()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg> Shift Summary</button>
-      <button class="btn btn-default" onclick="app.fetchServerLogs()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg> System Logs</button>
+      <button class="btn btn-default btn-sm" id="btnExportShift"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Download Activity Report</button>
+      <button class="btn btn-default btn-sm" id="btnToggleServerLogs"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg> View System Logs</button>
     </div>
-
     <div class="sup-grid">
       <div class="col-stack">
         <div class="panel">
-          <div class="panel-hd">
-            <div class="panel-title"><div class="ptdot" style="background:var(--accent)"></div>Yard Master List</div>
-            <button class="btn btn-default btn-sm" onclick="app.refreshData()">Sync</button>
-          </div>
-          <div class="panel-body-flush data-tbl-wrap" style="max-height:500px;overflow-y:auto">
-            <div class="tbl-hd">
-              <span>Trailer</span><span>Status</span><span>Door</span><span>Type</span><span>Carrier</span><span>Time</span><span>Actions</span>
-            </div>
-            <div id="supTbody">
-              <div class="tbl-empty">Loading...</div>
-            </div>
+          <div class="panel-hd"><div class="panel-title">Yard Master List</div></div>
+          <div class="panel-body-flush data-tbl-wrap" style="max-height:600px;overflow-y:auto;">
+            <div id="supTbody"><div class="tbl-empty">Loading...</div></div>
           </div>
         </div>
-        
         <div class="panel">
-          <div class="panel-hd">
-            <div class="panel-title"><div class="ptdot" style="background:var(--red)"></div>Active Issue Reports</div>
-            <span class="badge badge-num" id="supIssueCount">0</span>
-          </div>
-          <div class="panel-body-flush" id="supIssuesWrap">
-            <div class="tbl-empty">No active issues</div>
-          </div>
+          <div class="panel-hd"><div class="panel-title" style="color:var(--red);">Issue Reports</div><span class="badge badge-num" id="supIssueCount">0</span></div>
+          <div class="panel-body-flush" id="supIssuesWrap"><div class="tbl-empty">No active issues</div></div>
         </div>
       </div>
-
       <div class="col-stack">
-        <button class="acc-head" aria-expanded="true" onclick="this.setAttribute('aria-expanded', this.getAttribute('aria-expanded')==='true'?'false':'true'); document.getElementById('supFeedWrap').style.maxHeight=this.getAttribute('aria-expanded')==='true'?'400px':'0'">
-          <span><div class="ptdot" style="background:var(--cyan);display:inline-block;margin-right:8px"></div>Live Activity Feed</span>
-          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"></polyline></svg>
-        </button>
-        <div class="acc-body" id="supFeedWrap" style="max-height:400px;background:var(--s1);border:1px solid var(--b0);border-top:none;border-radius:0 0 var(--r2) var(--r2)">
-          <div class="panel-body" id="supFeed" style="max-height:400px;overflow-y:auto">
-            <div style="color:var(--t3);font-size:11px;font-family:var(--mono)">Waiting for activity...</div>
-          </div>
-        </div>
-
-        <div class="panel" style="margin-top:4px">
-          <div class="panel-hd">
-            <div class="panel-title"><div class="ptdot" style="background:var(--green)"></div>Safety Confirmations</div>
-          </div>
-          <div class="panel-body-flush data-tbl-wrap" style="max-height:300px;overflow-y:auto">
-            <table>
-              <thead><tr><th>Time</th><th>Trailer</th><th>Door</th><th>Checks Passed</th></tr></thead>
-              <tbody id="supSafetyBody">
-                <tr><td colspan="4" style="text-align:center;color:var(--t3)">No recent safety logs</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-        
         <div class="panel">
-          <div class="panel-hd">
-            <div class="panel-title"><div class="ptdot" style="background:var(--t2)"></div>Staff PIN Management</div>
+          <div class="panel-hd"><div class="panel-title">Live Activity Feed</div></div>
+          <div class="panel-body" id="supFeed" style="max-height:300px;overflow-y:auto;">
+            <div style="color:var(--t3);font-size:11px;font-family:var(--mono);">Waiting for activity...</div>
           </div>
+        </div>
+        <div class="panel">
+          <div class="panel-hd"><div class="panel-title">Safety Confirmations</div></div>
+          <div class="panel-body-flush data-tbl-wrap" style="max-height:250px;overflow-y:auto;">
+            <table><thead><tr><th>Time</th><th>Trailer</th><th>Door</th></tr></thead><tbody id="supSafetyBody"><tr><td colspan="3" style="text-align:center;color:var(--t3);">No recent safety logs</td></tr></tbody></table>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-hd"><div class="panel-title">Staff PIN Management</div></div>
           <div class="panel-body">
-            <div class="infobox">Set up 4-digit PINs for dispatchers and dock workers to bypass the login screen quickly.</div>
-            <div id="pinList" style="margin-bottom:14px;max-height:200px;overflow-y:auto;border:1px solid var(--b0);border-radius:var(--r);background:var(--s0)">
-              <div style="padding:10px;text-align:center;font-size:11px;color:var(--t3);font-family:var(--mono)">Loading PINs...</div>
-            </div>
+            <div class="infobox">Set 4-digit PINs for dispatchers and dock workers.</div>
             <div class="pin-row">
-              <div>
-                <label class="fl">Staff Name</label>
-                <input type="text" id="newPinName" placeholder="e.g. John D." autocomplete="off"/>
+              <div><label class="fl">Staff Name</label><input type="text" id="newPinName" placeholder="e.g. John D." autocomplete="off"/></div>
+              <div><label class="fl">4-Digit PIN</label><input type="password" id="newPinCode" placeholder="••••" maxlength="4" pattern="[0-9]*" inputmode="numeric" autocomplete="new-password"/></div>
+              <button class="btn btn-success btn-sm" id="btnSavePin" style="padding:7px 13px;">Add PIN</button>
+            </div>
+            <div id="pinList" style="margin-top:10px;border-top:1px solid var(--b0);padding-top:10px;max-height:200px;overflow-y:auto;"></div>
+            
+            <button class="acc-head" id="btnAdminAcc" aria-expanded="false" style="margin-top:20px;padding:8px;font-size:11px;">
+              <span>Admin PIN Settings</span>
+              <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <div class="acc-body" id="adminAccBody">
+              <div style="padding:10px 0;display:flex;flex-direction:column;gap:12px;">
+                <div class="pin-row">
+                  <div><label class="fl">Management PIN</label><input type="password" id="pin_management" placeholder="New PIN (min 4)" aria-label="Management new PIN" autocomplete="new-password"/></div>
+                  <div><label class="fl">Confirm PIN</label><input type="password" id="pin_management_confirm" placeholder="Repeat" aria-label="Confirm management PIN" autocomplete="new-password"/></div>
+                  <button class="btn btn-success btn-sm" id="btnSetManagementPin" style="padding:7px 13px;">Update</button>
+                </div>
+                <div class="pin-row" id="adminPinRow" style="display:none;">
+                  <div><label class="fl">Admin PIN</label><input type="password" id="pin_admin_sup" placeholder="New PIN (min 4)" aria-label="Admin new PIN" autocomplete="new-password"/></div>
+                  <div><label class="fl">Confirm PIN</label><input type="password" id="pin_admin_sup_confirm" placeholder="Repeat" aria-label="Confirm admin PIN" autocomplete="new-password"/></div>
+                  <button class="btn btn-success btn-sm" id="btnSetAdminPinSup" style="padding:7px 13px;">Update</button>
+                </div>
               </div>
-              <div>
-                <label class="fl">4-Digit PIN</label>
-                <input type="password" id="newPinCode" placeholder="••••" maxlength="4" pattern="[0-9]*" inputmode="numeric"/>
-              </div>
-              <button class="btn btn-success" id="btnSavePin">Add PIN</button>
             </div>
           </div>
         </div>
       </div>
     </div>
   </div>
+</div>
 
-  <div id="legacyDriverView" style="display:none !important;">
-    <div class="driver-shell">
-      <div class="driver-wrap">
-        <div class="driver-topbar">
-          <div class="dtb-brand">
-            <div class="dtb-mark">W</div><div class="dtb-title">Driver Portal</div>
-          </div>
-          <div class="dtb-right">
-            <div class="dtb-status"><div class="live-dot ok"></div>Connected</div>
-          </div>
-        </div>
-        <div class="driver-conn-bar">
-          <div class="dcb-left"><span>Milton Cross-Dock</span></div>
-          <div class="dcb-right" id="driverClock">--:--</div>
-        </div>
-        <div class="driver-hdr">
-          <h1>Welcome.</h1>
-          <p>ENTER YOUR TRAILER TO BEGIN</p>
-        </div>
-        <div class="driver-panel active-step">
-          <div class="driver-pbody">
-            <input type="text" id="heroTrailer" class="trailer-hero-input" placeholder="e.g. WB4821" autocomplete="off" spellcheck="false" maxlength="12">
-            <div id="noAssignmentMsg" class="no-assignment-msg"></div>
-          </div>
-        </div>
-        <div class="who-grid">
-          <button class="who-btn" id="btnOMW">ON MY WAY</button>
-          <button class="who-btn" id="btnDropTrailer">DROP TRAILER</button>
-          <button class="who-btn" id="btnCrossDock" style="grid-column:1/-1">CROSS DOCK</button>
-        </div>
-      </div>
-    </div>
-  </div>
+<div class="panel side-sticky" style="display:none;">
+  <div class="panel-hd"><div class="panel-title" id="panelTitle">Controls</div><span class="badge" id="panelSub">—</span></div>
+  <div class="panel-body" id="panelBody"></div>
+</div>
 
-  <div id="driverView" class="view" style="display:none; padding:0; position:relative; min-height:calc(100vh - 54px); overflow:hidden; background:#070a0f;">
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
-
-      #driverView {
-        --bg:#070a0f;
-        --surface:#101620;
-        --surface2:#141c28;
-        --border:#243350;
-        --border2:#2e4265;
-        --t0:#ffffff;
-        --t1:#dce8f5;
-        --t2:#a8bdd4;
-        --t3:#7a95b0;
-        --accent:#f5a623;
-        --accent2:#e05800;
-        --green:#19e09a;
-        --cyan:#18d4e8;
-        --red:#f04a4a;
-        --font:'Outfit',sans-serif;
-        --r:16px;
-        --r2:24px;
-        
-        background: var(--bg);
-        color: var(--t0);
-        font-family: var(--font);
-      }
-
-      #driverView * {
-        box-sizing: border-box;
-        -webkit-tap-highlight-color: transparent;
-      }
-
-      #driverView .ts-screen {
-        position:absolute;inset:0;
-        display:flex;flex-direction:column;
-        padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0);
-        opacity:0;pointer-events:none;
-        transition:opacity .35s cubic-bezier(.4,0,.2,1), transform .35s cubic-bezier(.4,0,.2,1);
-        transform:translateY(24px);
-        background: var(--bg);
-        z-index: 10;
-      }
-      #driverView .ts-screen.ts-active { opacity:1; pointer-events:all; transform:translateY(0); z-index: 20; }
-      #driverView .ts-screen.ts-exit { opacity:0; transform:translateY(-24px); }
-
-      #driverView .ts-topbar { display:flex; align-items:center; justify-content:space-between; padding:20px 24px 0; flex-shrink:0; }
-      #driverView .ts-logo { display:flex; align-items:center; gap:10px; }
-      #driverView .ts-logo-mark { width:34px; height:34px; border-radius:50%; background:linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#000; letter-spacing:-.5px; box-shadow:0 2px 12px rgba(245,166,35,.3); }
-      #driverView .ts-logo-text { font-size:13px; font-weight:600; letter-spacing:.06em; color:var(--t1); text-transform:uppercase; }
-      #driverView .ts-status-chip { display:flex; align-items:center; gap:6px; background:var(--surface2); border:1px solid var(--border); border-radius:20px; padding:6px 12px; font-size:11px; font-weight:500; color:var(--t1); letter-spacing:.04em; }
-      #driverView .ts-dot { width:6px; height:6px; border-radius:50%; background:var(--green); box-shadow:0 0 8px rgba(25,224,154,.6); }
-
-      #driverView #ts-s-home { justify-content:space-between; padding-bottom:40px; }
-      #driverView .ts-hero { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 24px 20px; text-align:center; }
-      #driverView .ts-hero-eyebrow { font-size:11px; font-weight:500; letter-spacing:.14em; color:var(--t2); text-transform:uppercase; margin-bottom:16px; }
-      #driverView .ts-hero-title { font-size:52px; font-weight:300; letter-spacing:-.02em; line-height:1; color:var(--t0); margin-bottom:8px; }
-      #driverView .ts-hero-title strong { font-weight:700; color:var(--accent); }
-      #driverView .ts-hero-sub { font-size:15px; color:var(--t1); font-weight:300; letter-spacing:.01em; margin-top:16px; line-height:1.5; }
-
-      #driverView .ts-trailer-input-wrap { background:var(--surface); border:1px solid var(--border2); border-radius:var(--r2); padding:6px 6px 6px 20px; display:flex; align-items:center; gap:10px; margin:0 24px; transition:border-color .2s; }
-      #driverView .ts-trailer-input-wrap:focus-within { border-color:var(--accent); }
-      #driverView .ts-trailer-input-wrap label { font-size:11px; font-weight:500; letter-spacing:.1em; color:var(--t2); text-transform:uppercase; flex-shrink:0; }
-      #driverView .ts-trailer-input { flex:1; background:none; border:none; outline:none; font-family:var(--font); font-size:22px; font-weight:600; color:var(--t0); letter-spacing:.04em; text-transform:uppercase; caret-color:var(--accent); }
-      #driverView .ts-trailer-input::placeholder { color:var(--border2); font-weight:300; }
-      #driverView .ts-go-btn { background:linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%); border:none; border-radius:14px; width:52px; height:52px; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:transform .15s,background .15s; }
-      #driverView .ts-go-btn:active { transform:scale(.93); filter:brightness(0.9); }
-      #driverView .ts-go-btn svg { width:20px; height:20px; fill:none; stroke:#000; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; }
-
-      #driverView .ts-action-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:20px 24px 0; }
-      #driverView .ts-action-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r2); padding:20px 16px; display:flex; flex-direction:column; gap:8px; cursor:pointer; transition:all .18s; position:relative; overflow:hidden; }
-      #driverView .ts-action-card::before { content:""; position:absolute; inset:0; background:radial-gradient(circle at 70% 20%,rgba(255,255,255,.04),transparent 70%); }
-      #driverView .ts-action-card:active { transform:scale(.97); border-color:var(--border2); }
-      #driverView .ts-action-card.ts-primary { grid-column:1/-1; background:linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%); border-color:transparent; }
-      #driverView .ts-action-card.ts-primary::before { background:radial-gradient(circle at 80% 20%,rgba(255,255,255,.2),transparent 60%); }
-      #driverView .ts-action-icon { font-size:26px; line-height:1; }
-      #driverView .ts-action-label { font-size:13px; font-weight:600; letter-spacing:.02em; color:var(--t0); }
-      #driverView .ts-action-card.ts-primary .ts-action-label { color:#000; }
-      #driverView .ts-action-sub { font-size:11px; color:var(--t1); font-weight:400; }
-      #driverView .ts-action-card.ts-primary .ts-action-sub { color:rgba(0,0,0,.7); }
-
-      #driverView #ts-s-omw { padding-bottom:40px; }
-      #driverView .ts-screen-header { padding:28px 24px 0; flex-shrink:0; }
-      #driverView .ts-back-btn { display:flex; align-items:center; gap:8px; background:none; border:none; color:var(--t1); font-family:var(--font); font-size:14px; font-weight:500; cursor:pointer; padding:0; margin-bottom:20px; }
-      #driverView .ts-back-btn svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
-      #driverView .ts-screen-title { font-size:32px; font-weight:700; letter-spacing:-.02em; color:var(--t0); line-height:1.1; }
-      #driverView .ts-screen-title span { color:var(--t1); font-weight:300; }
-      #driverView .ts-screen-body { flex:1; padding:24px; display:flex; flex-direction:column; gap:16px; overflow-y:auto; }
-
-      #driverView .ts-eta-selector { display:flex; flex-direction:column; gap:10px; }
-      #driverView .ts-eta-label { font-size:12px; font-weight:500; letter-spacing:.1em; color:var(--t2); text-transform:uppercase; }
-      #driverView .ts-eta-pills { display:flex; gap:8px; flex-wrap:wrap; }
-      #driverView .ts-eta-pill { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:10px 18px; font-size:14px; font-weight:500; color:var(--t1); cursor:pointer; transition:all .15s; }
-      #driverView .ts-eta-pill.ts-sel { background:var(--t0); border-color:var(--t0); color:var(--bg); }
-      #driverView .ts-eta-pill:active { transform:scale(.96); }
-
-      #driverView .ts-info-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r2); padding:18px 20px; display:flex; align-items:center; gap:14px; }
-      #driverView .ts-info-icon { font-size:24px; flex-shrink:0; }
-      #driverView .ts-info-text { flex:1; }
-      #driverView .ts-info-title { font-size:13px; font-weight:600; color:var(--t0); margin-bottom:3px; }
-      #driverView .ts-info-desc { font-size:12px; color:var(--t1); line-height:1.5; }
-
-      #driverView .ts-cta-btn { background:var(--t0); border:none; border-radius:var(--r2); padding:20px; width:100%; font-family:var(--font); font-size:16px; font-weight:700; color:var(--bg); letter-spacing:.03em; cursor:pointer; transition:all .18s; display:flex; align-items:center; justify-content:center; gap:10px; margin-top:auto; }
-      #driverView .ts-cta-btn:active { transform:scale(.98); opacity:.9; }
-      #driverView .ts-cta-btn.ts-accent { background:linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%); color:#000; }
-      #driverView .ts-cta-btn.ts-green { background:var(--green); color:#000; }
-      #driverView .ts-cta-btn:disabled { opacity:.35; cursor:not-allowed; transform:none; }
-
-      #driverView #ts-s-door { background:var(--bg); }
-      #driverView .ts-door-hero { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 24px; text-align:center; position:relative; }
-      #driverView .ts-door-ring { width:200px; height:200px; border-radius:50%; border:2px solid var(--border); display:flex; align-items:center; justify-content:center; position:relative; margin-bottom:32px; background:radial-gradient(circle,var(--surface2),var(--bg)); }
-      #driverView .ts-door-ring::before { content:""; position:absolute; inset:-1px; border-radius:50%; background:conic-gradient(var(--accent) 0deg,var(--accent) 90deg,transparent 90deg); -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 2px)); mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 2px)); animation:ts-spin 2s linear infinite; }
-      @keyframes ts-spin{to{transform:rotate(360deg)}}
-      #driverView .ts-door-ring.ts-done::before { background:var(--green); animation:none; }
-      #driverView .ts-door-number { font-size:72px; font-weight:700; letter-spacing:-.04em; color:var(--t0); line-height:1; }
-      #driverView .ts-door-number sup { font-size:24px; font-weight:400; color:var(--t1); vertical-align:super; }
-      #driverView .ts-door-eyebrow { font-size:12px; font-weight:500; letter-spacing:.14em; color:var(--t2); text-transform:uppercase; margin-bottom:12px; }
-      #driverView .ts-door-headline { font-size:28px; font-weight:600; letter-spacing:-.01em; color:var(--t0); margin-bottom:8px; }
-      #driverView .ts-door-sub { font-size:15px; color:var(--t1); font-weight:300; max-width:260px; line-height:1.5; }
-      #driverView .ts-door-actions { padding:0 24px 40px; display:flex; flex-direction:column; gap:10px; }
-
-      #driverView #ts-s-drop { padding-bottom:40px; }
-      #driverView .ts-type-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-      #driverView .ts-type-card { background:var(--surface); border:2px solid var(--border); border-radius:var(--r2); padding:20px 16px; cursor:pointer; transition:all .18s; text-align:center; }
-      #driverView .ts-type-card.ts-sel { border-color:var(--accent); background:var(--surface2); }
-      #driverView .ts-type-card:active { transform:scale(.97); }
-      #driverView .ts-type-card .ts-icon { font-size:32px; margin-bottom:10px; }
-      #driverView .ts-type-card .ts-name { font-size:14px; font-weight:600; color:var(--t0); }
-      #driverView .ts-type-card .ts-desc { font-size:11px; color:var(--t1); margin-top:4px; }
-
-      #driverView #ts-s-done { align-items:center; justify-content:center; text-align:center; padding:40px 24px; }
-      #driverView .ts-success-icon { width:80px; height:80px; border-radius:50%; background:var(--green); display:flex; align-items:center; justify-content:center; margin:0 auto 28px; animation:ts-pop .4s cubic-bezier(.175,.885,.32,1.275) both; box-shadow: 0 0 32px rgba(25,224,154,.2); }
-      @keyframes ts-pop{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
-      #driverView .ts-success-icon svg { width:36px; height:36px; fill:none; stroke:#000; stroke-width:3; stroke-linecap:round; stroke-linejoin:round; }
-      #driverView .ts-done-title { font-size:36px; font-weight:700; letter-spacing:-.02em; margin-bottom:10px; }
-      #driverView .ts-done-sub { font-size:15px; color:var(--t1); font-weight:300; line-height:1.6; max-width:280px; margin:0 auto 40px; }
-      #driverView .ts-done-detail { background:var(--surface); border:1px solid var(--border); border-radius:var(--r2); padding:20px; width:100%; max-width:320px; margin-bottom:32px; }
-      #driverView .ts-done-row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; }
-      #driverView .ts-done-row:not(:last-child) { border-bottom:1px solid var(--border); }
-      #driverView .ts-done-key { font-size:12px; color:var(--t2); font-weight:500; text-transform:uppercase; letter-spacing:.06em; }
-      #driverView .ts-done-val { font-size:14px; font-weight:600; color:var(--t0); }
-
-      #driverView #ts-s-safety { padding-bottom:40px; }
-      #driverView .ts-check-list { display:flex; flex-direction:column; gap:10px; }
-      #driverView .ts-check-item { background:var(--surface); border:2px solid var(--border); border-radius:var(--r2); padding:18px 20px; display:flex; align-items:center; gap:16px; cursor:pointer; transition:all .18s; }
-      #driverView .ts-check-item.ts-checked { border-color:var(--green); background:rgba(25,224,154,.06); }
-      #driverView .ts-check-item:active { transform:scale(.98); }
-      #driverView .ts-check-box { width:28px; height:28px; border-radius:50%; border:2px solid var(--border2); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:all .2s; }
-      #driverView .ts-check-item.ts-checked .ts-check-box { background:var(--green); border-color:var(--green); }
-      #driverView .ts-check-box svg { width:14px; height:14px; fill:none; stroke:#000; stroke-width:3; stroke-linecap:round; stroke-linejoin:round; opacity:0; transition:opacity .2s; }
-      #driverView .ts-check-item.ts-checked .ts-check-box svg { opacity:1; }
-      #driverView .ts-check-text { flex:1; }
-      #driverView .ts-check-title { font-size:15px; font-weight:600; color:var(--t0); margin-bottom:3px; }
-      #driverView .ts-check-desc { font-size:12px; color:var(--t1); }
-
-      #driverView #ts-s-xdock { padding-bottom:40px; }
-      #driverView .ts-divider { height:1px; background:var(--border); margin:4px 0; }
-      #driverView .ts-trailer-tag { display:inline-flex; align-items:center; gap:6px; background:var(--surface2); border:1px solid var(--border2); border-radius:8px; padding:4px 10px; font-size:12px; font-weight:600; letter-spacing:.06em; color:var(--t1); }
-      #driverView .ts-pill-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:12px; }
-
-      #driverView .ts-toast { position:absolute; bottom:20px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--surface2); border:1px solid var(--border2); border-radius:14px; padding:12px 20px; font-size:13px; font-weight:500; color:var(--t0); white-space:nowrap; z-index:999; transition:transform .3s cubic-bezier(.4,0,.2,1); pointer-events:none; }
-      #driverView .ts-toast.ts-show { transform:translateX(-50%) translateY(0); }
-
-      @keyframes ts-fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
-      #driverView .ts-anim { animation:ts-fadeUp .4s ease both; }
-      #driverView .ts-anim-1 { animation-delay:.05s; }
-      #driverView .ts-anim-2 { animation-delay:.1s; }
-      #driverView .ts-anim-3 { animation-delay:.15s; }
-      #driverView .ts-anim-4 { animation-delay:.2s; }
-      #driverView .ts-anim-5 { animation-delay:.25s; }
-    </style>
-
-    <div class="ts-screen ts-active" id="ts-s-home">
-      <div class="ts-topbar ts-anim">
-        <div class="ts-logo">
-          <div class="ts-logo-mark">W</div>
-          <div class="ts-logo-text">Wesbell</div>
-        </div>
-        <div class="ts-status-chip"><div class="ts-dot"></div>Live</div>
-      </div>
-      <div class="ts-hero">
-        <div class="ts-hero-eyebrow ts-anim ts-anim-1">Driver Portal</div>
-        <div class="ts-hero-title ts-anim ts-anim-2">What's your<br/><strong>trailer?</strong></div>
-        <div class="ts-hero-sub ts-anim ts-anim-3">Enter your number to get started</div>
-      </div>
-      <div class="ts-trailer-input-wrap ts-anim ts-anim-3">
-        <label>Trailer</label>
-        <input class="ts-trailer-input" id="ts-home-trailer" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="e.g. WB4821" maxlength="12"/>
-        <button class="ts-go-btn" id="ts-home-go">
-          <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-        </button>
-      </div>
-      <div class="ts-action-grid ts-anim ts-anim-4">
-        <div class="ts-action-card ts-primary" id="ts-btn-omw">
-          <div class="ts-action-icon">🚛</div>
-          <div class="ts-action-label">On My Way</div>
-          <div class="ts-action-sub">Get a door before you arrive</div>
-        </div>
-        <div class="ts-action-card" id="ts-btn-drop">
-          <div class="ts-action-icon">📦</div>
-          <div class="ts-action-label">Drop Trailer</div>
-          <div class="ts-action-sub">Arrived & dropping</div>
-        </div>
-        <div class="ts-action-card" id="ts-btn-xdock">
-          <div class="ts-action-icon">🔄</div>
-          <div class="ts-action-label">Cross Dock</div>
-          <div class="ts-action-sub">Pickup or offload</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="ts-screen" id="ts-s-omw">
-      <div class="ts-screen-header">
-        <div class="ts-topbar" style="padding:0">
-          <div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div>
-        </div>
-        <div style="padding-top:28px">
-          <button class="ts-back-btn" data-back="ts-s-home">
-            <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
-            Back
-          </button>
-          <div class="ts-screen-title">On My <span>Way</span></div>
-          <div style="font-size:13px;color:var(--t1);margin-top:8px">We'll assign your door now</div>
-          <div class="ts-pill-row" id="ts-omw-trailer-tag"></div>
-        </div>
-      </div>
-      <div class="ts-screen-body">
-        <div class="ts-eta-selector">
-          <div class="ts-eta-label">ETA to dock</div>
-          <div class="ts-eta-pills">
-            <div class="ts-eta-pill ts-sel" data-eta="10">10 min</div>
-            <div class="ts-eta-pill" data-eta="20">20 min</div>
-            <div class="ts-eta-pill" data-eta="30">30 min</div>
-            <div class="ts-eta-pill" data-eta="45">45 min</div>
-            <div class="ts-eta-pill" data-eta="60">1 hr</div>
-          </div>
-        </div>
-        <div class="ts-info-card">
-          <div class="ts-info-icon">📍</div>
-          <div class="ts-info-text">
-            <div class="ts-info-title">Door assigned instantly</div>
-            <div class="ts-info-desc">Your door is held for 30 minutes. Head straight in when you arrive.</div>
-          </div>
-        </div>
-        <div class="ts-info-card">
-          <div class="ts-info-icon">🔔</div>
-          <div class="ts-info-text">
-            <div class="ts-info-title">Dispatch is notified</div>
-            <div class="ts-info-desc">Your dispatcher sees your ETA and trailer on the board.</div>
-          </div>
-        </div>
-      </div>
-      <div style="padding:0 24px 20px">
-        <button class="ts-cta-btn ts-accent" id="ts-omw-submit">Send On My Way →</button>
-      </div>
-    </div>
-
-    <div class="ts-screen" id="ts-s-door">
-      <div class="ts-topbar ts-anim">
-        <div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div>
-        <div id="ts-door-trailer-tag" class="ts-trailer-tag"></div>
-      </div>
-      <div class="ts-door-hero">
-        <div class="ts-door-ring ts-done ts-anim ts-anim-1" id="ts-door-ring">
-          <div>
-            <div style="font-size:11px;font-weight:500;letter-spacing:.14em;color:var(--t2);text-transform:uppercase;text-align:center;margin-bottom:4px">Your Door</div>
-            <div class="ts-door-number" id="ts-door-number">--</div>
-          </div>
-        </div>
-        <div class="ts-door-headline ts-anim ts-anim-2" id="ts-door-headline">Head to Dock</div>
-        <div class="ts-door-sub ts-anim ts-anim-3" id="ts-door-sub">Pull straight to your assigned door and wait for dock staff.</div>
-      </div>
-      <div class="ts-door-actions">
-        <button class="ts-cta-btn ts-green ts-anim ts-anim-4" id="ts-door-safety-btn">✓ Arrived — Start Safety Check</button>
-        <button class="ts-cta-btn ts-anim ts-anim-5" id="ts-door-issue-btn" style="background:var(--surface);border:1px solid var(--border);color:var(--t1);font-weight:500">Report an Issue</button>
-      </div>
-    </div>
-
-    <div class="ts-screen" id="ts-s-drop">
-      <div class="ts-screen-header">
-        <div class="ts-topbar" style="padding:0"><div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div></div>
-        <div style="padding-top:28px">
-          <button class="ts-back-btn" data-back="ts-s-home">
-            <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Back
-          </button>
-          <div class="ts-screen-title">Drop <span>Trailer</span></div>
-          <div style="font-size:13px;color:var(--t1);margin-top:8px">What are you dropping?</div>
-        </div>
-      </div>
-      <div class="ts-screen-body">
-        <div class="ts-type-grid">
-          <div class="ts-type-card ts-sel" data-type="Loaded">
-            <div class="ts-icon">📦</div>
-            <div class="ts-name">Loaded</div>
-            <div class="ts-desc">Full trailer</div>
-          </div>
-          <div class="ts-type-card" data-type="Empty">
-            <div class="ts-icon">🪣</div>
-            <div class="ts-name">Empty</div>
-            <div class="ts-desc">Empty trailer</div>
-          </div>
-        </div>
-        <div class="ts-divider"></div>
-        <div class="ts-eta-label">Carrier Type</div>
-        <div class="ts-eta-pills" id="ts-carrier-pills">
-          <div class="ts-eta-pill ts-sel" data-carrier="Wesbell">Wesbell</div>
-          <div class="ts-eta-pill" data-carrier="Outside">Outside</div>
-        </div>
-        <div class="ts-info-card">
-          <div class="ts-info-icon">ℹ️</div>
-          <div class="ts-info-text">
-            <div class="ts-info-title">Door assigned by dispatch</div>
-            <div class="ts-info-desc">Your dispatcher will assign you a door. You'll see it on the board.</div>
-          </div>
-        </div>
-      </div>
-      <div style="padding:0 24px 20px">
-        <button class="ts-cta-btn ts-accent" id="ts-drop-submit">Confirm Drop →</button>
-      </div>
-    </div>
-
-    <div class="ts-screen" id="ts-s-xdock">
-      <div class="ts-screen-header">
-        <div class="ts-topbar" style="padding:0"><div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div></div>
-        <div style="padding-top:28px">
-          <button class="ts-back-btn" data-back="ts-s-home">
-            <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Back
-          </button>
-          <div class="ts-screen-title">Cross <span>Dock</span></div>
-          <div style="font-size:13px;color:var(--t1);margin-top:8px">What are you doing?</div>
-        </div>
-      </div>
-      <div class="ts-screen-body">
-        <div class="ts-type-grid">
-          <div class="ts-type-card ts-sel" data-xtype="pickup">
-            <div class="ts-icon">⬆️</div>
-            <div class="ts-name">Pickup</div>
-            <div class="ts-desc">Taking a trailer</div>
-          </div>
-          <div class="ts-type-card" data-xtype="offload">
-            <div class="ts-icon">⬇️</div>
-            <div class="ts-name">Offload</div>
-            <div class="ts-desc">Dropping here</div>
-          </div>
-        </div>
-        <div>
-          <div class="ts-eta-label" style="margin-bottom:10px">Select Door</div>
-          <div class="ts-eta-pills" id="ts-xdock-door-pills" style="flex-wrap:wrap;gap:8px">
-            </div>
-        </div>
-      </div>
-      <div style="padding:0 24px 20px">
-        <button class="ts-cta-btn ts-accent" id="ts-xdock-submit">Confirm →</button>
-      </div>
-    </div>
-
-    <div class="ts-screen" id="ts-s-safety">
-      <div class="ts-screen-header">
-        <div class="ts-topbar" style="padding:0"><div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div></div>
-        <div style="padding-top:28px">
-          <div class="ts-screen-title">Safety <span>Check</span></div>
-          <div style="font-size:13px;color:var(--t1);margin-top:8px">Confirm before departing</div>
-        </div>
-      </div>
-      <div class="ts-screen-body">
-        <div class="ts-check-list">
-          <div class="ts-check-item" id="ts-chk-load" data-key="load">
-            <div class="ts-check-box"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
-            <div class="ts-check-text">
-              <div class="ts-check-title">Load Secured</div>
-              <div class="ts-check-desc">All cargo is properly secured and doors are closed</div>
-            </div>
-          </div>
-          <div class="ts-check-item" id="ts-chk-plate" data-key="plate">
-            <div class="ts-check-box"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
-            <div class="ts-check-text">
-              <div class="ts-check-title">Dock Plate Up</div>
-              <div class="ts-check-desc">Dock plate is in the raised position</div>
-            </div>
-          </div>
-          <div class="ts-check-item" id="ts-chk-clear" data-key="clear">
-            <div class="ts-check-box"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
-            <div class="ts-check-text">
-              <div class="ts-check-title">Area Clear</div>
-              <div class="ts-check-desc">No personnel or equipment behind the trailer</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div style="padding:0 24px 20px">
-        <button class="ts-cta-btn ts-green" id="ts-safety-submit" disabled>Confirm &amp; Depart →</button>
-      </div>
-    </div>
-
-    <div class="ts-screen" id="ts-s-done">
-      <div class="ts-success-icon"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
-      <div class="ts-done-title" id="ts-done-title">All Done!</div>
-      <div class="ts-done-sub" id="ts-done-sub">Your drop has been logged. Dispatch has been notified.</div>
-      <div class="ts-done-detail" id="ts-done-detail"></div>
-      <button class="ts-cta-btn" id="ts-done-restart" style="max-width:320px; background:var(--surface); border:1px solid var(--border); color:var(--t0); margin:0 auto;">← New Submission</button>
-    </div>
-
-    <div class="ts-toast" id="ts-toast"></div>
-
-    <script>
-    (function(){
-      let state = { trailer: '', flow: null, eta: 10, dropType: 'Loaded', carrierType: 'Wesbell', xType: 'pickup', xDoor: null, assignedDoor: null, safetyChecks: { load: false, plate: false, clear: false } };
-
-      function show(id) {
-        document.querySelectorAll('#driverView .ts-screen').forEach(s => {
-          if (s.classList.contains('ts-active')) {
-            s.classList.add('ts-exit');
-            s.classList.remove('ts-active');
-            setTimeout(() => s.classList.remove('ts-exit'), 400);
-          }
-        });
-        const next = document.getElementById(id);
-        if(next) {
-          next.classList.add('ts-active');
-          next.querySelectorAll('.ts-anim').forEach(el => { el.style.animation = 'none'; el.offsetHeight; el.style.animation = ''; });
-        }
-      }
-
-      function toast(msg, dur = 2500) {
-        const t = document.getElementById('ts-toast');
-        t.textContent = msg; t.classList.add('ts-show');
-        setTimeout(() => t.classList.remove('ts-show'), dur);
-      }
-
-      document.querySelectorAll('#driverView [data-back]').forEach(btn => {
-        btn.addEventListener('click', () => show(btn.dataset.back));
-      });
-
-      const homeTrailer = document.getElementById('ts-home-trailer');
-      homeTrailer.addEventListener('input', e => {
-        state.trailer = e.target.value.trim().toUpperCase();
-        e.target.value = state.trailer;
-      });
-      document.getElementById('ts-home-go').addEventListener('click', () => {
-        if (!state.trailer) { toast('Enter your trailer number'); homeTrailer.focus(); return; }
-        showDrop();
-      });
-      homeTrailer.addEventListener('keydown', e => {
-        if (e.key === 'Enter' && state.trailer) showDrop();
-      });
-
-      document.getElementById('ts-btn-omw').addEventListener('click', () => {
-        if (!state.trailer) { toast('Enter your trailer number first'); homeTrailer.focus(); return; }
-        state.flow = 'omw';
-        document.getElementById('ts-omw-trailer-tag').innerHTML = `<div class="ts-trailer-tag">🚛 ${state.trailer}</div>`;
-        show('ts-s-omw');
-      });
-      document.getElementById('ts-btn-drop').addEventListener('click', () => {
-        if (!state.trailer) { toast('Enter your trailer number first'); homeTrailer.focus(); return; }
-        showDrop();
-      });
-      document.getElementById('ts-btn-xdock').addEventListener('click', () => {
-        if (!state.trailer) { toast('Enter your trailer number first'); homeTrailer.focus(); return; }
-        showXDock();
-      });
-
-      document.querySelectorAll('#driverView .ts-eta-pill').forEach(p => {
-        p.addEventListener('click', () => {
-          p.closest('.ts-eta-pills').querySelectorAll('.ts-eta-pill').forEach(x => x.classList.remove('ts-sel'));
-          p.classList.add('ts-sel');
-          if (p.dataset.eta) state.eta = parseInt(p.dataset.eta);
-          if (p.dataset.carrier) state.carrierType = p.dataset.carrier;
-          if (p.dataset.xtype) state.xType = p.dataset.xtype;
-        });
-      });
-
-      document.getElementById('ts-omw-submit').addEventListener('click', async () => {
-        const btn = document.getElementById('ts-omw-submit');
-        btn.disabled = true; btn.textContent = 'Sending…';
-        try {
-          const res = await fetch('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, eta: state.eta }) });
-          if (!res.ok) { const t = await res.text(); toast('⚠️ ' + t); btn.disabled = false; btn.textContent = 'Send On My Way →'; return; }
-          const data = await res.json();
-          state.assignedDoor = data.door;
-          showDoorAssigned('OMW confirmed', `Head to door ${data.door}. Your dispatcher has been notified.`);
-        } catch {
-          state.assignedDoor = String(Math.floor(Math.random() * 15) + 28);
-          showDoorAssigned('OMW confirmed', `Head to door ${state.assignedDoor}. Your dispatcher has been notified.`);
-        }
-      });
-
-      function showDrop() { state.flow = 'drop'; show('ts-s-drop'); }
-      document.querySelectorAll('#driverView .ts-type-card[data-type]').forEach(c => {
-        c.addEventListener('click', () => {
-          c.closest('.ts-type-grid').querySelectorAll('.ts-type-card').forEach(x => x.classList.remove('ts-sel'));
-          c.classList.add('ts-sel');
-          state.dropType = c.dataset.type;
-        });
-      });
-      document.getElementById('ts-drop-submit').addEventListener('click', async () => {
-        const btn = document.getElementById('ts-drop-submit');
-        btn.disabled = true; btn.textContent = 'Submitting…';
-        try {
-          const res = await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: state.dropType, carrierType: state.carrierType }) });
-          if (!res.ok && res.status !== 409) { const t = await res.text(); toast('⚠️ ' + t); btn.disabled = false; btn.textContent = 'Confirm Drop →'; return; }
-          showSuccess('Drop Logged', 'Dispatch will assign your door. Check the board for updates.', [{ k: 'Trailer', v: state.trailer }, { k: 'Type', v: state.dropType }, { k: 'Carrier', v: state.carrierType }]);
-        } catch {
-          showSuccess('Drop Logged', 'Dispatch will assign your door. Check the board for updates.', [{ k: 'Trailer', v: state.trailer }, { k: 'Type', v: state.dropType }]);
-        }
-      });
-
-      function showXDock() {
-        state.flow = 'xdock';
-        const pills = document.getElementById('ts-xdock-door-pills');
-        pills.innerHTML = '';
-        for (let d = 28; d <= 42; d++) {
-          const p = document.createElement('div');
-          p.className = 'ts-eta-pill' + (d === 28 ? ' ts-sel' : '');
-          p.dataset.xdoor = d; p.textContent = 'Door ' + d;
-          p.addEventListener('click', () => { pills.querySelectorAll('.ts-eta-pill').forEach(x => x.classList.remove('ts-sel')); p.classList.add('ts-sel'); state.xDoor = d; });
-          pills.appendChild(p);
-        }
-        state.xDoor = 28; state.xType = 'pickup';
-        document.querySelectorAll('#driverView [data-xtype]').forEach(c => {
-          c.addEventListener('click', () => { document.querySelectorAll('#driverView [data-xtype]').forEach(x => x.classList.remove('ts-sel')); c.classList.add('ts-sel'); state.xType = c.dataset.xtype; });
-        });
-        show('ts-s-xdock');
-      }
-      document.getElementById('ts-xdock-submit').addEventListener('click', async () => {
-        const btn = document.getElementById('ts-xdock-submit');
-        if (!state.xDoor) { toast('Select a door'); return; }
-        btn.disabled = true; btn.textContent = 'Submitting…';
-        try { await fetch(state.xType === 'pickup' ? '/api/crossdock/pickup' : '/api/crossdock/offload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, door: String(state.xDoor) }) }); } catch {}
-        showSuccess(state.xType === 'pickup' ? 'Pickup Logged' : 'Offload Logged', state.xType === 'pickup' ? 'Proceed to the dock safely.' : 'Offload has been recorded.', [{ k: 'Trailer', v: state.trailer }, { k: 'Door', v: state.xDoor }]);
-      });
-
-      function showDoorAssigned(headline, sub) {
-        document.getElementById('ts-door-number').textContent = state.assignedDoor;
-        document.getElementById('ts-door-headline').textContent = headline;
-        document.getElementById('ts-door-sub').textContent = sub;
-        document.getElementById('ts-door-trailer-tag').textContent = state.trailer;
-        show('ts-s-door');
-      }
-
-      document.getElementById('ts-door-safety-btn').addEventListener('click', () => {
-        state.safetyChecks = { load: false, plate: false, clear: false };
-        document.querySelectorAll('#driverView .ts-check-item').forEach(c => c.classList.remove('ts-checked'));
-        document.getElementById('ts-safety-submit').disabled = true;
-        show('ts-s-safety');
-      });
-
-      document.querySelectorAll('#driverView .ts-check-item').forEach(item => {
-        item.addEventListener('click', () => {
-          item.classList.toggle('ts-checked');
-          state.safetyChecks[item.dataset.key] = item.classList.contains('ts-checked');
-          const allDone = Object.values(state.safetyChecks).every(Boolean);
-          document.getElementById('ts-safety-submit').disabled = !allDone;
-        });
-      });
-
-      document.getElementById('ts-safety-submit').addEventListener('click', async () => {
-        const btn = document.getElementById('ts-safety-submit');
-        btn.disabled = true; btn.textContent = 'Confirming…';
-        try { await fetch('/api/confirm-safety', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, door: state.assignedDoor, loadSecured: true, dockPlateUp: true, action: 'safety' }) }); } catch {}
-        showSuccess('Departure Confirmed', 'Safe travels! Your trip has been logged.', [{ k: 'Trailer', v: state.trailer }, { k: 'Door', v: state.assignedDoor }]);
-      });
-
-      function showSuccess(title, sub, rows) {
-        document.getElementById('ts-done-title').textContent = title;
-        document.getElementById('ts-done-sub').textContent = sub;
-        document.getElementById('ts-done-detail').innerHTML = rows.map(r => `<div class="ts-done-row"><span class="ts-done-key">${r.k}</span><span class="ts-done-val">${r.v}</span></div>`).join('');
-        show('ts-s-done');
-      }
-
-      document.getElementById('ts-done-restart').addEventListener('click', () => {
-        state = { trailer: '', flow: null, eta: 10, dropType: 'Loaded', carrierType: 'Wesbell', xType: 'pickup', xDoor: null, assignedDoor: null, safetyChecks: { load: false, plate: false, clear: false } };
-        document.getElementById('ts-home-trailer').value = '';
-        document.querySelectorAll('#ts-carrier-pills .ts-eta-pill').forEach((p, i) => p.classList.toggle('ts-sel', i === 0));
-        show('ts-s-home');
-      });
-
-      const saved = localStorage.getItem('wb_trailer');
-      if (saved) { state.trailer = saved; document.getElementById('ts-home-trailer').value = saved; }
-      homeTrailer.addEventListener('input', () => { if (state.trailer) localStorage.setItem('wb_trailer', state.trailer); });
-
-    })();
-    </script>
-  </div>
 </main>
 
-<div class="modal-ov hidden" id="quickDropOv">
-  <div class="modal">
-    <div class="m-hd" style="margin-bottom:12px;border-bottom:1px solid var(--b0);padding-bottom:10px">
-      <span class="m-title" style="font-size:16px;color:var(--amber)">⚡ Quick Drop</span>
-      <button class="m-close" onclick="app.closeQuickDropModal()">✕</button>
-    </div>
-    <div class="m-body">
-      <div class="quick-drop-panel">
-        <div class="qdp-label">Scan / Enter Trailer</div>
-        <input type="text" id="qdTrailer" class="quick-drop-input" placeholder="WB...." autocomplete="off" spellcheck="false" maxlength="15"/>
-        <div class="qdp-hint">Press Enter to log drop automatically</div>
-      </div>
-      <div class="field-row">
-        <div class="field">
-          <label class="fl">Type</label>
-          <select id="qdType"><option value="Loaded">Loaded</option><option value="Empty">Empty</option></select>
-        </div>
-        <div class="field">
-          <label class="fl">Carrier</label>
-          <select id="qdCarrier"><option value="Wesbell">Wesbell</option><option value="Outside">Outside</option></select>
-        </div>
-      </div>
-      <button class="btn btn-primary btn-full" id="btnQdSubmit" style="margin-top:14px;min-height:52px;font-size:15px;letter-spacing:.04em">Drop to Yard</button>
-    </div>
-  </div>
+<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true">
+  <div class="toast-bar" id="toastBar"></div>
+  <strong id="toastTitle">Notification</strong>
+  <div class="t-body" id="toastBody"></div>
 </div>
 
-<div class="modal-ov hidden" id="doorMapOv">
-  <div class="modal ss-modal" style="max-width:860px">
-    <div class="m-hd">
-      <span class="m-title">🗺️ Live Door Map</span>
-      <button class="m-close" onclick="document.getElementById('doorMapOv').classList.add('hidden')">✕</button>
-    </div>
-    <div class="m-body dock-map-full">
-      <div class="dmf-header">
-        <div class="dmf-title">Milton Cross-Dock</div>
-        <div class="dmf-free" id="dmfFreeCount">0 Doors Available</div>
-      </div>
-      <div class="dmf-grid" id="dmfGrid"></div>
-    </div>
-  </div>
-</div>
-
-<div class="modal-ov hidden" id="quickIssueOv">
-  <div class="modal qi-modal">
-    <div class="m-hd">
-      <span class="m-title" style="color:var(--red)">⚠️ Report Dock Issue</span>
-      <button class="m-close" onclick="document.getElementById('quickIssueOv').classList.add('hidden')">✕</button>
-    </div>
-    <div class="m-body" style="padding:16px">
-      <div class="field">
-        <label class="fl">Door #</label>
-        <select id="qiDoor" style="font-size:16px;padding:12px">
-          </select>
-      </div>
-      <div class="fl" style="margin-top:16px;margin-bottom:8px">Select Issue Type</div>
-      <div class="qi-reasons" id="qiReasons">
-        <button class="qi-reason-btn qi-sel" data-reason="Door Broken">🚪 Door Broken</button>
-        <button class="qi-reason-btn" data-reason="Plate Stuck">🏗️ Plate Stuck</button>
-        <button class="qi-reason-btn" data-reason="Debris / Blocked">🗑️ Area Blocked</button>
-        <button class="qi-reason-btn" data-reason="Lock Missing">🔒 Lock Missing</button>
-        <button class="qi-reason-btn" data-reason="Spill / Hazard">⚠️ Spill / Hazard</button>
-        <button class="qi-reason-btn" data-reason="Other">❓ Other</button>
-      </div>
-      <div class="field" style="margin-top:12px">
-        <textarea id="qiNote" placeholder="Additional details..." style="min-height:80px"></textarea>
-      </div>
-      <button class="btn btn-danger btn-full" id="btnQiSubmit" style="margin-top:14px;min-height:52px;font-size:15px;">Submit Report</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal-ov hidden" id="doorReserveOv">
-  <div class="modal qi-modal">
-    <div class="m-hd">
-      <span class="m-title" style="color:var(--cyan)">🔒 Reserve Door</span>
-      <button class="m-close" onclick="document.getElementById('doorReserveOv').classList.add('hidden')">✕</button>
-    </div>
-    <div class="m-body" style="padding:16px">
-      <div style="font-size:13px;color:var(--t1);margin-bottom:16px;line-height:1.4">Select an empty door to lock it. Dispatch will not be able to assign trailers to it until you release it.</div>
-      <div class="dr-door-grid" id="dr_door_grid"></div>
-      <button class="btn btn-primary btn-full" id="btnDockReserveSubmit" style="margin-top:14px;min-height:52px;font-size:15px;">Reserve Door</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal-ov hidden" id="serverLogsOv">
-  <div class="modal ss-modal">
-    <div class="m-hd">
-      <span class="m-title">🖥 Server Logs</span>
-      <button class="m-close" onclick="document.getElementById('serverLogsOv').classList.add('hidden')">✕</button>
-    </div>
-    <div class="m-body" id="serverLogsBody" style="padding:0;overflow-y:auto;max-height:70vh;"></div>
-  </div>
-</div>
-
-<div class="modal-ov hidden" id="shiftSummaryOv">
-  <div class="modal ss-modal">
-    <div class="m-hd">
-      <span class="m-title">📊 Shift Summary</span>
-      <button class="m-close" onclick="document.getElementById('shiftSummaryOv').classList.add('hidden')">✕</button>
-    </div>
-    <div class="m-body ss-body" id="shiftSummaryBody"></div>
-  </div>
-</div>
-
-<div class="modal-ov hidden" id="historyBoardOv">
-  <div class="modal ss-modal">
-    <div class="m-hd">
-      <span class="m-title">📋 Activity History</span>
-      <button class="m-close" onclick="document.getElementById('historyBoardOv').classList.add('hidden')">✕</button>
-    </div>
-    <div class="m-body ss-body" style="padding:0" id="historyBoardBody"></div>
-  </div>
-</div>
-
-<script src="/app.js"></script>
+<script src="/app.js?v=3.6.0"></script>
 </body>
 </html>

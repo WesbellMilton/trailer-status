@@ -989,6 +989,21 @@ body{background-image:none!important;background:transparent!important}
   (function(){
     let state = { trailer: '', carrier: '', action: '', eta: 10, dropType: 'Loaded', door: null, assignedDoor: null, safetyChecks: { load: false, plate: false } };
 
+    // --- Kiosk Mode (Isolate Driver View) ---
+    const driverWrap = document.getElementById('driverView');
+    const globalTopbar = document.querySelector('.topbar');
+    const globalBottomNav = document.querySelector('.bottom-nav');
+
+    function checkIsolation() {
+      const active = driverWrap.style.display !== 'none';
+      if (globalTopbar) globalTopbar.style.display = active ? 'none' : '';
+      if (globalBottomNav) globalBottomNav.style.display = active ? 'none' : '';
+    }
+    
+    // Lock the view immediately and watch for routing changes
+    checkIsolation();
+    new MutationObserver(checkIsolation).observe(driverWrap, { attributes: true, attributeFilter: ['style'] });
+
     // --- Progress & Navigation Manager ---
     function show(id) {
       document.querySelectorAll('#driverView .ts-screen').forEach(s => {
@@ -1070,7 +1085,7 @@ body{background-image:none!important;background:transparent!important}
         ];
       } else {
         actions = [
-          { id: 'drop', icon: '📦', label: 'Drop Trailer', sub: 'Park an inbound trailer', cls: 'ts-green' },
+          // Drop Trailer removed for outside carriers
           { id: 'xdock', icon: '🔄', label: 'Cross Dock', sub: 'Load or offload a trailer', cls: 'ts-orange' }
         ];
       }

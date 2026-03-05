@@ -1,26 +1,27 @@
 // sw.js — Wesbell Dispatch Service Worker
-const CACHE_NAME = "wesbell-v3.6.0";
+const CACHE_NAME = "wesbell-v3.6.5"; // Increment this when you push updates
 const ASSETS_TO_CACHE = [
   "/",
   "/index.html",
   "/style.css",
   "/app.js",
   "/manifest.json",
-  "/icons/icon-192.png"
+  "/icons/icon-192.png",
+  "/icons/icon-512.png"
 ];
 
-// 1. Install Event: Cache essential assets immediately
+// 1. INSTALL: Cache the "App Shell" so the UI works offline
 self.addEventListener("install", evt => {
   evt.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      console.log("SW: Caching App Shell");
+      console.log("SW: Caching App Shell Assets");
       return cache.addAll(ASSETS_TO_CACHE);
     })
   );
   self.skipWaiting();
 });
 
-// 2. Activate Event: Clean up old versions and force reload
+// 2. ACTIVATE: Clean up old caches and force clients to reload
 self.addEventListener("activate", evt => {
   evt.waitUntil(
     caches.keys().then(keys => {
@@ -30,7 +31,7 @@ self.addEventListener("activate", evt => {
     }).then(() => self.clients.claim())
   );
   
-  // Notify app.js that a new version is active
+  // Notify app.js that a new version is ready to be used
   evt.waitUntil(
     self.clients.matchAll({ type: "window" }).then(clients => {
       clients.forEach(client => client.postMessage({ type: "SW_UPDATED" }));
@@ -38,35 +39,36 @@ self.addEventListener("activate", evt => {
   );
 });
 
-// 3. Fetch Event: Network-First with Cache-Fallback
+// 3. FETCH: Network-First Strategy (with Cache Fallback)
 self.addEventListener("fetch", evt => {
   const url = new URL(evt.request.url);
 
-  // Skip non-GET requests and external URLs
+  // RULE 1: Skip non-GET requests (POST, PUT, DELETE)
   if (evt.request.method !== "GET" || url.origin !== self.location.origin) return;
 
-  // For API calls, go strictly to network (never cache real-time data)
+  // RULE 2: ALWAYS go to network for API calls (Never cache trailer state)
   if (url.pathname.startsWith("/api/")) {
-    return; 
+    return; // Browser handles this normally via network
   }
 
+  // RULE 3: For App Assets (CSS, JS, HTML), try Network first, then Cache
   evt.respondWith(
     fetch(evt.request)
-      .then(networkResponse => {
-        // If network works, update the cache with the new version
+      .then(networkRes => {
+        // If network is good, update cache with the fresh version
         return caches.open(CACHE_NAME).then(cache => {
-          cache.put(evt.request, networkResponse.clone());
-          return networkResponse;
+          cache.put(evt.request, networkRes.clone());
+          return networkRes;
         });
       })
       .catch(() => {
-        // If network fails (Offline), look for the file in cache
+        // If network fails (Offline), serve from the cache
         return caches.match(evt.request);
       })
   );
 });
 
-// 4. Push Notifications: Handle incoming alerts
+// 4. PUSH: Handle Dispatch & Driver Notifications
 self.addEventListener("push", evt => {
   if (!evt.data) return;
   let data = {};
@@ -84,9 +86,6 @@ self.addEventListener("push", evt => {
     renotify: true,
     vibrate: [100, 50, 100],
     data: data.data || {},
-    actions: [
-      { action: 'open', title: 'Open Dashboard' }
-    ]
   };
 
   evt.waitUntil(
@@ -94,7 +93,7 @@ self.addEventListener("push", evt => {
   );
 });
 
-// 5. Notification Interaction
+// 5. NOTIFICATION CLICK: Focus existing window or open new one
 self.addEventListener("notificationclick", evt => {
   evt.notification.close();
   evt.waitUntil(

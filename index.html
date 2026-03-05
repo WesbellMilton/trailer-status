@@ -1,156 +1,107 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <style>
-    /* ═══════════════════════════════════════════
-       GRADIENT KILL & KIOSK ISOLATION
-    ═══════════════════════════════════════════ */
-    body { background-image:none!important; background:#070a0f!important; }
-    #driverView, #dockView, #managementView { background-image:none!important; }
-    .driver-shell { background-image:none!important; }
-    
-    /* Ensure Tesla UI covers everything when active */
-    body:has(#driverView.ts-active) .topbar, 
-    body:has(#driverView.ts-active) .bottom-nav { display: none !important; }
-  </style>
-  
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
-  <title>Wesbell Dispatch</title>
-  
-  <link rel="manifest" href="/manifest.json"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <meta name="theme-color" content="#070a0f"/>
-
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet"/>
-  
-  <link rel="stylesheet" href="/style.css?v=3.6.0"/>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+    <title>Wesbell Dispatch Master</title>
+    <link rel="stylesheet" href="/style.css"/>
+    <style>
+        /* GRADIENT KILL - Protects high-contrast screens */
+        body { background: #070a0f !important; background-image: none !important; }
+        #driverView { background: #070a0f !important; }
+        /* Hide Nav when in Driver Mode */
+        body.mode-driver .topbar, body.mode-driver .bottom-nav { display: none !important; }
+    </style>
 </head>
 <body>
 
-<div class="modal-ov hidden" id="modalOv">
-  <div class="modal">
-    <h4 id="modalTitle">Confirm</h4>
-    <div class="m-sub" id="modalBody"></div>
-    <div class="m-btns">
-      <button class="btn btn-default" id="modalCancel">Cancel</button>
-      <button class="btn btn-danger" id="modalConfirm">Confirm</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal-ov hidden" id="quickIssueOv">
-  <div class="modal qi-modal">
-    <div class="m-hd">
-      <div>
-        <span class="m-title">⚠ Report Issue</span>
-        <div style="font-family:var(--mono);font-size:10px;color:var(--t2);margin-top:2px">
-          <span id="qi_trailer" style="color:var(--amber)"></span> · <span id="qi_door"></span>
-        </div>
-      </div>
-      <button class="m-close" onclick="document.getElementById('quickIssueOv').classList.add('hidden')">✕</button>
-    </div>
-    <div class="m-body" style="padding:16px;">
-      <div class="qi-reasons">
-        <button class="qi-reason-btn" data-reason="Damage">🔨 Damage</button>
-        <button class="qi-reason-btn" data-reason="Wrong trailer">❌ Wrong trailer</button>
-        <button class="qi-reason-btn" data-reason="Blocked door">🚧 Blocked door</button>
-        <button class="qi-reason-btn" data-reason="Load not ready">📦 Load not ready</button>
-      </div>
-      <textarea id="qi_note" placeholder="Additional notes..."></textarea>
-      <button class="btn btn-danger btn-full" id="btnQuickIssueSubmit">Submit Issue Report</button>
-    </div>
-  </div>
-</div>
-
-<div class="topbar">
-  <div class="topbar-inner">
-    <div class="brand-block">
-      <div class="brand-mark">W</div>
-      <div>
-        <div class="brand-name">WESBELL</div>
-        <div class="brand-sub">DISPATCH MGT</div>
-      </div>
-    </div>
-    <nav class="nav">
-      <a href="/" class="nav-item" id="navDispatch">Dispatcher</a>
-      <a href="/dock" class="nav-item" id="navDock">Dock</a>
-      <a href="/driver" class="nav-item" id="navDriver">Driver</a>
-      <a href="/management" class="nav-item" id="navManagement">Management</a>
-    </nav>
-    <div class="topbar-right">
-      <div class="chip"><div class="live-dot" id="wsDot"></div><span id="wsText">Connecting</span></div>
-      <button class="tb-btn danger" id="btnLogout" style="display:none;">Sign Out</button>
-    </div>
-  </div>
-</div>
-
-<div id="driverView" style="display:none;">
-  <div class="ts-progress-track"><div class="ts-progress-bar" id="ts-pb"></div></div>
-
-  <div class="ts-screen ts-active" id="ts-s-home">
-    <div class="ts-hero">
-      <div class="ts-hero-title">Trailer <strong>Check-In</strong></div>
-      <div class="ts-hero-sub">Enter trailer number to begin</div>
-    </div>
-    <div class="ts-trailer-input-wrap">
-      <input class="ts-trailer-input" id="ts-home-trailer" type="text" placeholder="WB-0000" maxlength="12"/>
-      <button class="ts-go-btn" id="ts-home-go">➔</button>
-    </div>
-  </div>
-
-  <div class="ts-screen" id="ts-s-carrier">
-    <div class="ts-screen-header"><div class="ts-screen-title">Identify <span>Service</span></div></div>
-    <div class="ts-screen-body">
-      <div class="ts-action-card ts-yellow" data-carrier="Wesbell">
-        <div class="ts-action-icon">🚛</div>
-        <div class="ts-action-text"><div class="ts-action-label">Wesbell Internal</div></div>
-      </div>
-      <div class="ts-action-card ts-blue" data-carrier="Outside">
-        <div class="ts-action-icon">🏢</div>
-        <div class="ts-action-text"><div class="ts-action-label">Outside Carrier</div></div>
-      </div>
-    </div>
-  </div>
-
-  <div class="ts-screen" id="ts-s-safety">
-    <div class="ts-screen-header"><div class="ts-screen-title">Safety <span>Check</span></div></div>
-    <div class="ts-screen-body">
-      <div class="ts-check-list">
-        <div class="ts-check-item" data-key="load">
-          <div class="ts-check-box">✓</div>
-          <div class="ts-check-text"><div class="ts-check-title">Load Secured</div></div>
-        </div>
-        <div class="ts-check-item" data-key="plate">
-          <div class="ts-check-box">✓</div>
-          <div class="ts-check-text"><div class="ts-check-title">Dock Plate Up</div></div>
-        </div>
-      </div>
-      <button class="ts-cta-btn ts-green" id="ts-safety-submit" disabled>Confirm & Complete</button>
-    </div>
-  </div>
-</div>
-
-<div class="panel" id="dockMapCard">
-          <div class="panel-hd"><div class="panel-title">Door Map</div></div>
-          <div class="panel-body"><div class="dock-map-grid" id="dockMapGrid"></div></div>
-        </div>
-      </div>
-
-      <div class="side-sticky">
-        <div class="panel">
-          <div class="panel-hd"><div class="panel-title">Manual Controls</div></div>
-          <div class="panel-body" id="panelBody">
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand-block"><div class="brand-mark">W</div><div class="brand-name">WESBELL</div></div>
+            <nav class="nav">
+                <a href="/" class="nav-item" id="navDispatch">Dispatcher</a>
+                <a href="/dock" class="nav-item" id="navDock">Dock</a>
+                <a href="/driver" class="nav-item" id="navDriver">Driver</a>
+                <a href="/management" class="nav-item" id="navManagement">Management</a>
+            </nav>
+            <div class="topbar-right">
+                <div class="chip"><div class="live-dot" id="wsDot"></div>Live</div>
+                <button id="btnStaffLogin" class="tb-btn">🔑 Staff Login</button>
             </div>
         </div>
-      </div>
-    </div>
-  </main>
-</div>
+    </header>
 
-<script src="/app.js?v=3.6.0"></script>
+    <main id="main-content">
+        
+        <div id="dispatchView" style="display:none;">
+            <div class="grid-main">
+                <div class="col-stack">
+                    <div class="panel">
+                        <div class="panel-hd"><div class="panel-title">Active Board</div></div>
+                        <div id="tbody" class="panel-body-flush"></div>
+                    </div>
+                </div>
+                <div class="side-sticky">
+                    <div class="panel" id="adminPanel">
+                        </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="driverView" style="display:none;">
+            <div class="ts-progress-track"><div id="ts-pb" class="ts-progress-bar"></div></div>
+            
+            <div id="ts-s-home" class="ts-screen ts-active">
+                <h1>Trailer Check-In</h1>
+                <input type="text" id="ts-home-trailer" class="ts-input-hero" placeholder="TRAILER #">
+                <button id="ts-home-go" class="ts-btn-primary">CONTINUE</button>
+            </div>
+
+            <div id="ts-s-mode" class="ts-screen">
+                <h2>Identify Service</h2>
+                <div class="ts-grid-2">
+                    <div class="ts-card ts-wesbell" data-mode="Wesbell"><b>Wesbell Driver</b><small>Internal Fleet</small></div>
+                    <div class="ts-card ts-carrier" data-mode="Carrier"><b>Outside Carrier</b><small>Third Party</small></div>
+                </div>
+            </div>
+
+            <div id="ts-s-actions-wesbell" class="ts-screen">
+                <div class="ts-grid-menu">
+                    <div class="ts-menu-item gold" data-action="arrive"><b>I Have Arrived</b></div>
+                    <div class="ts-menu-item blue" data-action="omw"><b>On My Way</b></div>
+                    <div class="ts-menu-item green" data-action="qd"><b>Quick Drop</b><small>No Prompt</small></div>
+                    <div class="ts-menu-item purple" data-action="shunt"><b>Shunt Trailer</b><small>No Prompt</small></div>
+                    <div class="ts-menu-item orange" data-action="xdock"><b>Cross Dock</b></div>
+                </div>
+            </div>
+
+            <div id="ts-s-actions-carrier" class="ts-screen">
+                <div class="ts-grid-menu">
+                    <div class="ts-menu-item orange" data-action="xdock"><b>Cross Dock</b><small>Safety Required</small></div>
+                </div>
+            </div>
+
+            <div id="ts-s-safety" class="ts-screen">
+                <h2>Safety Check</h2>
+                <div class="ts-check-list">
+                    <label class="ts-check-item" data-key="load"><input type="checkbox"> Load Secured</label>
+                    <label class="ts-check-item" data-key="plate"><input type="checkbox"> Dock Plate Up</label>
+                </div>
+                <button id="ts-safety-submit" class="ts-btn-primary green" disabled>CONFIRM</button>
+            </div>
+        </div>
+
+    </main>
+
+    <div class="modal-ov hidden" id="staffLoginOv">
+        <div class="modal">
+            <h4>Staff Override</h4>
+            <select id="staffRole"><option value="dispatcher">Dispatcher</option><option value="management">Management</option><option value="admin">Admin</option></select>
+            <input type="password" id="staffPin" placeholder="PIN">
+            <button id="btnStaffGo" class="btn btn-primary">Login</button>
+        </div>
+    </div>
+
+    <script src="/app.js"></script>
 </body>
 </html>

@@ -1051,6 +1051,65 @@ app.get("/api/audit",requireRole(["dispatcher","management","admin"]),async(req,
   }catch{res.status(500).send("Audit failed")}
 });
 
+// ── Load Status History ──
+app.get("/api/status-history/:trailer",async(req,res)=>{
+  try{
+    const trailer=String(req.params.trailer||"").trim().toUpperCase();
+    if(!trailer)return res.status(400).send("Missing trailer");
+    // Get all status-change events for this trailer from audit log
+    const events=await all(
+      `SELECT at,actorRole,action,details FROM audit
+       WHERE entityId=? AND (action='trailer_status_set' OR action='trailer_create' OR action='trailer_update'
+         OR action='omw' OR action='arrive' OR action='driver_drop' OR action='crossdock_pickup'
+         OR action='crossdock_offload' OR action='trailer_shunt' OR action='safety_confirmed')
+       ORDER BY at ASC`,
+      [trailer]
+    );
+    // Current trailer state
+    const current=await get(`SELECT * FROM trailers WHERE trailer=?`,[trailer]);
+    // Build timeline: deduplicate consecutive same-status entries
+    const timeline=[];
+    let lastStatus=null;
+    for(const e of events){
+      let details={};try{details=e.details?JSON.parse(e.details):{};}catch{}
+      const status=details.status||null;
+      const door=details.door||details.toDoor||null;
+      const entry={at:e.at,action:e.action,actorRole:e.actorRole,status,door,details};
+      if(status&&status===lastStatus)continue; // skip duplicate status
+      if(status)lastStatus=status;
+      timeline.push(entry);
+    }
+    // Compute duration for each step
+    const withDurations=timeline.map((e,i)=>{
+      const nextAt=i<timeline.length-1?timeline[i+1].at:Date.now();
+      return{...e,durationMs:nextAt-e.at};
+    });
+    res.json({trailer,current:current||null,timeline:withDurations});
+  }catch(err){console.error("[status-history]",err);res.status(500).send("History failed");}
+});
+
+// ── Load Status Board (all active trailers with timing) ──
+app.get("/api/load-status",requireRole(["dispatcher","management","admin","dock"]),async(req,res)=>{
+  try{
+    const rows=await all(`SELECT * FROM trailers WHERE status NOT IN ('Departed','') ORDER BY updatedAt DESC`);
+    // For each active trailer, get its last status-set event to compute time-in-status
+    const result=await Promise.all(rows.map(async r=>{
+      const lastChange=await get(
+        `SELECT at FROM audit WHERE entityId=? AND action='trailer_status_set' ORDER BY at DESC LIMIT 1`,
+        [r.trailer]
+      );
+      return{
+        trailer:r.trailer,status:r.status,door:r.door||"",direction:r.direction||"",
+        dropType:r.dropType||"",carrierType:r.carrierType||"",
+        updatedAt:r.updatedAt,doorAt:r.doorAt||null,omwAt:r.omwAt||null,omwEta:r.omwEta||null,
+        statusSince:lastChange?.at||r.updatedAt,
+        timeInStatusMs:Date.now()-(lastChange?.at||r.updatedAt),
+      };
+    }));
+    res.json(result);
+  }catch(err){console.error("[load-status]",err);res.status(500).send("Load status failed");}
+});
+
 // ── PIN management ──
 app.post("/api/management/set-pin",requireXHR,requireRole(["management","admin"]),async(req,res)=>{
   const actor=req.user?.role||"unknown";

@@ -1,1 +1,74 @@
-{"name":"Wesbell Dispatch","short_name":"Dispatch","description":"Wesbell Dispatch Management System","start_url":"/","display":"standalone","orientation":"any","background_color":"#0a0d12","theme_color":"#0a0d12","icons":[{"src":"/icons/icon-16.png","sizes":"16x16","type":"image/png","purpose":"any"},{"src":"/icons/icon-32.png","sizes":"32x32","type":"image/png","purpose":"any"},{"src":"/icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},{"src":"/icons/icon-192-maskable.png","sizes":"192x192","type":"image/png","purpose":"maskable"},{"src":"/icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},{"src":"/icons/icon-512-maskable.png","sizes":"512x512","type":"image/png","purpose":"maskable"}],"categories":["productivity","utilities"],"shortcuts":[{"name":"Driver Portal","short_name":"Driver","description":"Submit a trailer drop or cross dock","url":"/driver","icons":[{"src":"/icons/icon-192.png","sizes":"192x192"}]},{"name":"Dock View","short_name":"Dock","description":"Update dock loading status","url":"/dock","icons":[{"src":"/icons/icon-192.png","sizes":"192x192"}]},{"name":"Management","short_name":"Mgmt","description":"Management dashboard and audit","url":"/management","icons":[{"src":"/icons/icon-192.png","sizes":"192x192"}]}]}
+{
+  "name": "Wesbell Dispatch",
+  "short_name": "Dispatch",
+  "description": "Wesbell Dispatch Management System",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#070a0f",
+  "theme_color": "#070a0f",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/icons/icon-16.png",
+      "sizes": "16x16",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-32.png",
+      "sizes": "32x32",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "shortcuts": [
+    {
+      "name": "Driver Portal",
+      "short_name": "Driver",
+      "description": "Submit a trailer drop or cross dock",
+      "url": "/driver",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Dock View",
+      "short_name": "Dock",
+      "description": "Update dock loading status",
+      "url": "/dock",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Management",
+      "short_name": "Mgmt",
+      "description": "Management dashboard and audit",
+      "url": "/management",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

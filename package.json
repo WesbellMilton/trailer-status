@@ -1,7 +1,7 @@
 {
   "name": "wesbell-dispatch",
   "version": "3.5.0",
-  "description": "Wesbell Dispatch \u2014 dock & driver portal",
+  "description": "Wesbell Dispatch — dock & driver portal",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

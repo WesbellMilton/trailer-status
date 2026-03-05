@@ -1,163 +1,188 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
-  <title>Wesbell Dispatch</title>
-  
-  <style>
-    /* CSS RESET & GRADIENT FIX */
-    body { background: #070a0f!important; margin: 0; padding: 0; overscroll-behavior: none; }
-    #driverView { background: #070a0f!important; }
-    .hidden { display: none !important; }
-    /* Prevent cyan blobs from legacy styles */
-    #driverView, #dockView, #managementView { background-image: none !important; }
-  </style>
-
-  <link rel="manifest" href="/manifest.json"/>
-  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <meta name="theme-color" content="#070a0f"/>
-
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="/style.css?v=3.6.1"/>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Wesbell Dispatch & Portal</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
-<div class="toast" id="toast" role="status" aria-live="polite">
-  <div class="toast-bar"></div>
-  <strong id="toastTitle">Notification</strong>
-  <div class="t-body" id="toastBody"></div>
-</div>
-
-<div class="topbar">
-  <div class="topbar-inner">
-    <div class="brand-block">
-      <div class="brand-mark">W</div>
-      <div>
-        <div class="brand-name">WESBELL</div>
-        <div class="brand-sub">DISPATCH MGT</div>
-      </div>
-    </div>
-    <nav class="nav">
-      <a href="/" class="nav-item" id="navDispatch">Dispatcher</a>
-      <a href="/dock" class="nav-item" id="navDock">Dock</a>
-      <a href="/driver" class="nav-item" id="navDriver">Driver</a>
-      <a href="/management" class="nav-item" id="navManagement">Management</a>
-    </nav>
-    <div class="topbar-right">
-      <div class="chip"><div class="live-dot" id="wsDot"></div><span id="wsText">Live</span></div>
-      <button class="tb-btn danger" id="btnLogout" style="display:none;">Sign Out</button>
-    </div>
-  </div>
-</div>
-
-<main id="main-content">
-
-  <div id="driverView" style="display:none;" data-view-type="kiosk">
-    <div class="ts-progress-track"><div class="ts-progress-bar" id="ts-pb"></div></div>
-
-    <div class="ts-screen ts-active" id="ts-s-home">
-      <div class="ts-hero">
-        <div class="ts-hero-eyebrow">Wesbell Logistics</div>
-        <div class="ts-hero-title">Enter your<br/><strong>Trailer Number</strong></div>
-      </div>
-      <div class="ts-trailer-input-wrap">
-        <label>Trailer</label>
-        <input class="ts-trailer-input" id="ts-home-trailer" type="text" inputmode="text" autocapitalize="characters" placeholder="WB-0000">
-        <button class="ts-go-btn" id="ts-home-go">
-          <svg viewBox="0 0 24 24" width="24" height="24" stroke="white" stroke-width="3" fill="none"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-        </button>
-      </div>
-    </div>
-
-    <div class="ts-screen" id="ts-s-carrier" style="display:none;">
-      <div class="ts-screen-header">
-        <button class="ts-back-btn" data-back="ts-s-home">← Back</button>
-        <div class="ts-screen-title">Who are you<br/><span>driving for?</span></div>
-      </div>
-      <div class="ts-action-grid">
-        <div class="ts-action-card ts-yellow" data-carrier="Wesbell">
-          <div class="ts-action-icon">🚛</div>
-          <div class="ts-action-text"><div class="ts-action-label">Wesbell Internal</div></div>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand-block">
+                <div class="brand-mark">W</div>
+                <div>
+                    <div class="brand-name">WESBELL</div>
+                    <div class="brand-sub">DISPATCH MGT</div>
+                </div>
+            </div>
+            <nav class="nav">
+                <a href="/" class="nav-item active">Dispatcher</a>
+                <a href="/dock" class="nav-item">Dock</a>
+                <a href="/driver" class="nav-item">Driver</a>
+                <a href="/management" class="nav-item">Management</a>
+            </nav>
+            <div class="topbar-right">
+                <div class="chip">
+                    <div id="wsDot" class="live-dot"></div>
+                    <span>Live</span>
+                </div>
+                <button id="btnLogout" class="tb-btn danger">Logout</button>
+            </div>
         </div>
-        <div class="ts-action-card" data-carrier="Outside">
-          <div class="ts-action-icon">🏢</div>
-          <div class="ts-action-text"><div class="ts-action-label">Outside Carrier</div></div>
+    </header>
+
+    <main class="page">
+        
+        <div id="dispatchView" class="view-fade">
+            <div class="grid-main">
+                <div class="col-stack">
+                    <div class="disp-kpi-bar">
+                        <div class="kpi kpi-total">
+                            <div class="k-val" id="countsPill">0</div>
+                            <div class="k-lbl">Active Trailers</div>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-hd">
+                            <div class="panel-title">Trailer Board</div>
+                            <button class="btn btn-sm btn-default" id="historyBtn">History</button>
+                        </div>
+                        <div class="filter-bar">
+                            <input type="text" id="search" placeholder="Search trailer, door, note..." class="field">
+                            <button class="btn btn-default tight" id="clearFilters">Clear</button>
+                        </div>
+                        <div class="panel-body-flush">
+                            <div class="tbl-hd">
+                                <span>Trailer</span><span>Dir</span><span>Status</span><span>Door</span><span>Type</span><span>Note</span><span>Updated</span><span>Actions</span>
+                            </div>
+                            <div id="tbody" class="tbl-empty">No trailers match filters</div>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-hd">
+                            <div class="panel-title">Door Occupancy Map</div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="dock-map-grid" id="doorMap">
+                                </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="side-sticky">
+                    <div class="panel" id="adminPanel">
+                        <div class="panel-hd"><div class="panel-title">Manual Control</div></div>
+                        <div class="panel-body" id="panelBody">
+                            <div class="field">
+                                <label class="fl">Trailer #</label>
+                                <input type="text" id="ctrlTrailer" placeholder="Enter Trailer" style="text-transform:uppercase">
+                            </div>
+                            <div class="field-row">
+                                <div class="field">
+                                    <label class="fl">Door</label>
+                                    <select id="ctrlDoor">
+                                        <option value="">Yard</option>
+                                        </select>
+                                </div>
+                                <div class="field">
+                                    <label class="fl">Status</label>
+                                    <select id="ctrlStatus">
+                                        <option value="Incoming">Incoming</option>
+                                        <option value="Dropped">Dropped</option>
+                                        <option value="Loading">Loading</option>
+                                        <option value="Ready">Ready</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label class="fl">Notes</label>
+                                <textarea id="ctrlNote"></textarea>
+                            </div>
+                            <button class="btn btn-primary btn-full" id="btnUpdate">Update Board</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
 
-    <div class="ts-screen" id="ts-s-actions" style="display:none;">
-      <div class="ts-screen-header">
-        <div id="ts-actions-trailer-tag" class="ts-trailer-tag"></div>
-        <button class="ts-back-btn" data-back="ts-s-carrier">← Back</button>
-        <div class="ts-screen-title">Select<span> Activity</span></div>
-      </div>
-      <div class="ts-action-grid" id="ts-dynamic-actions">
+        <div id="dockView" class="view-fade" style="display:none">
+            <div class="dock-shell">
+                <div class="dock-search-bar">
+                    <input type="text" id="dockSearch" placeholder="Filter dock trailers...">
+                </div>
+                <div class="dock-cards" id="dockCards">
+                    </div>
+            </div>
         </div>
-    </div>
 
-    <div class="ts-screen" id="ts-s-omw" style="display:none;">
-      <div class="ts-screen-header">
-        <button class="ts-back-btn" data-back="ts-s-actions">← Back</button>
-        <div class="ts-screen-title">On My <span>Way</span></div>
-      </div>
-      <div class="ts-screen-body">
-        <div class="ts-eta-label">ETA to Dock</div>
-        <div class="ts-eta-pills">
-          <div class="ts-eta-pill ts-sel" data-eta="10">10m</div>
-          <div class="ts-eta-pill" data-eta="20">20m</div>
-          <div class="ts-eta-pill" data-eta="30">30m</div>
+        <div id="managementView" class="view-fade" style="display:none">
+            <div class="sup-shell">
+                <div class="kpi-row" id="supKpis">
+                    </div>
+                <div class="panel">
+                    <div class="panel-hd"><div class="panel-title">Recent Activity Audit</div></div>
+                    <div class="data-tbl-wrap">
+                        <table id="supFeed">
+                            </table>
+                    </div>
+                </div>
+            </div>
         </div>
-        <button class="ts-cta-btn ts-accent" id="ts-omw-submit" style="margin-top:40px;">Send Notification →</button>
-      </div>
-    </div>
 
-    <div class="ts-screen" id="ts-s-door" style="display:none;">
-      <div class="ts-door-hero">
-        <div class="ts-door-ring">
-          <div class="ts-door-number" id="ts-door-number">--</div>
+        <div id="driverView" style="display:none">
+            <div class="ts-progress-track">
+                <div id="ts-pb" class="ts-progress-bar" style="width: 15%"></div>
+            </div>
+            
+            <div id="ts-s-home" class="ts-screen ts-active">
+                <h1 class="ts-title">Driver Check-in</h1>
+                <input type="text" id="ts-home-trailer" class="trailer-hero-input" placeholder="ENTER TRAILER #">
+                <button id="ts-home-go" class="driver-submit">Continue</button>
+            </div>
+
+            <div id="ts-s-carrier" class="ts-screen">
+                <h2 class="ts-sub">Select Carrier</h2>
+                <div class="who-grid">
+                    <div class="who-btn" data-carrier="Wesbell">
+                        <span class="who-icon">🚛</span>
+                        <span class="who-label">Wesbell</span>
+                    </div>
+                    <div class="who-btn" data-carrier="Outside">
+                        <span class="who-icon">📦</span>
+                        <span class="who-label">Outside</span>
+                    </div>
+                </div>
+                <button class="btn btn-default" data-back="ts-s-home">Back</button>
+            </div>
+
+            <div id="ts-s-actions" class="ts-screen">
+                <div id="ts-actions-trailer-tag" class="context-chip">TRAILER: --</div>
+                <div class="ts-dynamic-actions" id="ts-dynamic-actions">
+                    </div>
+            </div>
+
+            <div id="ts-s-door" class="ts-screen">
+                <div class="done-ring">✓</div>
+                <h1 id="ts-door-headline">Success</h1>
+                <div class="ac-door" id="ts-door-number">--</div>
+                <p id="ts-door-sub">Proceed to your assigned door.</p>
+                <button id="ts-door-done-btn" class="driver-submit green">Finish</button>
+            </div>
         </div>
-        <div class="ts-door-headline" id="ts-door-headline">Door Assigned</div>
-        <div class="ts-door-sub" id="ts-door-sub">Please pull into the assigned door.</div>
-      </div>
-      <div class="ts-door-actions">
-        <button class="ts-cta-btn" id="ts-door-done-btn">Finish</button>
-      </div>
+
+    </main>
+
+    <div id="toast" class="toast">
+        <div id="toastBody" class="t-body"></div>
     </div>
-  </div>
 
-  <div id="dispatchView" style="display:none;">
-    <div class="panel">
-      <div class="panel-hd">
-        <div class="panel-title">Active Trailers</div>
-        <span class="badge" id="countsPill">0</span>
-      </div>
-      <div id="tbody"></div> </div>
-  </div>
-
-  <div id="dockView" style="display:none;">
-    <div class="dock-toolbar">
-      <input id="dockSearch" placeholder="Filter cards...">
-      <button class="tb-btn" id="btnDockViewToggle">Map View</button>
-    </div>
-    <div class="dock-cards" id="dockCards"></div>
-  </div>
-
-</main>
-
-<nav class="bottom-nav">
-  <div class="bottom-nav-inner">
-    <a href="/" class="bn-item" id="bnDispatch">Board</a>
-    <a href="/dock" class="bn-item" id="bnDock">Dock</a>
-    <a href="/driver" class="bn-item" id="bnDriver">Driver</a>
-    <a href="/management" class="bn-item" id="bnManagement">Mgmt</a>
-  </div>
-</nav>
-
-<script src="/app.js?v=3.6.1"></script>
+    <script src="app.js"></script>
 </body>
 </html>

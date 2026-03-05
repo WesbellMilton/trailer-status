@@ -25,15 +25,35 @@
   };
   const esc = s => String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
 
+  // FIXED: Safely handling API errors internally and returning null instead of fatally throwing
   async function apiJson(url, opts) {
-    const res = await fetch(url, opts);
-    if (res.status===401) { location.href="/login?expired=1&from="+encodeURIComponent(location.pathname); throw new Error("401"); }
-    if (res.status===403) { console.warn("Forbidden:", url); throw new Error("403"); }
-    // 409 Conflict = structured duplicate warning — return the JSON body, don't throw
-    if (res.status===409) { const ct=res.headers.get("content-type")||""; return ct.includes("application/json") ? res.json() : {}; }
-    if (!res.ok) { const t=await res.text().catch(()=>""); throw new Error(t||"HTTP "+res.status); }
-    const ct = res.headers.get("content-type")||"";
-    return ct.includes("application/json") ? res.json() : {};
+    try {
+      const res = await fetch(url, opts);
+      if (res.status===401) { 
+          location.href="/login?expired=1&from="+encodeURIComponent(location.pathname); 
+          return null; 
+      }
+      if (res.status===403) { 
+          console.warn("Forbidden:", url); 
+          toast("Access Denied", "You do not have permission for this action.", "err");
+          return null; 
+      }
+      // 409 Conflict = structured duplicate warning — return the JSON body, don't throw
+      if (res.status===409) { 
+          const ct=res.headers.get("content-type")||""; 
+          return ct.includes("application/json") ? res.json() : {}; 
+      }
+      if (!res.ok) { 
+          const t = await res.text().catch(()=>""); 
+          throw new Error(t || "HTTP " + res.status); 
+      }
+      const ct = res.headers.get("content-type")||"";
+      return ct.includes("application/json") ? res.json() : {};
+    } catch (error) {
+      console.error("API Call Failed:", error);
+      toast("Network Error", error.message || "Failed to connect to the server.", "err");
+      return null; 
+    }
   }
 
   function toast(title, body, type, duration) {

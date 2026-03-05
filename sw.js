@@ -1,5 +1,5 @@
-// sw.js — Wesbell Dispatch Service Worker
-const CACHE_NAME = "wesbell-v3.6.5"; // Increment this when you push updates
+// sw.js — Wesbell Dispatch Service Worker v4.0.0
+const CACHE_NAME = "wesbell-v4.0.0"; // Updated to match your new system version
 const ASSETS_TO_CACHE = [
   "/",
   "/index.html",
@@ -7,21 +7,23 @@ const ASSETS_TO_CACHE = [
   "/app.js",
   "/manifest.json",
   "/icons/icon-192.png",
-  "/icons/icon-512.png"
+  "/icons/icon-512.png",
+  "https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&family=Outfit:wght@300;400;600;700&display=swap"
 ];
 
-// 1. INSTALL: Cache the "App Shell" so the UI works offline
+// 1. INSTALL: Force the new version immediately
 self.addEventListener("install", evt => {
   evt.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      console.log("SW: Caching App Shell Assets");
-      return cache.addAll(ASSETS_TO_CACHE);
+      console.log("SW: Caching App Shell");
+      // Use cache.addAll but catch individual failures so the whole SW doesn't crash
+      return Promise.allSettled(ASSETS_TO_CACHE.map(url => cache.add(url)));
     })
   );
   self.skipWaiting();
 });
 
-// 2. ACTIVATE: Clean up old caches and force clients to reload
+// 2. ACTIVATE: Cleanup old versions
 self.addEventListener("activate", evt => {
   evt.waitUntil(
     caches.keys().then(keys => {
@@ -30,77 +32,70 @@ self.addEventListener("activate", evt => {
       );
     }).then(() => self.clients.claim())
   );
-  
-  // Notify app.js that a new version is ready to be used
-  evt.waitUntil(
-    self.clients.matchAll({ type: "window" }).then(clients => {
-      clients.forEach(client => client.postMessage({ type: "SW_UPDATED" }));
+});
+
+// 3. FETCH: Smart Strategy
+self.addEventListener("fetch", evt => {
+  const url = new URL(evt.request.url);
+
+  // RULE 1: Standard API & WebSocket bypass
+  if (evt.request.method !== "GET" || url.pathname.startsWith("/api/") || url.origin !== self.location.origin) {
+    return;
+  }
+
+  // RULE 2: Stale-While-Revalidate for UI Assets
+  // This makes the tablet load the UI "instantly" from cache while updating in background
+  evt.respondWith(
+    caches.match(evt.request).then(cachedRes => {
+      const fetchPromise = fetch(evt.request).then(networkRes => {
+        // Update cache with fresh version
+        if (networkRes.ok) {
+          const cacheCopy = networkRes.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(evt.request, cacheCopy));
+        }
+        return networkRes;
+      }).catch(() => {
+        // Silently fail fetch if offline
+      });
+
+      return cachedRes || fetchPromise;
     })
   );
 });
 
-// 3. FETCH: Network-First Strategy (with Cache Fallback)
-self.addEventListener("fetch", evt => {
-  const url = new URL(evt.request.url);
-
-  // RULE 1: Skip non-GET requests (POST, PUT, DELETE)
-  if (evt.request.method !== "GET" || url.origin !== self.location.origin) return;
-
-  // RULE 2: ALWAYS go to network for API calls (Never cache trailer state)
-  if (url.pathname.startsWith("/api/")) {
-    return; // Browser handles this normally via network
-  }
-
-  // RULE 3: For App Assets (CSS, JS, HTML), try Network first, then Cache
-  evt.respondWith(
-    fetch(evt.request)
-      .then(networkRes => {
-        // If network is good, update cache with the fresh version
-        return caches.open(CACHE_NAME).then(cache => {
-          cache.put(evt.request, networkRes.clone());
-          return networkRes;
-        });
-      })
-      .catch(() => {
-        // If network fails (Offline), serve from the cache
-        return caches.match(evt.request);
-      })
-  );
-});
-
-// 4. PUSH: Handle Dispatch & Driver Notifications
+// 4. PUSH: Enhanced for Driver Assignments
 self.addEventListener("push", evt => {
   if (!evt.data) return;
   let data = {};
-  try { 
-    data = evt.data.json(); 
-  } catch { 
-    data = { title: "Wesbell Dispatch", body: evt.data.text() }; 
-  }
-
-  const options = {
-    body: data.body || "",
-    icon: "/icons/icon-192.png",
-    badge: "/icons/icon-192.png",
-    tag: "wb-dispatch",
-    renotify: true,
-    vibrate: [100, 50, 100],
-    data: data.data || {},
-  };
+  try { data = evt.data.json(); } catch (e) { data = { title: "Wesbell", body: evt.data.text() }; }
 
   evt.waitUntil(
-    self.registration.showNotification(data.title || "Wesbell Dispatch", options)
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      tag: data.tag || "wb-alert",
+      renotify: true,
+      // Vibrate pattern: Long, Short, Long (distinguishable in a loud warehouse)
+      vibrate: [300, 100, 300],
+      data: data.data || {}
+    })
   );
 });
 
-// 5. NOTIFICATION CLICK: Focus existing window or open new one
+// 5. CLICK: Navigate to specific screen if data is present
 self.addEventListener("notificationclick", evt => {
   evt.notification.close();
+  const targetUrl = evt.notification.data.url || "/";
+
   evt.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then(cs => {
       const existing = cs.find(c => c.url.includes(self.location.origin));
-      if (existing) return existing.focus();
-      return clients.openWindow("/");
+      if (existing) {
+        existing.navigate(targetUrl);
+        return existing.focus();
+      }
+      return clients.openWindow(targetUrl);
     })
   );
 });

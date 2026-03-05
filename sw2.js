@@ -1,7 +1,9 @@
-// sw2.js — Wesbell Dispatch Service Worker
-// Integrated with Network-First Strategy + Real-Time API Passthrough
+/**
+ * WESBELL DISPATCH & DRIVER PORTAL - SERVICE WORKER (sw2.js)
+ * v4.0.0 - Optimized for instant load and unreliable warehouse Wi-Fi.
+ */
 
-const CACHE_NAME = "wesbell-v3.7.0";
+const CACHE_NAME = "wesbell-v4.0.0"; 
 const ASSETS_TO_CACHE = [
   "/",
   "/index.html",
@@ -9,7 +11,8 @@ const ASSETS_TO_CACHE = [
   "/app.js",
   "/manifest.json",
   "/icons/icon-192.png",
-  "/icons/icon-512.png"
+  "/icons/icon-512.png",
+  "https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&family=Outfit:wght@300;400;600;700&display=swap"
 ];
 
 // 1. INSTALL: Populate cache with App Shell
@@ -17,7 +20,8 @@ self.addEventListener("install", evt => {
   evt.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
       console.log("SW2: Caching App Shell Assets");
-      return cache.addAll(ASSETS_TO_CACHE);
+      // Use Promise.allSettled to ensure one missing icon doesn't break the whole SW
+      return Promise.allSettled(ASSETS_TO_CACHE.map(url => cache.add(url)));
     })
   );
   self.skipWaiting();
@@ -36,38 +40,37 @@ self.addEventListener("activate", evt => {
   // Notify clients (app.js) to reload for the new version
   evt.waitUntil(
     self.clients.matchAll({ type: "window" }).then(clients => {
-      clients.forEach(client => client.postMessage({ type: "SW_UPDATED" }));
+      clients.forEach(client => client.postMessage({ type: "SW_UPDATED", version: CACHE_NAME }));
     })
   );
 });
 
-// 3. FETCH: Network-First with Cache-Fallback
+// 3. FETCH: Stale-While-Revalidate for Assets, Network-Only for API
 self.addEventListener("fetch", evt => {
   const url = new URL(evt.request.url);
 
-  // Skip non-GET requests (POSTs must hit network)
-  if (evt.request.method !== "GET" || url.origin !== self.location.origin) return;
-
-  // CRITICAL: Passthrough for Real-time API data
-  // We NEVER want to serve a cached version of the trailer board.
-  if (url.pathname.startsWith("/api/")) {
-    return; 
+  // RULE A: API Passthrough (Always Network)
+  // We NEVER cache trailer state or dispatcher actions.
+  if (evt.request.method !== "GET" || url.pathname.startsWith("/api/")) {
+    return;
   }
 
-  // For static assets (CSS, JS, HTML), try Network first, fallback to Cache
+  // RULE B: Stale-While-Revalidate for UI Assets
+  // This makes the tablet load the UI "instantly" while updating in background.
   evt.respondWith(
-    fetch(evt.request)
-      .then(networkRes => {
-        // If network is successful, update cache with the fresh version
-        return caches.open(CACHE_NAME).then(cache => {
-          cache.put(evt.request, networkRes.clone());
-          return networkRes;
-        });
-      })
-      .catch(() => {
-        // If offline, serve from cache
-        return caches.match(evt.request);
-      })
+    caches.match(evt.request).then(cachedRes => {
+      const fetchPromise = fetch(evt.request).then(networkRes => {
+        if (networkRes && networkRes.status === 200) {
+          const cacheCopy = networkRes.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(evt.request, cacheCopy));
+        }
+        return networkRes;
+      }).catch(() => {
+        // Silently fail if offline, the cachedRes (if any) is already being returned
+      });
+
+      return cachedRes || fetchPromise;
+    })
   );
 });
 
@@ -85,9 +88,9 @@ self.addEventListener("push", evt => {
     body: data.body || "",
     icon: "/icons/icon-192.png",
     badge: "/icons/icon-192.png",
-    tag: "wb-dispatch",
+    tag: data.tag || "wb-dispatch",
     renotify: true,
-    vibrate: [100, 50, 100],
+    vibrate: [200, 100, 200], // Stronger pulse for noisy dock environments
     data: data.data || {},
   };
 
@@ -96,14 +99,17 @@ self.addEventListener("push", evt => {
   );
 });
 
-// 5. NOTIFICATION CLICK: Focus existing app window
+// 5. NOTIFICATION CLICK: Smart Redirection
 self.addEventListener("notificationclick", evt => {
   evt.notification.close();
+  // Allow the push data to specify a path (e.g., /dock)
+  const targetPath = evt.notification.data.url || "/";
+
   evt.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then(cs => {
-      const existing = cs.find(c => c.url.includes(self.location.origin));
+      const existing = cs.find(c => new URL(c.url).pathname === targetPath);
       if (existing) return existing.focus();
-      return clients.openWindow("/");
+      return clients.openWindow(targetPath);
     })
   );
 });

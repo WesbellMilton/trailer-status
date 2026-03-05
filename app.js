@@ -99,13 +99,6 @@
 
   function highlightNav(){
     ["navDispatch","navDock","navDriver","navManagement"].forEach(id=>el(id)?.classList.remove("active"));
-    // On /driver — hide all nav links except the driver one, lock out staff navigation
-    if(isDriver()){
-      ["navDispatch","navDock","navManagement"].forEach(id=>{const n=el(id);if(n)n.style.display="none";});
-      el("navDriver")?.classList.add("active");
-      const rb=el("roleBadge");if(rb)rb.style.display="none";
-      return;
-    }
     const p=path();
     if(p.startsWith("/management"))el("navManagement")?.classList.add("active");
     else if(p.startsWith("/driver"))el("navDriver")?.classList.add("active");
@@ -1294,11 +1287,6 @@
     const p=path();
     if(p.startsWith("/driver")){
       el("driverView").style.display="";
-      // Lock: hide all topbar elements except the Start Over button
-      ["roleBadge","btnAudit","btnInstallPwa"].forEach(id=>{const n=el(id);if(n)n.style.display="none";});
-      // Lock: hide global nav links — driver stays on /driver only
-      ["navDispatch","navDock","navManagement"].forEach(id=>{const n=el(id);if(n)n.style.display="none";});
-      // Lock: btnLogout always means "Start Over" on driver — never staff logout
       const logoutBtn=el("btnLogout");
       if(logoutBtn){logoutBtn.style.display="";logoutBtn.textContent="↩ Start Over";logoutBtn.onclick=e=>{e.stopImmediatePropagation();try{sessionStorage.removeItem("wb_whoType");}catch{}driverRestart();};}
       el("btnAudit").style.display="none";
@@ -1344,7 +1332,7 @@
     for(const[tog,body] of [["pinMgmtToggle","pinMgmtBody"],["adminPinToggle","adminPinBody"]]){
       if(direct?.closest?.(`#${tog}`)){const t=el(tog),b=el(body);if(!t||!b)return;const open=t.getAttribute("aria-expanded")==="true";t.setAttribute("aria-expanded",open?"false":"true");b.style.maxHeight=open?"0px":(b.scrollHeight+40)+"px";return;}
     }
-    if(act==="openStaffLogin"){if(isDriver())return;el("btnDockStaffLogin")?.click();return;}
+    if(act==="openStaffLogin"){el("btnDockStaffLogin")?.click();return;}
     if(id==="btnLogout")return doLogout();
     if(id==="btnAudit"){const s=el("auditCard").style.display!=="none";el("auditCard").style.display=s?"none":"";if(!s)loadAuditInto(el("auditBody"),el("auditCount"),7);return;}
     if(id==="btnShiftSummary"){openShiftSummary();return;}
@@ -1525,7 +1513,7 @@
     ws.onmessage=evt=>{
       lastMsg=Date.now();let msg;try{msg=JSON.parse(evt.data);}catch{return;}
       const{type,payload}=msg||{};
-      if(type==="state"){trailers=payload||{};renderBoard();if(isSuper())renderSupBoard();if(isDock())renderDockView();if(isAdmin()&&!isSuper())renderBoard();}
+      if(type==="state"){trailers=payload||{};renderBoard();if(isSuper())renderSupBoard();if(isDock()){renderDockView();if(window._loadStatusRefresh&&document.getElementById("lsp-body")?.classList.contains("lsp-open"))window._loadStatusRefresh();}if(isAdmin()&&!isSuper())renderBoard();}
       else if(type==="dockplates"){dockPlates=payload||{};if(!isDriver())renderPlates();}
       else if(type==="doorblocks"){doorBlocks=payload||{};renderDockMap();renderBoard();}
       else if(type==="confirmations"){confirmations=Array.isArray(payload)?payload:[];if(isSuper())renderSupConf();}
@@ -1543,28 +1531,6 @@
   function initStaffLogin(){
     const ov=el("staffLoginOv"),roleEl=el("staffLoginRole"),pinEl=el("staffLoginPin"),errEl=el("staffLoginErr"),goBtn=el("staffLoginGo"),cancel=el("staffLoginCancel"),logoutRow=el("staffLogoutRow"),curRole=el("staffCurrentRole"),logoutBtn=el("staffLogoutBtn");
     if(!ov)return;
-
-    // ── DRIVER LOCK: hide all staff-accessible nav and block modal entirely on /driver ──
-    if(isDriver()){
-      // Hide global nav links so driver can't navigate to staff views
-      ["navDispatch","navDock","navManagement"].forEach(id=>{const n=el(id);if(n)n.style.display="none";});
-      // Hide role badge, audit, version chip from topbar
-      ["roleBadge","btnAudit"].forEach(id=>{const n=el(id);if(n)n.style.display="none";});
-      // Intercept any attempt to show the staffLoginOv — silently block it
-      const _origRemove=ov.classList.remove.bind(ov.classList);
-      ov.classList.remove=function(...args){
-        if(args.includes("hidden")&&isDriver())return; // block show
-        _origRemove(...args);
-      };
-      // Also ensure it stays hidden if somehow triggered
-      const observer=new MutationObserver(()=>{if(isDriver()&&!ov.classList.contains("hidden"))ov.classList.add("hidden");});
-      observer.observe(ov,{attributes:true,attributeFilter:["class"]});
-      // No further wiring needed for driver path
-      function syncStaffButtons(){} // no-op
-      syncStaffButtons();initStaffLogin._sync=syncStaffButtons;
-      return;
-    }
-
     function openModal(){
       errEl.style.display="none";pinEl.value="";
       const signedIn=ROLE&&["admin","management","dispatcher","dock"].includes(ROLE);
@@ -1679,6 +1645,204 @@
         },800);
       });
     }
+
+    /* ══════════════════════════════════════════════════════
+       LOAD STATUS TRACKER — dock view panel + history modal
+    ══════════════════════════════════════════════════════ */
+    (function initLoadStatusTracker(){
+      const STAGES=["Incoming","Dropped","Loading","Dock Ready","Ready","Departed"];
+      const STAGE_IDX=Object.fromEntries(STAGES.map((s,i)=>[s,i]));
+      // Warning thresholds per status (minutes)
+      const WARN_MIN={Incoming:30,Dropped:20,Loading:90,["Dock Ready"]:30,Ready:20};
+      const OVER_MIN={Incoming:60,Dropped:45,Loading:180,["Dock Ready"]:60,Ready:45};
+
+      const q=id=>document.getElementById(id);
+      const fmtDur=ms=>{
+        if(ms<0)return"—";
+        const s=Math.floor(ms/1000),m=Math.floor(s/60),h=Math.floor(m/60);
+        if(h>=1)return`${h}h ${m%60}m`;
+        if(m>=1)return`${m}m`;
+        return`${s}s`;
+      };
+      const fmtAbs=ms=>ms?new Date(ms).toLocaleString(undefined,{month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
+
+      // ── Panel toggle ──
+      const toggle=q("lsp-toggle"),body=q("lsp-body");
+      if(toggle&&body){
+        toggle.addEventListener("click",()=>{
+          const open=body.classList.toggle("lsp-open");
+          toggle.classList.toggle("lsp-open",open);
+          if(open)loadStatusData();
+        });
+      }
+
+      // ── Refresh button ──
+      q("lsp-refresh")?.addEventListener("click",loadStatusData);
+
+      // ── Row click → history modal ──
+      q("lsp-rows")?.addEventListener("click",e=>{
+        const row=e.target.closest("[data-lsp-trailer]");
+        if(row)openHistoryModal(row.dataset.lspTrailer);
+      });
+
+      // ── Auto-refresh when WS fires (status changes) ──
+      // Hook into the existing trailers update — re-render if panel is open
+      const _origBroadcast=window.__lspHooked;
+      if(!_origBroadcast){
+        window.__lspHooked=true;
+        // We'll trigger from renderDockView below
+      }
+
+      // ── Load status data ──
+      async function loadStatusData(){
+        const rowsEl=q("lsp-rows"),loadEl=q("lsp-loading"),emptyEl=q("lsp-empty"),countEl=q("lsp-count");
+        if(!rowsEl)return;
+        if(loadEl)loadEl.style.display="";
+        if(rowsEl)rowsEl.innerHTML="";
+        if(emptyEl)emptyEl.style.display="none";
+        try{
+          // Use live trailers cache — no extra API call needed
+          const rows=Object.entries(trailers)
+            .map(([t,r])=>({trailer:t,...r}))
+            .filter(r=>r.status&&r.status!=="Departed")
+            .sort((a,b)=>{
+              const ord={Loading:0,Dropped:1,["Dock Ready"]:2,Incoming:3,Ready:4};
+              return(ord[a.status]??9)-(ord[b.status]??9)||(a.updatedAt||0)-(b.updatedAt||0);
+            });
+          if(loadEl)loadEl.style.display="none";
+          if(countEl)countEl.textContent=`${rows.length} active trailer${rows.length===1?"":"s"}`;
+          if(!rows.length){if(emptyEl)emptyEl.style.display="";return;}
+          rowsEl.innerHTML=rows.map(r=>renderLspRow(r)).join("");
+        }catch(e){
+          if(loadEl)loadEl.style.display="none";
+          if(rowsEl)rowsEl.innerHTML=`<div style="padding:12px;color:var(--red);font-size:12px;font-family:var(--mono);">Failed to load: ${e.message}</div>`;
+        }
+      }
+
+      function renderLspRow(r){
+        const stIdx=STAGE_IDX[r.status]??0;
+        const totalStages=STAGES.length-1; // exclude Departed from progress %
+        const pct=Math.min(100,Math.round((stIdx/Math.max(1,totalStages-1))*100));
+
+        // Step dots
+        const dots=STAGES.slice(0,6).map((s,i)=>{
+          const cls=i<stIdx?"done":i===stIdx?"active":"pending";
+          return`<div class="lsp-dot ${cls}" title="${s}" style="margin-left:${i===0?0:(100/(STAGES.length-1)).toFixed(1)}%;"></div>`;
+        });
+
+        // Progress fill colour
+        const fillColor=r.status==="Loading"?"var(--amber)":r.status==="Ready"||r.status==="Dock Ready"?"var(--green)":r.status==="Departed"?"var(--t3)":"var(--violet)";
+
+        // Time in current status
+        const sinceMs=Date.now()-(r.updatedAt||Date.now());
+        const warnMs=(WARN_MIN[r.status]||999)*60000;
+        const overMs=(OVER_MIN[r.status]||9999)*60000;
+        const timeCls=sinceMs>overMs?"lsp-time-over":sinceMs>warnMs?"lsp-time-warn":"lsp-time-ok";
+
+        // Status badge class
+        const badgeCls=`lsp-badge lsp-badge-${(r.status||"").toLowerCase().replace(/ /g,"")}`;
+
+        const doorHtml=r.door
+          ?`<span class="lsp-door">D${esc(r.door)}</span>`
+          :`<span class="lsp-door-none">—</span>`;
+
+        return`<div class="lsp-row" data-lsp-trailer="${esc(r.trailer)}" title="Tap to see full history">
+          <div class="lsp-trailer">${esc(r.trailer)}</div>
+          <div class="lsp-progress-wrap">
+            <div class="lsp-progress-bg"><div class="lsp-progress-fill" style="width:${pct}%;background:${fillColor};"></div></div>
+            <div class="lsp-step-dots" style="display:flex;justify-content:space-between;padding:0 1px;">
+              ${STAGES.slice(0,5).map((s,i)=>{
+                const dc=i<stIdx?"done":i===stIdx?"active":"pending";
+                return`<div class="lsp-dot ${dc}" title="${s}"></div>`;
+              }).join("")}
+            </div>
+          </div>
+          <div>${doorHtml}</div>
+          <div class="lsp-time-in ${timeCls}">${fmtDur(sinceMs)}</div>
+          <div><span class="${badgeCls}">${esc(r.status)}</span></div>
+        </div>`;
+      }
+
+      // ── History modal ──
+      async function openHistoryModal(trailer){
+        const ov=q("statusHistoryOv"),body=q("sh-body"),label=q("sh-trailer-label");
+        if(!ov||!body)return;
+        if(label)label.textContent=`Trailer ${trailer}`;
+        body.innerHTML=`<div class="sh-loading"><span class="lsp-spinner"></span> Loading history…</div>`;
+        ov.classList.remove("hidden");lockScroll();
+        try{
+          const data=await apiJson(`/api/status-history/${encodeURIComponent(trailer)}`);
+          body.innerHTML=renderHistoryModal(data);
+        }catch(e){
+          body.innerHTML=`<div class="sh-err">Failed to load history: ${e.message}</div>`;
+        }
+      }
+
+      function renderHistoryModal(data){
+        const {trailer,current,timeline}=data;
+        if(!timeline||!timeline.length)return`<div class="sh-loading">No history found for this trailer.</div>`;
+
+        const totalMs=timeline.length>1?(timeline[timeline.length-1].at-timeline[0].at)+((timeline[timeline.length-1].durationMs)||0):0;
+        const stageEvents=timeline.filter(e=>e.status);
+
+        // Summary cards
+        const summaryHtml=`<div class="sh-summary">
+          <div class="sh-sum-card">
+            <div class="sh-sum-lbl">Total time on board</div>
+            <div class="sh-sum-val">${fmtDur(totalMs)}</div>
+          </div>
+          <div class="sh-sum-card">
+            <div class="sh-sum-lbl">Current status</div>
+            <div class="sh-sum-val" style="font-size:13px;">${esc(current?.status||"—")}${current?.door?`<span style="font-size:11px;color:var(--t2);margin-left:6px;">D${esc(current.door)}</span>`:""}</div>
+          </div>
+        </div>`;
+
+        // Timeline
+        const stepsHtml=timeline.map(step=>{
+          const isCurrent=step.status&&step.status===current?.status&&!timeline.slice(timeline.indexOf(step)+1).some(s=>s.status);
+          const dotCls=isCurrent?"sh-dot-active":step.status?"sh-dot-done":"sh-dot-event";
+          const warnMs=step.status?(WARN_MIN[step.status]||999)*60000:Infinity;
+          const overMs=step.status?(OVER_MIN[step.status]||9999)*60000:Infinity;
+          const durCls=step.durationMs>overMs?"sh-dur-over":step.durationMs>warnMs?"sh-dur-warn":"";
+          const badgeCls=step.status?`lsp-badge lsp-badge-${step.status.toLowerCase().replace(/ /g,"")}` :"";
+          const actionLabel={
+            trailer_create:"Created",trailer_update:"Updated",trailer_status_set:"Status set",
+            omw:"On My Way logged",arrive:"Driver arrived",driver_drop:"Driver dropped",
+            crossdock_pickup:"XDock pickup",crossdock_offload:"XDock offload",
+            trailer_shunt:"Shunted",safety_confirmed:"Safety confirmed",
+          }[step.action]||step.action;
+
+          return`<div class="sh-step">
+            <div class="sh-dot ${dotCls}"></div>
+            <div class="sh-step-header">
+              ${step.status?`<span class="${badgeCls}">${esc(step.status)}</span>`:`<span style="font-size:11px;font-family:var(--mono);color:var(--cyan);">${esc(actionLabel)}</span>`}
+              ${isCurrent?`<span class="sh-current-badge">● NOW</span>`:""}
+            </div>
+            <div class="sh-step-meta">${esc(actionLabel)}${step.actorRole?` · ${esc(step.actorRole)}`:""}${step.door?` · D${esc(step.door)}`:""}</div>
+            <div class="sh-step-time">${fmtAbs(step.at)}</div>
+            ${!isCurrent&&step.durationMs>0?`<div class="sh-duration ${durCls}">⏱ ${fmtDur(step.durationMs)} in this stage</div>`:""}
+          </div>`;
+        }).join("");
+
+        return summaryHtml+`<div class="sh-timeline">${stepsHtml}</div>`;
+      }
+
+      // ── Close modal ──
+      q("shClose")?.addEventListener("click",()=>{q("statusHistoryOv")?.classList.add("hidden");unlockScroll();});
+      q("statusHistoryOv")?.addEventListener("click",e=>{if(e.target===q("statusHistoryOv")){q("statusHistoryOv").classList.add("hidden");unlockScroll();}});
+      document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!q("statusHistoryOv")?.classList.contains("hidden")){q("statusHistoryOv").classList.add("hidden");unlockScroll();}});
+
+      // ── Re-render on WS state update if panel is open ──
+      const _origRenderDock=renderDockView;
+      window._lspRenderDock=function(){
+        _origRenderDock.apply(this,arguments);
+        if(q("lsp-body")?.classList.contains("lsp-open"))loadStatusData();
+      };
+
+      // Expose for WS hook
+      window._loadStatusRefresh=loadStatusData;
+
+    })(); // end initLoadStatusTracker
 
     connectWs();initQuickDrop();initVoiceInput();initDockScan();initDimMode();initDockRememberLogin();
   });

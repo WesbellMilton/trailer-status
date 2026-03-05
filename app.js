@@ -10,7 +10,15 @@
   const isDock   = () => path().startsWith("/dock");
   const isAdmin  = () => ROLE === "admin";
 function showMode(mode){
+const p = location.pathname.toLowerCase();
 
+if(p.startsWith("/driver")){
+  showMode("driver");
+}else if(p.startsWith("/dock")){
+  showMode("dock");
+}else{
+  showMode("dispatch");
+}
   const dispatch = document.getElementById("dispatchView");
   const dock = document.getElementById("dockView");
   const driver = document.getElementById("driverView");
@@ -22,7 +30,15 @@ function showMode(mode){
   if(mode === "dispatch" && dispatch) dispatch.style.display = "block";
   if(mode === "dock" && dock) dock.style.display = "block";
   if(mode === "driver" && driver) driver.style.display = "block";
+const p = location.pathname.toLowerCase();
 
+if(p.startsWith("/driver")){
+  showMode("driver");
+}else if(p.startsWith("/dock")){
+  showMode("dock");
+}else{
+  showMode("dispatch");
+}
 }
   const fmtTime = ms => {
     if (!ms) return "";

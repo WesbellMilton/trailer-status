@@ -7,57 +7,9 @@
   const path = () => location.pathname.toLowerCase();
   const isDriver = () => path().startsWith("/driver");
   const isSuper  = () => path().startsWith("/management");
-  const isDock  = () => path().startsWith("/dock");
-const isAdmin = () => ROLE === "admin";
-function showMode(mode){
+  const isDock   = () => path().startsWith("/dock");
+  const isAdmin  = () => ROLE === "admin";
 
-  const dispatch = document.getElementById("dispatchView");
-  const dock = document.getElementById("dockView");
-  const driver = document.getElementById("driverView");
-
-  if(dispatch) dispatch.style.display = "none";
-  if(dock) dock.style.display = "none";
-  if(driver) driver.style.display = "none";
-
-  if(mode === "dispatch" && dispatch) dispatch.style.display = "block";
-  if(mode === "dock" && dock) dock.style.display = "block";
-  if(mode === "driver" && driver) driver.style.display = "block";
-}
-
-/* Determine page mode */
-const p = location.pathname.toLowerCase();
-
-if (p.startsWith("/driver")) {
-  showMode("driver");
-} 
-else if (p.startsWith("/dock")) {
-  showMode("dock");
-} 
-else {
-  showMode("dispatch");
-}
-
-  const dispatch = document.getElementById("dispatchView");
-  const dock = document.getElementById("dockView");
-  const driver = document.getElementById("driverView");
-
-  if(dispatch) dispatch.style.display = "none";
-  if(dock) dock.style.display = "none";
-  if(driver) driver.style.display = "none";
-
-  if(mode === "dispatch" && dispatch) dispatch.style.display = "block";
-  if(mode === "dock" && dock) dock.style.display = "block";
-  if(mode === "driver" && driver) driver.style.display = "block";
-const p = location.pathname.toLowerCase();
-
-if(p.startsWith("/driver")){
-  showMode("driver");
-}else if(p.startsWith("/dock")){
-  showMode("dock");
-}else{
-  showMode("dispatch");
-}
-}
   const fmtTime = ms => {
     if (!ms) return "";
     try { return new Date(ms).toLocaleString(undefined,{month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"}); }
@@ -2320,10 +2272,7 @@ if(p.startsWith("/driver")){
   }
   function connectWs(){
     wsStatus("warn");
-    const proto = location.protocol === "https:" ? "wss:" : "ws:";
-const isDriverPath = location.pathname.toLowerCase().startsWith("/driver");
-const wsPath = isDriverPath ? "/ws/driver" : "/ws";
-const ws = new WebSocket(`${proto}//${location.host}${wsPath}`);
+    const ws=new WebSocket(`${location.protocol==="https:"?"wss":"ws"}://${location.host}`);
     let lastMsg=Date.now();
     const watchdog=setInterval(()=>{ if(Date.now()-lastMsg>35000){ try{ws.close();}catch{} } },5000);
     ws.onopen=()=>{ wsRetry=0; wsStatus("ok"); };

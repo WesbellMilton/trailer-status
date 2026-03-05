@@ -1,188 +1,1078 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Wesbell Dispatch & Portal</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="/icons/icon-192.png">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+/* GRADIENT KILL - prevents cyan blobs */
+body{background-image:none!important;background:transparent!important}
+#driverView,#dockView,#managementView{background-image:none!important}
+.driver-shell{background-image:none!important}
+</style>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+  <title>Wesbell Dispatch</title>
+  <link rel="manifest" href="/manifest.json"/>
+
+  <!-- Favicons -->
+  <link rel="icon" type="image/x-icon" href="/icons/favicon.ico"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png"/>
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png"/>
+
+  <!-- Apple touch icon (home screen icon for iOS without PWA install) -->
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png"/>
+
+  <!-- iOS PWA meta -->
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Dispatch"/>
+
+  <!-- ═══ iOS Splash Screens — Full Coverage 2025 ═══ -->
+
+  <!-- iPhone 17 Pro Max / 16 Pro Max (440x956 @3x) -->
+  <!-- iPhone 16 Plus / 15 Pro Max / 15 Plus / 14 Pro Max (430x932 @3x) -->
+  <!-- iPhone 17 Air (402x874 @3x) -->
+  <!-- iPhone 17 / 17 Pro / 16 Pro / 15 Pro (393x852 @3x) -->
+  <!-- iPhone 16 / 15 / 14 / 13 Pro / 13 / 12 Pro / 12 (390x844 @3x) -->
+  <!-- iPhone 13 Pro Max / 12 Pro Max (428x926 @3x) -->
+  <!-- iPhone SE 3rd / 2nd gen / 8 (375x667 @2x) -->
+  <!-- iPhone X / XS / 11 Pro (375x812 @3x) -->
+  <!-- iPhone XS Max / 11 Pro Max (414x896 @3x) -->
+  <!-- iPhone XR / 11 (414x896 @2x) -->
+  <!-- iPhone 8 Plus / 7 Plus / 6s Plus (414x736 @3x) -->
+  <!-- iPhone SE 1st gen (320x568 @2x) -->
+
+  <!-- iPad Pro 12.9" M4 (1032x1376 @2x) -->
+  <!-- iPad Pro 12.9" (1024x1366 @2x) -->
+  <!-- iPad Pro 11" M4 (834x1210 @2x) -->
+  <!-- iPad Pro 11" / Air 11" (834x1194 @2x) -->
+  <!-- iPad Air 13" (1024x1366 @2x) -->
+  <!-- iPad mini 6/7 (744x1133 @2x) -->
+  <!-- iPad 10th gen (820x1180 @2x) -->
+  <!-- iPad 9th gen and older (768x1024 @2x) -->
+
+  <!-- Theme / tile colours -->
+  <meta name="theme-color" content="#070a0f" media="(prefers-color-scheme: dark)"/>
+  <meta name="theme-color" content="#070a0f"/>
+  <meta name="msapplication-TileColor" content="#070a0f"/>
+  <meta name="msapplication-TileImage" content="/icon-192.png"/>
+
+  <!-- Android / Samsung PWA -->
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="application-name" content="Dispatch"/>
+
+  <!-- Prevent text size adjust on orientation change (iOS + Android) -->
+  <meta name="format-detection" content="telephone=no"/>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/style.css?v=3.6.0"/>
 </head>
 <body>
+<a class="skip-link" href="#main-content">Skip to main content</a>
 
-    <header class="topbar">
-        <div class="topbar-inner">
-            <div class="brand-block">
-                <div class="brand-mark">W</div>
-                <div>
-                    <div class="brand-name">WESBELL</div>
-                    <div class="brand-sub">DISPATCH MGT</div>
-                </div>
-            </div>
-            <nav class="nav">
-                <a href="/" class="nav-item active">Dispatcher</a>
-                <a href="/dock" class="nav-item">Dock</a>
-                <a href="/driver" class="nav-item">Driver</a>
-                <a href="/management" class="nav-item">Management</a>
-            </nav>
-            <div class="topbar-right">
-                <div class="chip">
-                    <div id="wsDot" class="live-dot"></div>
-                    <span>Live</span>
-                </div>
-                <button id="btnLogout" class="tb-btn danger">Logout</button>
-            </div>
+<!-- MODAL -->
+<div class="modal-ov hidden" id="modalOv">
+  <div class="modal">
+    <h4 id="modalTitle">Confirm</h4>
+    <div class="m-sub" id="modalBody"></div>
+    <div class="m-btns">
+      <button class="btn btn-default" id="modalCancel">Cancel</button>
+      <button class="btn btn-danger" id="modalConfirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- DOCK MAP STATUS PICKER -->
+<div class="modal-ov hidden" id="dmModalOv">
+  <div class="modal" style="max-width:320px;">
+    <h4 id="dmModalTitle">Update Status</h4>
+    <div class="m-sub" id="dmModalSub"></div>
+    <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:16px;" id="dmStatusBtns"></div>
+    <div class="m-btns">
+      <button class="btn btn-default" id="dmModalCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand-block">
+      <div class="brand-mark">W</div>
+      <div>
+        <div class="brand-name">WESBELL</div>
+        <div class="brand-sub">DISPATCH MGT</div>
+      </div>
+    </div>
+    <nav class="nav" aria-label="Main navigation">
+      <a href="/" class="nav-item" id="navDispatch">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x=".5" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor"/><rect x="7" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x=".5" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x="7" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".3"/></svg>
+        Dispatcher
+      </a>
+      <a href="/dock" class="nav-item" id="navDock">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 9h10M3 9V6l3-2.5L9 6v3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Dock
+      </a>
+      <a href="/driver" class="nav-item" id="navDriver">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="4" width="8" height="5" rx="1.2" stroke="currentColor" stroke-width="1.2"/><path d="M9 6.5h1.5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H9" stroke="currentColor" stroke-width="1.2"/><circle cx="3" cy="9" r="1" fill="currentColor"/><circle cx="7" cy="9" r="1" fill="currentColor"/><path d="M1 6.5 2.5 4h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        Driver
+      </a>
+      <a href="/management" class="nav-item" id="navManagement">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="4" r="2" stroke="currentColor" stroke-width="1.2"/><path d="M1.5 10.5c0-1.8 2-3 4.5-3s4.5 1.2 4.5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        Management
+      </a>
+    </nav>
+    <div class="topbar-right">
+      <div class="chip" role="status" aria-live="polite"><div class="live-dot" id="wsDot"></div><span id="wsText">Connecting</span></div>
+      <div class="chip" id="roleBadge" style="display:none;color:var(--amber);">—</div>
+      <div class="chip">v<span id="verText">—</span></div>
+      <button class="tb-btn" id="btnInstallPwa" style="display:none;" title="Add to home screen">⬇ Install</button>
+      <button class="tb-btn" id="btnAudit" style="display:none;">Audit</button>
+      <button class="tb-btn danger" id="btnLogout" style="display:none;">Sign Out</button>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV (mobile) -->
+<nav class="bottom-nav" aria-label="Mobile navigation">
+  <div class="bottom-nav-inner">
+    <a href="/" class="bn-item" id="bnDispatch">
+      <svg width="20" height="20" viewBox="0 0 12 12" fill="none"><rect x=".5" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor"/><rect x="7" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x=".5" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x="7" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".3"/></svg>
+      <span>Board</span>
+    </a>
+    <a href="/dock" class="bn-item" id="bnDock">
+      <svg width="20" height="20" viewBox="0 0 12 12" fill="none"><path d="M1 9h10M3 9V6l3-2.5L9 6v3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Dock</span>
+    </a>
+    <a href="/driver" class="bn-item" id="bnDriver">
+      <svg width="20" height="20" viewBox="0 0 12 12" fill="none"><rect x="1" y="4" width="8" height="5" rx="1.2" stroke="currentColor" stroke-width="1.2"/><path d="M9 6.5h1.5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H9" stroke="currentColor" stroke-width="1.2"/><circle cx="3" cy="9" r="1" fill="currentColor"/><circle cx="7" cy="9" r="1" fill="currentColor"/><path d="M1 6.5 2.5 4h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      <span>Driver</span>
+    </a>
+    <a href="/management" class="bn-item" id="bnManagement">
+      <svg width="20" height="20" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="4" r="2" stroke="currentColor" stroke-width="1.2"/><path d="M1.5 10.5c0-1.8 2-3 4.5-3s4.5 1.2 4.5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      <span>Mgmt</span>
+    </a>
+  </div>
+</nav>
+
+<!-- PULL TO REFRESH -->
+<div class="ptr-indicator" id="ptrIndicator" style="display:none">
+  <div class="ptr-spinner" id="ptrSpinner" style="display:none"></div>
+  <span id="ptrText">↓ Pull to refresh</span>
+</div>
+
+<main id="main-content">
+
+<!-- ═══════════════════════════════════════════
+     DRIVER VIEW
+═══════════════════════════════════════════ -->
+<div id="driverView" style="display:none;">
+  <div class="driver-shell">
+    <div class="driver-wrap">
+
+      <!-- Offline banner -->
+      <div class="offline-banner" id="offlineBanner" style="display:none;">
+        <span>⚠ No connection — submissions blocked until reconnected</span>
+        <div class="offline-dots"><span></span><span></span><span></span></div>
+      </div>
+
+      <!-- Ready notification banner -->
+      <div class="ready-notif-banner" id="readyNotifBanner" style="display:none;">
+        <span class="rnb-icon">🟢</span>
+        <span id="readyNotifText">Trailer ready</span>
+        <button data-dismiss="readyNotifBanner" class="rnb-close" aria-label="Dismiss notification">✕</button>
+      </div>
+
+      <!-- Compact topbar: brand + status + actions in one row -->
+      <div class="driver-topbar">
+        <div class="dtb-brand">
+          <div class="dtb-mark">W</div>
+          <div class="dtb-title">Driver Portal</div>
         </div>
-    </header>
-
-    <main class="page">
-        
-        <div id="dispatchView" class="view-fade">
-            <div class="grid-main">
-                <div class="col-stack">
-                    <div class="disp-kpi-bar">
-                        <div class="kpi kpi-total">
-                            <div class="k-val" id="countsPill">0</div>
-                            <div class="k-lbl">Active Trailers</div>
-                        </div>
-                    </div>
-
-                    <div class="panel">
-                        <div class="panel-hd">
-                            <div class="panel-title">Trailer Board</div>
-                            <button class="btn btn-sm btn-default" id="historyBtn">History</button>
-                        </div>
-                        <div class="filter-bar">
-                            <input type="text" id="search" placeholder="Search trailer, door, note..." class="field">
-                            <button class="btn btn-default tight" id="clearFilters">Clear</button>
-                        </div>
-                        <div class="panel-body-flush">
-                            <div class="tbl-hd">
-                                <span>Trailer</span><span>Dir</span><span>Status</span><span>Door</span><span>Type</span><span>Note</span><span>Updated</span><span>Actions</span>
-                            </div>
-                            <div id="tbody" class="tbl-empty">No trailers match filters</div>
-                        </div>
-                    </div>
-
-                    <div class="panel">
-                        <div class="panel-hd">
-                            <div class="panel-title">Door Occupancy Map</div>
-                        </div>
-                        <div class="panel-body">
-                            <div class="dock-map-grid" id="doorMap">
-                                </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="side-sticky">
-                    <div class="panel" id="adminPanel">
-                        <div class="panel-hd"><div class="panel-title">Manual Control</div></div>
-                        <div class="panel-body" id="panelBody">
-                            <div class="field">
-                                <label class="fl">Trailer #</label>
-                                <input type="text" id="ctrlTrailer" placeholder="Enter Trailer" style="text-transform:uppercase">
-                            </div>
-                            <div class="field-row">
-                                <div class="field">
-                                    <label class="fl">Door</label>
-                                    <select id="ctrlDoor">
-                                        <option value="">Yard</option>
-                                        </select>
-                                </div>
-                                <div class="field">
-                                    <label class="fl">Status</label>
-                                    <select id="ctrlStatus">
-                                        <option value="Incoming">Incoming</option>
-                                        <option value="Dropped">Dropped</option>
-                                        <option value="Loading">Loading</option>
-                                        <option value="Ready">Ready</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="field">
-                                <label class="fl">Notes</label>
-                                <textarea id="ctrlNote"></textarea>
-                            </div>
-                            <button class="btn btn-primary btn-full" id="btnUpdate">Update Board</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div class="dtb-right">
+          <div class="dtb-status">
+            <div class="live-dot" id="driverWsDot"></div>
+            <span id="driverWsText">Connecting…</span>
+            <div class="lookup-spinner" id="lookupSpinner"></div>
+          </div>
+          <button class="push-toggle-btn" id="btnPushToggle" style="display:none;" title="Push notifications">🔔</button>
+          <button class="tb-btn" id="btnDriverStaffLogin" style="font-size:10px;padding:4px 8px;" title="Staff sign in">🔑 Staff</button>
         </div>
+      </div>
 
-        <div id="dockView" class="view-fade" style="display:none">
-            <div class="dock-shell">
-                <div class="dock-search-bar">
-                    <input type="text" id="dockSearch" placeholder="Filter dock trailers...">
-                </div>
-                <div class="dock-cards" id="dockCards">
-                    </div>
+      <!-- ── SCREEN: WHO ARE YOU ── -->
+      <!-- Quick Drop Mode -->
+      <div id="quickDropPanel" class="quick-drop-panel" style="display:none;">
+        <div class="qdp-label">⚡ Quick Drop</div>
+        <input id="quickDropTrailer" class="quick-drop-input" type="text" inputmode="numeric" placeholder="Trailer #" maxlength="10" autocomplete="off" autocorrect="off" spellcheck="false"/>
+        <div class="qdp-hint">Type trailer number — auto-submits as Dropped · Inbound · Loaded</div>
+        <button class="btn btn-default btn-sm" onclick="document.getElementById('quickDropPanel').style.display='none';document.getElementById('who-screen').style.display='';" style="margin-top:10px;">← Back to normal</button>
+      </div>
+
+      <div id="who-screen">
+        <div class="driver-panel active-step">
+          <div class="driver-phd">
+            <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+              <span class="driver-phd-title">Select your carrier</span>
+              <button class="btn btn-default btn-sm" onclick="document.getElementById('quickDropPanel').style.display='';document.getElementById('who-screen').style.display='none';" style="font-size:10px;">⚡ Quick Drop</button>
             </div>
+          </div>
+          <div class="driver-pbody">
+            <div class="who-grid">
+              <button class="who-btn" data-who="wesbell">
+                <span class="who-icon">🚛</span>
+                <span class="who-label">Wesbell</span>
+              </button>
+              <button class="who-btn" data-who="outside">
+                <span class="who-icon">🏢</span>
+                <span class="who-label">Outside</span>
+              </button>
+            </div>
+          </div>
         </div>
+      </div>
 
-        <div id="managementView" class="view-fade" style="display:none">
-            <div class="sup-shell">
-                <div class="kpi-row" id="supKpis">
-                    </div>
-                <div class="panel">
-                    <div class="panel-hd"><div class="panel-title">Recent Activity Audit</div></div>
-                    <div class="data-tbl-wrap">
-                        <table id="supFeed">
-                            </table>
-                    </div>
-                </div>
+      <!-- ── SCREEN: FLOW SELECTION ── -->
+      <div id="flow-screen" style="display:none;">
+        <div class="driver-panel active-step">
+          <div class="driver-phd">
+            <span class="driver-phd-title">What are you here to do?</span>
+            <button class="btn btn-default btn-sm" id="btnBackToWho" style="min-height:36px;">← Not me</button>
+          </div>
+          <div class="driver-pbody">
+            <p class="flow-sub" id="flowScreenSub">Select an activity:</p>
+            <div class="flow-grid">
+              <button class="flow-btn" id="flowBtnDrop" data-flow="drop">
+                <span class="flow-icon">📦</span>
+                <span class="flow-label">Drop a Trailer</span>
+                <span class="flow-desc">Park a trailer at a door</span>
+              </button>
+              <button class="flow-btn" data-flow="shunt">
+                <span class="flow-icon">🔀</span>
+                <span class="flow-label">Shunt a Trailer</span>
+                <span class="flow-desc">Move trailer to a different door</span>
+              </button>
+              <button class="flow-btn" data-flow="xdock_pickup">
+                <span class="flow-icon">🔄</span>
+                <span class="flow-label">Cross Dock Pickup</span>
+                <span class="flow-desc">Pick up a loaded trailer</span>
+              </button>
+              <button class="flow-btn" data-flow="xdock_offload">
+                <span class="flow-icon">📥</span>
+                <span class="flow-label">Cross Dock Offload</span>
+                <span class="flow-desc">Drop a loaded trailer to unload</span>
+              </button>
+              <button class="flow-btn" id="flowBtnOmw" data-flow="omw" style="display:none;">
+                <span class="flow-icon">🚛</span>
+                <span class="flow-label">On My Way</span>
+                <span class="flow-desc">Let dispatch know you're coming — get a door now</span>
+              </button>
+              <button class="flow-btn" id="flowBtnArrive" data-flow="arrive">
+                <span class="flow-icon">📍</span>
+                <span class="flow-label">I've Arrived</span>
+                <span class="flow-desc">Check in on arrival — get your door assignment</span>
+              </button>
             </div>
+          </div>
         </div>
+      </div>
 
-        <div id="driverView" style="display:none">
-            <div class="ts-progress-track">
-                <div id="ts-pb" class="ts-progress-bar" style="width: 15%"></div>
+      <!-- ── SCREEN: ON MY WAY ── -->
+      <div id="omw-screen" style="display:none;">
+        <div class="driver-panel active-step">
+          <div class="driver-phd">
+            <span class="driver-phd-title"><span style="color:var(--amber);">🚛</span> On My Way</span>
+            <button class="btn btn-default btn-sm" id="btnBackToFlow5">← Back</button>
+          </div>
+          <div class="driver-pbody">
+            <div class="field">
+              <label class="fl" for="omw_trailer">Trailer Number</label>
+              <input id="omw_trailer" class="trailer-hero-input" placeholder="e.g. 4821" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" inputmode="numeric"/>
             </div>
-            
-            <div id="ts-s-home" class="ts-screen ts-active">
-                <h1 class="ts-title">Driver Check-in</h1>
-                <input type="text" id="ts-home-trailer" class="trailer-hero-input" placeholder="ENTER TRAILER #">
-                <button id="ts-home-go" class="driver-submit">Continue</button>
+            <div class="field">
+              <label class="fl" for="omw_eta">ETA (minutes away) <span style="color:var(--t3);font-weight:400;">— optional</span></label>
+              <input id="omw_eta" type="number" min="1" max="240" placeholder="e.g. 30" inputmode="numeric" autocomplete="off" style="font-size:16px;"/>
             </div>
-
-            <div id="ts-s-carrier" class="ts-screen">
-                <h2 class="ts-sub">Select Carrier</h2>
-                <div class="who-grid">
-                    <div class="who-btn" data-carrier="Wesbell">
-                        <span class="who-icon">🚛</span>
-                        <span class="who-label">Wesbell</span>
-                    </div>
-                    <div class="who-btn" data-carrier="Outside">
-                        <span class="who-icon">📦</span>
-                        <span class="who-label">Outside</span>
-                    </div>
-                </div>
-                <button class="btn btn-default" data-back="ts-s-home">Back</button>
-            </div>
-
-            <div id="ts-s-actions" class="ts-screen">
-                <div id="ts-actions-trailer-tag" class="context-chip">TRAILER: --</div>
-                <div class="ts-dynamic-actions" id="ts-dynamic-actions">
-                    </div>
-            </div>
-
-            <div id="ts-s-door" class="ts-screen">
-                <div class="done-ring">✓</div>
-                <h1 id="ts-door-headline">Success</h1>
-                <div class="ac-door" id="ts-door-number">--</div>
-                <p id="ts-door-sub">Proceed to your assigned door.</p>
-                <button id="ts-door-done-btn" class="driver-submit green">Finish</button>
-            </div>
+            <div id="omw_err" style="display:none;padding:8px 10px;border-radius:6px;background:var(--red-bg);border:1px solid var(--red-bd);color:var(--red);font-size:12px;margin-bottom:10px;"></div>
+            <button class="btn btn-success driver-submit" id="btnOmwSubmit" disabled>📍 Notify Dispatch</button>
+          </div>
         </div>
+      </div>
 
-    </main>
+      <!-- ── SCREEN: OMW CONFIRMED ── -->
+      <div id="omw-confirm-screen" style="display:none;">
+        <div class="driver-panel active-step" style="text-align:center;">
+          <div class="driver-pbody" style="padding:28px 16px 24px;">
+            <div style="font-size:48px;margin-bottom:10px;">🚛</div>
+            <div style="font-size:22px;font-weight:700;color:var(--t0);margin-bottom:6px;" id="omwConfirmTitle">Door assigned!</div>
+            <div style="font-size:14px;color:var(--t1);margin-bottom:20px;" id="omwConfirmSub">Dispatch has been notified.</div>
+            <div class="assignment-card" id="omwAssignmentCard" style="margin-bottom:20px;">
+              <div class="ac-label">YOUR DOOR</div>
+              <div class="ac-door" id="omwDoorNum">—</div>
+              <div class="ac-meta" id="omwEtaDisplay" style="font-size:11px;color:var(--t2);"></div>
+            </div>
+            <button class="btn btn-default" id="btnOmwDone">Done</button>
+          </div>
+        </div>
+      </div>
 
-    <div id="toast" class="toast">
-        <div id="toastBody" class="t-body"></div>
+      <!-- ── SCREEN: ARRIVE (QR scan / walk-in) ── -->
+      <div id="arrive-screen" style="display:none;">
+        <div class="driver-panel active-step">
+          <div class="driver-phd">
+            <span class="driver-phd-title"><span style="color:var(--green);">📍</span> Arrival Check-In</span>
+            <button class="btn btn-default btn-sm" id="btnBackToFlow6">← Back</button>
+          </div>
+          <div class="driver-pbody">
+            <div class="field">
+              <label class="fl" for="arr_trailer">Trailer Number</label>
+              <input id="arr_trailer" class="trailer-hero-input" placeholder="e.g. 4821"
+                autocomplete="off" autocorrect="off" autocapitalize="characters"
+                spellcheck="false" inputmode="numeric"/>
+            </div>
+            <div class="field">
+              <label class="fl" for="arr_droptype">Drop Type</label>
+              <select id="arr_droptype">
+                <option value="Loaded">Loaded</option>
+                <option value="Empty">Empty</option>
+              </select>
+            </div>
+            <div id="arr_err" style="display:none;padding:8px 10px;border-radius:6px;background:var(--red-bg);border:1px solid var(--red-bd);color:var(--red);font-size:12px;margin-bottom:10px;"></div>
+            <button class="btn btn-success driver-submit" id="btnArriveSubmit" disabled>📍 Get My Door</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SCREEN: ARRIVE CONFIRMED ── -->
+      <div id="arrive-confirm-screen" style="display:none;">
+        <div class="driver-panel active-step" style="text-align:center;">
+          <div class="driver-pbody" style="padding:28px 16px 24px;">
+            <div style="font-size:48px;margin-bottom:10px;">✅</div>
+            <div style="font-size:22px;font-weight:700;color:var(--t0);margin-bottom:6px;" id="arrConfirmTitle">Door assigned!</div>
+            <div style="font-size:14px;color:var(--t1);margin-bottom:20px;" id="arrConfirmSub">Proceed to your door.</div>
+            <div class="assignment-card visible" style="margin-bottom:20px;">
+              <div class="ac-label">YOUR DOOR</div>
+              <div class="ac-door" id="arrDoorNum">—</div>
+              <div class="ac-meta" style="font-size:11px;color:var(--t2);">Door held for 30 min until you drop</div>
+            </div>
+            <button class="btn btn-default" id="btnArrDone">Done</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SCREEN: SHUNT ── -->
+      <div id="shunt-screen" style="display:none;">
+        <div class="driver-panel active-step">
+          <div class="driver-phd">
+            <span class="driver-phd-title"><span style="color:var(--amber);">🔀</span> Shunt Trailer</span>
+            <button class="btn btn-default btn-sm" id="btnBackToFlow2">← Back</button>
+          </div>
+          <div class="driver-pbody">
+            <input id="sh_trailer" class="trailer-hero-input" placeholder="Trailer #"
+              autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false" aria-label="Trailer number to shunt"/>
+
+            <div style="margin:14px 0 6px;font-family:var(--mono);font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;">New Door</div>
+            <div class="assignment-card visible" style="margin-bottom:10px;animation:none;">
+              <div class="ac-icon">🚪</div>
+              <div class="ac-body">
+                <div class="ac-label">Selected Door</div>
+                <div class="ac-door" id="sh_door_display">Select a door below</div>
+              </div>
+            </div>
+
+            <div class="door-picker-grid" id="shuntDoorGrid" style="margin-bottom:14px;"></div>
+
+            <button class="btn btn-primary btn-full" id="btnDriverShunt" disabled aria-label="Submit shunt">
+              Move Trailer
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SCREEN: DRIVER DROP ── -->
+      <div id="drop-screen" style="display:none;">
+        <div class="driver-panel active-step">
+          <div class="driver-phd">
+            <span class="driver-phd-title"><span style="color:var(--amber);">📦</span> Trailer Drop</span>
+            <button class="btn btn-default btn-sm" id="btnBackToFlow">← Back</button>
+          </div>
+          <div class="driver-pbody">
+            <input id="v_trailer" class="trailer-hero-input" placeholder="Trailer #" aria-label="Your trailer number"
+              autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false"/>
+
+            <div class="assignment-card" id="assignmentCard">
+              <div class="ac-icon">🚪</div>
+              <div class="ac-body">
+                <div class="ac-label">Assigned Door</div>
+                <div class="ac-door" id="ac_door">—</div>
+                <div class="ac-meta" id="ac_meta">Assigned by dispatcher</div>
+                <div class="ac-override" id="ac_override">Choose a different door</div>
+              </div>
+            </div>
+
+            <div class="door-picker-wrap" id="doorPickerWrap">
+              <div class="door-picker-label">Select Your Door (28–42)</div>
+              <div class="door-picker-grid" id="doorPickerGrid"></div>
+            </div>
+
+            <label class="fl" style="margin-top:12px;margin-bottom:6px;">Drop Type</label>
+            <div class="drop-type-toggle">
+              <button class="drop-type-btn selected" id="dtbEmpty" data-type="Empty">
+                <span class="dtb-icon">📦</span>Empty
+              </button>
+              <button class="drop-type-btn" id="dtbLoaded" data-type="Loaded">
+                <span class="dtb-icon">🏋️</span>Loaded
+              </button>
+            </div>
+
+            <button class="driver-submit" id="btnDriverDrop" disabled>
+              <span>Record Drop</span>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="no-safety-note">✓ No safety check required for drops</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SCREEN: CROSS DOCK PICKUP ── -->
+      <div id="xdock-pickup-screen" style="display:none;">
+        <div class="driver-panel active-step">
+          <div class="driver-phd">
+            <span class="driver-phd-title"><span style="color:var(--cyan);">🔄</span> Cross Dock Pickup</span>
+            <button class="btn btn-default btn-sm" data-flow-back="1">← Back</button>
+          </div>
+          <div class="driver-pbody">
+            <label class="fl" style="margin-bottom:6px;">Trailer Number to Pick Up</label>
+            <input id="xp_trailer" aria-label="Trailer number for cross dock pickup" class="trailer-hero-input" placeholder="e.g. 5312"
+              autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false"/>
+
+            <div class="assignment-card" id="pickupAssignmentCard" style="border-color:var(--cyan-bd);background:var(--cyan-bg);">
+              <div class="ac-icon">🚪</div>
+              <div class="ac-body">
+                <div class="ac-label" style="color:var(--cyan);">Your Assigned Door</div>
+                <div class="ac-door" id="pac_door">—</div>
+                <div class="ac-meta" id="pac_meta">Assigned by dispatcher</div>
+              </div>
+            </div>
+
+            <div class="no-assignment-msg" id="pickupNoAssignment">
+              <span>⚠️</span>
+              <div>
+                <div style="font-weight:600;color:var(--t0);">No assignment found</div>
+                <div style="font-size:11px;color:var(--t1);margin-top:2px;">Contact your dispatcher — this trailer has no door assigned.</div>
+              </div>
+            </div>
+
+            <button class="driver-submit" id="btnXdockPickup" disabled>
+              <span>Confirm Pickup</span>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="safety-required-note">⚠ Safety check required after this step</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SCREEN: CROSS DOCK OFFLOAD ── -->
+      <div id="xdock-offload-screen" style="display:none;">
+        <div class="driver-panel active-step">
+          <div class="driver-phd">
+            <span class="driver-phd-title"><span style="color:var(--amber);">📥</span> Cross Dock Offload</span>
+            <button class="btn btn-default btn-sm" data-flow-back="1">← Back</button>
+          </div>
+          <div class="driver-pbody">
+            <input id="xo_trailer" aria-label="Trailer number for cross dock offload" class="trailer-hero-input" placeholder="Trailer #"
+              autocomplete="off" inputmode="numeric" autocorrect="off" spellcheck="false"/>
+
+            <div class="assignment-card" id="offloadAssignmentCard">
+              <div class="ac-icon">🚪</div>
+              <div class="ac-body">
+                <div class="ac-label">Assigned Door</div>
+                <div class="ac-door" id="oac_door">—</div>
+                <div class="ac-meta" id="oac_meta">Assigned by dispatcher</div>
+                <div class="ac-override" id="oac_override">Choose a different door</div>
+              </div>
+            </div>
+
+            <div class="door-picker-wrap" id="offloadDoorPickerWrap">
+              <div class="door-picker-label">Select Your Door (28–42)</div>
+              <div class="door-picker-grid" id="offloadDoorPickerGrid"></div>
+            </div>
+
+            <button class="driver-submit" id="btnXdockOffload" disabled>
+              <span>Confirm Offload</span>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="safety-required-note">⚠ Safety check required after this step</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SCREEN: SAFETY ── -->
+      <div id="safety-screen" style="display:none;">
+        <div class="driver-panel active-step" style="border-color:rgba(32,208,144,.25);">
+          <div class="driver-phd">
+            <span class="driver-phd-title"><span style="color:var(--green);">🛡</span> Safety Confirmation</span>
+          </div>
+          <div class="driver-pbody">
+            <div id="safetyContext" style="margin-bottom:14px;display:flex;gap:6px;flex-wrap:wrap;"></div>
+            <label class="checkline" for="c_loadSecured">
+              <input id="c_loadSecured" type="checkbox"/>
+              <div>
+                <div class="cl-main">Load secured</div>
+                <div class="cl-sub">Straps, locks, and load bars confirmed</div>
+              </div>
+            </label>
+            <label class="checkline" for="c_dockPlateUp">
+              <input id="c_dockPlateUp" type="checkbox"/>
+              <div>
+                <div class="cl-main">Dock plate raised</div>
+                <div class="cl-sub">Plate fully up before departing dock</div>
+              </div>
+            </label>
+
+            <!-- ── ISSUE REPORT (optional) ── -->
+            <div class="issue-toggle-wrap">
+              <label class="issue-toggle-label" for="c_hasIssue">
+                <input id="c_hasIssue" type="checkbox"/>
+                <div class="itl-body">
+                  <div class="itl-main">⚠ Report a trailer issue</div>
+                  <div class="itl-sub">Damage, missing items, unsafe condition</div>
+                </div>
+              </label>
+            </div>
+
+            <div class="issue-report-body" id="issueReportBody" style="display:none;">
+              <!-- Camera / file input -->
+              <input type="file" id="issuePhotoInput" accept="image/*" capture="environment" style="display:none;" aria-label="Take photo"/>
+              <div class="issue-photo-zone" id="issuePhotoZone">
+                <div class="ipz-empty" id="ipzEmpty">
+                  <span class="ipz-icon">📷</span>
+                  <span class="ipz-label">Tap to take photo</span>
+                  <span class="ipz-sub">Optional — helps document the issue</span>
+                </div>
+                <img class="ipz-preview" id="ipzPreview" alt="Issue photo preview" style="display:none;"/>
+                <button class="ipz-remove" id="btnRemovePhoto" style="display:none;" aria-label="Remove photo">✕</button>
+              </div>
+              <label class="fl" style="margin:12px 0 5px;">Describe the issue</label>
+              <textarea id="issueNote" placeholder="e.g. Rear door damaged, missing load bar, spill in bay 3…" rows="3" style="resize:none;font-size:16px;line-height:1.5;"></textarea>
+            </div>
+
+            <button class="driver-submit green" id="btnConfirmSafety" disabled>
+              <span>Confirm &amp; Complete</span>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12 13 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SCREEN: DONE ── -->
+      <div id="done-screen" style="display:none;">
+        <div class="driver-panel">
+          <div class="driver-done">
+            <div class="done-ring">✅</div>
+            <div class="done-title">All Done!</div>
+            <div class="done-detail" id="driverDoneDetail"></div>
+            <button class="driver-submit done-restart-btn" id="btnDriverRestart">
+              <span>New Submission</span>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Session history -->
+      <div class="session-history" id="sessionHistory">
+        <div class="sh-hd">
+          <span>This Session</span>
+          <span id="shCount" style="color:var(--t3);">0 submissions</span>
+        </div>
+        <div class="sh-body" id="shBody">
+          <div class="sh-empty">No submissions yet this session.</div>
+        </div>
+      </div>
+
+      <!-- Always-visible reset — lets any driver start completely over -->
+      <button id="btnDriverFullReset" style="
+        width:100%;padding:12px;border-radius:9px;
+        border:1px solid var(--b1);background:transparent;
+        color:var(--t3);font-size:12px;font-family:var(--mono);
+        letter-spacing:.04em;cursor:pointer;touch-action:manipulation;
+        transition:color .15s,border-color .15s;
+      ">↺ Start over / wrong driver</button>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     MANAGEMENT VIEW
+═══════════════════════════════════════════ -->
+<div id="managementView" style="display:none;">
+  <div class="sup-shell">
+    <div class="kpi-row" id="supKpis"></div>
+    <div class="sup-grid">
+
+      <div class="panel" style="grid-column:1/-1;">
+        <div class="panel-hd">
+          <div class="panel-title"><div class="ptdot" style="background:var(--amber)"></div>Live Trailer Board</div>
+          <span class="badge badge-num" id="supCountsPill">0</span>
+        </div>
+        <div class="filter-bar">
+          <div class="field"><label class="fl">Search</label><input id="supSearch" inputmode="search" autocomplete="off" aria-label="Search trailers" placeholder="Trailer / door / note…"/></div>
+          <div class="field"><label class="fl">Direction</label>
+            <select id="supFilterDir" aria-label="Filter by direction"><option value="">All Directions</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
+          </div>
+          <div class="field"><label class="fl">Status</label>
+            <select id="supFilterStatus" aria-label="Filter by status"><option value="">All Statuses</option><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select>
+          </div>
+          <div class="tight"><button class="btn btn-default btn-sm" id="btnSupClearFilters" style="margin-top:14px;">Clear</button></div>
+        </div>
+        <div class="tbl-hd"><span>Trailer</span><span>Dir</span><span>Status</span><span>Door</span><span>Type</span><span>Note</span><span>Updated</span><span></span></div>
+        <div id="supTbody"></div>
+        <div class="board-footer" role="status" aria-live="polite"><span id="supLastUpdated">—</span><span id="supCountStr">—</span></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-hd">
+          <div class="panel-title"><div class="ptdot" style="background:var(--cyan)"></div>Recent Activity</div>
+          <span class="badge badge-num" id="supAuditCount">0</span>
+        </div>
+        <div class="panel-body" id="supFeed"><div style="color:var(--t2);font-size:11px;font-family:var(--mono);">Loading…</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-hd">
+          <div class="panel-title"><div class="ptdot" style="background:var(--green)"></div>Safety Confirmations</div>
+          <span class="badge badge-num" id="supConfCount">0</span>
+        </div>
+        <div class="panel-body-flush">
+          <div class="data-tbl-wrap">
+            <table><thead><tr><th>Time</th><th>Trailer</th><th>Door</th><th>Type</th><th>IP</th></tr></thead>
+            <tbody id="supConfBody"><tr><td colspan="5" style="padding:16px;color:var(--t2);">Loading…</td></tr></tbody></table>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" style="grid-column:1/-1;">
+        <div class="panel-hd">
+          <div class="panel-title"><div class="ptdot" style="background:var(--red)"></div>Trailer Issue Reports</div>
+          <span class="badge badge-num" id="supIssueCount">0</span>
+        </div>
+        <div class="panel-body-flush" id="supIssueBody">
+          <div style="padding:24px;text-align:center;color:var(--t3);font-family:var(--mono);font-size:11px;">No issue reports yet.</div>
+        </div>
+      </div>
+
+      <div class="panel" style="grid-column:1/-1;">
+        <button class="acc-head" id="pinMgmtToggle" aria-expanded="false">
+          <span style="display:flex;align-items:center;gap:9px;">
+            <span>🔒</span>
+            <span>PIN Management</span>
+            <span class="badge" style="color:var(--amber);border-color:var(--amber-bd);background:var(--amber-bg);font-size:9px;">Restricted</span>
+          </span>
+          <span class="chev">▾</span>
+        </button>
+        <div class="acc-body" id="pinMgmtBody" style="max-height:0px;overflow:hidden;transition:max-height .3s ease;">
+        <div class="panel-body">
+          <div class="infobox infobox-amber" style="margin-bottom:14px;">
+            <div class="ib-title">Security Notice</div>
+            PINs are hashed server-side — cannot be viewed, only reset. All changes are audit-logged and active sessions are invalidated immediately. Management can change Dispatcher, Dock and Management PINs. Only Admin can change the Admin PIN.
+          </div>
+          <div class="pin-row">
+            <div><label class="fl">Dispatcher PIN</label><input type="password" id="pin_dispatcher" placeholder="New PIN (min 4)" aria-label="Dispatcher new PIN" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_dispatcher_confirm" placeholder="Repeat" aria-label="Confirm dispatcher PIN" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetDispatcherPin" style="padding:7px 13px;">Update</button>
+          </div>
+          <div class="pin-row">
+            <div><label class="fl">Dock PIN</label><input type="password" id="pin_dock" placeholder="New PIN (min 4)" aria-label="Dock new PIN" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_dock_confirm" placeholder="Repeat" aria-label="Confirm dock PIN" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetDockPin" style="padding:7px 13px;">Update</button>
+          </div>
+          <div class="pin-row">
+            <div><label class="fl">Management PIN</label><input type="password" id="pin_management" placeholder="New PIN (min 4)" aria-label="Management new PIN" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_management_confirm" placeholder="Repeat" aria-label="Confirm management PIN" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetManagementPin" style="padding:7px 13px;">Update</button>
+          </div>
+          <div class="pin-row" id="adminPinRow" style="display:none;">
+            <div><label class="fl">Admin PIN</label><input type="password" id="pin_admin_sup" placeholder="New PIN (min 4)" aria-label="Admin new PIN" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_admin_sup_confirm" placeholder="Repeat" aria-label="Confirm admin PIN" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetAdminPinSup" style="padding:7px 13px;">Update</button>
+          </div>
+        </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     DOCK VIEW
+═══════════════════════════════════════════ -->
+<div id="dockView" style="display:none;">
+  <div class="dock-shell">
+
+    <!-- Dock Top Bar -->
+    <div class="dock-toolbar">
+      <div class="dock-toolbar-left">
+        <div class="live-dot" id="dockWsDot"></div>
+        <span id="dockWsText">Connecting…</span>
+      </div>
+      <div class="dock-filter-wrap">
+        <button class="dock-filter-btn active" data-dock-filter="active" aria-pressed="true">Active</button>
+        <button class="dock-filter-btn" data-dock-filter="all" aria-pressed="false">All</button>
+      </div>
+      <div class="dock-toolbar-right">
+        <span class="badge badge-num" id="dockCount">0</span>
+        <button class="tb-btn" id="btnDockViewToggle" data-view="cards" title="Toggle map view">🗺 Map</button>
+        <button class="tb-btn" id="btnDockBulk" title="Bulk select">☑ Bulk</button>
+        <button class="tb-btn" id="btnDimMode" title="Toggle dim mode">🌙 Dim</button>
+        <button class="tb-btn" id="btnDockStaffLogin" style="font-size:10px;padding:4px 9px;" title="Staff sign in">🔑 Staff</button>
+      </div>
     </div>
 
-    <script src="app.js"></script>
+    <!-- Scan / Search Bar -->
+    <div class="dock-search-bar">
+      <div class="dock-scan-wrap">
+        <input id="dockScanInput" class="dock-scan-input" placeholder="⚡ Scan or type trailer # — auto-advances status" autocomplete="off" inputmode="text" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go"/>
+        <button class="tb-btn" id="btnVoiceDock" title="Voice input">🎙</button>
+      </div>
+      <input id="dockSearch" placeholder="🔍 Filter cards…" autocomplete="off" aria-label="Search dock trailers" inputmode="search"/>
+    </div>
+
+    <!-- Bulk Actions Bar (shown when bulk mode active) -->
+    <div class="dock-bulk-bar" id="dockBulkBar">
+      <span id="dockBulkCount" style="font-family:var(--mono);font-size:11px;color:var(--t2)">0 selected</span>
+      <button class="btn btn-sm" style="border-color:var(--amber-bd);color:var(--amber);background:rgba(245,166,35,.1);" id="btnBulkLoading">→ Loading</button>
+      <button class="btn btn-sm" style="border-color:rgba(24,212,232,.4);color:var(--cyan);background:rgba(24,212,232,.08);" id="btnBulkDockReady">→ Dock Ready</button>
+    </div>
+
+    <div id="dockLoginNudge" class="infobox infobox-amber" style="margin:10px 14px 0;display:none;"><div class="ib-title">Not signed in</div>Sign in as <a href="/login">Dock</a> to update trailer statuses.</div>
+    <div class="dock-cards" id="dockCards">
+      <div class="dock-empty">Loading…</div>
+    </div>
+
+    <div class="dock-plates-inline" id="dockPlatesInline">
+      <button class="acc-head" id="dockPlatesToggle2" aria-expanded="false">
+        <span style="display:flex;align-items:center;gap:9px;">Dock Plates (28–42) <span class="badge" id="platesMini2">—</span></span>
+        <span class="chev">▾</span>
+      </button>
+      <div class="acc-body" id="dockPlatesBody2" style="max-height:0px;overflow:hidden;transition:max-height .3s ease;">
+        <div class="plate-grid" id="platesGrid2"></div>
+        <div style="padding:0 12px 10px;font-family:var(--mono);font-size:9px;color:var(--t3);letter-spacing:.04em;">Tap Edit on any door to update status or note.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     DISPATCH VIEW
+═══════════════════════════════════════════ -->
+<div id="dispatchView" style="display:none;">
+  <div class="page">
+    <div class="grid-main">
+
+      <!-- LEFT COLUMN: board + map + audit -->
+      <div class="col-stack">
+
+        <!-- Dispatcher KPI Row -->
+        <div class="disp-kpi-bar">
+          <div id="dispKpis" class="kpi-row"></div>
+          <div class="disp-actions">
+            <button class="btn btn-default btn-sm" id="btnShiftSummary">📊 Shift Summary</button>
+            <button class="btn btn-default btn-sm" id="btnHistoryBoard">🕐 History</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-hd">
+            <div class="panel-title"><div class="ptdot" style="background:var(--amber)"></div>Trailer Board</div>
+            <span class="badge badge-num" id="countsPill">0</span>
+          </div>
+          <div class="filter-bar">
+            <div class="field"><label class="fl">Search</label><input id="search" placeholder="Trailer, door, note…" aria-label="Search trailers" inputmode="search" autocomplete="off"/></div>
+            <div class="field"><label class="fl">Direction</label>
+              <select id="filterDir" aria-label="Filter by direction"><option value="">All Directions</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
+            </div>
+            <div class="field"><label class="fl">Status</label>
+              <select id="filterStatus" aria-label="Filter by status"><option value="">All Statuses</option><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select>
+            </div>
+            <div class="tight"><button class="btn btn-default btn-sm" id="btnClearFilters" style="margin-top:14px;">Clear</button></div>
+          </div>
+          <div class="tbl-hd">
+            <span>Trailer</span><span>Dir</span><span>Status</span><span>Door</span>
+            <span>Type</span><span>Note</span><span>Updated</span><span id="actionsColHead">Actions</span>
+          </div>
+          <div id="tbody"></div>
+          <div class="board-footer" role="status" aria-live="polite"><span id="lastUpdated">—</span><span id="boardCountStr">—</span></div>
+        </div>
+
+        <div class="panel" id="dockMapCard">
+          <div class="panel-hd">
+            <div class="panel-title"><div class="ptdot" style="background:var(--cyan)"></div>Door Occupancy Map</div>
+            <span class="badge" id="dockMapFreeCount" style="color:var(--green);">—</span>
+          </div>
+          <div class="panel-body" style="padding:10px 12px;">
+            <div class="dock-map-grid" id="dockMapGrid"></div>
+          </div>
+        </div>
+
+        <div class="panel" id="auditCard" style="display:none;">
+          <div class="panel-hd">
+            <div class="panel-title"><div class="ptdot" style="background:var(--t2)"></div>Audit Log</div>
+            <span class="badge badge-num" id="auditCount">0</span>
+          </div>
+          <div class="panel-body-flush">
+            <div class="data-tbl-wrap">
+              <table style="min-width:740px;">
+                <thead><tr><th>Time</th><th>Role</th><th>Action</th><th>Entity</th><th>ID</th><th>Details</th><th>IP</th></tr></thead>
+                <tbody id="auditBody"><tr><td colspan="7" style="padding:16px;color:var(--t2);">Click Audit to load.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dock plates — center/left column -->
+        <div class="panel" id="dockPlatesCard">
+          <button class="acc-head" id="dockPlatesToggle" aria-expanded="false">
+            <span style="display:flex;align-items:center;gap:9px;">Dock Plates (28–42) <span class="badge" id="platesMini">—</span></span>
+            <span class="chev">▾</span>
+          </button>
+          <div class="acc-body" id="dockPlatesBody" style="max-height:0px;overflow:hidden;transition:max-height .3s ease;">
+            <div class="plate-grid" id="platesGrid"></div>
+            <div style="padding:0 12px 10px;font-family:var(--mono);font-size:9px;color:var(--t3);letter-spacing:.04em;">Click Edit on any door to update status or note.</div>
+          </div>
+        </div>
+
+      </div>
+      <!-- end col-stack -->
+
+      <!-- RIGHT COLUMN: admin controls + dispatcher controls -->
+      <div style="display:flex;flex-direction:column;gap:14px;">
+
+        <!-- Admin-only panel (hidden for non-admins) -->
+        <div id="adminPanel" class="panel" style="display:none;">
+          <div class="panel-hd">
+            <div class="panel-title"><span class="ptdot" style="background:var(--amber)"></span>⚡ Admin Controls</div>
+          </div>
+          <div class="panel-body">
+            <div class="infobox infobox-amber" style="margin-bottom:12px;">
+              <div class="ib-title">Master Access</div>
+              Full control over all roles and settings.
+            </div>
+            <div class="divider"></div>
+            <button class="btn btn-danger btn-sm" id="btnClearAll" style="width:100%;margin-bottom:16px;">⚠ Clear All Trailers</button>
+            <div class="divider" style="margin-bottom:0;"></div>
+            <button class="acc-head" id="adminPinToggle" aria-expanded="false" style="border-radius:0;border:none;border-bottom:1px solid var(--b0);margin:0 -14px;padding:10px 14px;width:calc(100% + 28px);">
+              <span style="display:flex;align-items:center;gap:7px;font-size:10px;">🔒 PIN Management</span>
+              <span class="chev">▾</span>
+            </button>
+            <div id="adminPinBody" style="max-height:0px;overflow:hidden;transition:max-height .35s ease;">
+            <div style="padding-top:12px;">
+            <div class="pin-row">
+              <div><label class="fl">Dispatcher PIN</label><input type="password" id="pin_dispatcher_a" placeholder="New PIN" aria-label="Dispatcher PIN" autocomplete="new-password"/></div>
+              <div><label class="fl">Confirm</label><input type="password" id="pin_dispatcher_a_confirm" placeholder="Repeat" aria-label="Confirm" autocomplete="new-password"/></div>
+              <button class="btn btn-success btn-sm" id="btnSetDispatcherPinA" style="padding:7px 13px;">Set</button>
+            </div>
+            <div class="pin-row">
+              <div><label class="fl">Dock PIN</label><input type="password" id="pin_dock_a" placeholder="New PIN" aria-label="Dock PIN" autocomplete="new-password"/></div>
+              <div><label class="fl">Confirm</label><input type="password" id="pin_dock_a_confirm" placeholder="Repeat" aria-label="Confirm" autocomplete="new-password"/></div>
+              <button class="btn btn-success btn-sm" id="btnSetDockPinA" style="padding:7px 13px;">Set</button>
+            </div>
+            <div class="pin-row">
+              <div><label class="fl">Management PIN</label><input type="password" id="pin_management_a" placeholder="New PIN" aria-label="Management PIN" autocomplete="new-password"/></div>
+              <div><label class="fl">Confirm</label><input type="password" id="pin_management_a_confirm" placeholder="Repeat" aria-label="Confirm" autocomplete="new-password"/></div>
+              <button class="btn btn-success btn-sm" id="btnSetManagementPinA" style="padding:7px 13px;">Set</button>
+            </div>
+            <div class="pin-row">
+              <div><label class="fl">Admin PIN</label><input type="password" id="pin_admin_a" placeholder="New PIN" aria-label="Admin PIN" autocomplete="new-password"/></div>
+              <div><label class="fl">Confirm</label><input type="password" id="pin_admin_a_confirm" placeholder="Repeat" aria-label="Confirm" autocomplete="new-password"/></div>
+              <button class="btn btn-success btn-sm" id="btnSetAdminPinA" style="padding:7px 13px;">Set</button>
+            </div>
+            </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dispatcher / dock controls injected by app.js -->
+        <div class="panel side-sticky">
+          <div class="panel-hd">
+            <div class="panel-title" id="panelTitle">Controls</div>
+            <span class="badge" id="panelSub">—</span>
+          </div>
+          <div class="panel-body" id="panelBody"></div>
+        </div>
+
+      </div>
+      <!-- end right column -->
+
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true">
+  <div class="toast-bar" id="toastBar"></div>
+  <strong id="toastTitle">Notification</strong>
+  <div class="t-body" id="toastBody"></div>
+</div>
+
+</main>
+<script src="/app.js?v=3.6.0"></script>
+<!-- SW registered by app.js initPush() -->
+<!-- STAFF SIGN-IN MODAL (dock/driver pages) -->
+<div class="modal-ov hidden" id="staffLoginOv">
+  <div class="modal" style="max-width:340px;">
+    <h4>Staff Sign In</h4>
+    <div class="m-sub">Sign in to access management or admin controls on this page.</div>
+    <div class="field">
+      <label class="fl" for="staffLoginRole">Role</label>
+      <select id="staffLoginRole">
+        <option value="management">Management</option>
+        <option value="admin">⚡ Admin</option>
+        <option value="dispatcher">Dispatcher</option>
+      </select>
+    </div>
+    <div class="field">
+      <label class="fl" for="staffLoginPin">PIN</label>
+      <input id="staffLoginPin" type="password" inputmode="numeric" placeholder="Enter PIN" autocomplete="current-password"/>
+    </div>
+    <div id="staffLoginErr" style="display:none;color:var(--red);font-size:12px;margin-bottom:8px;font-family:var(--mono);"></div>
+    <div class="m-btns">
+      <button class="btn btn-default" id="staffLoginCancel">Cancel</button>
+      <button class="btn btn-primary" id="staffLoginGo">Sign In →</button>
+    </div>
+    <!-- Show when already signed in -->
+    <div id="staffLogoutRow" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--b0);">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--t1);margin-bottom:8px;">Signed in as <strong id="staffCurrentRole" style="color:var(--amber);"></strong></div>
+      <button class="btn btn-danger btn-sm btn-full" id="staffLogoutBtn">Sign Out</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Dock Issue Report Modal ── -->
+<div class="modal-ov hidden" id="dockIssueOv">
+  <div class="modal" style="max-width:420px;">
+    <h4>⚠ Report Trailer Issue</h4>
+    <div class="m-sub" id="dockIssueCtx" style="margin-bottom:14px;font-family:var(--mono);font-size:11px;color:var(--t2);letter-spacing:.04em;"></div>
+
+    <!-- Photo zone — label wraps input for iOS tap compatibility -->
+    <label for="dockIssuePhotoInput" class="issue-photo-zone" id="dockIssuePhotoZone" style="cursor:pointer;">
+    <input type="file" id="dockIssuePhotoInput" accept="image/*" capture="environment" style="display:none;position:absolute;width:0;height:0;opacity:0;" aria-label="Take photo"/>
+      <div id="dockIssueEmpty" class="ipz-empty">
+        <span class="ipz-icon">📷</span>
+        <span class="ipz-label">Tap to take photo</span>
+        <span class="ipz-sub">Optional — helps document the issue</span>
+      </div>
+      <img class="ipz-preview" id="dockIssuePrev" alt="Issue photo preview" style="display:none;"/>
+      <button class="ipz-remove" id="dockIssueRemovePhoto" style="display:none;" aria-label="Remove photo">✕</button>
+    </label>
+
+    <!-- Note -->
+    <div class="field" style="margin-top:14px;">
+      <label class="fl" for="dockIssueNote">Describe the issue</label>
+      <textarea id="dockIssueNote" rows="3" placeholder="e.g. Rear door damaged, missing load bar, spill in bay 3…" style="resize:none;font-size:16px;line-height:1.5;"></textarea>
+    </div>
+
+    <div id="dockIssueErr" style="display:none;padding:8px 10px;border-radius:6px;background:var(--red-bg);border:1px solid var(--red-bd);color:var(--red);font-size:12px;font-family:var(--mono);margin-top:8px;"></div>
+
+    <div class="m-btns" style="margin-top:16px;">
+      <button class="btn" id="dockIssueCancelBtn">Cancel</button>
+      <button class="btn btn-red" id="dockIssueSubmitBtn">Submit Report</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Issue photo lightbox ── -->
+<div class="issue-lightbox" id="issueLightbox">
+  <button class="issue-lightbox-close" id="issueLightboxClose" aria-label="Close photo">✕</button>
+  <img id="issueLightboxImg" src="" alt="Issue photo"/>
+</div>
+
+
+<!-- Quick Issue Modal -->
+<div class="modal-ov hidden" id="quickIssueOv">
+  <div class="modal qi-modal">
+    <div class="m-hd">
+      <div>
+        <span class="m-title">⚠ Report Issue</span>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--t2);margin-top:2px">
+          <span id="qi_trailer" style="color:var(--amber)"></span> · <span id="qi_door"></span>
+        </div>
+      </div>
+      <button class="m-close" onclick="document.getElementById('quickIssueOv').classList.add('hidden')">✕</button>
+    </div>
+    <div class="m-body" style="padding:16px;">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--t3);margin-bottom:10px;letter-spacing:.06em;">SELECT REASON(S)</div>
+      <div class="qi-reasons">
+        <button class="qi-reason-btn" data-reason="Damage">🔨 Damage</button>
+        <button class="qi-reason-btn" data-reason="Wrong trailer">❌ Wrong trailer</button>
+        <button class="qi-reason-btn" data-reason="Blocked door">🚧 Blocked door</button>
+        <button class="qi-reason-btn" data-reason="Load not ready">📦 Load not ready</button>
+        <button class="qi-reason-btn" data-reason="Seal broken">🔓 Seal broken</button>
+        <button class="qi-reason-btn" data-reason="Safety hazard">⚠ Safety hazard</button>
+        <button class="qi-reason-btn" data-reason="No paperwork">📋 No paperwork</button>
+        <button class="qi-reason-btn" data-reason="Mechanical issue">🔧 Mechanical</button>
+      </div>
+      <textarea id="qi_note" placeholder="Additional notes (optional)…" style="width:100%;margin-top:12px;padding:10px;background:var(--s2);border:1px solid var(--b1);border-radius:var(--r);color:var(--t0);font-size:13px;min-height:70px;resize:vertical;box-sizing:border-box;"></textarea>
+      <button class="btn btn-danger btn-full" id="btnQuickIssueSubmit" style="margin-top:12px;min-height:52px;font-size:15px;">Submit Issue Report</button>
+    </div>
+  </div>
+</div>
+
+<!-- Dock Reserve Door Modal -->
+<div class="modal-ov hidden" id="dockReserveOv">
+  <div class="modal qi-modal">
+    <div class="m-hd">
+      <div>
+        <span class="m-title">🚪 Reserve Door</span>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--t2);margin-top:2px">for trailer <span id="dr_trailer" style="color:var(--amber)"></span></div>
+      </div>
+      <button class="m-close" onclick="document.getElementById('dockReserveOv').classList.add('hidden')">✕</button>
+    </div>
+    <div class="m-body" style="padding:16px;">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--t3);margin-bottom:10px;letter-spacing:.06em;">SELECT DOOR</div>
+      <div class="dr-door-grid" id="dr_door_grid"></div>
+      <button class="btn btn-primary btn-full" id="btnDockReserveSubmit" style="margin-top:14px;min-height:52px;font-size:15px;">Reserve Door</button>
+    </div>
+  </div>
+</div>
+
+<!-- Server Logs Modal -->
+<div class="modal-ov hidden" id="serverLogsOv">
+  <div class="modal ss-modal">
+    <div class="m-hd">
+      <span class="m-title">🖥 Server Logs</span>
+      <button class="m-close" onclick="document.getElementById('serverLogsOv').classList.add('hidden')">✕</button>
+    </div>
+    <div class="m-body" id="serverLogsBody" style="padding:0;overflow-y:auto;max-height:70vh;"></div>
+  </div>
+</div>
+
+<!-- Shift Summary Modal -->
+<div class="modal-ov hidden" id="shiftSummaryOv">
+  <div class="modal ss-modal">
+    <div class="m-hd">
+      <span class="m-title">📊 Shift Summary</span>
+      <button class="m-close" onclick="document.getElementById('shiftSummaryOv').classList.add('hidden')">✕</button>
+    </div>
+    <div class="m-body ss-body" id="shiftSummaryBody"></div>
+  </div>
+</div>
+
+<!-- History Board Modal -->
+<div class="modal-ov hidden" id="historyBoardOv">
+  <div class="modal ss-modal">
+    <div class="m-hd">
+      <span class="m-title">🕐 Trailer History</span>
+      <button class="m-close" onclick="document.getElementById('historyBoardOv').classList.add('hidden')">✕</button>
+    </div>
+    <div class="m-body" id="historyBoardBody" style="padding:0;overflow-y:auto;max-height:70vh;"></div>
+  </div>
+</div>
+
 </body>
 </html>

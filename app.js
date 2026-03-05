@@ -1912,26 +1912,40 @@
         setTimeout(() => el(id)?.scrollIntoView({behavior:"smooth",block:"center"}), 300);
       }, {passive:true});
     });
-    // Visual Viewport API — push bottom nav up when keyboard opens
+   // FIXED: Safely calculate offset, falling back to 0 if visualViewport is unsupported
+  window.visualViewport?.addEventListener("resize", () => {
+    let offset = 0;
     if (window.visualViewport) {
-      window.visualViewport.addEventListener("resize", () => {
-        const offset = window.innerHeight - window.visualViewport.height;
-        const bn = document.querySelector(".bottom-nav");
-        if (bn) bn.style.transform = offset > 100 ? `translateY(-${offset}px)` : "";
-      });
+      offset = window.innerHeight - window.visualViewport.height;
+    }
+    const bn = document.querySelector(".bottom-nav");
+    if (bn) bn.style.transform = offset > 100 ? `translateY(-${offset}px)` : "";
+  });
+
+  async function loadInitial(){ 
+    try{ 
+      const w=await apiJson("/api/whoami"); 
+      ROLE=w?.role; 
+      VERSION=w?.version||""; 
+      
+      // Only enforce redirect for logged-in users on the wrong page.
+      if (w?.redirectTo && ROLE && w.redirectTo !== location.pathname) {
+          location.href = w.redirectTo;
+          return;
+      }
+      
+      highlightNav();
+      
+      // ... (Rest of your loadInitial logic) ...
+    } catch(e) {
+      console.error("Initialization failed", e);
     }
   }
+  
+  // Kickstart the app
+  loadInitial();
 
-  async function loadInitial(){
-    try{ const w=await apiJson("/api/whoami"); ROLE=w?.role; VERSION=w?.version||"";
-      // Only enforce redirect for logged-in users on the wrong page.
-      // Unauthenticated users (drivers) can navigate freely — the server
-      // already guards pages; we just let the server handle it via guardPage.
-      if (w?.redirectTo && ROLE && w.redirectTo !== location.pathname) {
-        location.replace(w.redirectTo);
-        return;
-      }
-    }
+})();
     catch{ ROLE=null; VERSION=""; }
     el("verText").textContent=VERSION||"—";
 

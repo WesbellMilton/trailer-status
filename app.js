@@ -99,6 +99,13 @@
 
   function highlightNav(){
     ["navDispatch","navDock","navDriver","navManagement"].forEach(id=>el(id)?.classList.remove("active"));
+    // On /driver — hide all nav links except the driver one, lock out staff navigation
+    if(isDriver()){
+      ["navDispatch","navDock","navManagement"].forEach(id=>{const n=el(id);if(n)n.style.display="none";});
+      el("navDriver")?.classList.add("active");
+      const rb=el("roleBadge");if(rb)rb.style.display="none";
+      return;
+    }
     const p=path();
     if(p.startsWith("/management"))el("navManagement")?.classList.add("active");
     else if(p.startsWith("/driver"))el("navDriver")?.classList.add("active");
@@ -1287,6 +1294,11 @@
     const p=path();
     if(p.startsWith("/driver")){
       el("driverView").style.display="";
+      // Lock: hide all topbar elements except the Start Over button
+      ["roleBadge","btnAudit","btnInstallPwa"].forEach(id=>{const n=el(id);if(n)n.style.display="none";});
+      // Lock: hide global nav links — driver stays on /driver only
+      ["navDispatch","navDock","navManagement"].forEach(id=>{const n=el(id);if(n)n.style.display="none";});
+      // Lock: btnLogout always means "Start Over" on driver — never staff logout
       const logoutBtn=el("btnLogout");
       if(logoutBtn){logoutBtn.style.display="";logoutBtn.textContent="↩ Start Over";logoutBtn.onclick=e=>{e.stopImmediatePropagation();try{sessionStorage.removeItem("wb_whoType");}catch{}driverRestart();};}
       el("btnAudit").style.display="none";
@@ -1332,7 +1344,7 @@
     for(const[tog,body] of [["pinMgmtToggle","pinMgmtBody"],["adminPinToggle","adminPinBody"]]){
       if(direct?.closest?.(`#${tog}`)){const t=el(tog),b=el(body);if(!t||!b)return;const open=t.getAttribute("aria-expanded")==="true";t.setAttribute("aria-expanded",open?"false":"true");b.style.maxHeight=open?"0px":(b.scrollHeight+40)+"px";return;}
     }
-    if(act==="openStaffLogin"){el("btnDockStaffLogin")?.click();return;}
+    if(act==="openStaffLogin"){if(isDriver())return;el("btnDockStaffLogin")?.click();return;}
     if(id==="btnLogout")return doLogout();
     if(id==="btnAudit"){const s=el("auditCard").style.display!=="none";el("auditCard").style.display=s?"none":"";if(!s)loadAuditInto(el("auditBody"),el("auditCount"),7);return;}
     if(id==="btnShiftSummary"){openShiftSummary();return;}
@@ -1531,6 +1543,28 @@
   function initStaffLogin(){
     const ov=el("staffLoginOv"),roleEl=el("staffLoginRole"),pinEl=el("staffLoginPin"),errEl=el("staffLoginErr"),goBtn=el("staffLoginGo"),cancel=el("staffLoginCancel"),logoutRow=el("staffLogoutRow"),curRole=el("staffCurrentRole"),logoutBtn=el("staffLogoutBtn");
     if(!ov)return;
+
+    // ── DRIVER LOCK: hide all staff-accessible nav and block modal entirely on /driver ──
+    if(isDriver()){
+      // Hide global nav links so driver can't navigate to staff views
+      ["navDispatch","navDock","navManagement"].forEach(id=>{const n=el(id);if(n)n.style.display="none";});
+      // Hide role badge, audit, version chip from topbar
+      ["roleBadge","btnAudit"].forEach(id=>{const n=el(id);if(n)n.style.display="none";});
+      // Intercept any attempt to show the staffLoginOv — silently block it
+      const _origRemove=ov.classList.remove.bind(ov.classList);
+      ov.classList.remove=function(...args){
+        if(args.includes("hidden")&&isDriver())return; // block show
+        _origRemove(...args);
+      };
+      // Also ensure it stays hidden if somehow triggered
+      const observer=new MutationObserver(()=>{if(isDriver()&&!ov.classList.contains("hidden"))ov.classList.add("hidden");});
+      observer.observe(ov,{attributes:true,attributeFilter:["class"]});
+      // No further wiring needed for driver path
+      function syncStaffButtons(){} // no-op
+      syncStaffButtons();initStaffLogin._sync=syncStaffButtons;
+      return;
+    }
+
     function openModal(){
       errEl.style.display="none";pinEl.value="";
       const signedIn=ROLE&&["admin","management","dispatcher","dock"].includes(ROLE);
@@ -1645,329 +1679,6 @@
         },800);
       });
     }
-
-    /* ══════════════════════════════════════════════════════
-       DOCK DRIVER PANEL — Wesbell & Carrier submission flows
-       Only shown on /dock path
-    ══════════════════════════════════════════════════════ */
-    if(isDock()){
-      (function initDockDriverPanel(){
-        const CSRF_H={"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"};
-        // State
-        let ddp={
-          mode:"",         // 'wesbell'|'carrier'
-          trailer:"",
-          xType:"pickup",  // 'pickup'|'offload'
-          dropType:"Loaded",
-          selectedDoor:null,
-          shuntDoor:null,
-          eta:10,
-          safety:{load:false,plate:false},
-          carrierType:"Wesbell"
-        };
-
-        const q=id=>document.getElementById(id);
-
-        // ── Toast ──
-        function ddpToast(msg,dur=2800){
-          const t=q("ddp-toast");if(!t)return;
-          t.textContent=msg;t.classList.add("ddp-show");
-          clearTimeout(ddpToast._t);ddpToast._t=setTimeout(()=>t.classList.remove("ddp-show"),dur);
-        }
-
-        // ── Screen manager ──
-        function ddpShow(id){
-          document.querySelectorAll("#dockDriverPanel .ddp-screen").forEach(s=>{
-            s.classList.remove("ddp-active");
-          });
-          const next=q(id);if(next){next.classList.add("ddp-active");next.querySelectorAll(".ddp-fade").forEach(el=>{el.style.animation="none";el.offsetHeight;el.style.animation="";});}
-        }
-
-        // ── Toggle panel open/close ──
-        const toggle=q("ddp-toggle"),body=q("ddp-body");
-        if(toggle&&body){
-          toggle.addEventListener("click",()=>{
-            const open=body.classList.toggle("ddp-open");
-            toggle.classList.toggle("ddp-open",open);
-          });
-        }
-
-        // ── Override badge ──
-        function ddpSyncOverride(){
-          const badge=q("ddp-override-badge"),roleEl=q("ddp-override-role");
-          const overRoles=["dispatcher","admin","management"];
-          const isOver=ROLE&&overRoles.includes(ROLE);
-          if(badge){badge.classList.toggle("ddp-visible",!!isOver);}
-          if(roleEl&&ROLE)roleEl.textContent=ROLE.toUpperCase();
-          // Show override bar inside action screens
-          ["ddp-wb-override-bar","ddp-ca-override-bar"].forEach(id=>{
-            const b=q(id);if(b){b.textContent=isOver?`⚡ ${ROLE.toUpperCase()} override — full access`:"";b.classList.toggle("ddp-visible",!!isOver);}
-          });
-        }
-        ddpSyncOverride();
-        // Re-sync if role changes later (after staff login)
-        const _origSyncStaff=typeof initStaffLogin!=="undefined"&&initStaffLogin._sync;
-        const _ddpOrigSync=_origSyncStaff;
-        // Poll every 2s for role changes (lightweight)
-        setInterval(ddpSyncOverride,2000);
-
-        // ── Back buttons (static) ──
-        document.querySelectorAll("#dockDriverPanel [data-ddp-back]").forEach(btn=>{
-          btn.addEventListener("click",()=>ddpShow(btn.dataset.ddpBack));
-        });
-        q("ddp-arrive-back")?.addEventListener("click",()=>{
-          ddpShow(ddp.mode==="wesbell"?"ddp-s-wesbell":"ddp-s-carrier");
-        });
-        q("ddp-xtype-back")?.addEventListener("click",()=>{
-          ddpShow(ddp.mode==="wesbell"?"ddp-s-wesbell":"ddp-s-carrier");
-        });
-
-        // ── Mode select ──
-        document.querySelectorAll("#dockDriverPanel [data-ddp-mode]").forEach(card=>{
-          card.addEventListener("click",()=>{
-            ddp.mode=card.dataset.ddpMode;
-            ddp.carrierType=ddp.mode==="wesbell"?"Wesbell":"Outside";
-            ddpShow(ddp.mode==="wesbell"?"ddp-s-wesbell":"ddp-s-carrier");
-          });
-        });
-
-        // ── Drop type cards ──
-        document.querySelectorAll("#dockDriverPanel [data-ddp-droptype]").forEach(c=>{
-          c.addEventListener("click",()=>{
-            document.querySelectorAll("#dockDriverPanel [data-ddp-droptype]").forEach(x=>x.classList.remove("ddp-sel"));
-            c.classList.add("ddp-sel");ddp.dropType=c.dataset.ddpDroptype;
-          });
-        });
-
-        // ── XDock type cards ──
-        document.querySelectorAll("#dockDriverPanel [data-ddp-xtype]").forEach(c=>{
-          c.addEventListener("click",()=>{
-            document.querySelectorAll("#dockDriverPanel [data-ddp-xtype]").forEach(x=>x.classList.remove("ddp-sel"));
-            c.classList.add("ddp-sel");ddp.xType=c.dataset.ddpXtype;
-          });
-        });
-
-        // ── ETA pills ──
-        document.querySelectorAll("#ddp-s-omw .ddp-pill[data-ddp-eta]").forEach(p=>{
-          p.addEventListener("click",()=>{
-            document.querySelectorAll("#ddp-s-omw .ddp-pill").forEach(x=>x.classList.remove("ddp-sel"));
-            p.classList.add("ddp-sel");ddp.eta=parseInt(p.dataset.ddpEta);
-          });
-        });
-
-        // ── Trailer inputs — uppercase ──
-        ["ddp-qd-trailer","ddp-sh-trailer","ddp-omw-trailer","ddp-arr-trailer","ddp-drop-trailer","ddp-xd-trailer"].forEach(id=>{
-          const inp=q(id);if(!inp)return;
-          inp.addEventListener("input",()=>{inp.value=inp.value.toUpperCase();ddp.trailer=inp.value.trim();});
-        });
-
-        // ── Door grid builder ──
-        function ddpBuildDoorGrid(gridId,selectedDoor){
-          const grid=q(gridId);if(!grid)return;
-          const occupied=getOccupiedDoors();
-          let html="";
-          for(let d=28;d<=42;d++){
-            const ds=String(d),isOcc=!!occupied[ds]&&ds!==selectedDoor,isSel=selectedDoor&&String(selectedDoor)===ds;
-            html+=`<button class="ddp-door-btn${isOcc?" ddp-occ":""}${isSel?" ddp-sel":""}" data-ddp-door="${ds}" data-ddp-grid="${gridId}" ${isOcc?"disabled":""}>${d}</button>`;
-          }
-          grid.innerHTML=html;
-          grid.querySelectorAll(".ddp-door-btn:not(.ddp-occ)").forEach(btn=>{
-            btn.addEventListener("click",()=>{
-              grid.querySelectorAll(".ddp-door-btn").forEach(b=>b.classList.remove("ddp-sel"));
-              btn.classList.add("ddp-sel");
-              if(gridId==="ddp-sh-door-grid"){ddp.shuntDoor=parseInt(btn.dataset.ddpDoor);const s=q("ddp-sh-submit");if(s)s.disabled=false;}
-              else{ddp.selectedDoor=parseInt(btn.dataset.ddpDoor);const s=q("ddp-xd-door-next");if(s)s.disabled=false;}
-            });
-          });
-        }
-
-        // ── Show success ──
-        function ddpSuccess(title,sub,rows){
-          q("ddp-done-title").textContent=title;
-          q("ddp-done-sub").textContent=sub;
-          q("ddp-done-summary").innerHTML=rows.map(r=>`<div class="ddp-sum-row"><span class="ddp-sum-key">${r.k}</span><span class="ddp-sum-val">${r.v}</span></div>`).join("");
-          ddpShow("ddp-s-done");
-          haptic("success");
-        }
-
-        // ── Show door assigned ──
-        function ddpShowDoor(door,sub){
-          q("ddp-door-num").textContent=door;
-          q("ddp-door-sub").textContent=sub||`Pull straight to Door ${door}`;
-          ddpShow("ddp-s-door");
-          haptic("success");
-        }
-
-        // ── Busy helper ──
-        function ddpBusy(btn,msg){btn.disabled=true;btn._orig=btn.textContent;btn.textContent=msg;}
-        function ddpUnbusy(btn){btn.disabled=false;btn.textContent=btn._orig||"Submit";}
-
-        // ── Validate trailer ──
-        function ddpNeedTrailer(id){ddp.trailer=(q(id)?.value||"").trim();if(!ddp.trailer){ddpToast("Enter a trailer number first");q(id)?.focus();return false;}return true;}
-
-        // ══════════════════
-        // WESBELL FLOWS
-        // ══════════════════
-
-        // Wesbell actions
-        q("ddp-wb-quickdrop")?.addEventListener("click",()=>{
-          ddp.trailer="";if(q("ddp-qd-trailer"))q("ddp-qd-trailer").value="";
-          ddpShow("ddp-s-quickdrop");setTimeout(()=>q("ddp-qd-trailer")?.focus(),80);
-        });
-        q("ddp-qd-submit")?.addEventListener("click",async()=>{
-          if(!ddpNeedTrailer("ddp-qd-trailer"))return;
-          const btn=q("ddp-qd-submit");ddpBusy(btn,"Dropping…");
-          try{
-            await fetch("/api/driver/drop",{method:"POST",headers:CSRF_H,body:JSON.stringify({trailer:ddp.trailer,dropType:"Loaded",carrierType:"Wesbell",force:true})});
-            ddpSuccess("Quick Drop Logged","Trailer dropped to yard instantly.",[{k:"Trailer",v:ddp.trailer},{k:"Type",v:"Quick Drop"},{k:"Carrier",v:"Wesbell"}]);
-          }catch{ddpToast("Submission failed — check connection");}
-          finally{ddpUnbusy(btn);}
-        });
-
-        // Shunt
-        q("ddp-wb-shunt")?.addEventListener("click",()=>{
-          ddp.shuntDoor=null;if(q("ddp-sh-trailer"))q("ddp-sh-trailer").value="";
-          ddpBuildDoorGrid("ddp-sh-door-grid",null);
-          const s=q("ddp-sh-submit");if(s)s.disabled=true;
-          ddpShow("ddp-s-shunt");setTimeout(()=>q("ddp-sh-trailer")?.focus(),80);
-        });
-        q("ddp-sh-submit")?.addEventListener("click",async()=>{
-          if(!ddpNeedTrailer("ddp-sh-trailer"))return;
-          if(!ddp.shuntDoor){ddpToast("Select a door first");return;}
-          const btn=q("ddp-sh-submit");ddpBusy(btn,"Moving…");
-          try{
-            await fetch("/api/shunt",{method:"POST",headers:CSRF_H,body:JSON.stringify({trailer:ddp.trailer,door:String(ddp.shuntDoor)})});
-            ddpSuccess("Shunt Complete","Trailer moved with no further action required.",[{k:"Trailer",v:ddp.trailer},{k:"New Door",v:"Door "+ddp.shuntDoor}]);
-          }catch{ddpToast("Shunt failed");}
-          finally{ddpUnbusy(btn);}
-        });
-
-        // OMW
-        q("ddp-wb-omw")?.addEventListener("click",()=>{
-          if(q("ddp-omw-trailer"))q("ddp-omw-trailer").value="";
-          ddpShow("ddp-s-omw");setTimeout(()=>q("ddp-omw-trailer")?.focus(),80);
-        });
-        q("ddp-omw-submit")?.addEventListener("click",async()=>{
-          if(!ddpNeedTrailer("ddp-omw-trailer"))return;
-          const btn=q("ddp-omw-submit");ddpBusy(btn,"Sending…");
-          try{
-            const res=await fetch("/api/driver/omw",{method:"POST",headers:CSRF_H,body:JSON.stringify({trailer:ddp.trailer,eta:ddp.eta})});
-            if(res.ok){const data=await res.json();ddpShowDoor(data.door,`OMW confirmed. Head to Door ${data.door} when you arrive.`);}
-            else{const t=await res.text();ddpToast("⚠️ "+t);}
-          }catch{ddpToast("Connection error");}
-          finally{ddpUnbusy(btn);}
-        });
-
-        // Arrive (Wesbell)
-        q("ddp-wb-arrive")?.addEventListener("click",()=>{
-          if(q("ddp-arr-trailer"))q("ddp-arr-trailer").value="";
-          ddp.carrierType="Wesbell";
-          ddpShow("ddp-s-arrive");setTimeout(()=>q("ddp-arr-trailer")?.focus(),80);
-        });
-
-        // ══════════════════
-        // CARRIER FLOWS
-        // ══════════════════
-
-        q("ddp-ca-drop")?.addEventListener("click",()=>{
-          ddp.dropType="Loaded";if(q("ddp-drop-trailer"))q("ddp-drop-trailer").value="";
-          document.querySelectorAll("#dockDriverPanel [data-ddp-droptype]").forEach((c,i)=>c.classList.toggle("ddp-sel",i===0));
-          ddpShow("ddp-s-drop");setTimeout(()=>q("ddp-drop-trailer")?.focus(),80);
-        });
-        q("ddp-drop-submit")?.addEventListener("click",async()=>{
-          if(!ddpNeedTrailer("ddp-drop-trailer"))return;
-          const btn=q("ddp-drop-submit");ddpBusy(btn,"Submitting…");
-          try{
-            await fetch("/api/driver/drop",{method:"POST",headers:CSRF_H,body:JSON.stringify({trailer:ddp.trailer,dropType:ddp.dropType,carrierType:"Outside"})});
-            ddpSuccess("Drop Logged","Dispatch will assign a door on the board.",[{k:"Trailer",v:ddp.trailer},{k:"Type",v:ddp.dropType},{k:"Carrier",v:"Outside"}]);
-          }catch{ddpToast("Submission failed");}
-          finally{ddpUnbusy(btn);}
-        });
-
-        q("ddp-ca-arrive")?.addEventListener("click",()=>{
-          if(q("ddp-arr-trailer"))q("ddp-arr-trailer").value="";
-          ddp.carrierType="Outside";
-          ddpShow("ddp-s-arrive");setTimeout(()=>q("ddp-arr-trailer")?.focus(),80);
-        });
-
-        // Cross dock entry (both Wesbell and Carrier)
-        q("ddp-wb-xdock")?.addEventListener("click",()=>{
-          ddp.mode="wesbell";ddp.xType="pickup";if(q("ddp-xd-trailer"))q("ddp-xd-trailer").value="";
-          document.querySelectorAll("#dockDriverPanel [data-ddp-xtype]").forEach((c,i)=>c.classList.toggle("ddp-sel",i===0));
-          ddpShow("ddp-s-xdock-type");setTimeout(()=>q("ddp-xd-trailer")?.focus(),80);
-        });
-        q("ddp-ca-xdock")?.addEventListener("click",()=>{
-          ddp.mode="carrier";ddp.xType="pickup";if(q("ddp-xd-trailer"))q("ddp-xd-trailer").value="";
-          document.querySelectorAll("#dockDriverPanel [data-ddp-xtype]").forEach((c,i)=>c.classList.toggle("ddp-sel",i===0));
-          ddpShow("ddp-s-xdock-type");setTimeout(()=>q("ddp-xd-trailer")?.focus(),80);
-        });
-
-        // Xdock next → door select
-        q("ddp-xtype-next")?.addEventListener("click",()=>{
-          if(!ddpNeedTrailer("ddp-xd-trailer"))return;
-          ddp.selectedDoor=null;
-          ddpBuildDoorGrid("ddp-xd-door-grid",null);
-          const s=q("ddp-xd-door-next");if(s)s.disabled=true;
-          ddpShow("ddp-s-xdock-door");
-        });
-
-        // Door next → safety
-        q("ddp-xd-door-next")?.addEventListener("click",()=>{
-          if(!ddp.selectedDoor){ddpToast("Select a door first");return;}
-          ddp.safety={load:false,plate:false};
-          document.querySelectorAll("#ddp-s-safety .ddp-check-item").forEach(c=>c.classList.remove("ddp-chk"));
-          const s=q("ddp-safety-submit");if(s)s.disabled=true;
-          ddpShow("ddp-s-safety");
-        });
-
-        // Safety checks
-        document.querySelectorAll("#ddp-s-safety .ddp-check-item").forEach(item=>{
-          item.addEventListener("click",()=>{
-            item.classList.toggle("ddp-chk");
-            ddp.safety[item.dataset.ddpChk]=item.classList.contains("ddp-chk");
-            const allDone=Object.values(ddp.safety).every(Boolean);
-            const s=q("ddp-safety-submit");if(s)s.disabled=!allDone;
-          });
-        });
-
-        q("ddp-safety-submit")?.addEventListener("click",async()=>{
-          const btn=q("ddp-safety-submit");ddpBusy(btn,"Confirming…");
-          const endpoint=ddp.xType==="pickup"?"/api/crossdock/pickup":"/api/crossdock/offload";
-          try{
-            await fetch(endpoint,{method:"POST",headers:CSRF_H,body:JSON.stringify({trailer:ddp.trailer,door:String(ddp.selectedDoor)})});
-            await fetch("/api/confirm-safety",{method:"POST",headers:CSRF_H,body:JSON.stringify({trailer:ddp.trailer,door:String(ddp.selectedDoor),loadSecured:true,dockPlateUp:true,action:ddp.xType==="pickup"?"xdock_pickup":"safety"})}).catch(()=>{});
-            ddpSuccess(
-              ddp.xType==="pickup"?"Pickup Complete":"Offload Complete",
-              "Safety confirmed. Trip logged.",
-              [{k:"Trailer",v:ddp.trailer},{k:"Door",v:"Door "+ddp.selectedDoor},{k:"Type",v:ddp.xType==="pickup"?"XDock Pickup":"XDock Offload"}]
-            );
-          }catch{ddpToast("Submission failed");}
-          finally{ddpUnbusy(btn);}
-        });
-
-        // Arrive submit (shared)
-        q("ddp-arr-submit")?.addEventListener("click",async()=>{
-          if(!ddpNeedTrailer("ddp-arr-trailer"))return;
-          const btn=q("ddp-arr-submit");ddpBusy(btn,"Getting door…");
-          try{
-            const res=await fetch("/api/driver/arrive",{method:"POST",headers:CSRF_H,body:JSON.stringify({trailer:ddp.trailer,carrierType:ddp.carrierType,dropType:"Loaded",direction:"Inbound"})});
-            if(res.ok){const data=await res.json();ddpShowDoor(data.door,`Door assigned! Pull to Door ${data.door}.`);}
-            else{const t=await res.text();ddpToast("⚠️ "+t);}
-          }catch{ddpToast("Connection error");}
-          finally{ddpUnbusy(btn);}
-        });
-
-        // Door done
-        q("ddp-door-done")?.addEventListener("click",()=>ddpShow("ddp-s-mode"));
-
-        // Restart
-        q("ddp-done-restart")?.addEventListener("click",()=>{
-          ddp={mode:"",trailer:"",xType:"pickup",dropType:"Loaded",selectedDoor:null,shuntDoor:null,eta:10,safety:{load:false,plate:false},carrierType:"Wesbell"};
-          ddpShow("ddp-s-mode");
-        });
-
-      })(); // end initDockDriverPanel
-    } // end isDock()
 
     connectWs();initQuickDrop();initVoiceInput();initDockScan();initDimMode();initDockRememberLogin();
   });

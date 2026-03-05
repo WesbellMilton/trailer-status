@@ -1,26 +1,29 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
-  <title>Wesbell Dispatch</title>
   <style>
     /* GRADIENT KILL - prevents interference in Driver Mode */
     body { background-image:none!important; background:#070a0f!important; }
-    #driverView { background:#070a0f!important; }
+    #driverView,#dockView,#managementView{ background-image:none!important; }
+    .driver-shell{ background-image:none!important; }
+    
+    /* Auto-hide navigation when Driver View is active */
     body:has(#driverView[style*="display: block"]) .topbar,
     body:has(#driverView[style*="display: block"]) .bottom-nav { display: none !important; }
   </style>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+  <title>Wesbell Dispatch</title>
   <link rel="manifest" href="/manifest.json"/>
   <link rel="stylesheet" href="/style.css?v=3.6.0"/>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=DM+Mono&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet"/>
 </head>
 <body>
 
 <div class="modal-ov hidden" id="staffLoginOv">
   <div class="modal" style="max-width:340px;">
     <h4>Staff Sign In</h4>
-    <div class="m-sub">Enter role and PIN to unlock manual overrides.</div>
+    <div class="m-sub">Sign in to access management or admin controls.</div>
     <div class="field">
       <label class="fl">Role</label>
       <select id="staffLoginRole">
@@ -56,7 +59,7 @@
       <a href="/management" class="nav-item">Management</a>
     </nav>
     <div class="topbar-right">
-      <div class="chip"><div class="live-dot" id="wsDot"></div>Live</div>
+      <div class="chip"><div class="live-dot" id="wsDot"></div><span id="wsText">Connecting</span></div>
       <button class="tb-btn" id="btnStaffLogin">🔑 Staff</button>
     </div>
   </div>
@@ -68,7 +71,7 @@
     <div class="grid-main">
       <div class="col-stack">
         <div class="panel">
-          <div class="panel-hd"><div class="panel-title">Active Trailer Board</div><span class="badge" id="countsPill">0</span></div>
+          <div class="panel-hd"><div class="panel-title">Active Trailer Board</div><span class="badge badge-num" id="countsPill">0</span></div>
           <div class="panel-body-flush">
             <div class="tbl-hd"><span>Trailer</span><span>Status</span><span>Door</span><span>Note</span><span>Actions</span></div>
             <div id="tbody"></div>
@@ -83,14 +86,14 @@
         <div class="panel" id="adminPanel">
           <div class="panel-hd"><div class="panel-title">Manual Controls</div></div>
           <div class="panel-body" id="panelBody">
-            <p style="font-size:11px; color:var(--t3);">Staff login required for manual trailer updates.</p>
+            <p style="font-size:11px; color:var(--t3);">Authorized staff only. Use the Staff button above to unlock.</p>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <div id="driverView" style="display:none;">
+  <div id="driverView" style="display:none; padding:0; position:relative; min-height:100vh; overflow:hidden;">
     <div class="ts-progress-track"><div class="ts-progress-bar" id="ts-pb"></div></div>
 
     <div class="ts-screen ts-active" id="ts-s-home">
@@ -101,14 +104,14 @@
       </div>
     </div>
 
-    <div class="ts-screen" id="ts-s-mode">
+    <div class="ts-screen" id="ts-s-carrier">
       <div class="ts-screen-header"><div class="ts-screen-title">Identify <span>Service</span></div></div>
       <div class="ts-screen-body">
-        <div class="ts-action-card ts-yellow" data-mode="Wesbell">
+        <div class="ts-action-card ts-yellow" data-carrier="Wesbell">
           <div class="ts-action-icon">🏗️</div>
           <div class="ts-action-text"><div class="ts-action-label">Wesbell Driver</div><small>Internal Fleet</small></div>
         </div>
-        <div class="ts-action-card ts-blue" data-mode="Carrier">
+        <div class="ts-action-card ts-blue" data-carrier="Outside">
           <div class="ts-action-icon">🚛</div>
           <div class="ts-action-text"><div class="ts-action-label">Outside Carrier</div><small>Third Party</small></div>
         </div>
@@ -116,24 +119,24 @@
     </div>
 
     <div class="ts-screen" id="ts-s-actions-wesbell">
-      <div class="ts-screen-header"><div class="ts-screen-title">Operations</div></div>
+      <div class="ts-screen-header"><div class="ts-screen-title">Driver <span>Operations</span></div></div>
       <div class="ts-screen-body">
         <div class="ts-grid-menu">
-          <div class="ts-menu-item gold" data-action="arrive"><b>I Have Arrived</b></div>
-          <div class="ts-menu-item blue" data-action="omw"><b>On My Way</b></div>
-          <div class="ts-menu-item green" data-action="qd"><b>Quick Drop</b><small>No prompt</small></div>
-          <div class="ts-menu-item purple" data-action="shunt"><b>Shunt Trailer</b><small>No prompt</small></div>
-          <div class="ts-menu-item orange" data-action="xdock"><b>Cross Dock</b></div>
+          <div class="ts-menu-item gold" data-action="arrive"><b>I Have Arrived</b><small>Get door assignment</small></div>
+          <div class="ts-menu-item blue" data-action="omw"><b>On My Way</b><small>Reserve door</small></div>
+          <div class="ts-menu-item green" data-action="qd"><b>Quick Drop</b><small>No prompts</small></div>
+          <div class="ts-menu-item purple" data-action="shunt"><b>Shunt Trailer</b><small>No prompts</small></div>
+          <div class="ts-menu-item orange" data-action="xdock"><b>Cross Dock</b><small>Safety checks required</small></div>
         </div>
       </div>
     </div>
 
     <div class="ts-screen" id="ts-s-actions-carrier">
-      <div class="ts-screen-header"><div class="ts-screen-title">Carrier Operations</div></div>
+      <div class="ts-screen-header"><div class="ts-screen-title">Carrier <span>Portal</span></div></div>
       <div class="ts-screen-body">
         <div class="ts-action-card ts-orange" data-action="xdock">
           <div class="ts-action-icon">🔄</div>
-          <div class="ts-action-text"><div class="ts-action-label">Cross Dock</div><small>Safety checks required</small></div>
+          <div class="ts-action-text"><div class="ts-action-label">Cross Dock</div><small>Standard safety protocol</small></div>
         </div>
       </div>
     </div>
@@ -144,11 +147,11 @@
         <div class="ts-check-list">
           <div class="ts-check-item" data-key="load">
             <div class="ts-check-box"></div>
-            <div class="ts-check-text"><div class="ts-check-title">Load Secured</div></div>
+            <div class="ts-check-text"><div class="ts-check-title">Load Secured</div><small>Cargo stabilized</small></div>
           </div>
           <div class="ts-check-item" data-key="plate">
             <div class="ts-check-box"></div>
-            <div class="ts-check-text"><div class="ts-check-title">Dock Plate Up</div></div>
+            <div class="ts-check-text"><div class="ts-check-title">Dock Plate Up</div><small>Plate retracted</small></div>
           </div>
         </div>
         <button class="ts-cta-btn ts-green" id="ts-safety-submit" disabled>CONFIRM & COMPLETE</button>
@@ -157,7 +160,7 @@
 
     <div class="ts-screen" id="ts-s-result">
       <div class="ts-result-ring">✓</div>
-      <h1 id="ts-res-head">Activity Logged</h1>
+      <h1 id="ts-res-head">Activity Confirmed</h1>
       <div id="ts-res-door" class="ts-door-display">YARD</div>
       <button onclick="location.reload()" class="ts-btn-primary">DONE</button>
     </div>

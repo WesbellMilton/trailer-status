@@ -961,6 +961,484 @@ body{background-image:none!important;background:transparent!important}
       </div>
     </div>
 
+    <!-- ══ DOCK DRIVER PANEL ══ -->
+    <div id="dockDriverPanel">
+      <style>
+        #dockDriverPanel {
+          --ddp-bg:#0a0d12; --ddp-surf:#111620; --ddp-surf2:#161e2e;
+          --ddp-bd:#1e2f4a; --ddp-bd2:#263d5e;
+          --ddp-t0:#f0f6ff; --ddp-t1:#b8cfe8; --ddp-t2:#7a9ab8; --ddp-t3:#4a6a88;
+          --ddp-green:#19e09a; --ddp-blue:#2088ff; --ddp-yellow:#f5a623;
+          --ddp-purple:#b052d9; --ddp-orange:#ff6b00; --ddp-red:#ff453a;
+          --ddp-r:14px; --ddp-r2:20px;
+          font-family:'Outfit','DM Sans',sans-serif;
+          margin:10px 0 0;
+          border-top:1px solid var(--ddp-bd);
+          background:var(--ddp-bg);
+          position:relative;
+          overflow:hidden;
+        }
+        /* toggle header */
+        #ddp-toggle {
+          display:flex;align-items:center;justify-content:space-between;
+          padding:14px 16px;cursor:pointer;
+          background:var(--ddp-surf);border-bottom:1px solid var(--ddp-bd);
+          user-select:none;
+        }
+        #ddp-toggle-left { display:flex;align-items:center;gap:10px; }
+        #ddp-toggle-icon { font-size:18px; }
+        #ddp-toggle-label { font-size:13px;font-weight:700;color:var(--ddp-t0);letter-spacing:.02em; }
+        #ddp-toggle-sub   { font-size:11px;color:var(--ddp-t2);margin-top:1px; }
+        #ddp-toggle-chev  { font-size:11px;color:var(--ddp-t3);transition:transform .25s; }
+        #ddp-toggle.ddp-open #ddp-toggle-chev { transform:rotate(180deg); }
+        /* override badge */
+        #ddp-override-badge {
+          display:none;margin:0 16px;padding:7px 12px;
+          background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);
+          border-radius:8px;font-size:11px;font-weight:600;color:var(--ddp-yellow);
+          text-align:center;letter-spacing:.04em;
+        }
+        #ddp-override-badge.ddp-visible { display:block; }
+        /* collapsible body */
+        #ddp-body {
+          max-height:0;overflow:hidden;
+          transition:max-height .35s cubic-bezier(.4,0,.2,1);
+        }
+        #ddp-body.ddp-open { max-height:1200px; }
+        /* screens */
+        #ddp-screens { position:relative;min-height:200px; }
+        .ddp-screen { display:none;padding:16px; }
+        .ddp-screen.ddp-active { display:block; }
+        /* back row */
+        .ddp-back { display:flex;align-items:center;gap:6px;background:none;border:none;
+          color:var(--ddp-t2);font-size:13px;font-weight:500;cursor:pointer;
+          font-family:inherit;padding:0;margin-bottom:14px; }
+        .ddp-back svg { width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round; }
+        .ddp-screen-title { font-size:22px;font-weight:700;letter-spacing:-.01em;color:var(--ddp-t0);margin-bottom:4px; }
+        .ddp-screen-sub   { font-size:12px;color:var(--ddp-t2);margin-bottom:16px; }
+        /* mode cards (Wesbell / Carrier) */
+        .ddp-mode-grid { display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px; }
+        .ddp-mode-card {
+          background:var(--ddp-surf);border:2px solid var(--ddp-bd);
+          border-radius:var(--ddp-r2);padding:20px 14px;
+          display:flex;flex-direction:column;align-items:center;gap:8px;
+          cursor:pointer;transition:all .18s;text-align:center;
+        }
+        .ddp-mode-card:active { transform:scale(.96); }
+        .ddp-mode-card.ddp-wesbell { border-color:var(--ddp-yellow);background:rgba(245,166,35,.06); }
+        .ddp-mode-card.ddp-carrier { border-color:var(--ddp-blue);background:rgba(32,136,255,.06); }
+        .ddp-mode-icon  { font-size:32px;line-height:1; }
+        .ddp-mode-label { font-size:15px;font-weight:700;color:var(--ddp-t0); }
+        .ddp-mode-sub   { font-size:11px;color:var(--ddp-t1);line-height:1.4; }
+        /* action list */
+        .ddp-action-list { display:flex;flex-direction:column;gap:10px; }
+        .ddp-action-card {
+          background:var(--ddp-surf);border:2px solid var(--ddp-bd);
+          border-radius:var(--ddp-r2);padding:16px 16px;
+          display:flex;align-items:center;gap:14px;
+          cursor:pointer;transition:all .18s;min-height:68px;position:relative;
+        }
+        .ddp-action-card::after { content:"›";position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:18px;color:var(--ddp-t3); }
+        .ddp-action-card:active { transform:scale(.97); }
+        .ddp-action-icon  { font-size:28px;line-height:1;flex-shrink:0; }
+        .ddp-action-label { font-size:15px;font-weight:700;color:var(--ddp-t0);margin-bottom:2px; }
+        .ddp-action-sub   { font-size:11px;color:var(--ddp-t1);line-height:1.3;padding-right:20px; }
+        .ddp-card-green  { border-color:var(--ddp-green);  background:rgba(25,224,154,.06); }
+        .ddp-card-blue   { border-color:var(--ddp-blue);   background:rgba(32,136,255,.06); }
+        .ddp-card-yellow { border-color:var(--ddp-yellow); background:rgba(245,166,35,.06); }
+        .ddp-card-purple { border-color:var(--ddp-purple); background:rgba(176,82,217,.06); }
+        .ddp-card-orange { border-color:var(--ddp-orange); background:rgba(255,107,0,.06);  }
+        /* trailer input */
+        .ddp-input-row { display:flex;align-items:center;gap:8px;
+          background:var(--ddp-surf);border:2px solid var(--ddp-bd2);
+          border-radius:var(--ddp-r);padding:6px 6px 6px 14px;
+          transition:border-color .2s;margin-bottom:12px; }
+        .ddp-input-row:focus-within { border-color:var(--ddp-yellow); }
+        .ddp-input-lbl { font-size:10px;font-weight:600;letter-spacing:.1em;color:var(--ddp-t3);text-transform:uppercase;flex-shrink:0; }
+        .ddp-trailer-inp {
+          flex:1;background:none;border:none;outline:none;
+          font-family:inherit;font-size:18px;font-weight:700;
+          color:var(--ddp-t0);letter-spacing:.04em;text-transform:uppercase;
+          caret-color:var(--ddp-yellow);
+        }
+        .ddp-trailer-inp::placeholder { color:var(--ddp-t3);font-weight:400; }
+        /* eta pills */
+        .ddp-eta-lbl  { font-size:10px;font-weight:600;letter-spacing:.1em;color:var(--ddp-t3);text-transform:uppercase;margin-bottom:8px; }
+        .ddp-eta-wrap { display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px; }
+        .ddp-pill {
+          background:var(--ddp-surf);border:1px solid var(--ddp-bd2);
+          border-radius:10px;padding:8px 14px;font-size:13px;font-weight:500;
+          color:var(--ddp-t2);cursor:pointer;transition:all .15s;font-family:inherit;
+        }
+        .ddp-pill.ddp-sel { background:var(--ddp-t0);border-color:var(--ddp-t0);color:var(--ddp-bg);font-weight:700; }
+        .ddp-pill:active  { transform:scale(.95); }
+        /* type cards */
+        .ddp-type-grid { display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px; }
+        .ddp-type-card {
+          background:var(--ddp-surf);border:2px solid var(--ddp-bd);
+          border-radius:var(--ddp-r);padding:16px 10px;
+          cursor:pointer;transition:all .18s;text-align:center;font-family:inherit;
+        }
+        .ddp-type-card.ddp-sel { border-color:var(--ddp-t0);background:var(--ddp-surf2); }
+        .ddp-type-card:active   { transform:scale(.97); }
+        .ddp-type-icon { font-size:24px;margin-bottom:6px; }
+        .ddp-type-name { font-size:13px;font-weight:700;color:var(--ddp-t0); }
+        .ddp-type-desc { font-size:11px;color:var(--ddp-t2);margin-top:2px; }
+        /* safety checks */
+        .ddp-check-list { display:flex;flex-direction:column;gap:10px;margin-bottom:14px; }
+        .ddp-check-item {
+          background:var(--ddp-surf);border:2px solid var(--ddp-bd);
+          border-radius:var(--ddp-r);padding:14px 16px;
+          display:flex;align-items:center;gap:14px;cursor:pointer;
+          transition:all .18s;user-select:none;
+        }
+        .ddp-check-item.ddp-chk { border-color:var(--ddp-green);background:rgba(25,224,154,.06); }
+        .ddp-check-item:active   { transform:scale(.98); }
+        .ddp-check-box {
+          width:26px;height:26px;border-radius:50%;border:2px solid var(--ddp-bd2);
+          display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;
+        }
+        .ddp-check-item.ddp-chk .ddp-check-box { background:var(--ddp-green);border-color:var(--ddp-green); }
+        .ddp-check-box svg { width:13px;height:13px;fill:none;stroke:#000;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;opacity:0;transition:opacity .2s; }
+        .ddp-check-item.ddp-chk .ddp-check-box svg { opacity:1; }
+        .ddp-check-title { font-size:14px;font-weight:600;color:var(--ddp-t0);margin-bottom:2px; }
+        .ddp-check-desc  { font-size:11px;color:var(--ddp-t2); }
+        /* door grid */
+        .ddp-door-grid { display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-bottom:14px; }
+        .ddp-door-btn {
+          background:var(--ddp-surf);border:2px solid var(--ddp-bd);
+          border-radius:10px;padding:12px 4px;font-size:14px;font-weight:700;
+          color:var(--ddp-t0);cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;
+        }
+        .ddp-door-btn.ddp-sel { background:var(--ddp-t0);border-color:var(--ddp-t0);color:var(--ddp-bg); }
+        .ddp-door-btn.ddp-occ { opacity:.4;cursor:not-allowed;border-style:dashed; }
+        .ddp-door-btn:active:not(.ddp-occ) { transform:scale(.92); }
+        /* cta */
+        .ddp-cta {
+          width:100%;border:none;border-radius:var(--ddp-r);
+          padding:16px;font-family:inherit;font-size:15px;font-weight:700;
+          cursor:pointer;transition:all .18s;display:flex;align-items:center;justify-content:center;gap:8px;
+        }
+        .ddp-cta:active   { transform:scale(.98);opacity:.9; }
+        .ddp-cta:disabled { opacity:.35;cursor:not-allowed;transform:none; }
+        .ddp-cta-green  { background:var(--ddp-green);color:#000; }
+        .ddp-cta-blue   { background:var(--ddp-blue);color:#fff; }
+        .ddp-cta-yellow { background:var(--ddp-yellow);color:#000; }
+        .ddp-cta-white  { background:var(--ddp-t0);color:#000; }
+        .ddp-cta-ghost  { background:var(--ddp-surf2);border:2px solid var(--ddp-bd2);color:var(--ddp-t1);font-weight:500; }
+        .ddp-cta + .ddp-cta { margin-top:8px; }
+        /* info card */
+        .ddp-info { background:var(--ddp-surf);border:1px solid var(--ddp-bd);border-radius:var(--ddp-r);padding:12px 14px;display:flex;gap:10px;align-items:flex-start;margin-bottom:12px; }
+        .ddp-info-icon  { font-size:18px;flex-shrink:0; }
+        .ddp-info-title { font-size:12px;font-weight:600;color:var(--ddp-t0);margin-bottom:2px; }
+        .ddp-info-desc  { font-size:11px;color:var(--ddp-t2);line-height:1.5; }
+        /* door assigned */
+        .ddp-door-assigned {
+          background:linear-gradient(135deg,rgba(25,224,154,.12),rgba(25,224,154,.04));
+          border:2px solid var(--ddp-green);border-radius:var(--ddp-r2);
+          padding:20px 16px;text-align:center;margin-bottom:14px;
+        }
+        .ddp-door-assigned-lbl { font-size:10px;font-weight:700;letter-spacing:.14em;color:var(--ddp-green);text-transform:uppercase;margin-bottom:4px; }
+        .ddp-door-assigned-num { font-size:56px;font-weight:700;letter-spacing:-.04em;color:var(--ddp-t0);line-height:1; }
+        .ddp-door-assigned-sub { font-size:12px;color:var(--ddp-t1);margin-top:6px; }
+        /* success */
+        .ddp-success-icon { width:56px;height:56px;border-radius:50%;background:var(--ddp-green);
+          display:flex;align-items:center;justify-content:center;margin:0 auto 14px; }
+        .ddp-success-icon svg { width:26px;height:26px;fill:none;stroke:#000;stroke-width:3;stroke-linecap:round;stroke-linejoin:round; }
+        .ddp-success-title { font-size:24px;font-weight:700;color:var(--ddp-t0);text-align:center;margin-bottom:6px; }
+        .ddp-success-sub   { font-size:13px;color:var(--ddp-t2);text-align:center;margin-bottom:16px;line-height:1.5; }
+        .ddp-summary { background:var(--ddp-surf);border:1px solid var(--ddp-bd);border-radius:var(--ddp-r);padding:14px;margin-bottom:14px; }
+        .ddp-sum-row { display:flex;justify-content:space-between;align-items:center;padding:6px 0; }
+        .ddp-sum-row:not(:last-child) { border-bottom:1px solid var(--ddp-bd); }
+        .ddp-sum-key { font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ddp-t3); }
+        .ddp-sum-val { font-size:13px;font-weight:600;color:var(--ddp-t0); }
+        /* toast */
+        .ddp-toast { position:absolute;bottom:16px;left:50%;transform:translateX(-50%) translateY(80px);
+          background:var(--ddp-surf2);border:1px solid var(--ddp-bd2);border-radius:12px;
+          padding:10px 18px;font-size:13px;font-weight:600;color:var(--ddp-t0);
+          white-space:nowrap;z-index:999;transition:transform .3s;pointer-events:none; }
+        .ddp-toast.ddp-show { transform:translateX(-50%) translateY(0); }
+        /* override bar */
+        .ddp-override-bar {
+          display:none;background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.25);
+          border-radius:var(--ddp-r);padding:10px 14px;margin-bottom:12px;
+          font-size:11px;font-weight:600;color:var(--ddp-yellow);text-align:center;
+        }
+        .ddp-override-bar.ddp-visible { display:block; }
+        @keyframes ddp-fadeup { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+        .ddp-fade { animation:ddp-fadeup .3s ease both; }
+      </style>
+
+      <!-- Toggle header -->
+      <div id="ddp-toggle">
+        <div id="ddp-toggle-left">
+          <span id="ddp-toggle-icon">🚛</span>
+          <div>
+            <div id="ddp-toggle-label">Driver Submit Panel</div>
+            <div id="ddp-toggle-sub">Wesbell & Carrier flows</div>
+          </div>
+        </div>
+        <span id="ddp-toggle-chev">▾</span>
+      </div>
+
+      <!-- Override badge (shown when dispatcher/admin/management is signed in) -->
+      <div id="ddp-override-badge">⚡ Override mode active — <span id="ddp-override-role"></span> signed in</div>
+
+      <!-- Collapsible body -->
+      <div id="ddp-body">
+        <div id="ddp-screens">
+
+          <!-- S0: Mode select -->
+          <div class="ddp-screen ddp-active" id="ddp-s-mode">
+            <div class="ddp-screen-title">Driver Submit</div>
+            <div class="ddp-screen-sub">Select your carrier type to begin</div>
+            <div class="ddp-mode-grid ddp-fade">
+              <div class="ddp-mode-card ddp-wesbell" data-ddp-mode="wesbell">
+                <div class="ddp-mode-icon">🚛</div>
+                <div class="ddp-mode-label">Wesbell</div>
+                <div class="ddp-mode-sub">Wesbell company driver</div>
+              </div>
+              <div class="ddp-mode-card ddp-carrier" data-ddp-mode="carrier">
+                <div class="ddp-mode-icon">🏢</div>
+                <div class="ddp-mode-label">Carrier</div>
+                <div class="ddp-mode-sub">Outside carrier driver</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- S1: Wesbell actions -->
+          <div class="ddp-screen" id="ddp-s-wesbell">
+            <button class="ddp-back" data-ddp-back="ddp-s-mode">
+              <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Back
+            </button>
+            <div class="ddp-screen-title">Wesbell</div>
+            <div class="ddp-screen-sub">Select your activity</div>
+            <div class="ddp-override-bar" id="ddp-wb-override-bar"></div>
+            <div class="ddp-action-list">
+              <div class="ddp-action-card ddp-card-green" id="ddp-wb-quickdrop">
+                <span class="ddp-action-icon">📦</span>
+                <div><div class="ddp-action-label">Quick Drop</div><div class="ddp-action-sub">Drop trailer — no prompts, instant submit</div></div>
+              </div>
+              <div class="ddp-action-card ddp-card-purple" id="ddp-wb-shunt">
+                <span class="ddp-action-icon">🔀</span>
+                <div><div class="ddp-action-label">Shunt Trailer</div><div class="ddp-action-sub">Move to a new door — no prompts</div></div>
+              </div>
+              <div class="ddp-action-card ddp-card-orange" id="ddp-wb-xdock">
+                <span class="ddp-action-icon">🔄</span>
+                <div><div class="ddp-action-label">Cross Dock</div><div class="ddp-action-sub">Load / offload — safety confirmation required</div></div>
+              </div>
+              <div class="ddp-action-card ddp-card-blue" id="ddp-wb-omw">
+                <span class="ddp-action-icon">🚛</span>
+                <div><div class="ddp-action-label">On My Way</div><div class="ddp-action-sub">Get a door assigned before arriving</div></div>
+              </div>
+              <div class="ddp-action-card ddp-card-yellow" id="ddp-wb-arrive">
+                <span class="ddp-action-icon">📍</span>
+                <div><div class="ddp-action-label">I Have Arrived</div><div class="ddp-action-sub">Assign a door right now, on the spot</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- S2: Carrier actions -->
+          <div class="ddp-screen" id="ddp-s-carrier">
+            <button class="ddp-back" data-ddp-back="ddp-s-mode">
+              <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Back
+            </button>
+            <div class="ddp-screen-title">Outside Carrier</div>
+            <div class="ddp-screen-sub">Select your activity</div>
+            <div class="ddp-override-bar" id="ddp-ca-override-bar"></div>
+            <div class="ddp-action-list">
+              <div class="ddp-action-card ddp-card-green" id="ddp-ca-drop">
+                <span class="ddp-action-icon">📦</span>
+                <div><div class="ddp-action-label">Drop Trailer</div><div class="ddp-action-sub">Drop loaded or empty trailer</div></div>
+              </div>
+              <div class="ddp-action-card ddp-card-orange" id="ddp-ca-xdock">
+                <span class="ddp-action-icon">🔄</span>
+                <div><div class="ddp-action-label">Cross Dock</div><div class="ddp-action-sub">Load / offload — safety confirmation required</div></div>
+              </div>
+              <div class="ddp-action-card ddp-card-yellow" id="ddp-ca-arrive">
+                <span class="ddp-action-icon">📍</span>
+                <div><div class="ddp-action-label">I Have Arrived</div><div class="ddp-action-sub">Get a door assigned right now</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- S3: Quick Drop (Wesbell) — trailer input only -->
+          <div class="ddp-screen" id="ddp-s-quickdrop">
+            <button class="ddp-back" data-ddp-back="ddp-s-wesbell">
+              <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Back
+            </button>
+            <div class="ddp-screen-title">Quick Drop</div>
+            <div class="ddp-screen-sub">Enter trailer number — submits instantly, no further prompts</div>
+            <div class="ddp-input-row">
+              <span class="ddp-input-lbl">Trailer</span>
+              <input class="ddp-trailer-inp" id="ddp-qd-trailer" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="e.g. WB4821" maxlength="12"/>
+            </div>
+            <button class="ddp-cta ddp-cta-green" id="ddp-qd-submit">Drop Now →</button>
+          </div>
+
+          <!-- S4: Shunt (Wesbell) — trailer + door, no safety -->
+          <div class="ddp-screen" id="ddp-s-shunt">
+            <button class="ddp-back" data-ddp-back="ddp-s-wesbell">
+              <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Back
+            </button>
+            <div class="ddp-screen-title">Shunt Trailer</div>
+            <div class="ddp-screen-sub">Move to a new door — no further prompts</div>
+            <div class="ddp-input-row">
+              <span class="ddp-input-lbl">Trailer</span>
+              <input class="ddp-trailer-inp" id="ddp-sh-trailer" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="Trailer #" maxlength="12"/>
+            </div>
+            <div class="ddp-eta-lbl">Move to door</div>
+            <div class="ddp-door-grid" id="ddp-sh-door-grid"></div>
+            <button class="ddp-cta ddp-cta-white" id="ddp-sh-submit" disabled>Confirm Shunt →</button>
+          </div>
+
+          <!-- S5: OMW (Wesbell) — trailer + eta -->
+          <div class="ddp-screen" id="ddp-s-omw">
+            <button class="ddp-back" data-ddp-back="ddp-s-wesbell">
+              <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Back
+            </button>
+            <div class="ddp-screen-title">On My Way</div>
+            <div class="ddp-screen-sub">Door assigned before you arrive — held 30 min</div>
+            <div class="ddp-input-row">
+              <span class="ddp-input-lbl">Trailer</span>
+              <input class="ddp-trailer-inp" id="ddp-omw-trailer" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="Trailer #" maxlength="12"/>
+            </div>
+            <div class="ddp-eta-lbl">ETA to dock</div>
+            <div class="ddp-eta-wrap">
+              <button class="ddp-pill ddp-sel" data-ddp-eta="10">10 min</button>
+              <button class="ddp-pill" data-ddp-eta="20">20 min</button>
+              <button class="ddp-pill" data-ddp-eta="30">30 min</button>
+              <button class="ddp-pill" data-ddp-eta="45">45 min</button>
+              <button class="ddp-pill" data-ddp-eta="60">1 hr</button>
+            </div>
+            <button class="ddp-cta ddp-cta-blue" id="ddp-omw-submit">Send On My Way →</button>
+          </div>
+
+          <!-- S6: Arrive (shared Wesbell + Carrier) — trailer only, door assigned on submit -->
+          <div class="ddp-screen" id="ddp-s-arrive">
+            <button class="ddp-back" id="ddp-arrive-back">
+              <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Back
+            </button>
+            <div class="ddp-screen-title">I Have Arrived</div>
+            <div class="ddp-screen-sub">Door assigned on the spot — dispatch notified immediately</div>
+            <div class="ddp-input-row">
+              <span class="ddp-input-lbl">Trailer</span>
+              <input class="ddp-trailer-inp" id="ddp-arr-trailer" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="Trailer #" maxlength="12"/>
+            </div>
+            <button class="ddp-cta ddp-cta-yellow" id="ddp-arr-submit">Get Door Now →</button>
+          </div>
+
+          <!-- S7: Door assigned result -->
+          <div class="ddp-screen" id="ddp-s-door">
+            <div class="ddp-door-assigned ddp-fade" id="ddp-door-assigned-card">
+              <div class="ddp-door-assigned-lbl">Your Door</div>
+              <div class="ddp-door-assigned-num" id="ddp-door-num">--</div>
+              <div class="ddp-door-assigned-sub" id="ddp-door-sub">Head straight to your door</div>
+            </div>
+            <button class="ddp-cta ddp-cta-ghost" id="ddp-door-done">✓ Got it — Done</button>
+          </div>
+
+          <!-- S8: Drop trailer (carrier) — type select -->
+          <div class="ddp-screen" id="ddp-s-drop">
+            <button class="ddp-back" data-ddp-back="ddp-s-carrier">
+              <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Back
+            </button>
+            <div class="ddp-screen-title">Drop Trailer</div>
+            <div class="ddp-screen-sub">What are you dropping?</div>
+            <div class="ddp-input-row">
+              <span class="ddp-input-lbl">Trailer</span>
+              <input class="ddp-trailer-inp" id="ddp-drop-trailer" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="Trailer #" maxlength="12"/>
+            </div>
+            <div class="ddp-type-grid">
+              <div class="ddp-type-card ddp-sel" data-ddp-droptype="Loaded">
+                <div class="ddp-type-icon">📦</div>
+                <div class="ddp-type-name">Loaded</div>
+                <div class="ddp-type-desc">Full trailer</div>
+              </div>
+              <div class="ddp-type-card" data-ddp-droptype="Empty">
+                <div class="ddp-type-icon">🪣</div>
+                <div class="ddp-type-name">Empty</div>
+                <div class="ddp-type-desc">Empty trailer</div>
+              </div>
+            </div>
+            <div class="ddp-info">
+              <span class="ddp-info-icon">ℹ️</span>
+              <div><div class="ddp-info-title">Door assigned by dispatch</div><div class="ddp-info-desc">Dispatch will assign your door on the board after submission.</div></div>
+            </div>
+            <button class="ddp-cta ddp-cta-green" id="ddp-drop-submit">Confirm Drop →</button>
+          </div>
+
+          <!-- S9: XDock type (pickup / offload) -->
+          <div class="ddp-screen" id="ddp-s-xdock-type">
+            <button class="ddp-back" id="ddp-xtype-back">
+              <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Back
+            </button>
+            <div class="ddp-screen-title">Cross Dock</div>
+            <div class="ddp-screen-sub">Pickup or offload?</div>
+            <div class="ddp-input-row">
+              <span class="ddp-input-lbl">Trailer</span>
+              <input class="ddp-trailer-inp" id="ddp-xd-trailer" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="Trailer #" maxlength="12"/>
+            </div>
+            <div class="ddp-type-grid">
+              <div class="ddp-type-card ddp-sel" data-ddp-xtype="pickup">
+                <div class="ddp-type-icon">⬆️</div>
+                <div class="ddp-type-name">Pickup</div>
+                <div class="ddp-type-desc">Taking a trailer</div>
+              </div>
+              <div class="ddp-type-card" data-ddp-xtype="offload">
+                <div class="ddp-type-icon">⬇️</div>
+                <div class="ddp-type-name">Offload</div>
+                <div class="ddp-type-desc">Dropping here</div>
+              </div>
+            </div>
+            <button class="ddp-cta ddp-cta-white" id="ddp-xtype-next">Next → Select Door</button>
+          </div>
+
+          <!-- S10: XDock door select -->
+          <div class="ddp-screen" id="ddp-s-xdock-door">
+            <button class="ddp-back" data-ddp-back="ddp-s-xdock-type">
+              <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Back
+            </button>
+            <div class="ddp-screen-title">Select Door</div>
+            <div class="ddp-screen-sub">Which door are you at?</div>
+            <div class="ddp-door-grid" id="ddp-xd-door-grid"></div>
+            <button class="ddp-cta ddp-cta-white" id="ddp-xd-door-next" disabled>Next → Safety Check</button>
+          </div>
+
+          <!-- S11: Safety check (xdock only — 2 prompts) -->
+          <div class="ddp-screen" id="ddp-s-safety">
+            <button class="ddp-back" data-ddp-back="ddp-s-xdock-door">
+              <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Back
+            </button>
+            <div class="ddp-screen-title">Safety Check</div>
+            <div class="ddp-screen-sub">Both must be confirmed before completing</div>
+            <div class="ddp-check-list">
+              <div class="ddp-check-item" data-ddp-chk="load">
+                <div class="ddp-check-box"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+                <div><div class="ddp-check-title">Load Secured</div><div class="ddp-check-desc">All cargo secured, trailer doors closed</div></div>
+              </div>
+              <div class="ddp-check-item" data-ddp-chk="plate">
+                <div class="ddp-check-box"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+                <div><div class="ddp-check-title">Dock Plate Up</div><div class="ddp-check-desc">Dock plate is in the raised position</div></div>
+              </div>
+            </div>
+            <button class="ddp-cta ddp-cta-green" id="ddp-safety-submit" disabled>Confirm &amp; Complete →</button>
+          </div>
+
+          <!-- S12: Success -->
+          <div class="ddp-screen" id="ddp-s-done">
+            <div class="ddp-success-icon ddp-fade"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div class="ddp-success-title ddp-fade" id="ddp-done-title">Done!</div>
+            <div class="ddp-success-sub ddp-fade" id="ddp-done-sub">Dispatch has been notified.</div>
+            <div class="ddp-summary ddp-fade" id="ddp-done-summary"></div>
+            <button class="ddp-cta ddp-cta-ghost" id="ddp-done-restart">← New Submission</button>
+          </div>
+
+        </div><!-- #ddp-screens -->
+        <div class="ddp-toast" id="ddp-toast"></div>
+      </div><!-- #ddp-body -->
+    </div><!-- #dockDriverPanel -->
+
   </div>
 </div>
 

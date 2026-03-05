@@ -36,21 +36,6 @@ else if (p.startsWith("/dock")) {
 else {
   showMode("dispatch");
 }
-function showMode(mode){
-
-  const dispatch = document.getElementById("dispatchView");
-  const dock = document.getElementById("dockView");
-  const driver = document.getElementById("driverView");
-
-  if(dispatch) dispatch.style.display = "none";
-  if(dock) dock.style.display = "none";
-  if(driver) driver.style.display = "none";
-
-  if(mode === "dispatch" && dispatch) dispatch.style.display = "block";
-  if(mode === "dock" && dock) dock.style.display = "block";
-  if(mode === "driver" && driver) driver.style.display = "block";
-
-}
 
 const p = location.pathname.toLowerCase();
 

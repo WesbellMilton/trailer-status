@@ -10,14 +10,6 @@
   const isDock   = () => path().startsWith("/dock");
   const isAdmin  = () => ROLE === "admin";
 
-  // ✅ SAFE DOM helpers (prevents crash if an element is missing on a page)
-  const show = (id, disp="") => { const n=el(id); if(n) n.style.display=disp; };
-  const hide = (id) => { const n=el(id); if(n) n.style.display="none"; };
-  const setText = (id, txt) => { const n=el(id); if(n) n.textContent = txt; };
-  const setHTML = (id, html) => { const n=el(id); if(n) n.innerHTML = html; };
-  const addCls = (id, c) => { const n=el(id); if(n) n.classList.add(c); };
-  const rmCls = (id, c) => { const n=el(id); if(n) n.classList.remove(c); };
-
   const fmtTime = ms => {
     if (!ms) return "";
     try { return new Date(ms).toLocaleString(undefined,{month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"}); }
@@ -33,40 +25,21 @@
   };
   const esc = s => String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
 
-  // ✅ apiJson (strict) and apiFetch (raw Response) — both handle 401 redirect
   async function apiJson(url, opts) {
     const res = await fetch(url, opts);
     if (res.status===401) { location.href="/login?expired=1&from="+encodeURIComponent(location.pathname); throw new Error("401"); }
     if (res.status===403) { console.warn("Forbidden:", url); throw new Error("403"); }
+    // 409 Conflict = structured duplicate warning — return the JSON body, don't throw
     if (res.status===409) { const ct=res.headers.get("content-type")||""; return ct.includes("application/json") ? res.json() : {}; }
     if (!res.ok) { const t=await res.text().catch(()=>""); throw new Error(t||"HTTP "+res.status); }
     const ct = res.headers.get("content-type")||"";
     return ct.includes("application/json") ? res.json() : {};
   }
-  async function apiFetch(url, opts={}) {
-    const o = {...opts};
-    o.headers = {...(o.headers||{}), "X-Requested-With":"XMLHttpRequest"};
-    // If you pass JSON body without headers, add content-type automatically:
-    if (o.body && !o.headers["Content-Type"]) o.headers["Content-Type"]="application/json";
-    const res = await fetch(url, o);
-    if (res.status===401) { location.href="/login?expired=1&from="+encodeURIComponent(location.pathname); }
-    return res;
-  }
-
-  // ✅ unify showToast so your newer calls don't crash
-  function showToast(a,b,c){
-    // supports: showToast("text","ok",4000) OR showToast("text","err")
-    const msg = (typeof a==="string") ? a : (a?.message||"");
-    const type = (b==="success"||b==="ok") ? "ok" : (b==="warn"||b==="warning") ? "warn" : (b==="err"||b==="error") ? "err" : "ok";
-    const dur = (typeof c==="number") ? c : 4500;
-    toast(type==="ok" ? "Done" : type==="warn" ? "Heads up" : "Error", msg, type, dur);
-  }
 
   function toast(title, body, type, duration) {
-    setText("toastTitle", title);
-    setText("toastBody", body||"");
+    el("toastTitle").textContent = title;
+    el("toastBody").textContent = body||"";
     const t=el("toast");
-    if(!t) return;
     t.className = "toast "+(type==="ok"?"t-ok":type==="warn"?"t-warn":"t-err");
     t.style.display="block";
     t.style.transform="";
@@ -75,24 +48,24 @@
     else if (type==="err") haptic("error");
     else haptic("light");
     clearTimeout(toast._t);
-    toast._t = setTimeout(()=>{ if(t) t.style.display="none"; }, duration||4500);
+    toast._t = setTimeout(()=>t.style.display="none", duration||4500);
   }
 
   let _mr=null;
   function showModal(title,body) {
     return new Promise(r=>{
       _mr=r;
-      setText("modalTitle", title);
-      setText("modalBody", body);
-      el("modalOv")?.classList.remove("hidden");
-      el("modalConfirm")?.focus();
+      el("modalTitle").textContent=title;
+      el("modalBody").textContent=body;
+      el("modalOv").classList.remove("hidden");
+      el("modalConfirm").focus();
     });
   }
-  el("modalCancel")?.addEventListener("click",  ()=>{ el("modalOv")?.classList.add("hidden"); if(_mr){_mr(false);_mr=null;} });
-  el("modalConfirm")?.addEventListener("click", ()=>{ el("modalOv")?.classList.add("hidden"); if(_mr){_mr(true);_mr=null;} });
-  el("modalOv")?.addEventListener("click", e=>{ if(e.target===el("modalOv")){ el("modalOv")?.classList.add("hidden"); if(_mr){_mr(false);_mr=null;} } });
+  el("modalCancel")?.addEventListener("click",  ()=>{ el("modalOv").classList.add("hidden"); if(_mr){_mr(false);_mr=null;} });
+  el("modalConfirm")?.addEventListener("click", ()=>{ el("modalOv").classList.add("hidden"); if(_mr){_mr(true);_mr=null;} });
+  el("modalOv")?.addEventListener("click", e=>{ if(e.target===el("modalOv")){ el("modalOv").classList.add("hidden"); if(_mr){_mr(false);_mr=null;} } });
   el("dmModalCancel")?.addEventListener("click", () => el("dmModalOv")?.classList.add("hidden"));
-  el("dmModalOv")?.addEventListener("click", e => { if(e.target===el("dmModalOv")) el("dmModalOv")?.classList.add("hidden"); });
+  el("dmModalOv")?.addEventListener("click", e => { if(e.target===el("dmModalOv")) el("dmModalOv").classList.add("hidden"); });
 
   function setPlatesOpen(open) {
     const t=el("dockPlatesToggle"), b=el("dockPlatesBody"); if(!t||!b) return;
@@ -132,13 +105,8 @@
     else if(p.startsWith("/dock")) el("navDock")?.classList.add("active");
     else el("navDispatch")?.classList.add("active");
     const rb=el("roleBadge");
-    if(rb){
-      if(ROLE){
-        rb.style.display="";
-        rb.textContent=ROLE==="admin"?"⚡ ADMIN":ROLE.toUpperCase();
-        rb.style.color=ROLE==="admin"?"var(--amber)":"";
-      } else rb.style.display="none";
-    }
+    if(ROLE){ rb.style.display=""; rb.textContent=ROLE==="admin"?"⚡ ADMIN":ROLE.toUpperCase(); rb.style.color=ROLE==="admin"?"var(--amber)":""; }
+    else { rb.style.display="none"; }
   }
 
   /* ── DOOR OCCUPANCY ── */
@@ -207,12 +175,17 @@
       prevStatuses[r.trailer]=r.status;
       const readyFlash=((ROLE==="dispatcher"||ROLE==="management")&&!readOnly&&r.status==="Ready")?" ready-flash":"";
       const door = r.door ? `<span class="t-door">${esc(r.door)}</span>` : `<span style="color:var(--t3)">—</span>`;
+      const note=r.note?`<span class="t-note" title="${esc(r.note)}">${esc(r.note)}</span>`:`<span style="color:var(--t3)">—</span>`;
+      const dtype=r.dropType?`<span style="font-size:10px;color:var(--t2);font-family:var(--mono);">${esc(r.dropType)}</span>`:`<span style="color:var(--t3)">—</span>`;
       const ctag=carrierTag(r.carrierType);
       const ago=r.updatedAt?timeAgo(r.updatedAt):"";
+      // OMW badge
       const omwBadge = r.omwAt && r.status==="Incoming"
         ? `<span class="omw-badge">🚛 OMW${r.omwEta?` ~${r.omwEta}m`:""}</span>` : "";
+      // Time on door
       const doorAge = r.doorAt && r.door
         ? `<span class="door-age" title="At door ${timeAgo(r.doorAt)}">${timeAgo(r.doorAt)}</span>` : "";
+      // Inline note (editable for dispatchers)
       const noteHtml = canEdit
         ? `<span class="t-note-edit" data-trailer="${esc(r.trailer)}" data-note="${esc(r.note||"")}" title="Click to edit note">${r.note?`<span class="t-note">${esc(r.note)}</span>`:`<span style="color:var(--t3);font-style:italic">add note…</span>`}</span>`
         : (r.note?`<span class="t-note" title="${esc(r.note)}">${esc(r.note)}</span>`:`<span style="color:var(--t3)">—</span>`);
@@ -231,16 +204,16 @@
         const quickBtns = nexts.map((s,i) => {
           if(i===0){
             const btnCls = s==="Ready"?"btn-success":"btn-primary";
-            return `<button class="btn ${btnCls} btn-sm qs-btn" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}">${esc(s)}</button>`;
+            return `<button class="btn ${btnCls} btn-sm qs-btn" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}" aria-label="${esc(s)} trailer ${esc(r.trailer)}">${esc(s)}</button>`;
           }
-          return `<button class="btn btn-default btn-sm qs-btn qs-secondary" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}">${esc(s)}</button>`;
+          return `<button class="btn btn-default btn-sm qs-btn qs-secondary" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}" aria-label="${esc(s)} trailer ${esc(r.trailer)}">${esc(s)}</button>`;
         }).join("");
         acts = `<div class="t-acts">
           ${quickBtns}
-          ${r.status==="Dock Ready"?`<button class="btn btn-success btn-sm" data-act="markReady" data-trailer-id="${esc(r.trailer)}" style="font-weight:800;">✓ Ready</button>`:""}
-          <button class="btn btn-default btn-sm" data-act="shuntToggle" data-trailer-id="${esc(r.trailer)}">Move</button>
-          <button class="btn btn-default btn-sm" data-act="edit" data-trailer-id="${esc(r.trailer)}">Edit</button>
-          <button class="btn btn-danger btn-sm" data-act="delete" data-trailer-id="${esc(r.trailer)}">Del</button>
+          ${r.status==="Dock Ready"?`<button class="btn btn-success btn-sm" data-act="markReady" data-trailer-id="${esc(r.trailer)}" style="font-weight:800;" aria-label="Mark trailer ${esc(r.trailer)} ready">✓ Ready</button>`:""}
+          <button class="btn btn-default btn-sm" data-act="shuntToggle" data-trailer-id="${esc(r.trailer)}" aria-label="Move trailer ${esc(r.trailer)} to new door">Move</button>
+          <button class="btn btn-default btn-sm" data-act="edit" data-trailer-id="${esc(r.trailer)}" aria-label="Edit trailer ${esc(r.trailer)}">Edit</button>
+          <button class="btn btn-danger btn-sm" data-act="delete" data-trailer-id="${esc(r.trailer)}" aria-label="Delete trailer ${esc(r.trailer)}">Del</button>
         </div>`;
       } else if(canDock){
         if(r.status==="Dropped"||r.status==="Incoming")
@@ -258,7 +231,7 @@
             const ds=String(d);
             const isCurrent=ds===(r.door||"");
             const isOcc=!!occupied[ds]&&!isCurrent;
-            return `<button class="shunt-door-btn${isCurrent?" current":""}${isOcc?" occ":""}" data-act="shuntDoor" data-door="${ds}" data-trailer-id="${esc(r.trailer)}" ${isCurrent?"disabled":""}>${ds}${isOcc?`<span class="shunt-occ-dot"></span>`:""}</button>`;
+            return `<button class="shunt-door-btn${isCurrent?" current":""}${isOcc?" occ":""}" data-act="shuntDoor" data-door="${ds}" data-trailer-id="${esc(r.trailer)}" ${isCurrent?"disabled":""} aria-label="Move to door ${ds}${isOcc?" (occupied)":""}">${ds}${isOcc?`<span class="shunt-occ-dot"></span>`:""}</button>`;
           }).join("")}</div>
           <button class="btn btn-default btn-sm" data-act="shuntToggle" data-trailer-id="${esc(r.trailer)}" style="margin-top:4px;">Cancel</button>
         </div>` : "";
@@ -269,7 +242,7 @@
         <span class="t-dir">${esc(r.direction||"—")}</span>
         <span class="t-status">${statusTag(r.status)}</span>
         <span class="t-door-cell">${door}${doorAge}</span>
-        <span class="t-type">${ctag||`<span style="color:var(--t3)">—</span>`}</span>
+        <span class="t-type">${ctag||dtype}</span>
         <span class="t-note-cell">${noteHtml}</span>
         <span class="t-time" title="${esc(fmtTime(r.updatedAt))}">${esc(ago)}</span>
         <div class="t-acts-wrap">${acts}</div>
@@ -303,7 +276,6 @@
     const badge = el("dockMapFreeCount");
     if (badge) badge.textContent = `${freeCount} free`;
   }
-
   function renderSupBoard() {
     renderBoardInto(el("supTbody"),el("supCountsPill"),el("supCountStr"),el("supSearch"),el("supFilterDir"),el("supFilterStatus"),true);
     const slu=el("supLastUpdated"); if(slu) slu.textContent="Updated "+fmtTime(Date.now());
@@ -319,9 +291,9 @@
       {val:v.filter(r=>r.status==="Departed").length,lbl:"Departed",cls:"kpi-departed"},
       {val:confirmations.length,lbl:"Safety Confirms",cls:"kpi-conf"},
     ];
-    const k=el("supKpis"); if(!k) return;
-    k.innerHTML=kpis.map(k=>`<div class="kpi ${k.cls}"><div class="k-val" data-target="${k.val}">0</div><div class="k-lbl">${k.lbl}</div></div>`).join("");
-    k.querySelectorAll(".k-val[data-target]").forEach(kpiEl=>{
+    el("supKpis").innerHTML=kpis.map(k=>`<div class="kpi ${k.cls}"><div class="k-val" data-target="${k.val}">0</div><div class="k-lbl">${k.lbl}</div></div>`).join("");
+    // Count-up animation
+    el("supKpis").querySelectorAll(".k-val[data-target]").forEach(kpiEl=>{
       const target=parseInt(kpiEl.dataset.target)||0;
       if(target===0){ kpiEl.textContent="0"; return; }
       const dur=Math.min(600, target*80);
@@ -359,6 +331,41 @@
     if(el("dockPlatesToggle2")?.getAttribute("aria-expanded")==="true") setPlatesOpen2(true);
   }
 
+  function renderSupConf() {
+    const sb=el("supConfBody"),sc=el("supConfCount"); if(!sb)return;
+    sc.textContent=confirmations.length;
+    sb.innerHTML=!confirmations.length
+      ?`<tr><td colspan="5" style="padding:16px;color:var(--t2);">No confirmations yet.</td></tr>`
+      :confirmations.map(c=>`<tr><td class="muted">${esc(fmtTime(c.at))}</td><td class="mono" style="font-weight:500;color:var(--t0);">${esc(c.trailer||"—")}</td><td class="mono">${esc(c.door||"—")}</td><td style="color:var(--t1);font-size:11px;">${esc(c.action||"—")}</td><td class="muted">${esc((c.ip||"—").split(",")[0])}</td></tr>`).join("");
+  }
+
+  const FEED_COLORS={trailer_create:"var(--green)",trailer_update:"var(--cyan)",trailer_delete:"var(--red)",trailer_status_set:"var(--amber)",driver_drop:"var(--violet)",crossdock_pickup:"var(--cyan)",crossdock_offload:"var(--amber)",safety_confirmed:"var(--green)",plate_set:"var(--t2)",pin_changed:"var(--amber)",trailer_clear_all:"var(--red)"};
+  function renderFeed(rows) {
+    const feed=el("supFeed"); if(!feed)return;
+    el("supAuditCount").textContent=rows.length;
+    if(!rows.length){ feed.innerHTML=`<div style="color:var(--t2);font-size:11px;font-family:var(--mono);">No activity yet.</div>`; return; }
+    feed.innerHTML=rows.slice(0,15).map(r=>{
+      const color=FEED_COLORS[r.action]||"var(--t2)";
+      let txt=`<strong>${esc(r.actorRole||"—")}</strong> — ${esc(r.action||"—")}`;
+      if(r.entityId&&r.entityId!=="*") txt+=` · <strong>${esc(r.entityId)}</strong>`;
+      return `<div class="feed-item"><div class="feed-pip" style="background:${color};"></div><div class="feed-content"><div class="feed-action">${txt}</div><div class="feed-time">${esc(timeAgo(r.at))}</div></div></div>`;
+    }).join("");
+  }
+
+  async function loadAuditInto(bodyEl,countEl,cols) {
+    try {
+      const rows=await apiJson("/api/audit?limit=200"); if(!rows)return;
+      if(countEl) countEl.textContent=rows.length;
+      if(cols===0){ renderFeed(rows); return; }
+      if(!bodyEl)return;
+      if(!rows.length){ bodyEl.innerHTML=`<tr><td colspan="${cols}" style="padding:16px;color:var(--t2);">No entries.</td></tr>`; return; }
+      bodyEl.innerHTML=rows.map(r=>{
+        let d=""; try{ d=JSON.stringify(r.details||{}); }catch{}
+        return `<tr><td class="muted">${esc(fmtTime(r.at))}</td><td style="color:var(--t1);">${esc(r.actorRole||"—")}</td><td style="color:var(--t1);">${esc(r.action||"—")}</td><td class="muted">${esc(r.entityType||"—")}</td><td class="mono">${esc(r.entityId||"—")}</td><td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;color:var(--t2);" title="${esc(d)}">${esc(d)}</td><td class="muted">${esc(r.ip||"—")}</td></tr>`;
+      }).join("");
+    } catch(e){ toast("Audit error",e.message,"err"); }
+  }
+
   function dispPanelHtml(){ return `
     <div class="infobox infobox-amber"><div class="ib-title">Dispatcher Controls</div>Add and manage trailers. Use inline buttons on each row for quick status changes.</div>
     <div class="field"><label class="fl" for="d_trailer">Trailer Number</label><input id="d_trailer" placeholder="e.g. 5312" autocomplete="off" inputmode="numeric" autocorrect="off" autocapitalize="none" spellcheck="false" style="font-family:var(--mono);font-weight:500;"/></div>
@@ -387,18 +394,380 @@
     <div class="infobox infobox-cyan"><div class="ib-title">Dock Workflow</div>1. Trailer arrives → tap <strong>Loading</strong><br/>2. Loading done → tap <strong>Dock Ready</strong><br/>3. Dispatcher confirms → driver notified.</div>
     <div style="font-size:11px;color:var(--t2);">No dispatch controls on Dock role.</div>`; }
 
+  /* ── DOCK VIEW ── */
+  let dockFilter = "active";
+
+  const DOCK_STATUS_NEXT = {
+    "Incoming":  { label:"Mark Loading",    to:"Loading",    cls:"dc-btn-default" },
+    "Dropped":   { label:"Mark Loading",    to:"Loading",    cls:"dc-btn-default" },
+    "Loading":   { label:"Mark Dock Ready", to:"Dock Ready", cls:"dc-btn-cyan"    },
+    "Dock Ready":{ label:"Awaiting dispatcher", to:null,     cls:"" },
+    "Ready":     { label:"Ready for pickup",    to:null,     cls:"" },
+    "Departed":  { label:"Departed",            to:null,     cls:"" },
+  };
+
+  const DOCK_STATUS_COLOR = {
+    "Incoming":"dc-incoming","Dropped":"dc-dropped","Loading":"dc-loading",
+    "Dock Ready":"dc-dockready","Ready":"dc-ready","Departed":"dc-departed",
+  };
+
+  function renderDockView() {
+    const cards = el("dockCards");
+    const countEl = el("dockCount");
+    if (!cards) return;
+    const q = (el("dockSearch")?.value || "").trim().toLowerCase();
+    const rows = Object.entries(trailers)
+      .map(([t,r]) => ({trailer:t,...r}))
+      .filter(r => {
+        if (dockFilter==="active" && r.status==="Departed") return false;
+        if (q && !`${r.trailer} ${r.door||""} ${r.note||""} ${r.status||""}`.toLowerCase().includes(q)) return false;
+        return true;
+      })
+      .sort((a,b) => {
+        // Priority sort: longest wait first within status groups
+        const order = {"Loading":0,"Dropped":1,"Incoming":2,"Dock Ready":3,"Ready":4,"Departed":5};
+        const so = (order[a.status]??9)-(order[b.status]??9);
+        if (so !== 0) return so;
+        // Within same status: longest wait first (lowest updatedAt)
+        return (a.updatedAt||0)-(b.updatedAt||0);
+      });
+    if (countEl) countEl.textContent = rows.length;
+    const canAct = ROLE==="dock"||ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin";
+    const loginNudge = el("dockLoginNudge");
+    if (loginNudge) loginNudge.style.display = canAct ? "none" : "";
+
+    // Update inbound ETA countdown timers
+    clearInterval(_omwTimer);
+    if (!rows.length) {
+      cards.innerHTML = `<div class="dock-empty">${q?"No trailers match search.":dockFilter==="active"?"No active trailers.":"No trailers on board."}</div>`;
+      return;
+    }
+
+    const isDimMode = document.body.classList.contains("dim-mode");
+    const isDoorMap = el("btnDockViewToggle")?.dataset.view === "map";
+
+    if (isDoorMap) {
+      renderDockDoorMapView(cards, rows, canAct);
+      return;
+    }
+
+    cards.innerHTML = rows.map(r => {
+      const colorCls = DOCK_STATUS_COLOR[r.status]||"";
+      const next = DOCK_STATUS_NEXT[r.status];
+      const hasAction = next?.to && canAct;
+      const isSelected = dockSelected.has(r.trailer);
+      const statusDot = {"Loading":"var(--amber)","Dock Ready":"var(--cyan)","Ready":"var(--green)","Dropped":"var(--violet)","Incoming":"var(--t2)","Departed":"var(--t3)"}[r.status]||"var(--t3)";
+
+
+
+      // ETA countdown for OMW trailers
+      let etaHtml = "";
+      if (r.omwAt && r.omwEta && r.status==="Incoming") {
+        const arrivedAt = r.omwAt + r.omwEta * 60000;
+        const remaining = Math.max(0, Math.ceil((arrivedAt - Date.now()) / 60000));
+        etaHtml = `<div class="dc-eta-badge ${remaining===0?"dc-eta-now":""}" data-arrives="${arrivedAt}">🚛 ${remaining===0?"Arriving now":`~${remaining}m`}</div>`;
+      } else if (r.omwAt && r.status==="Incoming") {
+        etaHtml = `<div class="dc-eta-badge">🚛 OMW</div>`;
+      }
+
+      return `<div class="dock-card ${colorCls}${isSelected?" dc-selected":""}" data-trailer="${esc(r.trailer)}" data-swipe-trailer="${esc(r.trailer)}">
+        ${dockBulkMode?`<button class="dc-select-btn ${isSelected?"dc-sel-active":""}" data-act="dockSelect" data-trailer-id="${esc(r.trailer)}">${isSelected?"✓":""}</button>`:""}
+        <div class="dc-top">
+          <div class="dc-trailer-block">
+            <div class="dc-trailer">${esc(r.trailer)}</div>
+            ${r.note?`<div class="dc-note">${esc(r.note)}</div>`:""}
+          </div>
+          <div class="dc-right-block">
+            ${r.door?`<div class="dc-door-badge">D${esc(r.door)}</div>`:`<div class="dc-door-empty">No door</div>`}
+            ${r.doorAt&&r.door?`<div class="dc-time-on-door">⏱ ${timeAgo(r.doorAt)}</div>`:""}
+            ${etaHtml}
+            <div class="dc-status-pill" style="--dot:${statusDot}">${esc(r.status)}</div>
+          </div>
+        </div>
+        <div class="dc-meta-row">
+          ${r.carrierType?carrierTag(r.carrierType):""}
+          ${r.updatedAt?`<span class="dc-ago">${esc(timeAgo(r.updatedAt))}</span>`:""}
+        </div>
+        ${hasAction
+          ?`<button class="dc-action-btn ${next.cls}" data-act="dockSet" data-to="${esc(next.to)}" data-trailer-id="${esc(r.trailer)}">${esc(next.label)}</button>`
+          :next?.to
+            ?`<button class="dc-action-btn dc-btn-signin" data-act="openStaffLogin">🔑 Sign in to update</button>`
+            :`<div class="dc-no-action">${esc(next?.label||"—")}</div>`
+        }
+        <div class="dc-bottom-row">
+          ${canAct?`<button class="dc-issue-btn" data-act="dockReportIssue" data-trailer-id="${esc(r.trailer)}" data-door="${esc(r.door||"")}">⚠ Issue</button>`:""}
+          ${canAct&&!r.door?`<button class="dc-reserve-btn" data-act="dockReserveDoor" data-trailer-id="${esc(r.trailer)}">🚪 Reserve Door</button>`:""}
+        </div>
+        <div class="dc-swipe-hint">← Issue &nbsp;&nbsp; Advance →</div>
+      </div>`;
+    }).join("");
+
+    // Start ETA countdown timer
+    const etaBadges = cards.querySelectorAll("[data-arrives]");
+    if (etaBadges.length) {
+      _omwTimer = setInterval(() => {
+        etaBadges.forEach(badge => {
+          const arrives = parseInt(badge.dataset.arrives);
+          const remaining = Math.max(0, Math.ceil((arrives - Date.now()) / 60000));
+          badge.textContent = remaining===0 ? "🚛 Arriving now" : `🚛 ~${remaining}m`;
+          if (remaining===0) badge.classList.add("dc-eta-now");
+        });
+      }, 30000);
+    }
+
+    // Init card swipe gestures
+    initDockCardSwipes();
+  }
+
+  function renderDockDoorMapView(cards, rows, canAct) {
+    const byDoor = {};
+    rows.forEach(r => { if(r.door) byDoor[r.door] = r; });
+    const doors = [];
+    for (let d=28; d<=42; d++) doors.push(String(d));
+    const statusDot = {"Loading":"var(--amber)","Dock Ready":"var(--cyan)","Ready":"var(--green)","Dropped":"var(--violet)","Incoming":"var(--t2)","Departed":"var(--t3)"};
+
+    cards.innerHTML = `
+      <div class="dock-map-full">
+        <div class="dmf-header">
+          <span class="dmf-title">Door Occupancy</span>
+          <span class="dmf-free">${doors.filter(d=>!byDoor[d]).length} free</span>
+        </div>
+        <div class="dmf-grid">
+          ${doors.map(door => {
+            const r = byDoor[door];
+            const blocked = doorBlocks[door];
+            if (blocked) return `<div class="dmf-cell dmf-blocked"><div class="dmf-door">D${door}</div><div class="dmf-status">Blocked</div><div class="dmf-trailer" style="font-size:9px;color:var(--t3)">${esc(blocked.note||"")}</div></div>`;
+            if (!r) return `<div class="dmf-cell dmf-free"><div class="dmf-door">D${door}</div><div class="dmf-status" style="color:var(--green)">Free</div></div>`;
+            const dot = statusDot[r.status]||"var(--t3)";
+
+            return `<div class="dmf-cell dmf-occupied" data-act="dockMapCard" data-trailer-id="${esc(r.trailer)}">
+              <div class="dmf-door">D${door}</div>
+              <div class="dmf-trailer-num">${esc(r.trailer)}</div>
+              <div class="dmf-status-dot" style="background:${dot}"></div>
+              <div class="dmf-status-lbl">${esc(r.status)}</div>
+              ${r.doorAt?`<div class="dmf-age">${timeAgo(r.doorAt)}</div>`:""}
+            </div>`;
+          }).join("")}
+        </div>
+      </div>`;
+  }
+
+  let _omwTimer = null;
+  let dockBulkMode = false;
+  let dockSelected = new Set();
+
+  function toggleDockBulkMode() {
+    dockBulkMode = !dockBulkMode;
+    dockSelected.clear();
+    const btn = el("btnDockBulk");
+    if (btn) { btn.textContent = dockBulkMode ? "✕ Cancel" : "☑ Bulk"; btn.classList.toggle("btn-cyan", dockBulkMode); }
+    const bar = el("dockBulkBar");
+    if (bar) bar.style.display = dockBulkMode ? "flex" : "none";
+    renderDockView();
+  }
+
+  async function applyBulkStatus(status) {
+    if (!dockSelected.size) return;
+    const trailerList = [...dockSelected];
+    haptic("medium");
+    try {
+      await Promise.all(trailerList.map(t =>
+        apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer:t,status})})
+      ));
+      showToast(`✓ ${trailerList.length} trailers → ${status}`, "success");
+      dockSelected.clear();
+      dockBulkMode = false;
+      renderDockView();
+    } catch(e) { showToast("Bulk update failed","err"); }
+  }
+
+  function initDockCardSwipes() {
+    const cards = document.querySelectorAll(".dock-card[data-swipe-trailer]");
+    cards.forEach(card => {
+      let startX=0, startY=0, swiping=false;
+      const trailer = card.dataset.swipeTrailer;
+      card.addEventListener("touchstart", e => {
+        startX=e.touches[0].clientX; startY=e.touches[0].clientY; swiping=true;
+        card.style.transition="none";
+      }, {passive:true});
+      card.addEventListener("touchmove", e => {
+        if(!swiping) return;
+        const dx=e.touches[0].clientX-startX, dy=e.touches[0].clientY-startY;
+        if(Math.abs(dy)>Math.abs(dx)+10){ swiping=false; card.style.transform=""; return; }
+        if(Math.abs(dx)>8) e.preventDefault();
+        const clamped = Math.max(-100,Math.min(100,dx));
+        card.style.transform=`translateX(${clamped}px)`;
+        card.style.opacity = 1 - Math.abs(clamped)/200;
+      }, {passive:false});
+      card.addEventListener("touchend", e => {
+        if(!swiping) return; swiping=false;
+        const dx=e.changedTouches[0].clientX-startX;
+        card.style.transition="transform .2s ease,opacity .2s ease";
+        card.style.transform=""; card.style.opacity="";
+        if(dx > 60) {
+          // Swipe right → advance status
+          const r = trailers[trailer];
+          const next = DOCK_STATUS_NEXT[r?.status];
+          if(next?.to && (ROLE==="dock"||ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin")){
+            haptic("medium");
+            dockSet(trailer, next.to);
+          }
+        } else if(dx < -60) {
+          // Swipe left → report issue
+          const r = trailers[trailer];
+          openQuickIssue(trailer, r?.door||"");
+        }
+      });
+    });
+  }
+
+  // Quick issue modal with preset reasons
+  function openQuickIssue(trailer, door) {
+    const ov = el("quickIssueOv");
+    if(!ov) return;
+    el("qi_trailer").textContent = trailer;
+    el("qi_door").textContent = door ? `Door ${door}` : "No door";
+    ov.classList.remove("hidden");
+    // Reset selections
+    ov.querySelectorAll(".qi-reason-btn").forEach(b=>b.classList.remove("qi-sel"));
+    if(el("qi_note")) el("qi_note").value="";
+  }
+
+  async function submitQuickIssue() {
+    const trailer = el("qi_trailer")?.textContent||"";
+    const door = el("qi_door")?.textContent?.replace("Door ","").replace("No door","")||"";
+    const selected = [...document.querySelectorAll(".qi-reason-btn.qi-sel")].map(b=>b.dataset.reason).join(", ");
+    const note = el("qi_note")?.value||"";
+    const full = [selected, note].filter(Boolean).join(" — ");
+    if(!full.trim()){ showToast("Select a reason","err"); return; }
+    try {
+      await apiJson("/api/report-issue",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door,note:full})});
+      showToast("Issue reported","ok");
+      el("quickIssueOv").classList.add("hidden");
+    } catch(e) { showToast("Failed to report issue","err"); }
+  }
+
+  // Door reservation from dock
+  function openDockReserveDoor(trailer) {
+    const ov = el("dockReserveOv");
+    if(!ov) return;
+    el("dr_trailer").textContent = trailer;
+    ov.classList.remove("hidden");
+    // Build door buttons
+    const grid = el("dr_door_grid");
+    if(!grid) return;
+    const occupied = getOccupiedDoors();
+    const doors = [];
+    for(let d=28;d<=42;d++) doors.push(String(d));
+    grid.innerHTML = doors.map(d=>{
+      const occ = occupied[d] || doorBlocks[d];
+      return `<button class="dr-door-btn ${occ?"dr-door-occ":""}" data-door="${d}" ${occ?"disabled":""} onclick="selectReserveDoor(this,'${d}')">${d}${occ?`<span class='dr-occ-lbl'>${occ.trailer||"Block"}</span>`:""}</button>`;
+    }).join("");
+  }
+
+  let _selectedReserveDoor = null;
+  window.selectReserveDoor = function(btn, door) {
+    document.querySelectorAll(".dr-door-btn").forEach(b=>b.classList.remove("dr-sel"));
+    btn.classList.add("dr-sel");
+    _selectedReserveDoor = door;
+  };
+
+  async function submitDockReserve() {
+    const trailer = el("dr_trailer")?.textContent||"";
+    const door = _selectedReserveDoor;
+    if(!door){ showToast("Select a door","err"); return; }
+    try {
+      await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door,status:"Incoming",direction:"Inbound"})});
+      showToast(`Door ${door} reserved for ${trailer}`,"ok");
+      el("dockReserveOv").classList.add("hidden");
+      _selectedReserveDoor = null;
+    } catch(e) { showToast("Reserve failed","err"); }
+  }
+
+  // Voice input
+  function initVoiceInput() {
+    const btn = el("btnVoiceDock");
+    if(!btn || !("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
+      if(btn) btn.style.display="none"; return;
+    }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    btn.addEventListener("click", () => {
+      const rec = new SR();
+      rec.lang = "en-US"; rec.maxAlternatives=1;
+      btn.textContent="🎙 Listening…"; btn.classList.add("voice-active");
+      rec.onresult = e => {
+        const val = e.results[0][0].transcript.replace(/\s+/g,"").toUpperCase();
+        const search = el("dockSearch");
+        if(search){ search.value=val; renderDockView(); }
+        showToast(`Heard: ${val}`,"ok");
+      };
+      rec.onerror = () => showToast("Voice failed","err");
+      rec.onend = () => { btn.textContent="🎙"; btn.classList.remove("voice-active"); };
+      rec.start();
+    });
+  }
+
+  // Scan/type instant update
+  function initDockScan() {
+    const input = el("dockScanInput");
+    if(!input) return;
+    let debounce;
+    input.addEventListener("input", () => {
+      clearTimeout(debounce);
+      const val = input.value.trim().toUpperCase();
+      if(val.length < 3) return;
+      debounce = setTimeout(async () => {
+        const r = trailers[val];
+        if(!r){ showToast(`Trailer ${val} not found on board`,"err",3000); return; }
+        const next = DOCK_STATUS_NEXT[r.status];
+        if(!next?.to){ showToast(`${val} is already ${r.status}`,"ok",3000); input.value=""; return; }
+        haptic("medium");
+        await dockSet(val, next.to);
+        input.value="";
+        input.classList.add("scan-flash");
+        setTimeout(()=>input.classList.remove("scan-flash"),600);
+      }, 400);
+    });
+    input.addEventListener("keydown", e => { if(e.key==="Escape") input.value=""; });
+  }
+
+  // Dim mode toggle
+  function toggleDimMode() {
+    const on = document.body.classList.toggle("dim-mode");
+    try { localStorage.setItem("wb_dimmode", on?"1":"0"); } catch{}
+    const btn = el("btnDimMode");
+    if(btn) btn.textContent = on ? "☀ Bright" : "🌙 Dim";
+  }
+
+  function initDimMode() {
+    try { if(localStorage.getItem("wb_dimmode")==="1") document.body.classList.add("dim-mode"); } catch{}
+  }
+
+  // Remember dock login — store last role so we can show appropriate UI on return
+  function initDockRememberLogin() {
+    try {
+      if(ROLE) localStorage.setItem("wb_last_role", ROLE);
+    } catch{}
+  }
+
+    function syncDockWsDot(state) {
+    const dot=el("dockWsDot"),txt=el("dockWsText"); if(!dot||!txt)return;
+    dot.className="live-dot "+state;
+    txt.textContent=state==="ok"?"Live":state==="bad"?"Offline":"Connecting…";
+  }
+
   function renderRolePanel() {
-    if(!el("panelTitle") || !el("panelBody")) return; // ✅ if panel doesn't exist on this page, don't crash
-    if(ROLE==="admin"){ setText("panelTitle","Admin"); setText("panelSub","Master access"); setHTML("panelBody",dispPanelHtml()); show("btnLogout"); show("btnAudit"); renderPlates(); return; }
-    if(ROLE==="dispatcher"||ROLE==="management"){ setText("panelTitle",ROLE==="management"?"Management":"Dispatcher"); setText("panelSub","Full control"); setHTML("panelBody",dispPanelHtml()); show("btnLogout"); show("btnAudit"); renderPlates(); return; }
-    if(ROLE==="dock"){ setText("panelTitle","Dock"); setText("panelSub","Loading / Dock Ready"); setHTML("panelBody",dockPanelHtml()); show("btnLogout"); hide("btnAudit"); renderPlates(); return; }
-    setText("panelTitle","Not Authenticated"); setText("panelSub","—");
-    setHTML("panelBody",`<div style="color:var(--t2);font-size:12px;line-height:1.6;">Please <a href="/login">sign in</a> to access controls.</div>`);
-    hide("btnLogout"); hide("btnAudit");
+    if(ROLE==="admin"){ el("panelTitle").textContent="Admin"; el("panelSub").textContent="Master access"; el("panelBody").innerHTML=dispPanelHtml(); el("btnLogout").style.display=""; el("btnAudit").style.display=""; renderPlates(); return; }
+    if(ROLE==="dispatcher"||ROLE==="management"){ el("panelTitle").textContent=ROLE==="management"?"Management":"Dispatcher"; el("panelSub").textContent="Full control"; el("panelBody").innerHTML=dispPanelHtml(); el("btnLogout").style.display=""; el("btnAudit").style.display=""; renderPlates(); return; }
+    if(ROLE==="dock"){ el("panelTitle").textContent="Dock"; el("panelSub").textContent="Loading / Dock Ready"; el("panelBody").innerHTML=dockPanelHtml(); el("btnLogout").style.display=""; el("btnAudit").style.display="none"; renderPlates(); return; }
+    el("panelTitle").textContent="Not Authenticated"; el("panelSub").textContent="—";
+    el("panelBody").innerHTML=`<div style="color:var(--t2);font-size:12px;line-height:1.6;">Please <a href="/login">sign in</a> to access controls.</div>`;
+    el("btnLogout").style.display="none"; el("btnAudit").style.display="none";
   }
 
   async function doLogout(){
     if (isDriver()) {
+      // Drivers have no session — just clear their local state and restart
       try { sessionStorage.removeItem("wb_driver_session"); sessionStorage.removeItem("wb_whoType"); } catch {}
       driverRestart();
       return;
@@ -406,102 +775,80 @@
     try{ await apiJson("/api/logout",{method:"POST",headers:CSRF}); }catch{}
     location.href="/login";
   }
-
-  /* ─────────────────────────────────────────────
-     ✅ IMPORTANT FIX FOR “DRIVER SHOWING EVERYWHERE”
-     If *any* of these elements are missing on a page,
-     the old code would crash at: el("driverView").style...
-     and the default HTML (Driver Portal) stays visible.
-     We now use safe hide()/show() everywhere.
-  ───────────────────────────────────────────── */
-  async function loadInitial(){
+  async function dispSave(){
+    const trailer=(el("d_trailer")?.value||"").trim();
+    if(!trailer) return toast("Validation error","Trailer number is required.","err");
     try{
-      const w=await apiJson("/api/whoami");
-      ROLE=w?.role; VERSION=w?.version||"";
-      if (w?.redirectTo && ROLE && w.redirectTo !== location.pathname) {
-        location.replace(w.redirectTo);
-        return;
-      }
-    } catch { ROLE=null; VERSION=""; }
-
-    setText("verText", VERSION||"—");
-
-    // ✅ Safe hide all views
-    hide("driverView");
-    hide("managementView");
-    hide("dockView");
-    hide("dispatchView");
-
-    const p = path();
-    if(p.startsWith("/driver")){
-      show("driverView","");
-      addCls("driverView","view-fade");
-
-      const logoutBtn = el("btnLogout");
-      if(logoutBtn){
-        logoutBtn.style.display="";
-        logoutBtn.textContent="↩ Start Over";
-        logoutBtn.onclick = (e) => {
-          e.stopImmediatePropagation();
-          try{ sessionStorage.removeItem("wb_whoType"); }catch{}
-          driverRestart();
-        };
-      }
-      hide("btnAudit");
-
-      try{
-        const savedWho=sessionStorage.getItem("wb_whoType");
-        if(savedWho){ driverState.whoType=savedWho; showScreen("flow-screen"); }
-        else showScreen("who-screen");
-      }catch{ showScreen("who-screen"); }
-
-      renderSessionHistory();
-      initPush();
+      await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({
+        trailer,
+        direction:(el("d_direction")?.value||"").trim(),
+        status:(el("d_status")?.value||"").trim(),
+        door:(el("d_door")?.value||"").trim(),
+        note:(el("d_note")?.value||"").trim(),
+        dropType:(el("d_dropType")?.value||"").trim(),
+        carrierType:(el("d_carrierType")?.value||"").trim(),
+      })});
+      toast("Saved",`Trailer ${trailer} updated.`,"ok");
+      ["d_trailer","d_door","d_note"].forEach(id=>{if(el(id))el(id).value="";});
+      el("d_direction").value="Inbound"; el("d_status").value="Incoming"; el("d_dropType").value=""; if(el("d_carrierType"))el("d_carrierType").value="";
+      setTimeout(()=>el("d_trailer")?.focus(),50);
     }
-    else if(p.startsWith("/management")){
-      show("managementView","");
-      addCls("managementView","view-fade");
-      show("btnLogout");
-      const a = el("btnAudit");
-      if(a) a.style.display=(ROLE==="management"||ROLE==="admin")?"":"none";
+    catch(e){ toast("Save failed",e.message,"err"); }
+  }
+  async function dispDelete(trailer){
+    if(!await showModal("Delete Trailer",`Permanently delete trailer ${trailer}? Cannot be undone.`))return;
+    try{ await apiJson("/api/delete",{method:"POST",headers:CSRF,body:JSON.stringify({trailer})}); toast("Deleted",`Trailer ${trailer} removed.`,"warn"); }
+    catch(e){ toast("Delete failed",e.message,"err"); }
+  }
+  async function dispClear(){
+    if(!await showModal("Clear All Records","Permanently remove ALL trailer records? Cannot be undone."))return;
+    try{ await apiJson("/api/clear",{method:"POST",headers:CSRF}); toast("Board cleared","All records removed.","warn"); }
+    catch(e){ toast("Clear failed",e.message,"err"); }
+  }
+  async function shuntTrailer(trailer, door){
+    try{
+      await apiJson("/api/shunt",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door})});
+      shuntOpen[trailer]=false;
+      toast("Moved",`Trailer ${trailer} → Door ${door} (Dropped)`,"ok");
+    }catch(e){ toast("Shunt failed",e.message,"err"); }
+  }
+  async function quickStatus(trailer, status){
+    haptic("medium");
+    try{ await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})}); toast("Updated",`${trailer} → ${status}`,"ok"); }
+    catch(e){ toast("Update failed",e.message,"err"); }
+  }
+  async function dockSet(trailer,status){
+    haptic("medium");
+    try{
+      await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})});
+      const statusLabels = {"Loading":"🟡 Loading started","Dock Ready":"🔵 Dock Ready","Ready":"🟢 Ready"};
+      showToast(statusLabels[status]||`${trailer} → ${status}`, "ok", 4000);
     }
-    else if(p.startsWith("/dock")){
-      show("dockView","");
-      addCls("dockView","view-fade");
-      const lo = el("btnLogout"); if(lo) lo.style.display=ROLE?"":"none";
-      hide("btnAudit");
-    }
-    else {
-      show("dispatchView","");
-      addCls("dispatchView","view-fade");
-      const lo = el("btnLogout"); if(lo) lo.style.display=ROLE?"":"none";
-      const a = el("btnAudit");
-      if(a) a.style.display=(ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin")?"":"none";
-      const adminPanel=el("adminPanel");
-      if(adminPanel) adminPanel.style.display=ROLE==="admin"?"":"none";
-    }
-
-    highlightNav();
-
-    try{ const t=await apiJson("/api/state"); trailers=t||{}; }catch{ trailers={}; }
-
-    if(!isDriver()){
-      try{ const p2=await apiJson("/api/dockplates"); dockPlates=p2||{}; }catch{ dockPlates={}; }
-      try{ const b=await apiJson("/api/doorblocks"); doorBlocks=b||{}; }catch{ doorBlocks={}; }
-    }
-
-    if(isSuper()){
-      renderSupBoard();
-      renderPlates();
-    }
-    if(ROLE==="admin" && !isSuper()){ renderBoard(); renderRolePanel(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
-    else if(ROLE==="management" && !isSuper()){ renderRolePanel(); renderBoard(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
-    else if(isDock()){ renderDockView(); renderPlates(); }
-    else if(!isDriver()&&!isSuper()){ renderRolePanel(); renderBoard(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
+    catch(e){ toast("Update failed",e.message,"err"); }
+  }
+  async function markReady(trailer){
+    haptic("success");
+    try{ await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status:"Ready"})}); toast("Trailer Ready",`${trailer} marked Ready.`,"ok"); }
+    catch(e){ toast("Update failed",e.message,"err"); }
+  }
+  async function plateSave(door){
+    const status=(document.querySelector(`[data-plate-status="${CSS.escape(door)}"]`)?.value||"").trim();
+    const note=(document.querySelector(`[data-plate-note="${CSS.escape(door)}"]`)?.value||"").trim();
+    try{ await apiJson("/api/dockplates/set",{method:"POST",headers:CSRF,body:JSON.stringify({door,status,note})}); toast("Plate updated",`Door ${door} → ${status}`,"ok"); plateEditOpen[door]=false; renderPlates(); }
+    catch(e){ toast("Update failed",e.message,"err"); }
+  }
+  async function setPin(role,inputId,confirmId){
+    const pin=(el(inputId)?.value||"").trim(), conf=(el(confirmId)?.value||"").trim();
+    if(pin.length<4) return toast("PIN too short","Minimum 4 characters.","err");
+    if(pin!==conf) return toast("PINs do not match","Enter matching PINs.","err");
+    if(!await showModal("Update PIN",`Change the ${role} PIN? Active sessions will be invalidated.`))return;
+    try{ await apiJson("/api/management/set-pin",{method:"POST",headers:CSRF,body:JSON.stringify({role,pin})}); toast("PIN updated",`${role} PIN changed.`,"ok"); el(inputId).value=""; el(confirmId).value=""; }
+    catch(e){ toast("Update failed",e.message,"err"); }
   }
 
-  /* ── DRIVER PORTAL (keep your existing driver code below here) ── */
+  /* ── DRIVER PORTAL ── */
   let _wsOnline = false;
+
   function setDriverOnline(online) {
     _wsOnline = online;
     const banner = el("offlineBanner");
@@ -519,15 +866,18 @@
     });
   }
 
-  /* ── PUSH (your existing push code stays the same) ── */
+  /* ── PUSH ── */
   let _pushSub = null;
+
   async function initPush() {
     if (!("serviceWorker" in navigator)) return;
     try {
       const reg = await navigator.serviceWorker.register("/sw2.js",{scope:"/"});
+      // Auto-reload when SW sends cache-cleared signal
       navigator.serviceWorker.addEventListener("message", e => {
         if (e.data?.type === "SW_UPDATED") location.reload();
       });
+      // Detect SW update and notify user
       reg.addEventListener("updatefound", () => {
         const nw = reg.installing;
         if (!nw) return;
@@ -541,11 +891,13 @@
       if (!("PushManager" in window)) return;
       _pushSub = await reg.pushManager.getSubscription();
       updatePushBtn();
+      // Driver mode — auto-request notifications if not already subscribed
       if (isDriver() && !_pushSub) {
         await subscribePush();
       }
     } catch(e){ console.warn("SW registration failed:",e); }
   }
+
   async function subscribePush() {
     if (!("serviceWorker" in navigator)) return toast("Not supported","Push not supported in this browser.","err");
     try {
@@ -557,6 +909,7 @@
       toast("Notifications on","You'll be notified when your trailer is ready.","ok");
     } catch(e){ toast("Notifications blocked","Enable notifications in browser settings.","err"); }
   }
+
   async function unsubscribePush() {
     if (!_pushSub) return;
     try {
@@ -567,6 +920,7 @@
       toast("Notifications off","Push notifications disabled.","warn");
     } catch(e){ toast("Error",e.message,"err"); }
   }
+
   function updatePushBtn() {
     const btn=el("btnPushToggle"); if(!btn)return;
     if(isDriver()){ btn.style.display="none"; return; }
@@ -575,6 +929,7 @@
     if(_pushSub){ btn.textContent="🔔 Notifications On"; btn.classList.add("push-on"); }
     else { btn.textContent="🔕 Enable Notifications"; btn.classList.remove("push-on"); }
   }
+
   function urlBase64ToUint8Array(base64String) {
     const padding="=".repeat((4-base64String.length%4)%4);
     const base64=(base64String+padding).replace(/-/g,"+").replace(/_/g,"/");
@@ -582,21 +937,746 @@
     return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
   }
 
-  /* ─────────────────────────────────────────────
-     ✅ KEEP THE REST OF YOUR FILE AS-IS
-     (all your driver screens, dock view, click handlers,
-      websocket, etc.)
-     The key fix you needed was:
-       1) Safe hide/show in loadInitial()
-       2) Safe helpers to prevent null .style crashes
-       3) Define apiFetch + showToast so they never crash
-  ───────────────────────────────────────────── */
+  /* ── DRIVER STATE ── */
+  const driverState = {
+    whoType:null, flowType:null, trailer:"", assignedDoor:"",
+    selectedDoor:"", dropType:"Empty", overrideMode:false,
+    sessionDrops:[], shuntDoor:"",
+  };
+  try { const s=sessionStorage.getItem("wb_driver_session"); if(s) driverState.sessionDrops=JSON.parse(s); } catch {}
+  function saveSessionHistory(){ try{ sessionStorage.setItem("wb_driver_session",JSON.stringify(driverState.sessionDrops)); }catch{} }
 
-  /* ── DRIVER STATE / SCREENS / ALL YOUR EXISTING CODE ── */
-  // (PASTE YOUR REMAINING CODE HERE EXACTLY AS YOU HAD IT)
-  // IMPORTANT: Do NOT remove connectWs(), click handlers, etc.
+  function renderSessionHistory(){
+    const count=el("shCount"),body=el("shBody"); if(!count||!body)return;
+    const drops=driverState.sessionDrops;
+    count.textContent=`${drops.length} submission${drops.length===1?"":"s"}`;
+    if(!drops.length){ body.innerHTML=`<div class="sh-empty">No submissions yet this session.</div>`; return; }
+    const typeLabel={drop:"Drop",xdock_pickup:"XD Pickup",xdock_offload:"XD Offload",shunt:"Shunt"};
+    body.innerHTML=drops.slice().reverse().map(d=>`
+      <div class="sh-row">
+        <div><span class="sh-trailer">${esc(d.trailer)}</span><span class="sh-meta"> · D${esc(d.door)} · ${esc(typeLabel[d.flowType]||d.flowType)}</span></div>
+        <div>${d.flowType==="drop"?"":(d.safetyDone?`<span class="sh-status-ok">✓ Safety</span>`:`<span class="sh-status-err">⚠ Safety</span>`)}<span class="sh-meta" style="margin-left:6px;">${esc(timeAgo(d.at))}</span></div>
+      </div>`).join("");
+  }
 
-  // ... your existing code continues ...
+  const ALL_SCREENS=["who-screen","flow-screen","omw-screen","omw-confirm-screen","arrive-screen","arrive-confirm-screen","shunt-screen","drop-screen","xdock-pickup-screen","xdock-offload-screen","safety-screen","done-screen"];
+  let _currentScreen="who-screen";
+  const _screenExitTimers={};
+
+  function showScreen(id, forceBack=false){
+    const prev=_currentScreen;
+    const prevEl=el(prev);
+    const nextEl=el(id);
+    if(!nextEl) return;
+
+    // Cancel any in-flight exit timer for the previous screen
+    if(_screenExitTimers[prev]){ clearTimeout(_screenExitTimers[prev]); delete _screenExitTimers[prev]; }
+
+    // Determine slide direction based on screen order
+    const prevIdx=ALL_SCREENS.indexOf(prev);
+    const nextIdx=ALL_SCREENS.indexOf(id);
+    const goingBack=forceBack||nextIdx<prevIdx;
+
+    // Animate out current
+    if(prevEl&&prev!==id){
+      prevEl.classList.remove("screen-enter","screen-enter-back","screen-exit");
+      void prevEl.offsetWidth;
+      prevEl.classList.add("screen-exit");
+      _screenExitTimers[prev]=setTimeout(()=>{ prevEl.style.display="none"; prevEl.classList.remove("screen-exit"); delete _screenExitTimers[prev]; },180);
+    }
+
+    // Hide all others immediately
+    ALL_SCREENS.forEach(s=>{ if(s!==prev&&s!==id){ const e=el(s); if(e)e.style.display="none"; } });
+
+    // Show and animate in
+    nextEl.style.display="";
+    nextEl.classList.remove("screen-enter","screen-enter-back","screen-exit","done-screen-active");
+    void nextEl.offsetWidth;
+    nextEl.classList.add(goingBack?"screen-enter-back":"screen-enter");
+
+    // Done screen stagger celebration
+    if(id==="done-screen") setTimeout(()=>nextEl.classList.add("done-screen-active"),20);
+
+    _currentScreen=id;
+    if(id==="who-screen"||id==="flow-screen") setTimeout(()=>nextEl.querySelector("button")?.focus(),80);
+  }
+
+  function selectWho(whoType){
+    driverState.whoType=whoType;
+    try{ sessionStorage.setItem("wb_whoType",whoType); }catch{}
+    const dropBtn=el("flowBtnDrop");
+    const shuntBtn=document.querySelector("[data-flow='shunt']");
+    const omwBtn=el("flowBtnOmw");
+    const isOutside=whoType==="outside";
+    if(dropBtn) dropBtn.style.display=isOutside?"none":"";
+    if(shuntBtn) shuntBtn.style.display=isOutside?"none":"";
+    if(omwBtn) omwBtn.style.display=isOutside?"none":"";  // Only Wesbell drivers can mark OMW
+    const sub=el("flowScreenSub");
+    if(sub) sub.textContent=isOutside?"Select your cross dock activity:":"What are you here to do?";
+    showScreen("flow-screen");
+  }
+
+  async function driverShunt(){
+    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
+    const trailer=(el("sh_trailer")?.value||"").trim();
+    const door=driverState.shuntDoor||"";
+    if(!trailer) return toast("Required","Enter your trailer number.","err");
+    if(!door) return toast("Required","Select the new door.","err");
+    try{
+      await apiJson("/api/shunt",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door})});
+      driverState.sessionDrops.push({trailer,door,flowType:"shunt",at:Date.now(),safetyDone:false});
+      saveSessionHistory(); renderSessionHistory();
+      showDoneScreen("shunt");
+    }catch(e){ toast("Submission failed",e.message,"err"); }
+  }
+
+  function selectFlow(flowType){
+    driverState.flowType=flowType;
+    driverState.trailer=""; driverState.assignedDoor=""; driverState.selectedDoor="";
+    driverState.dropType="Empty"; driverState.overrideMode=false;
+    if(flowType==="shunt"){ resetShuntScreen(); showScreen("shunt-screen"); setTimeout(()=>el("sh_trailer")?.focus(),100); }
+    else if(flowType==="drop"){ resetDropScreen(); showScreen("drop-screen"); setTimeout(()=>el("v_trailer")?.focus(),100); }
+    else if(flowType==="xdock_pickup"){ resetPickupScreen(); showScreen("xdock-pickup-screen"); setTimeout(()=>el("xp_trailer")?.focus(),100); }
+    else if(flowType==="xdock_offload"){ resetOffloadScreen(); showScreen("xdock-offload-screen"); setTimeout(()=>el("xo_trailer")?.focus(),100); }
+    else if(flowType==="omw"){ resetOmwScreen(); showScreen("omw-screen"); setTimeout(()=>el("omw_trailer")?.focus(),100); }
+    else if(flowType==="arrive"){ resetArriveScreen(); showScreen("arrive-screen"); setTimeout(()=>el("arr_trailer")?.focus(),100); }
+  }
+
+  /* ── ON MY WAY ── */
+  function resetOmwScreen(){
+    if(el("omw_trailer")) el("omw_trailer").value="";
+    if(el("omw_eta")) el("omw_eta").value="";
+    if(el("omw_err")) el("omw_err").style.display="none";
+    updateOmwSubmitState();
+  }
+  function updateOmwSubmitState(){
+    const btn=el("btnOmwSubmit");
+    if(!btn)return;
+    const trailer=(el("omw_trailer")?.value||"").trim();
+    btn.disabled=!trailer;
+  }
+  async function submitOmw(){
+    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
+    const trailer=(el("omw_trailer")?.value||"").trim().toUpperCase();
+    const eta=parseInt(el("omw_eta")?.value)||null;
+    const errEl=el("omw_err");
+    if(!trailer){ if(errEl){errEl.textContent="Enter your trailer number.";errEl.style.display="";} return; }
+    if(errEl) errEl.style.display="none";
+    const btn=el("btnOmwSubmit");
+    btn.disabled=true; btn.textContent="Notifying…";
+    try{
+      const res=await apiJson("/api/driver/omw",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,eta})});
+      const door=res?.door||"";
+      el("omwDoorNum").textContent=door||"—";
+      el("omwConfirmTitle").textContent=res?.alreadyActive
+        ?`Already on board${door?" — Door "+door:""}`
+        :`Door ${door} assigned!`;
+      el("omwConfirmSub").textContent=res?.alreadyActive
+        ?`Trailer ${trailer} is already ${res.status}${door?" at door "+door:""}.`
+        :`Head to door ${door} when you arrive. Door is held for 30 minutes.`;
+      el("omwEtaDisplay").textContent=eta?`ETA ~${eta} minutes`:"";
+      showScreen("omw-confirm-screen");
+    }catch(e){
+      if(errEl){errEl.textContent=e.message||"Submission failed.";errEl.style.display="";}
+      btn.disabled=false; btn.textContent="📍 Notify Dispatch";
+    }
+  }
+
+  /* ── ARRIVE (QR / Walk-in) ── */
+  function resetArriveScreen() {
+    if(el("arr_trailer")) el("arr_trailer").value = "";
+    if(el("arr_droptype")) el("arr_droptype").value = "Loaded";
+    const err = el("arr_err");
+    if(err){ err.style.display="none"; err.textContent=""; }
+    const btn = el("btnArriveSubmit");
+    if(btn){ btn.disabled=true; }
+  }
+
+  function updateArriveSubmitState() {
+    const trailer = (el("arr_trailer")?.value || "").trim();
+    const btn = el("btnArriveSubmit");
+    if(btn) btn.disabled = !trailer;
+  }
+
+  async function submitArrive() {
+    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
+    const trailer = (el("arr_trailer")?.value || "").trim().toUpperCase();
+    const dropType = el("arr_droptype")?.value || "Loaded";
+    const errEl = el("arr_err");
+    if(!trailer){ if(errEl){errEl.textContent="Enter your trailer number.";errEl.style.display="";} return; }
+    if(errEl) errEl.style.display = "none";
+    const btn = el("btnArriveSubmit");
+    btn.disabled = true; btn.textContent = "Assigning…";
+    try {
+      const carrierType = driverState.whoType === "outside" ? "Outside" : "Wesbell";
+      const res = await apiJson("/api/driver/arrive", {
+        method:"POST", headers:CSRF,
+        body: JSON.stringify({ trailer, dropType, carrierType, direction:"Inbound" })
+      });
+      const door = res?.door || "";
+      el("arrDoorNum").textContent = door || "—";
+      el("arrConfirmTitle").textContent = res?.alreadyActive
+        ? `Already checked in${door?" — Door "+door:""}`
+        : `Door ${door} assigned!`;
+      el("arrConfirmSub").textContent = res?.alreadyActive
+        ? `Trailer ${trailer} is already ${res.status}${door?" at door "+door:""}.`
+        : `Proceed to door ${door}. Your spot is held for 30 minutes.`;
+      haptic("success");
+      showScreen("arrive-confirm-screen");
+    } catch(e) {
+      if(errEl){errEl.textContent=e.message||"Check-in failed. Please ask dispatch.";errEl.style.display="";}
+      btn.disabled=false; btn.textContent="📍 Get My Door";
+    }
+  }
+
+  /* ── SHUNT ── */
+  function resetShuntScreen(){
+    if(el("sh_trailer")) el("sh_trailer").value="";
+    driverState.shuntDoor="";
+    if(el("sh_door_display")) el("sh_door_display").textContent="Select a door below";
+    buildShuntDoorPicker();
+    updateShuntSubmitState();
+  }
+  function buildShuntDoorPicker(){
+    const grid=el("shuntDoorGrid"); if(!grid)return;
+    const occupied=getOccupiedDoors();
+    const shTrailer=(el("sh_trailer")?.value||"").trim();
+    let html="";
+    for(let d=28;d<=42;d++){
+      const ds=String(d);
+      const occ=occupied[ds]&&occupied[ds].trailer!==shTrailer;
+      const sel=driverState.shuntDoor===ds;
+      html+=`<button class="door-btn${occ?" occupied":""}${sel?" selected":""}" data-act="shuntPickDoor" data-door="${ds}">${ds}${occ?`<span class="door-btn-sub">In use</span>`:""}</button>`;
+    }
+    grid.innerHTML=html;
+  }
+  function updateShuntSubmitState(){
+    const btn=el("btnDriverShunt"); if(!btn)return;
+    btn.disabled=!((el("sh_trailer")?.value||"").trim()&&driverState.shuntDoor)||!_wsOnline;
+  }
+
+  /* ── DRIVER DROP ── */
+  function resetDropScreen(){
+    if(el("v_trailer")){ el("v_trailer").value=""; el("v_trailer").classList.remove("has-value"); }
+    el("assignmentCard")?.classList.remove("visible");
+    hideDoorPicker("doorPickerWrap");
+    el("dtbEmpty")?.classList.add("selected"); el("dtbLoaded")?.classList.remove("selected");
+    driverState.dropType="Empty"; updateDropSubmitState();
+  }
+  function updateDropSubmitState(){
+    const btn=el("btnDriverDrop"); if(!btn)return;
+    btn.disabled=!driverState.trailer.trim()||!_wsOnline;
+  }
+
+  async function driverDrop(force=false){
+    if(!_wsOnline) return toast("Offline","Cannot submit while offline. Please wait for reconnection.","err");
+    const {trailer,selectedDoor:door,dropType}=driverState;
+    if(!trailer) return toast("Required","Enter your trailer number.","err");
+    try{
+      const carrierType=driverState.whoType==="outside"?"Outside":"Wesbell";
+      const res=await apiJson("/api/driver/drop",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door,dropType,carrierType,force})});
+      // Handle duplicate trailer warning (409)
+      if(res?.duplicate){
+        const confirmed=await showModal("Trailer Already on Board",res.message+" Overwrite the existing record?");
+        if(!confirmed) return;
+        return driverDrop(true); // retry with force=true
+      }
+      const assignedDoor=res?.door||door;
+      driverState.selectedDoor=assignedDoor;
+      driverState.sessionDrops.push({trailer,door:assignedDoor,dropType,flowType:"drop",at:Date.now(),safetyDone:false});
+      saveSessionHistory(); renderSessionHistory();
+      showDoneScreen("drop");
+    }catch(e){ if(e.message!=="409") toast("Submission failed",e.message,"err"); }
+  }
+
+  /* ── XDOCK PICKUP ── */
+  function resetPickupScreen(){
+    if(el("xp_trailer")){ el("xp_trailer").value=""; el("xp_trailer").classList.remove("has-value"); }
+    el("pickupAssignmentCard")?.classList.remove("visible");
+    el("pickupNoAssignment")?.classList.remove("visible");
+    const btn=el("btnXdockPickup"); if(btn)btn.disabled=true;
+  }
+  async function onPickupTrailerInput(){
+    const val=(el("xp_trailer")?.value||"").trim();
+    driverState.trailer=val;
+    el("xp_trailer")?.classList.toggle("has-value",val.length>0);
+    el("pickupAssignmentCard")?.classList.remove("visible");
+    el("pickupNoAssignment")?.classList.remove("visible");
+    const btn=el("btnXdockPickup"); if(btn)btn.disabled=true;
+    if(!val)return;
+    clearTimeout(onPickupTrailerInput._t);
+    onPickupTrailerInput._t=setTimeout(()=>lookupAssignment(val,"pickup"),500);
+  }
+  async function xdockPickup(){
+    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
+    const {trailer,selectedDoor:door}=driverState;
+    if(!trailer) return toast("Required","Enter trailer number.","err");
+    if(!door) return toast("No assignment","This trailer has no door assignment. Contact your dispatcher.","warn");
+    try{
+      await apiJson("/api/crossdock/pickup",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door})});
+      driverState.sessionDrops.push({trailer,door,flowType:"xdock_pickup",at:Date.now(),safetyDone:false});
+      saveSessionHistory(); renderSessionHistory();
+      showSafetyScreen();
+    }catch(e){ toast("Submission failed",e.message,"err"); }
+  }
+
+  /* ── XDOCK OFFLOAD ── */
+  function resetOffloadScreen(){
+    if(el("xo_trailer")){ el("xo_trailer").value=""; el("xo_trailer").classList.remove("has-value"); }
+    el("offloadAssignmentCard")?.classList.remove("visible");
+    hideDoorPicker("offloadDoorPickerWrap");
+    driverState.selectedDoor=""; updateOffloadSubmitState();
+  }
+  function updateOffloadSubmitState(){
+    const btn=el("btnXdockOffload"); if(!btn)return;
+    btn.disabled=!(driverState.trailer.trim()&&driverState.selectedDoor)||!_wsOnline;
+  }
+  async function onOffloadTrailerInput(){
+    const val=(el("xo_trailer")?.value||"").trim();
+    driverState.trailer=val;
+    el("xo_trailer")?.classList.toggle("has-value",val.length>0);
+    driverState.selectedDoor=""; driverState.overrideMode=false;
+    el("offloadAssignmentCard")?.classList.remove("visible");
+    hideDoorPicker("offloadDoorPickerWrap");
+    updateOffloadSubmitState();
+    if(!val)return;
+    clearTimeout(onOffloadTrailerInput._t);
+    onOffloadTrailerInput._t=setTimeout(()=>lookupAssignment(val,"offload"),500);
+  }
+  async function xdockOffload(force=false){
+    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
+    const {trailer,selectedDoor:door}=driverState;
+    if(!trailer) return toast("Required","Enter trailer number.","err");
+    if(!door) return toast("Required","Select a door.","err");
+    try{
+      const res=await apiJson("/api/crossdock/offload",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door,force})});
+      if(res?.duplicate){
+        const confirmed=await showModal("Trailer Already Active",res.message+" Overwrite the existing record?");
+        if(!confirmed) return;
+        return xdockOffload(true);
+      }
+      driverState.sessionDrops.push({trailer,door,flowType:"xdock_offload",at:Date.now(),safetyDone:false});
+      saveSessionHistory(); renderSessionHistory();
+      showSafetyScreen();
+    }catch(e){ if(e.message!=="409") toast("Submission failed",e.message,"err"); }
+  }
+
+  /* ── LOOKUP ── */
+  async function lookupAssignment(trailer,context){
+    const spinner=el("lookupSpinner"); if(spinner)spinner.classList.add("visible");
+    try{
+      const res=await fetch(`/api/driver/assignment?trailer=${encodeURIComponent(trailer)}`,{headers:{"X-Requested-With":"XMLHttpRequest"}});
+      if(!res.ok)throw new Error();
+      const data=await res.json();
+      const meta=[data.direction,data.status].filter(Boolean).join(" · ")||"Assigned by dispatcher";
+      if(context==="pickup"){
+        if(data.found&&data.door){
+          driverState.selectedDoor=data.door;
+          el("pac_door").textContent="Door "+data.door;
+          el("pac_meta").textContent=meta;
+          el("pickupAssignmentCard")?.classList.add("visible");
+          el("pickupNoAssignment")?.classList.remove("visible");
+          const btn=el("btnXdockPickup"); if(btn)btn.disabled=!_wsOnline;
+        } else {
+          driverState.selectedDoor="";
+          el("pickupNoAssignment")?.classList.add("visible");
+          const btn=el("btnXdockPickup"); if(btn)btn.disabled=true;
+        }
+      } else if(context==="offload"){
+        if(data.found&&data.door){
+          driverState.assignedDoor=data.door; driverState.selectedDoor=data.door; driverState.overrideMode=false;
+          el("oac_door").textContent="Door "+data.door;
+          el("oac_meta").textContent=meta;
+          el("offloadAssignmentCard")?.classList.add("visible");
+          hideDoorPicker("offloadDoorPickerWrap");
+        } else {
+          driverState.assignedDoor="";
+          if(!driverState.overrideMode){ driverState.selectedDoor=""; showDoorPicker("offloadDoorPickerWrap","offloadDoorPickerGrid"); }
+        }
+        updateOffloadSubmitState();
+      }
+    }catch{
+      if(context==="offload"&&!driverState.overrideMode) showDoorPicker("offloadDoorPickerWrap","offloadDoorPickerGrid");
+    }finally{
+      if(spinner)spinner.classList.remove("visible");
+    }
+  }
+
+  let _lookupTimer=null;
+  function onTrailerInput(){
+    const val=(el("v_trailer")?.value||"").trim();
+    driverState.trailer=val;
+    el("v_trailer")?.classList.toggle("has-value",val.length>0);
+    if(!driverState.overrideMode){ driverState.assignedDoor=""; driverState.selectedDoor=""; el("assignmentCard")?.classList.remove("visible"); hideDoorPicker("doorPickerWrap"); }
+    updateDropSubmitState();
+    if(!val){ driverState.overrideMode=false; return; }
+    clearTimeout(_lookupTimer);
+    _lookupTimer=setTimeout(()=>lookupDropAssignment(val),500);
+  }
+  async function lookupDropAssignment(trailer){
+    const spinner=el("lookupSpinner"); if(spinner)spinner.classList.add("visible");
+    try{
+      const res=await fetch(`/api/driver/assignment?trailer=${encodeURIComponent(trailer)}`,{headers:{"X-Requested-With":"XMLHttpRequest"}});
+      if(!res.ok)throw new Error();
+      const data=await res.json();
+      if(data.found&&data.door){
+        driverState.assignedDoor=data.door; driverState.selectedDoor=data.door; driverState.overrideMode=false;
+        el("ac_door").textContent="Door "+data.door;
+        el("ac_meta").textContent=[data.direction,data.status].filter(Boolean).join(" · ")||"Assigned by dispatcher";
+        el("assignmentCard")?.classList.add("visible");
+        hideDoorPicker("doorPickerWrap");
+      } else {
+        driverState.assignedDoor="";
+        if(!driverState.overrideMode){ driverState.selectedDoor=""; showDoorPicker("doorPickerWrap","doorPickerGrid"); }
+      }
+    }catch{ if(!driverState.overrideMode) showDoorPicker("doorPickerWrap","doorPickerGrid"); }
+    finally{ if(spinner)spinner.classList.remove("visible"); }
+    updateDropSubmitState();
+  }
+
+  function buildDoorPicker(gridId){
+    const grid=el(gridId||"doorPickerGrid"); if(!grid)return;
+    const occupied=getOccupiedDoors();
+    let html="";
+    for(let d=28;d<=42;d++){
+      const ds=String(d), occ=!!occupied[ds], sel=driverState.selectedDoor===ds;
+      html+=`<button class="door-btn${occ?" occupied":""}${sel?" selected":""}" data-door="${ds}" data-picker="${gridId||"doorPickerGrid"}">${ds}${occ?`<span class="door-btn-sub">In use</span>`:""}</button>`;
+    }
+    grid.innerHTML=html;
+  }
+  function showDoorPicker(wrapId,gridId){ buildDoorPicker(gridId); el(wrapId||"doorPickerWrap")?.classList.add("visible"); el("assignmentCard")?.classList.remove("visible"); }
+  function hideDoorPicker(wrapId){ el(wrapId||"doorPickerWrap")?.classList.remove("visible"); }
+
+  /* ── ISSUE REPORT STATE & CAMERA ── */
+  const issueState = { photoData: null, photoMime: null };
+
+  function resetIssueReport() {
+    issueState.photoData = null;
+    issueState.photoMime = null;
+    const chk = el("c_hasIssue");
+    if (chk) chk.checked = false;
+    const irb = el("issueReportBody"); if(irb) irb.style.display = "none";
+    el("issueNote") && (el("issueNote").value = "");
+    if (el("issuePhotoInput")) el("issuePhotoInput").value = "";
+    setIssuePhotoPreview(null);
+  }
+
+  function setIssuePhotoPreview(dataUrl) {
+    const zone   = el("issuePhotoZone");
+    const empty  = el("ipzEmpty");
+    const prev   = el("ipzPreview");
+    const remove = el("btnRemovePhoto");
+    if (!zone || !empty || !prev || !remove) return;
+    if (dataUrl) {
+      prev.src = dataUrl;
+      prev.style.display = "";
+      empty.style.display = "none";
+      remove.style.display = "";
+      zone.classList.add("has-photo");
+    } else {
+      prev.src = "";
+      prev.style.display = "none";
+      empty.style.display = "";
+      remove.style.display = "none";
+      zone.classList.remove("has-photo");
+    }
+  }
+
+  /* ── DOCK ISSUE REPORT MODAL ── */
+  const dockIssueState = { trailer: "", door: "" };
+
+  function openDockIssueModal(trailer, door) {
+    dockIssueState.trailer = trailer;
+    dockIssueState.door    = door;
+    issueState.photoData = null;
+    issueState.photoMime = null;
+    const ni    = el("dockIssueNote");
+    const pi    = el("dockIssuePhotoInput");
+    const prev  = el("dockIssuePrev");
+    const rem   = el("dockIssueRemovePhoto");
+    const empty = el("dockIssueEmpty");
+    const pz    = el("dockIssuePhotoZone");
+    const ctx   = el("dockIssueCtx");
+    const errEl = el("dockIssueErr");
+    if (ni)    ni.value = "";
+    if (pi)    pi.value = "";
+    if (prev)  { prev.style.display = "none"; prev.src = ""; }
+    if (rem)   rem.style.display = "none";
+    if (empty) empty.style.display = "";
+    if (pz)    pz.classList.remove("has-photo");
+    if (ctx)   ctx.textContent = `Trailer ${trailer}${door ? " · Door " + door : ""}`;
+    if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
+    el("dockIssueOv")?.classList.remove("hidden");
+    document.body.style.overflow = "hidden";
+    setTimeout(() => ni?.focus(), 120);
+  }
+
+  function closeDockIssueModal() {
+    el("dockIssueOv")?.classList.add("hidden");
+    document.body.style.overflow = "";
+  }
+
+  function initDockIssueModal() {
+    const input = el("dockIssuePhotoInput");
+    const zone  = el("dockIssuePhotoZone");
+    const prev  = el("dockIssuePrev");
+    const rem   = el("dockIssueRemovePhoto");
+    const empty = el("dockIssueEmpty");
+    if (!input || !zone) return;
+
+    // Photo zone is now a <label> — tapping it natively triggers the input on iOS
+    // Only block the click if there's already a photo (to prevent re-opening)
+    zone.addEventListener("click", (e) => {
+      if (issueState.photoData) e.preventDefault();
+    });
+
+    rem?.addEventListener("click", e => {
+      e.stopPropagation();
+      issueState.photoData = null; issueState.photoMime = null; input.value = "";
+      if (prev)  { prev.style.display = "none"; prev.src = ""; }
+      if (rem)   rem.style.display = "none";
+      if (empty) empty.style.display = "";
+      zone.classList.remove("has-photo");
+    });
+
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith("image/")) return toast("Invalid file", "Please select an image.", "err");
+      if (file.size > 8 * 1024 * 1024) return toast("Too large", "Photo must be under 8 MB.", "err");
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const result = ev.target.result;
+        issueState.photoMime = file.type;
+        issueState.photoData = result.slice(result.indexOf(",") + 1);
+        if (prev)  { prev.src = result; prev.style.display = ""; }
+        if (empty) empty.style.display = "none";
+        if (rem)   rem.style.display = "";
+        zone.classList.add("has-photo");
+        haptic("light");
+      };
+      reader.onerror = () => toast("Photo error", "Could not read the photo. Try again.", "err");
+      reader.readAsDataURL(file);
+    });
+
+    el("dockIssueCancelBtn")?.addEventListener("click", closeDockIssueModal);
+    el("dockIssueOv")?.addEventListener("click", e => { if (e.target === el("dockIssueOv")) closeDockIssueModal(); });
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape" && !el("dockIssueOv")?.classList.contains("hidden")) closeDockIssueModal();
+    });
+
+    el("dockIssueSubmitBtn")?.addEventListener("click", async () => {
+      const note  = (el("dockIssueNote")?.value || "").trim();
+      const errEl = el("dockIssueErr");
+      if (!note && !issueState.photoData) {
+        if (errEl) { errEl.textContent = "Add a note or photo before submitting."; errEl.style.display = ""; }
+        return;
+      }
+      const btn = el("dockIssueSubmitBtn");
+      if (btn) { btn.disabled = true; btn.textContent = "Submitting…"; }
+      if (errEl) errEl.style.display = "none";
+      try {
+        await apiJson("/api/report-issue", {
+          method: "POST", headers: CSRF,
+          body: JSON.stringify({
+            trailer:    dockIssueState.trailer,
+            door:       dockIssueState.door,
+            note,
+            photo_data: issueState.photoData || null,
+            photo_mime: issueState.photoMime || null,
+          })
+        });
+        closeDockIssueModal();
+        toast("Issue reported", `Report filed for trailer ${dockIssueState.trailer}.`, "ok");
+        haptic("success");
+      } catch(e) {
+        if (errEl) { errEl.textContent = e.message || "Submit failed."; errEl.style.display = ""; }
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "Submit Report"; }
+      }
+    });
+  }
+
+  function initIssueCamera() {
+    const zone  = el("issuePhotoZone");
+    const input = el("issuePhotoInput");
+    const chk   = el("c_hasIssue");
+    const body  = el("issueReportBody");
+    if (!zone || !input || !chk || !body) return;
+
+    // Toggle issue panel open/close
+    chk.addEventListener("change", () => {
+      body.style.display = chk.checked ? "" : "none";
+      if (!chk.checked) resetIssueReport();
+    });
+
+    // Tap photo zone → open camera
+    zone.addEventListener("click", () => {
+      if (issueState.photoData) return; // already has photo — let remove button handle it
+      input.click();
+    });
+
+    // Remove photo button
+    el("btnRemovePhoto")?.addEventListener("click", e => {
+      e.stopPropagation();
+      issueState.photoData = null;
+      issueState.photoMime = null;
+      if (input) input.value = "";
+      setIssuePhotoPreview(null);
+    });
+
+    // Process selected/captured photo
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith("image/")) return toast("Invalid file", "Please select an image.", "err");
+      if (file.size > 8 * 1024 * 1024) return toast("Too large", "Photo must be under 8 MB.", "err");
+
+      const reader = new FileReader();
+      reader.onload = e => {
+        const result = e.target.result; // data:image/jpeg;base64,...
+        const commaIdx = result.indexOf(",");
+        issueState.photoMime = file.type;
+        issueState.photoData = result.slice(commaIdx + 1); // strip data URL prefix
+        setIssuePhotoPreview(result);
+        haptic("light");
+      };
+      reader.onerror = () => toast("Photo error", "Could not read the photo. Try again.", "err");
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /* ── ISSUE REPORTS MANAGEMENT PANEL ── */
+  async function loadIssueReports() {
+    const body     = el("supIssueBody");
+    const countEl  = el("supIssueCount");
+    if (!body) return;
+    try {
+      const rows = await apiJson("/api/issue-reports?limit=50");
+      if (countEl) countEl.textContent = rows.length;
+      if (!rows.length) {
+        body.innerHTML = `<div style="padding:24px;text-align:center;color:var(--t3);font-family:var(--mono);font-size:11px;">No issue reports yet.</div>`;
+        return;
+      }
+      body.innerHTML = rows.map(r => {
+        const hasPhoto = !!r.photo_data;
+        const thumb = hasPhoto
+          ? `<div class="issue-thumb-wrap" data-issue-id="${r.id}" data-issue-mime="${esc(r.photo_mime||'image/jpeg')}">
+               <img src="/api/issue-reports/${r.id}/photo" alt="Issue photo" loading="lazy"/>
+             </div>`
+          : `<div class="issue-thumb-wrap"><div class="issue-thumb-empty">📷</div></div>`;
+        const noteHtml = r.note
+          ? `<div class="issue-note">${esc(r.note)}</div>`
+          : `<div class="issue-no-note">No description provided</div>`;
+        return `<div class="issue-card">
+          ${thumb}
+          <div class="issue-body">
+            <div class="issue-meta">
+              <span class="issue-trailer">${esc(r.trailer||"—")}</span>
+              ${r.door?`<span class="issue-door">D${esc(r.door)}</span>`:""}
+              <span class="issue-badge">⚠ Issue</span>
+              <span class="issue-time">${esc(timeAgo(r.at))}</span>
+            </div>
+            ${noteHtml}
+          </div>
+        </div>`;
+      }).join("");
+    } catch(e) { body.innerHTML = `<div style="padding:16px;color:var(--red);font-size:12px;">${esc(e.message)}</div>`; }
+  }
+
+  /* ── LIGHTBOX ── */
+  function initIssueLightbox() {
+    const lb    = el("issueLightbox");
+    const img   = el("issueLightboxImg");
+    const close = el("issueLightboxClose");
+    if (!lb || !img || !close) return;
+    function openLb(src) { img.src = src; lb.classList.add("open"); document.body.style.overflow = "hidden"; }
+    function closeLb()   { lb.classList.remove("open"); img.src = ""; document.body.style.overflow = ""; }
+    close.addEventListener("click", e => { e.stopPropagation(); closeLb(); });
+    lb.addEventListener("click", closeLb);
+    img.addEventListener("click", e => e.stopPropagation());
+    document.addEventListener("keydown", e => { if(e.key==="Escape" && lb.classList.contains("open")) closeLb(); });
+    // Delegate thumb clicks from management panel
+    document.addEventListener("click", ev => {
+      const thumb = ev.target.closest?.("[data-issue-id]");
+      if (thumb) { openLb(`/api/issue-reports/${thumb.dataset.issueId}/photo`); }
+    });
+  }
+
+  function showSafetyScreen(){
+    const ctx=el("safetyContext");
+    if(ctx){
+      const icon=driverState.flowType==="xdock_pickup"?"🔄 Pickup":"📥 Offload";
+      ctx.innerHTML=[
+        driverState.trailer?`<span class="context-chip">🚛 <strong>${esc(driverState.trailer)}</strong></span>`:"",
+        driverState.selectedDoor?`<span class="context-chip">🚪 Door <strong>${esc(driverState.selectedDoor)}</strong></span>`:"",
+        `<span class="context-chip">${icon}</span>`,
+      ].join("");
+    }
+    if(el("c_loadSecured"))el("c_loadSecured").checked=false;
+    if(el("c_dockPlateUp"))el("c_dockPlateUp").checked=false;
+    resetIssueReport();
+    updateSafetySubmitState();
+    showScreen("safety-screen");
+  }
+  function updateSafetySubmitState(){ const btn=el("btnConfirmSafety"); if(btn) btn.disabled=!(el("c_loadSecured")?.checked&&el("c_dockPlateUp")?.checked)||!_wsOnline; }
+  async function confSafety(){
+    if(!_wsOnline) return toast("Offline","Cannot submit while offline.","err");
+    if(!el("c_loadSecured")?.checked||!el("c_dockPlateUp")?.checked) return toast("Incomplete","Both safety items must be confirmed.","err");
+    const hasIssue = el("c_hasIssue")?.checked;
+    const issueNote = (el("issueNote")?.value||"").trim();
+    // Require at least a note or photo if issue is checked
+    if(hasIssue && !issueNote && !issueState.photoData) return toast("Describe the issue","Add a note or photo before submitting.","warn");
+    const btn = el("btnConfirmSafety");
+    const btnSpan = btn?.querySelector("span");
+    if(btn){ btn.disabled=true; if(btnSpan) btnSpan.textContent="Submitting…"; }
+    try{
+      await apiJson("/api/confirm-safety",{method:"POST",headers:CSRF,body:JSON.stringify({trailer:driverState.trailer,door:driverState.selectedDoor,loadSecured:true,dockPlateUp:true,action:driverState.flowType})});
+      // Submit issue report if flagged (fire-and-forget after safety succeeds)
+      if(hasIssue){
+        try{
+          await apiJson("/api/report-issue",{method:"POST",headers:CSRF,body:JSON.stringify({
+            trailer: driverState.trailer,
+            door: driverState.selectedDoor||driverState.shuntDoor||"",
+            note: issueNote,
+            photo_data: issueState.photoData||null,
+            photo_mime: issueState.photoMime||null,
+          })});
+          toast("Issue reported","Your report has been sent to management.","ok");
+        }catch(ie){ toast("Issue report failed",ie.message,"warn"); }
+      }
+      const last=driverState.sessionDrops[driverState.sessionDrops.length-1];
+      if(last&&last.trailer===driverState.trailer) last.safetyDone=true;
+      saveSessionHistory(); renderSessionHistory();
+      showDoneScreen(driverState.flowType);
+    }catch(e){
+      toast("Submission failed",e.message,"err");
+      if(btn){ btn.disabled=false; if(btnSpan) btnSpan.textContent="Confirm & Complete"; }
+    }
+  }
+
+  function showDoneScreen(flowType){
+    const labels={drop:"Drop recorded — no safety check required.",xdock_pickup:"Pickup recorded + safety confirmed.",xdock_offload:"Offload recorded + safety confirmed.",shunt:"Shunt recorded — trailer moved to new door."};
+    const detail=el("driverDoneDetail");
+    const _displayDoor = driverState.shuntDoor || driverState.selectedDoor || "—";
+    if(detail) detail.innerHTML=`Trailer <strong>${esc(driverState.trailer)}</strong> · Door <strong>${esc(_displayDoor)}</strong><br><span style="color:var(--t1);">${labels[flowType]||"Submitted."}</span>`;
+    showScreen("done-screen");
+  }
+
+  function driverRestart(){
+    driverState.whoType=null; driverState.flowType=null;
+    driverState.trailer=""; driverState.assignedDoor=""; driverState.selectedDoor="";
+    driverState.dropType="Empty"; driverState.overrideMode=false; driverState.shuntDoor="";
+    try{ sessionStorage.removeItem("wb_whoType"); }catch{}
+    showScreen("who-screen",true);
+  }
+
+  function syncDriverWsDot(state){
+    const dot=el("driverWsDot"),txt=el("driverWsText"); if(!dot||!txt)return;
+    dot.className="live-dot "+state;
+    txt.textContent=state==="ok"?"Live":state==="bad"?"Offline":"Connecting…";
+    setDriverOnline(state==="ok");
+  }
 
   /* ── HAPTIC FEEDBACK ── */
   function haptic(type) {
@@ -607,17 +1687,589 @@
     else if (type === "error") navigator.vibrate([30,60,30]);
   }
 
-  /* ── WEBSOCKET (keep your existing one) ── */
-  let wsRetry=0;
-  function wsStatus(s){
-    const dot=el("wsDot"), txt=el("wsText");
-    if(dot) dot.className="live-dot "+(s==="ok"?"ok":s==="bad"?"bad":"warn");
-    if(txt) txt.textContent=s==="ok"?"Live":s==="bad"?"Offline":"Connecting";
-    // keep your syncDriverWsDot/syncDockWsDot calls if those funcs exist below
-    if (typeof syncDriverWsDot === "function") syncDriverWsDot(s);
-    if (typeof syncDockWsDot === "function") syncDockWsDot(s);
+  /* ── SWIPE TO DISMISS TOAST ── */
+  function initToastSwipe() {
+    const t = el("toast");
+    if (!t) return;
+    let startX = 0, startY = 0, dx = 0;
+    t.addEventListener("touchstart", e => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      dx = 0;
+      t.classList.add("swiping");
+    }, {passive:true});
+    t.addEventListener("touchmove", e => {
+      dx = e.touches[0].clientX - startX;
+      const dy = Math.abs(e.touches[0].clientY - startY);
+      if (Math.abs(dx) < dy) return; // vertical swipe — ignore
+      if (dx > 0) t.style.transform = `translateX(${dx}px)`;
+    }, {passive:true});
+    t.addEventListener("touchend", () => {
+      t.classList.remove("swiping");
+      if (dx > 80) {
+        t.classList.add("swipe-out");
+        setTimeout(() => { t.style.display="none"; t.classList.remove("swipe-out"); t.style.transform=""; }, 200);
+      } else {
+        t.style.transform = "";
+      }
+      dx = 0;
+    }, {passive:true});
   }
 
+  /* ── PULL TO REFRESH ── */
+  function initPullToRefresh() {
+    let startY = 0, pulling = false, triggered = false;
+    const ind = el("ptrIndicator");
+    const txt = el("ptrText");
+    const spin = el("ptrSpinner");
+    if (!ind) return;
+
+    document.addEventListener("touchstart", e => {
+      if (window.scrollY === 0) { startY = e.touches[0].clientY; pulling = true; triggered = false; }
+    }, {passive:true});
+
+    document.addEventListener("touchmove", e => {
+      if (!pulling) return;
+      const dy = e.touches[0].clientY - startY;
+      if (dy > 10 && window.scrollY === 0) {
+        ind.classList.add("ptr-visible");
+        if (dy > 70 && !triggered) {
+          txt.textContent = "↑ Release to refresh";
+        } else if (dy <= 70) {
+          txt.textContent = "↓ Pull to refresh";
+        }
+      }
+    }, {passive:true});
+
+    document.addEventListener("touchend", async e => {
+      if (!pulling) return;
+      pulling = false;
+      const dy = e.changedTouches[0].clientY - startY;
+      if (dy > 70 && window.scrollY === 0 && !triggered) {
+        triggered = true;
+        ind.classList.add("ptr-loading");
+        spin.style.display = "block";
+        txt.textContent = "Refreshing…";
+        haptic("light");
+        try {
+          const [t, p] = await Promise.all([
+            apiJson("/api/state").catch(()=>null),
+            apiJson("/api/dockplates").catch(()=>null),
+          ]);
+          if(t) trailers = t;
+          if(p) dockPlates = p;
+          renderBoard(); renderDockView(); renderPlates(); renderSupBoard();
+          haptic("success");
+        } catch {}
+        await new Promise(r => setTimeout(r, 600));
+      }
+      ind.classList.remove("ptr-visible","ptr-loading");
+      spin.style.display = "none";
+      txt.textContent = "↓ Pull to refresh";
+    }, {passive:true});
+  }
+
+  /* ── BOTTOM NAV SYNC ── */
+  function syncBottomNav() {
+    const p = path();
+    ["bnDispatch","bnDock","bnDriver","bnManagement"].forEach(id => el(id)?.classList.remove("active"));
+
+    if (p.startsWith("/management")) {
+      el("bnManagement")?.classList.add("active");
+      // Management — hide driver tab
+      if(el("bnDriver")) el("bnDriver").style.display="none";
+    } else if (p.startsWith("/driver")) {
+      el("bnDriver")?.classList.add("active");
+      // Driver page — hide all other tabs, driver has no access elsewhere
+      ["bnDispatch","bnDock","bnManagement"].forEach(id=>{ if(el(id)) el(id).style.display="none"; });
+    } else if (p.startsWith("/dock")) {
+      el("bnDock")?.classList.add("active");
+      // Dock page — hide driver and management tabs
+      ["bnDriver","bnManagement"].forEach(id=>{ if(el(id)) el(id).style.display="none"; });
+    } else {
+      el("bnDispatch")?.classList.add("active");
+      // Dispatch — hide driver tab
+      if(el("bnDriver")) el("bnDriver").style.display="none";
+    }
+  }
+
+  /* ── SWIPE BETWEEN VIEWS ── */
+  function initSwipeViews() {
+    const p = path();
+    // Driver and dock are locked — no swipe navigation allowed
+    if (p.startsWith("/driver") || p.startsWith("/dock")) return;
+
+    const VIEWS = ["/", "/management"];
+    // Dispatchers/admin can swipe between / and /management
+    const currentIdx = () => p.startsWith("/management") ? 1 : 0;
+
+    let touchStartX = 0, touchStartY = 0, touchStartTime = 0;
+    const MIN_SWIPE_DISTANCE = 60;
+    const MAX_VERTICAL_RATIO = 0.6; // ignore if mostly vertical
+    const MAX_SWIPE_TIME = 350;     // ms
+
+    // Don't swipe when interacting with scrollable content or inputs
+    const isSwipable = (target) => {
+      const blocked = ["INPUT","TEXTAREA","SELECT"];
+      if (blocked.includes(target.tagName)) return false;
+      // Don't swipe on horizontally scrollable containers
+      let el = target;
+      while (el && el !== document.body) {
+        const style = getComputedStyle(el);
+        const overflowX = style.overflowX;
+        if ((overflowX === "auto" || overflowX === "scroll") && el.scrollWidth > el.clientWidth) return false;
+        el = el.parentElement;
+      }
+      return true;
+    };
+
+    document.addEventListener("touchstart", e => {
+      if (!isSwipable(e.target)) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchStartTime = Date.now();
+    }, {passive:true});
+
+    document.addEventListener("touchend", e => {
+      if (!touchStartX) return;
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      const dt = Date.now() - touchStartTime;
+      touchStartX = 0;
+
+      if (Math.abs(dx) < MIN_SWIPE_DISTANCE) return;
+      if (Math.abs(dy) / Math.abs(dx) > MAX_VERTICAL_RATIO) return;
+      if (dt > MAX_SWIPE_TIME) return;
+      if (!isSwipable(e.target)) return;
+
+      const idx = currentIdx();
+      if (dx < 0 && idx < VIEWS.length - 1) {
+        // swipe left → next view
+        haptic("light");
+        location.href = VIEWS[idx + 1];
+      } else if (dx > 0 && idx > 0) {
+        // swipe right → previous view
+        haptic("light");
+        location.href = VIEWS[idx - 1];
+      }
+    }, {passive:true});
+  }
+
+  /* ── PWA INSTALL PROMPT ── */
+  let _deferredInstallPrompt = null;
+  function initPwaInstall() {
+    window.addEventListener("beforeinstallprompt", e => {
+      e.preventDefault();
+      _deferredInstallPrompt = e;
+      // Show install button if we have one in the topbar
+      const btn = el("btnInstallPwa");
+      if (btn) btn.style.display = "";
+    });
+    window.addEventListener("appinstalled", () => {
+      _deferredInstallPrompt = null;
+      const btn = el("btnInstallPwa");
+      if (btn) btn.style.display = "none";
+      toast("App installed", "Wesbell Dispatch added to home screen.", "ok");
+    });
+    const btn = el("btnInstallPwa");
+    if (btn) {
+      btn.addEventListener("click", async () => {
+        if (!_deferredInstallPrompt) return;
+        _deferredInstallPrompt.prompt();
+        const { outcome } = await _deferredInstallPrompt.userChoice;
+        if (outcome === "accepted") haptic("success");
+        _deferredInstallPrompt = null;
+        btn.style.display = "none";
+      });
+    }
+  }
+
+  /* ── KEYBOARD AVOIDANCE ── */
+  function initKeyboardAvoidance() {
+    const inputs = ["v_trailer","xp_trailer","xo_trailer","sh_trailer","d_trailer","d_door"];
+    inputs.forEach(id => {
+      el(id)?.addEventListener("focus", () => {
+        setTimeout(() => el(id)?.scrollIntoView({behavior:"smooth",block:"center"}), 300);
+      }, {passive:true});
+    });
+    // Visual Viewport API — push bottom nav up when keyboard opens
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", () => {
+        const offset = window.innerHeight - window.visualViewport.height;
+        const bn = document.querySelector(".bottom-nav");
+        if (bn) bn.style.transform = offset > 100 ? `translateY(-${offset}px)` : "";
+      });
+    }
+  }
+
+  async function loadInitial(){
+    try{ const w=await apiJson("/api/whoami"); ROLE=w?.role; VERSION=w?.version||"";
+      // Only enforce redirect for logged-in users on the wrong page.
+      // Unauthenticated users (drivers) can navigate freely — the server
+      // already guards pages; we just let the server handle it via guardPage.
+      if (w?.redirectTo && ROLE && w.redirectTo !== location.pathname) {
+        location.replace(w.redirectTo);
+        return;
+      }
+    }
+    catch{ ROLE=null; VERSION=""; }
+    el("verText").textContent=VERSION||"—";
+
+    el("driverView").style.display="none";
+    el("managementView").style.display="none";
+    el("dockView").style.display="none";
+    el("dispatchView").style.display="none";
+
+    const p=path();
+    if(p.startsWith("/driver")){
+      el("driverView").style.display="";
+      // Driver has no login session — show a "Start Over" button that resets
+      // local state only, never calls /api/logout
+      const logoutBtn = el("btnLogout");
+      if(logoutBtn){
+        logoutBtn.style.display="";
+        logoutBtn.textContent="↩ Start Over";
+        // Replace click handler so it resets driver state instead of logging out
+        logoutBtn.onclick = (e) => {
+          e.stopImmediatePropagation();
+          try{ sessionStorage.removeItem("wb_whoType"); }catch{}
+          driverRestart();
+        };
+      }
+      el("btnAudit").style.display="none";
+      try{
+        const savedWho=sessionStorage.getItem("wb_whoType");
+        if(savedWho){
+          driverState.whoType=savedWho;
+          const isOutside=savedWho==="outside";
+          const dropBtn=el("flowBtnDrop"); if(dropBtn)dropBtn.style.display=isOutside?"none":"";
+          const shuntBtn=document.querySelector("[data-flow='shunt']"); if(shuntBtn)shuntBtn.style.display=isOutside?"none":"";
+          showScreen("flow-screen");
+        } else showScreen("who-screen");
+      }catch{ showScreen("who-screen"); }
+      renderSessionHistory();
+      initPush();
+    } else if(p.startsWith("/management")){
+      el("managementView").style.display=""; el("managementView").classList.add("view-fade");
+      el("btnLogout").style.display=""; 
+      el("btnAudit").style.display=(ROLE==="management"||ROLE==="admin")?"":"none";
+    } else if(p.startsWith("/dock")){
+      el("dockView").style.display=""; el("dockView").classList.add("view-fade");
+      el("btnLogout").style.display=ROLE?"":"none"; el("btnAudit").style.display="none";
+    } else {
+      el("dispatchView").style.display=""; el("dispatchView").classList.add("view-fade");
+      el("btnLogout").style.display=ROLE?"":"none";
+      el("btnAudit").style.display=(ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin")?"":"none";
+      const adminPanel=el("adminPanel");
+      if(adminPanel) adminPanel.style.display=ROLE==="admin"?"":"none";
+    }
+    highlightNav();
+    try{ const t=await apiJson("/api/state"); trailers=t||{}; }catch{ trailers={}; }
+    if(!isDriver()){
+      try{ const p=await apiJson("/api/dockplates"); dockPlates=p||{}; }catch{ dockPlates={}; }
+      try{ const b=await apiJson("/api/doorblocks"); doorBlocks=b||{}; }catch{ doorBlocks={}; }
+    }
+    if(isSuper()){ renderSupBoard(); renderSupConf(); loadAuditInto(null,el("supAuditCount"),0); loadIssueReports(); renderPlates();
+      // Admin PIN row — only visible to admin
+      const adminPinRow = el("adminPinRow");
+      if(adminPinRow) adminPinRow.style.display = ROLE==="admin" ? "" : "none";
+    }
+    if(ROLE==="admin" && !isSuper()){ renderBoard(); renderRolePanel(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
+    else if(ROLE==="management" && !isSuper()){ renderRolePanel(); renderBoard(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
+    else if(isDock()){ renderDockView(); renderPlates(); }
+    else if(!isDriver()&&!isSuper()){ renderRolePanel(); renderBoard(); let open=false; try{open=localStorage.getItem("platesOpen")==="1";}catch{} setPlatesOpen(open); }
+  }
+
+  /* ── GLOBAL CLICK HANDLER ── */
+  document.addEventListener("click", async ev => {
+    const direct = ev.target;
+    const id = direct?.id;
+    const act = direct?.dataset?.act || direct?.closest?.("[data-act]")?.dataset?.act;
+    const trId = direct?.dataset?.trailerId || direct?.closest?.("[data-trailer-id]")?.dataset?.trailerId;
+
+    if(direct?.closest?.("#dockPlatesToggle")){ setPlatesOpen(el("dockPlatesToggle").getAttribute("aria-expanded")!=="true"); return; }
+    if(direct?.closest?.("#dockPlatesToggle2")){ setPlatesOpen2(el("dockPlatesToggle2").getAttribute("aria-expanded")!=="true"); return; }
+    // PIN management accordions
+    if(direct?.closest?.("#pinMgmtToggle")){
+      const tog=el("pinMgmtToggle"), body=el("pinMgmtBody"); if(!tog||!body)return;
+      const open=tog.getAttribute("aria-expanded")==="true";
+      tog.setAttribute("aria-expanded",open?"false":"true");
+      body.style.maxHeight=open?"0px":(body.scrollHeight+40)+"px";
+      return;
+    }
+    if(direct?.closest?.("#adminPinToggle")){
+      const tog=el("adminPinToggle"), body=el("adminPinBody"); if(!tog||!body)return;
+      const open=tog.getAttribute("aria-expanded")==="true";
+      tog.setAttribute("aria-expanded",open?"false":"true");
+      body.style.maxHeight=open?"0px":(body.scrollHeight+40)+"px";
+      return;
+    }
+    // Dock card "sign in to update" quick button
+    if(act==="openStaffLogin"){ el("btnDockStaffLogin")?.click(); return; }
+    if(id==="btnLogout") return doLogout();
+    if(id==="btnAudit"){ const s=el("auditCard").style.display!=="none"; el("auditCard").style.display=s?"none":""; if(!s)loadAuditInto(el("auditBody"),el("auditCount"),7); return; }
+    if(id==="btnShiftSummary"){ openShiftSummary(); return; }
+    if(id==="btnDockBulk"){ toggleDockBulkMode(); return; }
+    if(id==="btnBulkLoading"){ applyBulkStatus("Loading"); return; }
+    if(id==="btnBulkDockReady"){ applyBulkStatus("Dock Ready"); return; }
+    if(id==="btnDimMode"){ toggleDimMode(); return; }
+    if(id==="btnDockScan"){ el("dockScanInput")?.focus(); return; }
+    if(id==="btnDockViewToggle"){
+      const cur=el("btnDockViewToggle")?.dataset.view||"cards";
+      const next=cur==="cards"?"map":"cards";
+      el("btnDockViewToggle").dataset.view=next;
+      el("btnDockViewToggle").textContent=next==="map"?"📋 Cards":"🗺 Map";
+      renderDockView(); return;
+    }
+    if(id==="btnQuickIssueSubmit"){ submitQuickIssue(); return; }
+    if(id==="btnDockReserveSubmit"){ submitDockReserve(); return; }
+    if(id==="btnHistoryBoard"){ openHistoryBoard(); return; }
+    if(id==="btnViewLogs"){ openServerLogs(); return; }
+    if(id==="btnClearFilters"||id==="btnSupClearFilters"){ ["search","filterDir","filterStatus","supSearch","supFilterDir","supFilterStatus"].forEach(i=>{if(el(i))el(i).value="";}); renderBoard(); renderSupBoard(); return; }
+    if(id==="btnSaveTrailer") return dispSave();
+    if(id==="btnClearAll") return dispClear();
+    if(id==="btnSetDispatcherPin") return setPin("dispatcher","pin_dispatcher","pin_dispatcher_confirm");
+    if(id==="btnSetDockPin")       return setPin("dock","pin_dock","pin_dock_confirm");
+    if(id==="btnSetManagementPin") return setPin("management","pin_management","pin_management_confirm");
+    if(id==="btnSetAdminPinSup")   return setPin("admin","pin_admin_sup","pin_admin_sup_confirm");
+    // Admin panel PIN buttons (dispatch view)
+    if(id==="btnSetDispatcherPinA") return setPin("dispatcher","pin_dispatcher_a","pin_dispatcher_a_confirm");
+    if(id==="btnSetDockPinA")       return setPin("dock","pin_dock_a","pin_dock_a_confirm");
+    if(id==="btnSetManagementPinA") return setPin("management","pin_management_a","pin_management_a_confirm");
+    if(id==="btnSetAdminPinA")      return setPin("admin","pin_admin_a","pin_admin_a_confirm");
+
+    const dockFilterBtn=direct?.closest?.("[data-dock-filter]");
+    if(dockFilterBtn){
+      dockFilter=dockFilterBtn.dataset.dockFilter;
+      document.querySelectorAll(".dock-filter-btn").forEach(b=>{
+        const active=b.dataset.dockFilter===dockFilter;
+        b.classList.toggle("active",active);
+        b.setAttribute("aria-pressed",active?"true":"false");
+      });
+      renderDockView(); return;
+    }
+
+    // Generic dismiss handler (replaces inline onclick)
+    const dismissId=direct?.dataset?.dismiss||direct?.closest?.("[data-dismiss]")?.dataset?.dismiss;
+    if(dismissId){ const d=el(dismissId); if(d)d.style.display="none"; return; }
+
+    const whoBtn=direct?.closest?.("[data-who]"); if(whoBtn){ selectWho(whoBtn.dataset.who); return; }
+    const flowBtn=direct?.closest?.("[data-flow]"); if(flowBtn){ selectFlow(flowBtn.dataset.flow); return; }
+    if(id==="btnBackToWho"){
+      try{ sessionStorage.removeItem("wb_whoType"); }catch{}
+      driverState.whoType=null;
+      showScreen("who-screen",true);
+      return;
+    }
+    if(id==="btnBackToFlow2"||direct?.dataset?.flowBack){ showScreen("flow-screen",true); return; }
+    if(id==="btnBackToFlow5"){ showScreen("flow-screen",true); return; }
+    if(id==="btnBackToFlow6"){ showScreen("flow-screen",true); return; }
+    if(id==="btnOmwSubmit")   return submitOmw();
+    if(id==="btnArriveSubmit") return submitArrive();
+    if(id==="btnArrDone")      return driverRestart();
+    if(id==="btnOmwDone")     return driverRestart();
+    if(id==="btnBackToFlow"){
+      const isOutside=driverState.whoType==="outside";
+      const dropBtn=el("flowBtnDrop"); if(dropBtn)dropBtn.style.display=isOutside?"none":"";
+      const shuntBtn=document.querySelector("[data-flow='shunt']"); if(shuntBtn)shuntBtn.style.display=isOutside?"none":"";
+      const omwBtn=el("flowBtnOmw"); if(omwBtn)omwBtn.style.display=isOutside?"none":"";
+      showScreen("flow-screen",true); return;
+    }
+    if(id==="btnDriverDrop")    return driverDrop();
+    if(id==="btnXdockPickup")   return xdockPickup();
+    if(id==="btnXdockOffload")  return xdockOffload();
+    if(id==="btnConfirmSafety") return confSafety();
+    if(id==="btnDriverShunt")   return driverShunt();
+    if(id==="btnDriverRestart"||id==="btnDriverFullReset") return driverRestart();
+    if(id==="btnPushToggle")    return _pushSub ? unsubscribePush() : subscribePush();
+
+    if(act==="shuntPickDoor"){
+      const d=direct?.dataset?.door||direct?.closest?.("[data-door]")?.dataset?.door;
+      if(d){ driverState.shuntDoor=d; buildShuntDoorPicker(); if(el("sh_door_display"))el("sh_door_display").textContent="Door "+d; updateShuntSubmitState(); }
+      return;
+    }
+
+    if(id==="ac_override"){ driverState.overrideMode=true; driverState.assignedDoor=""; driverState.selectedDoor=""; showDoorPicker("doorPickerWrap","doorPickerGrid"); updateDropSubmitState(); return; }
+    if(id==="oac_override"){ driverState.overrideMode=true; driverState.assignedDoor=""; driverState.selectedDoor=""; showDoorPicker("offloadDoorPickerWrap","offloadDoorPickerGrid"); updateOffloadSubmitState(); return; }
+
+    const doorBtn=direct?.closest?.("[data-door]");
+    if(doorBtn&&doorBtn.dataset.door&&!doorBtn.dataset.dmDoor&&!doorBtn.dataset.act){
+      driverState.selectedDoor=doorBtn.dataset.door; driverState.overrideMode=true;
+      buildDoorPicker(doorBtn.dataset.picker||"doorPickerGrid");
+      updateDropSubmitState(); updateOffloadSubmitState(); return;
+    }
+
+    const dtBtn=direct?.closest?.("[data-type]");
+    if(dtBtn&&dtBtn.dataset.type){ driverState.dropType=dtBtn.dataset.type; el("dtbEmpty")?.classList.toggle("selected",driverState.dropType==="Empty"); el("dtbLoaded")?.classList.toggle("selected",driverState.dropType==="Loaded"); return; }
+
+    if(act==="shuntToggle"&&trId){ shuntOpen[trId]=!shuntOpen[trId]; renderBoard(); return; }
+    if(act==="shuntDoor"&&trId){ const door=direct?.dataset?.door||direct?.closest?.("[data-door]")?.dataset?.door; if(door)return shuntTrailer(trId,door); }
+    if(act==="delete"&&trId) return dispDelete(trId);
+    if(act==="quickStatus"){ const to=direct?.dataset?.to||direct?.closest?.("[data-to]")?.dataset?.to; if(trId&&to)return quickStatus(trId,to); }
+    if(act==="edit"&&trId){
+      const r=trailers[trId]; if(!r)return;
+      el("d_trailer").value=trId; el("d_direction").value=r.direction||"Inbound"; el("d_status").value=r.status||"Incoming";
+      el("d_door").value=r.door||""; el("d_note").value=r.note||""; el("d_dropType").value=r.dropType||"";
+      if(el("d_carrierType"))el("d_carrierType").value=r.carrierType||"";
+      toast("Record loaded",`Editing trailer ${trId}`,"ok"); return;
+    }
+    
+    // Quick issue reason toggle
+    const qiBtn = direct?.closest?.(".qi-reason-btn");
+    if(qiBtn){ qiBtn.classList.toggle("qi-sel"); return; }
+    // Inline note editing
+    const noteEditEl = direct?.closest?.(".t-note-edit");
+    if(noteEditEl){
+      const trailer = noteEditEl.dataset.trailer;
+      const cur = noteEditEl.dataset.note || "";
+      const val = prompt(`Note for trailer ${trailer}:`, cur);
+      if(val !== null){
+        apiFetch("/api/upsert",{method:"POST",body:JSON.stringify({trailer,note:val.trim()})})
+          .then(()=>showToast("Note updated","ok"))
+          .catch(()=>showToast("Failed to update note","err"));
+      }
+      return;
+    }
+    if(act==="dockSet"){ const to=direct?.dataset?.to; if(trId&&to)return dockSet(trId,to); }
+    if(act==="dockSelect"&&trId){
+      if(dockSelected.has(trId)) dockSelected.delete(trId); else dockSelected.add(trId);
+      const cnt = el("dockBulkCount");
+      if(cnt) cnt.textContent = `${dockSelected.size} selected`;
+      renderDockView(); return;
+    }
+    if(act==="dockReserveDoor"&&trId){ openDockReserveDoor(trId); return; }
+    if(act==="dockMapCard"&&trId){
+      // Switch back to card view and highlight trailer
+      el("btnDockViewToggle").dataset.view="cards"; el("btnDockViewToggle").textContent="🗺 Map";
+      renderDockView();
+      setTimeout(()=>{ const c=document.querySelector(`[data-trailer="${trId}"]`); c?.scrollIntoView({behavior:"smooth",block:"center"}); },100);
+      return;
+    }
+    if(act==="dockReportIssue"){ const door=direct?.dataset?.door||direct?.closest?.("[data-door]")?.dataset?.door||""; if(trId) return openDockIssueModal(trId,door); }
+    if(act==="markReady"&&trId) return markReady(trId);
+
+    // Dock map cell click — open status modal for any door (occupied or empty)
+    const dmCell = direct?.closest?.("[data-dm-door]");
+    if (dmCell && (ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin")) {
+      const door = dmCell.dataset.dmDoor;
+      const occupied = getOccupiedDoors();
+      const occ = occupied[door];
+      const nextStatuses = {
+        "Incoming":   ["Dropped","Loading","Dock Ready","Ready","Departed"],
+        "Dropped":    ["Loading","Dock Ready","Ready","Departed"],
+        "Loading":    ["Dock Ready","Ready","Departed"],
+        "Dock Ready": ["Ready","Departed"],
+        "Ready":      ["Departed"],
+        "Departed":   ["Incoming","Dropped"],
+      };
+      const isBlock = occ?.status === "Blocked";
+      el("dmModalTitle").textContent = isBlock ? `Door ${door} — Blocked` : occ ? `Trailer ${occ.trailer} — D${door}` : `Door ${door} — Free`;
+      el("dmModalSub").textContent = isBlock ? (occ.note ? `Note: ${occ.note}` : "Manually marked occupied") : occ ? `Status: ${occ.status}` : "No trailer assigned";
+      const btns = el("dmStatusBtns");
+      btns.innerHTML = "";
+      if (isBlock) {
+        const clrBtn = document.createElement("button");
+        clrBtn.className = "btn btn-success btn-full";
+        clrBtn.dataset.dmAction = "clearBlock";
+        clrBtn.dataset.dmDoor = door;
+        clrBtn.textContent = "✓ Mark Free";
+        btns.appendChild(clrBtn);
+      } else if (occ) {
+        (nextStatuses[occ.status] || []).forEach(s => {
+          const cls = s==="Ready"?"btn-success":s==="Departed"?"btn-default":s==="Loading"?"btn-primary":"btn-cyan";
+          const b = document.createElement("button");
+          b.className = `btn ${cls} btn-full`;
+          b.dataset.dmStatus = s;
+          b.dataset.dmTrailer = occ.trailer;
+          b.textContent = s;
+          btns.appendChild(b);
+        });
+      } else {
+        const blockBtn = document.createElement("button");
+        blockBtn.className = "btn btn-default btn-full";
+        blockBtn.dataset.dmAction = "setBlock";
+        blockBtn.dataset.dmDoor = door;
+        blockBtn.textContent = "🚫 Mark Occupied";
+        btns.appendChild(blockBtn);
+      }
+      el("dmModalOv").classList.remove("hidden"); lockScroll();
+      return;
+    }
+
+    // Dock map block/clear
+    const dmActionBtn = direct?.closest?.("[data-dm-action]");
+    if (dmActionBtn) {
+      const action = dmActionBtn.dataset.dmAction;
+      const door2  = dmActionBtn.dataset.dmDoor;
+      el("dmModalOv").classList.add("hidden"); unlockScroll();
+      if (action === "setBlock") {
+        try { await apiJson("/api/doorblock/set", { method:"POST", headers:CSRF, body:JSON.stringify({ door:door2, note:"" }) }); doorBlocks[door2]={note:"",setAt:Date.now()}; renderDockMap(); toast("Door blocked",`D${door2} marked occupied`,"ok"); }
+        catch(e) { toast("Error",e.message,"err"); }
+      } else if (action === "clearBlock") {
+        try { await apiJson("/api/doorblock/clear", { method:"POST", headers:CSRF, body:JSON.stringify({ door:door2 }) }); delete doorBlocks[door2]; renderDockMap(); toast("Door freed",`D${door2} marked free`,"ok"); }
+        catch(e) { toast("Error",e.message,"err"); }
+      }
+      return;
+    }
+
+    // Dock map status button
+    const dmStatusBtn = direct?.closest?.("[data-dm-status]");
+    if (dmStatusBtn) {
+      const status  = dmStatusBtn.dataset.dmStatus;
+      const trailer = dmStatusBtn.dataset.dmTrailer;
+      el("dmModalOv").classList.add("hidden"); unlockScroll();
+      if (!trailer) { toast("No trailer","Add a trailer from the dispatch panel first.","warn"); return; }
+      try {
+        await apiJson("/api/upsert", { method:"POST", headers:CSRF, body:JSON.stringify({ trailer, status }) });
+        toast("Updated", `${trailer} → ${status}`, "ok");
+      } catch(e) { toast("Update failed", e.message, "err"); }
+      return;
+    }
+
+        const tog=direct?.dataset?.plateToggle; if(tog){ plateEditOpen[tog]=!plateEditOpen[tog]; renderPlates(); return; }
+    const psv=direct?.dataset?.plateSave; if(psv)return plateSave(psv);
+  });
+
+  document.addEventListener("change",ev=>{
+    const t=ev.target;
+    if(t?.dataset?.act==="rowStatus"){ const trailer=t.dataset.trailerId,status=t.value; apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})}).catch(e=>toast("Update failed",e.message,"err")); }
+    if(t?.id==="c_loadSecured"||t?.id==="c_dockPlateUp") updateSafetySubmitState();
+  });
+
+  el("v_trailer")?.addEventListener("input",onTrailerInput);
+  el("v_trailer")?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!el("btnDriverDrop")?.disabled)driverDrop(); });
+  el("omw_trailer")?.addEventListener("input", updateOmwSubmitState);
+  el("arr_trailer")?.addEventListener("input", updateArriveSubmitState);
+  el("arr_trailer")?.addEventListener("keydown", e=>{ if(e.key==="Enter"&&!el("btnArriveSubmit")?.disabled)submitArrive(); });
+  el("omw_trailer")?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!el("btnOmwSubmit")?.disabled)submitOmw(); });
+  // Set inputmode on trailer inputs for numeric keypad on mobile
+  ["v_trailer","xp_trailer","xo_trailer","sh_trailer"].forEach(id=>{
+    const inp=el(id); if(!inp)return;
+    inp.setAttribute("inputmode","numeric");
+    inp.setAttribute("autocomplete","off");
+    inp.setAttribute("autocorrect","off");
+    inp.setAttribute("autocapitalize","none");
+    inp.setAttribute("spellcheck","false");
+  });
+  el("xp_trailer")?.addEventListener("input",onPickupTrailerInput);
+  el("xo_trailer")?.addEventListener("input",onOffloadTrailerInput);
+  el("xo_trailer")?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!el("btnXdockOffload")?.disabled)xdockOffload(); });
+  el("sh_trailer")?.addEventListener("input",()=>{ buildShuntDoorPicker(); updateShuntSubmitState(); });
+  el("dockSearch")?.addEventListener("input",renderDockView);
+  ["d_trailer","d_door","d_note","d_direction","d_status","d_dropType","d_carrierType"].forEach(id=>{
+    el(id)?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); dispSave(); } });
+  });
+  ["search","filterDir","filterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderBoard)));
+  ["supSearch","supFilterDir","supFilterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderSupBoard)));
+
+  /* ── WEBSOCKET ── */
+  let wsRetry=0;
+  function wsStatus(s){
+    el("wsDot").className="live-dot "+(s==="ok"?"ok":s==="bad"?"bad":"warn");
+    el("wsText").textContent=s==="ok"?"Live":s==="bad"?"Offline":"Connecting";
+    syncDriverWsDot(s);
+    syncDockWsDot(s);
+  }
   function connectWs(){
     wsStatus("warn");
     const ws=new WebSocket(`${location.protocol==="https:"?"wss":"ws"}://${location.host}`);
@@ -626,26 +2278,303 @@
     ws.onopen=()=>{ wsRetry=0; wsStatus("ok"); };
     ws.onclose=()=>{
       clearInterval(watchdog); wsStatus("bad");
+      // Exponential backoff with ±30% jitter to spread reconnect storms
       const base = Math.min(8000, 500 + wsRetry++ * 650);
-      const jitter = base * 0.3 * (Math.random() * 2 - 1);
+      const jitter = base * 0.3 * (Math.random() * 2 - 1); // ±30%
       setTimeout(connectWs, Math.round(base + jitter));
     };
     ws.onmessage=evt=>{
       lastMsg=Date.now();
       let msg; try{msg=JSON.parse(evt.data);}catch{return;}
       const {type,payload}=msg||{};
-      if(type==="state"){ trailers=payload||{}; renderBoard(); if(isSuper())renderSupBoard(); if(isDock())renderDockView(); }
+      if(type==="state"){ trailers=payload||{}; renderBoard(); if(isSuper())renderSupBoard(); if(isDock())renderDockView(); if(isAdmin()&&!isSuper())renderBoard(); }
       else if(type==="dockplates"){ dockPlates=payload||{}; if(!isDriver()) renderPlates(); }
       else if(type==="doorblocks"){ doorBlocks=payload||{}; renderDockMap(); renderBoard(); }
-      else if(type==="confirmations"){ confirmations=Array.isArray(payload)?payload:[]; }
-      else if(type==="version"){ VERSION=payload?.version||VERSION; setText("verText", VERSION||"—"); }
+      else if(type==="confirmations"){ confirmations=Array.isArray(payload)?payload:[]; if(isSuper())renderSupConf(); }
+      else if(type==="ping"){/* keepalive — lastMsg already updated above */}
+      else if(type==="omw"){ showToast(`🚛 ${payload.trailer} on way → Door ${payload.door}${payload.eta?` · ETA ~${payload.eta}min`:""}`, "info", 6000); renderBoard(); }
+      else if(type==="arrive"){ showToast(`✅ ${payload.trailer} arrived at Door ${payload.door}`, "success", 6000); renderBoard(); }
+      else if(type==="version"){ VERSION=payload?.version||VERSION; el("verText").textContent=VERSION||"—"; }
+      else if(type==="notify"&&payload?.kind==="ready"){
+        toast("🟢 Trailer Ready",`${payload.trailer} is READY${payload.door?" at door "+payload.door:""}.`,"ok",8000);
+        if(isDriver()){
+          const banner=el("readyNotifBanner");
+          if(banner){
+            el("readyNotifText").textContent=`Trailer ${payload.trailer} is READY${payload.door?" at door "+payload.door:""}`;
+            banner.style.display="flex";
+            clearTimeout(banner._t);
+            banner._t=setTimeout(()=>banner.style.display="none",12000);
+          }
+        }
+      }
     };
   }
+  /* ── STAFF SIGN-IN MODAL (dock / driver pages) ── */
+  function initStaffLogin() {
+    const ov      = el("staffLoginOv");
+    const roleEl  = el("staffLoginRole");
+    const pinEl   = el("staffLoginPin");
+    const errEl   = el("staffLoginErr");
+    const goBtn   = el("staffLoginGo");
+    const cancel  = el("staffLoginCancel");
+    const logoutRow = el("staffLogoutRow");
+    const curRole   = el("staffCurrentRole");
+    const logoutBtn = el("staffLogoutBtn");
+    if (!ov) return;
 
-  // ✅ Boot
+    function openModal() {
+      errEl.style.display = "none";
+      pinEl.value = "";
+      if (ROLE && ["admin","management","dispatcher","dock"].includes(ROLE)) {
+        // Already signed in — show sign-out view
+        if(curRole) curRole.textContent = ROLE.charAt(0).toUpperCase() + ROLE.slice(1);
+        if(logoutRow) logoutRow.style.display = "";
+        if(roleEl?.closest(".field")) roleEl.closest(".field").style.display = "none";
+        if(pinEl?.closest(".field")) pinEl.closest(".field").style.display = "none";
+        if(goBtn) goBtn.style.display = "none";
+      } else {
+        if(logoutRow) logoutRow.style.display = "none";
+        if(roleEl?.closest(".field")) roleEl.closest(".field").style.display = "";
+        if(pinEl?.closest(".field")) pinEl.closest(".field").style.display = "";
+        if(goBtn) goBtn.style.display = "";
+      }
+      ov.classList.remove("hidden");
+      setTimeout(() => (ROLE ? null : pinEl?.focus()), 100);
+    }
+
+    function closeModal() { ov.classList.add("hidden"); }
+
+    // Open triggers
+    el("btnDockStaffLogin")?.addEventListener("click", openModal);
+    el("btnDriverStaffLogin")?.addEventListener("click", openModal);
+    cancel?.addEventListener("click", closeModal);
+    ov.addEventListener("click", e => { if (e.target === ov) closeModal(); });
+
+    // Sign in
+    async function doStaffLogin() {
+      const role = roleEl?.value;
+      const pin  = pinEl?.value || "";
+      if (!pin) { errEl.textContent = "Enter your PIN."; errEl.style.display = ""; return; }
+      goBtn.disabled = true; goBtn.textContent = "Signing in…";
+      errEl.style.display = "none";
+      try {
+        const r = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+          body: JSON.stringify({ role, pin })
+        });
+        const errText = await r.text();
+        if (!r.ok) {
+          errEl.textContent = r.status === 429
+            ? `🔒 ${errText}` // rate limit message already includes retry info
+            : errText;
+          errEl.style.display = "";
+          return;
+        }
+        haptic("success");
+        closeModal();
+        // Reload current page so the new session takes effect cleanly
+        location.reload();
+      } catch(e) {
+        errEl.textContent = "Connection error."; errEl.style.display = "";
+      } finally {
+        goBtn.disabled = false; goBtn.textContent = "Sign In →";
+      }
+    }
+
+    goBtn?.addEventListener("click", doStaffLogin);
+    pinEl?.addEventListener("keydown", e => { if (e.key === "Enter") doStaffLogin(); });
+
+    // Sign out
+    logoutBtn?.addEventListener("click", async () => {
+      try { await apiJson("/api/logout", { method: "POST", headers: CSRF }); } catch {}
+      haptic("light");
+      closeModal();
+      location.href = "/login";
+    });
+
+    // Update staff button appearance based on auth state
+    function syncStaffButtons() {
+      const signedIn = ROLE && ROLE !== "driver";
+      ["btnDockStaffLogin","btnDriverStaffLogin"].forEach(id => {
+        const b = el(id); if (!b) return;
+        if (signedIn) {
+          b.textContent = `👤 ${ROLE.charAt(0).toUpperCase() + ROLE.slice(1)}`;
+          b.style.borderColor = "var(--amber-bd)";
+          b.style.color = "var(--amber)";
+        } else {
+          b.textContent = "🔑 Staff";
+          b.style.borderColor = "";
+          b.style.color = "";
+        }
+      });
+    }
+    syncStaffButtons();
+    // Expose so it can be called after load
+    initStaffLogin._sync = syncStaffButtons;
+  }
+
   loadInitial().then(() => {
-    // leave your init calls here (syncBottomNav/initToastSwipe/etc) if you have them below
-    connectWs();
-  });
+    syncBottomNav();
+    initToastSwipe();
+    initPullToRefresh();
+    initKeyboardAvoidance();
+    initSwipeViews();
+    initPwaInstall();
+    initStaffLogin();
+    initStaffLogin._sync?.();
+    initIssueCamera();
+    initIssueLightbox();
+    initDockIssueModal();
+  
+  /* ══════════════════════════════════════════
+     SHIFT SUMMARY MODAL
+  ══════════════════════════════════════════ */
+  async function openServerLogs() {
+    const ov = el("serverLogsOv");
+    if(!ov) return;
+    ov.classList.remove("hidden");
+    el("serverLogsBody").innerHTML = '<div style="text-align:center;padding:20px;color:var(--t2)">Loading…</div>';
+    try {
+      const res = await apiFetch("/api/logs");
+      const logs = await res.json();
+      const levelColor = { error:"var(--red)", warn:"var(--amber)", info:"var(--t2)" };
+      const fmt = ts => new Date(ts).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+      if(!logs.length){ el("serverLogsBody").innerHTML='<div style="color:var(--t3);padding:16px">No logs yet</div>'; return; }
+      el("serverLogsBody").innerHTML = logs.map(l=>`
+        <div class="log-row">
+          <span class="log-time">${fmt(l.at)}</span>
+          <span class="log-level" style="color:${levelColor[l.level]||"var(--t2)"}">${(l.level||"").toUpperCase()}</span>
+          <span class="log-ctx" style="color:var(--cyan)">${l.context||""}</span>
+          <span class="log-msg">${l.message||""}</span>
+          ${l.detail?`<span class="log-detail">${l.detail}</span>`:""}
+        </div>`).join("");
+    } catch(e) {
+      el("serverLogsBody").innerHTML = '<div style="color:var(--red);padding:16px">Failed to load logs (admin only)</div>';
+    }
+  }
 
+  async function openShiftSummary() {
+    const ov = el("shiftSummaryOv");
+    if(!ov) return;
+    ov.classList.remove("hidden");
+    el("shiftSummaryBody").innerHTML = '<div style="text-align:center;padding:30px;color:var(--t2)">Loading…</div>';
+    try {
+      const res = await apiFetch("/api/shift-summary?hours=12");
+      const data = await res.json();
+      const fmt = ts => ts ? new Date(ts).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}) : "—";
+      const statusColors = {Incoming:"var(--t2)",Dropped:"var(--amber)",Loading:"var(--amber)",
+        "Dock Ready":"var(--cyan)","Ready":"var(--green)",Departed:"var(--t3)"};
+      
+      const kpiHtml = [
+        {v:data.total, l:"Total Trailers", c:"var(--amber)"},
+        {v:data.active, l:"Still Active", c:"var(--cyan)"},
+        {v:data.departed, l:"Departed", c:"var(--t3)"},
+        {v:data.arrivals, l:"Arrivals", c:"var(--green)"},
+        {v:data.omw, l:"OMW Events", c:"var(--t2)"},
+        {v:data.issues, l:"Issues Filed", c:"var(--red)"},
+      ].map(k=>`<div class="ss-kpi"><div class="ss-kval" style="color:${k.c}">${k.v}</div><div class="ss-klbl">${k.l}</div></div>`).join("");
+
+      const byStatusHtml = Object.entries(data.byStatus||{})
+        .map(([s,n])=>`<div class="ss-stat-row"><span style="color:${statusColors[s]||"var(--t1)"}">${s}</span><span class="ss-stat-n">${n}×</span></div>`).join("") || "<div style='color:var(--t3)'>No changes</div>";
+
+      const eventsHtml = (data.recentEvents||[]).slice(0,30).map(e=>{
+        const detail = e.details?.status || e.details?.door || e.details?.eta ? 
+          ` <span style="color:var(--t3);font-size:10px">${e.details.status||e.details.door||""}</span>` : "";
+        return `<div class="ss-ev"><span class="ss-ev-time">${fmt(e.at)}</span><span class="ss-ev-actor" style="color:var(--amber)">${e.actor}</span><span class="ss-ev-action">${e.action.replace(/_/g," ")}</span><span class="ss-ev-entity" style="color:var(--cyan)">${e.entity||""}</span>${detail}</div>`;
+      }).join("") || "<div style='color:var(--t3)'>No events</div>";
+
+      el("shiftSummaryBody").innerHTML = `
+        <div class="ss-section"><div class="ss-title">Last 12 Hours — ${new Date(data.since).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})} to now</div></div>
+        <div class="ss-kpi-row">${kpiHtml}</div>
+        <div class="ss-cols">
+          <div class="ss-col">
+            <div class="ss-section-hd">Status Changes</div>
+            ${byStatusHtml}
+          </div>
+          <div class="ss-col">
+            <div class="ss-section-hd">Recent Activity</div>
+            <div class="ss-events">${eventsHtml}</div>
+          </div>
+        </div>`;
+    } catch(e) {
+      el("shiftSummaryBody").innerHTML = '<div style="color:var(--red);padding:20px">Failed to load summary</div>';
+    }
+  }
+
+  /* ══════════════════════════════════════════
+     HISTORICAL BOARD
+  ══════════════════════════════════════════ */
+  async function openHistoryBoard() {
+    const ov = el("historyBoardOv");
+    if(!ov) return;
+    ov.classList.remove("hidden");
+    el("historyBoardBody").innerHTML = '<div style="text-align:center;padding:30px;color:var(--t2)">Loading audit log…</div>';
+    try {
+      const res = await apiFetch("/api/audit?limit=200");
+      const data = await res.json();
+      const events = (data.rows||data||[]).filter(e=>
+        ["trailer_update","trailer_create","trailer_status_set","upsert"].includes(e.action)
+      );
+      const fmt = ts => new Date(ts).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
+      const statusColors = {Incoming:"var(--t2)",Dropped:"var(--amber)",Loading:"var(--amber)",
+        "Dock Ready":"var(--cyan)","Ready":"var(--green)",Departed:"var(--t3)"};
+
+      if(!events.length){
+        el("historyBoardBody").innerHTML = '<div style="color:var(--t3);padding:20px">No trailer history found</div>';
+        return;
+      }
+      el("historyBoardBody").innerHTML = `
+        <div class="hist-hd"><span>Time</span><span>Actor</span><span>Trailer</span><span>Change</span></div>
+        ${events.map(e=>{
+          let det = {}; try{ det=JSON.parse(e.details||"{}"); }catch{}
+          const status = det.status||det.after?.status||"";
+          const door = det.door||det.after?.door||"";
+          const change = [status&&`<span style="color:${statusColors[status]||"var(--t1)"}">${status}</span>`,door&&`Door ${door}`].filter(Boolean).join(" · ")||e.action.replace(/_/g," ");
+          return `<div class="hist-row">
+            <span class="hist-time">${fmt(e.at)}</span>
+            <span class="hist-actor" style="color:var(--amber)">${e.actorRole||"—"}</span>
+            <span class="hist-trailer" style="color:var(--cyan);font-family:var(--mono)">${e.entityId||"—"}</span>
+            <span class="hist-change">${change}</span>
+          </div>`;
+        }).join("")}`;
+    } catch(e) {
+      el("historyBoardBody").innerHTML = '<div style="color:var(--red);padding:20px">Failed to load history</div>';
+    }
+  }
+
+  /* ══════════════════════════════════════════
+     QUICK DROP MODE (DRIVER)
+  ══════════════════════════════════════════ */
+  function initQuickDrop() {
+    const input = el("quickDropTrailer");
+    if(!input) return;
+    let debounce;
+    input.addEventListener("input", ()=>{
+      clearTimeout(debounce);
+      const val = input.value.trim().toUpperCase();
+      if(val.length < 3) return;
+      debounce = setTimeout(async ()=>{
+        try {
+          const r = await apiFetch("/api/upsert",{method:"POST",body:JSON.stringify({
+            trailer:val, direction:"Inbound", status:"Dropped", dropType:"Loaded", carrierType:"Outside"
+          })});
+          if(r.ok){
+            showToast(`✅ Trailer ${val} dropped!`,"success",5000);
+            input.value="";
+            input.classList.add("quick-drop-success");
+            setTimeout(()=>input.classList.remove("quick-drop-success"),1500);
+          }
+        } catch(e){ showToast("Quick drop failed","err"); }
+      }, 800);
+    });
+  }
+
+  connectWs();
+  initQuickDrop();
+  initVoiceInput();
+  initDockScan();
+  initDimMode();
+  initDockRememberLogin();
+  });
 })();

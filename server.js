@@ -381,7 +381,8 @@ app.use((req,res,next)=>{
     res.setHeader("Service-Worker-Allowed","/");
     res.setHeader("Content-Type","application/javascript");
     res.setHeader("Cache-Control","no-cache, no-store, must-revalidate");
-    return res.sendFile(path.join(__dirname,"sw.js"),err=>{if(err&&!res.headersSent)res.status(404).end()});
+    const swFile=req.path==="/sw2.js"?"sw2.js":"sw.js";
+    return res.sendFile(path.join(__dirname,swFile),err=>{if(err&&!res.headersSent)res.status(404).end()});
   }
   if(req.path==="/manifest.json")res.setHeader("Cache-Control","no-cache, no-store, must-revalidate");
   if(!SAFE_FILES.test(req.path))return next();
@@ -759,7 +760,7 @@ app.post("/api/doorblock/set",requireXHR,requireRole(["dock","dispatcher","manag
     const note=String(req.body.note||"").slice(0,120);
     if(!door||isNaN(parseInt(door))||parseInt(door)<28||parseInt(door)>42)return res.status(400).send("Invalid door");
     await run(`INSERT INTO doorblocks(door,note,setAt) VALUES(?,?,?) ON CONFLICT(door) DO UPDATE SET note=excluded.note,setAt=excluded.setAt`,[door,note,Date.now()]);
-    await audit(req,req.session?.role||"unknown","doorblock_set","doorblock",door,{note});
+    await audit(req,req.user?.role||"unknown","doorblock_set","doorblock",door,{note});
     await broadcastBlocks();
     res.json({ok:true});
   }catch{res.status(500).send("Doorblock set failed")}
@@ -770,7 +771,7 @@ app.post("/api/doorblock/clear",requireXHR,requireRole(["dock","dispatcher","man
     const door=String(req.body.door||"");
     if(!door)return res.status(400).send("Missing door");
     await run(`DELETE FROM doorblocks WHERE door=?`,[door]);
-    await audit(req,req.session?.role||"unknown","doorblock_clear","doorblock",door,{});
+    await audit(req,req.user?.role||"unknown","doorblock_clear","doorblock",door,{});
     await broadcastBlocks();
     res.json({ok:true});
   }catch{res.status(500).send("Doorblock clear failed")}

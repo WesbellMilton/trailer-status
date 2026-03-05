@@ -1,7 +1,7 @@
 // sw2.js — Wesbell Dispatch Service Worker
 // Integrated with Network-First Strategy + Real-Time API Passthrough
 
-const CACHE_NAME = "wesbell-v3.6.5";
+const CACHE_NAME = "wesbell-v3.7.0";
 const ASSETS_TO_CACHE = [
   "/",
   "/index.html",

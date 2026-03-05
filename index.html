@@ -1040,6 +1040,26 @@
 <!-- BUGFIX: app.js moved to bottom so it can bind to ALL elements (modals included) -->
 <script defer src="/app.js?v=3.6.0"></script>
 <!-- SW registered by app.js initPush() -->
+<script>
 
+if (window.location.pathname === "/driver") {
+
+  document.getElementById("dockView").style.display = "none";
+  document.getElementById("dispatchView").style.display = "none";
+  document.getElementById("managementView").style.display = "none";
+
+  document.getElementById("navDock").style.display = "none";
+  document.getElementById("navDispatch").style.display = "none";
+  document.getElementById("navManagement").style.display = "none";
+
+  document.getElementById("bnDock").style.display = "none";
+  document.getElementById("bnDispatch").style.display = "none";
+  document.getElementById("bnManagement").style.display = "none";
+
+  document.getElementById("driverView").style.display = "block";
+
+}
+
+</script>
 </body>
 </html>

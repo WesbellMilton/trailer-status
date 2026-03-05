@@ -37,24 +37,6 @@ else {
   showMode("dispatch");
 }
 
-const p = location.pathname.toLowerCase();
-
-if(p.startsWith("/driver")){
-  showMode("driver");
-}else if(p.startsWith("/dock")){
-  showMode("dock");
-}else{
-  showMode("dispatch");
-}
-  const p = location.pathname.toLowerCase();
-
-if(p.startsWith("/driver")){
-  showMode("driver");
-}else if(p.startsWith("/dock")){
-  showMode("dock");
-}else{
-  showMode("dispatch");
-}
   const dispatch = document.getElementById("dispatchView");
   const dock = document.getElementById("dockView");
   const driver = document.getElementById("driverView");

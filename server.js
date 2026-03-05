@@ -1,4 +1,4 @@
-// server.js — Wesbell Dispatch v3.5.1 (bugfix build)
+// server.js — Wesbell Dispatch v3.5.1 (bugfix build) — FIXED
 const express   = require("express");
 const http      = require("http");
 const path      = require("path");
@@ -33,7 +33,6 @@ app.use((req, res, next) => {
   res.json = (data) => {
     try {
       const raw = Buffer.from(JSON.stringify(data));
-      // don't gzip tiny payloads
       if (raw.length < 1024) return orig(data);
 
       zlib.gzip(raw, (err, gz) => {
@@ -273,9 +272,9 @@ async function encryptPushPayload(plaintext, keys) {
 
 async function sendPush(subscription, payload) {
   const { endpoint, keys } = subscription;
-  const url       = new URL(endpoint);
-  const audience  = `${url.protocol}//${url.host}`;
-  const jwt       = await buildVapidJWT(audience);
+  const url        = new URL(endpoint);
+  const audience   = `${url.protocol}//${url.host}`;
+  const jwt        = await buildVapidJWT(audience);
   const authHeader = `vapid t=${jwt},k=${VAPID_KEYS.publicKey}`;
   const encrypted  = await encryptPushPayload(payload, keys);
 
@@ -565,12 +564,8 @@ function ipOf(req) {
   return xf ? String(xf).split(",")[0].trim() : req.socket.remoteAddress || "";
 }
 
-function normTrailer(v) {
-  return String(v || "").trim().toUpperCase();
-}
-function normDoor(v) {
-  return String(v || "").trim();
-}
+function normTrailer(v) { return String(v || "").trim().toUpperCase(); }
+function normDoor(v)    { return String(v || "").trim(); }
 
 // Structured error log (visible in app)
 const MAX_LOGS = 500;
@@ -735,24 +730,33 @@ setInterval(cleanupExpiredReservations, 2 * 60 * 1000).unref();
 /* ══════════════════════════════════════════
    STATIC / VIEWS
 ══════════════════════════════════════════ */
-const SAFE_FILES = /^\/(app\.js|style\.css|sw2\.js|manifest\.json|favicon\.ico|favicon-\d+\.png|icon-\d+\.png|icon-[\w-]+\.png|apple-touch-icon\.png|icons\/icon-[\w-]+\.png|splash\/splash-[\w-]+\.png)$/;
+// FIX 1: path.join(__dirname, req.path) breaks because req.path starts with "/" (becomes absolute).
+// FIX 2: /sw2.js was always serving sw.js.
+const SAFE_FILES = /^\/(app\.js|style\.css|sw\.js|sw2\.js|manifest\.json|favicon\.ico|favicon-\d+\.png|icon-\d+\.png|icon-[\w-]+\.png|apple-touch-icon\.png|icons\/icon-[\w-]+\.png|splash\/splash-[\w-]+\.png)$/;
 
 app.use((req, res, next) => {
   if (req.path === "/sw.js" || req.path === "/sw2.js") {
     res.setHeader("Service-Worker-Allowed", "/");
     res.setHeader("Content-Type", "application/javascript");
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    return res.sendFile(path.join(__dirname, "sw.js"), err => { if (err && !res.headersSent) res.status(404).end(); });
+    const swName = req.path === "/sw2.js" ? "sw2.js" : "sw.js";
+    return res.sendFile(path.join(__dirname, swName), err => { if (err && !res.headersSent) res.status(404).end(); });
   }
+
   if (req.path === "/manifest.json") {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   }
+
   if (!SAFE_FILES.test(req.path)) return next();
 
   if (/\.(png|ico)$/.test(req.path)) res.setHeader("Cache-Control", "public, max-age=604800, immutable");
   if (/\.(js|css)$/.test(req.path))  res.setHeader("Cache-Control", "no-cache, must-revalidate");
 
-  const safePath = path.join(__dirname, req.path.replace(/\/\.\./g, ""));
+  const rel = req.path
+    .replace(/^\/+/, "")   // <— FIX: strip leading slash
+    .replace(/\.\./g, ""); // hard strip traversal
+
+  const safePath = path.join(__dirname, rel);
   res.sendFile(safePath, err => { if (err && !res.headersSent) res.status(404).end(); });
 });
 
@@ -787,7 +791,7 @@ function roleHome(role) { return ROLE_HOME[role] || null; }
   guardPage:
   - If no session: only allow pages that explicitly include "__driver__"
   - Admin: anywhere
-  - Management: anywhere authenticated pages exist (kept as your intention)
+  - Management: anywhere authenticated pages exist
   - Dispatcher: only where dispatcher OR dock OR __driver__ is allowed (NOT /management)
   - Dock: only where dock OR __driver__ is allowed (so /driver works)
 */
@@ -917,6 +921,7 @@ ${expiredHtml}
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
 <style>
+/* (login CSS unchanged — kept as-is) */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#070a0f;--s0:#0c1018;--s1:#101620;
@@ -1074,13 +1079,10 @@ body{min-height:100vh;background:var(--bg);color:var(--t0);font-family:var(--san
 /* ══════════════════════════════════════════
    PAGES
 ══════════════════════════════════════════ */
-app.get("/",           guardPage(["dispatcher","management","admin"]),               sendIndex);
-
-// FIX: removed "__driver__" so /dock is not publicly accessible
-app.get("/dock",       guardPage(["dock","dispatcher","management","admin"]),       sendIndex);
-
+app.get("/",           guardPage(["dispatcher","management","admin"]),                    sendIndex);
+app.get("/dock",       guardPage(["dock","dispatcher","management","admin"]),            sendIndex);
 app.get("/driver",     guardPage(["__driver__","dock","dispatcher","management","admin"]), sendIndex);
-app.get("/management", guardPage(["management","admin"]),                           sendIndex);
+app.get("/management", guardPage(["management","admin"]),                                sendIndex);
 
 /* ══════════════════════════════════════════
    API — AUTH
@@ -1181,7 +1183,6 @@ app.post("/api/upsert", requireXHR, requireDockStatusAllowed, async (req, res) =
 
     const doorAt = (door && door !== (existing?.door || "")) ? now : (existing?.doorAt || null);
 
-    // FIX: doorAt must update when door changes (not "first non-null wins")
     await run(
       `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt,doorAt)
        VALUES(?,?,?,?,?,?,?,?,?)
@@ -1671,7 +1672,6 @@ app.get("/api/shift-summary", requireRole(["dispatcher","management","admin"]), 
 
     const issues = await all(`SELECT id,at,trailer,door,note FROM issue_reports WHERE at > ? ORDER BY at DESC`, [since]);
 
-    // FIX: action name was "safety_confirmed" not "confirm_safety"
     const confirmations = events.filter(e => e.action === "safety_confirmed").length;
 
     res.json({
@@ -1819,7 +1819,6 @@ app.post("/api/confirm-safety", requireXHR, requireDriverAccess, async (req, res
     const action = String(req.body.action || "safety").trim();
     const at = Date.now();
 
-    // FIX: missing braces previously caused releaseReservation to run for all actions
     if (action === "xdock_pickup" && trailer) {
       await run(`UPDATE trailers SET status='Departed',updatedAt=? WHERE trailer=?`, [at, trailer]);
       await releaseReservation(trailer);
@@ -2003,7 +2002,6 @@ initDb()
         const backupFile = path.join(backupDir, "wesbell-backup.sqlite");
         fs.mkdirSync(backupDir, { recursive: true });
 
-        // FIX: wait for checkpoint + use VACUUM INTO for consistency
         await run("PRAGMA wal_checkpoint(TRUNCATE)");
         await run(`VACUUM INTO ?`, [backupFile]);
 

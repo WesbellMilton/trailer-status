@@ -1,133 +1,241 @@
-/* ═══════════════════════════════════════════
-   GLOBAL & RESET
-═══════════════════════════════════════════ */
+/**
+ * WESBELL DISPATCH & DRIVER PORTAL - MASTER STYLES
+ * v4.0.0 - Optimized for Kiosk, Desktop, and Mobile
+ */
+
 :root {
-  --bg:#070a0f; --s0:#0c1017; --s1:#101620; --s2:#141c28; --s3:#192130;
-  --b0:#1c2840; --b1:#243350; --b2:#2e4265;
-  --t0:#ffffff; --t1:#dce8f5; --t2:#a8bdd4; --t3:#7a95b0;
-  --amber:#f5a623; --cyan:#18d4e8; --green:#19e09a; --red:#f04a4a; --violet:#a67cf5;
-  --sans:'DM Sans', system-ui, sans-serif;
-  --mono:'DM Mono', monospace;
+  /* Dark Theme Palette */
+  --bg: #070a0f;
+  --s0: #0c1017;
+  --s1: #101620;
+  --s2: #141c28;
+  --s3: #192130;
+  
+  /* Borders & Accents */
+  --b0: #1c2840;
+  --b1: #243350;
+  --b2: #2e4265;
+  
+  /* Typography */
+  --t0: #ffffff;
+  --t1: #dce8f5;
+  --t2: #a8bdd4;
+  --t3: #7a95b0;
+  
+  /* Action Colors */
+  --amber: #f5a623;
+  --amber-bg: rgba(245, 166, 35, 0.10);
+  --cyan: #18d4e8;
+  --cyan-bg: rgba(24, 212, 232, 0.07);
+  --green: #19e09a;
+  --green-bg: rgba(25, 224, 154, 0.07);
+  --red: #f04a4a;
+  --red-bg: rgba(240, 74, 74, 0.08);
+  --violet: #a67cf5;
+
+  /* Fonts */
+  --sans: 'DM Sans', system-ui, sans-serif;
+  --mono: 'DM Mono', monospace;
+  --display: 'Outfit', sans-serif;
+  
+  /* Utilities */
+  --r: 8px;
+  --r2: 12px;
+  --sh: 0 4px 24px rgba(0,0,0,0.4);
 }
 
-/* GRADIENT KILL - Fixed to allow Tesla UI backgrounds */
-body { background: var(--bg)!important; color: var(--t0); margin: 0; }
-body:not(.driver-mode) { background-image: none!important; }
+/* ═══════════════════════════════════════════
+   CORE RESET & LAYOUT
+═══════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg) !important;
+  color: var(--t0);
+  font-family: var(--sans);
+  line-height: 1.5;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Kiosk Mode Body Override */
+body.driver-mode {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
 
 /* ═══════════════════════════════════════════
-   DISPATCH BOARD (Responsive Table)
+   TOPBAR & NAVIGATION
 ═══════════════════════════════════════════ */
+.topbar {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(7, 10, 15, 0.92);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--b0);
+  height: 54px;
+}
+
+.topbar-inner {
+  max-width: 1600px; margin: 0 auto; padding: 0 20px;
+  height: 100%; display: flex; align-items: center;
+}
+
+.brand-block { display: flex; align-items: center; gap: 10px; margin-right: 24px; }
+
+.brand-mark {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: linear-gradient(135deg, var(--amber) 0%, #e05800 100%);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-weight: 700; color: #000;
+}
+
+.nav { display: flex; gap: 4px; flex: 1; }
+
+.nav-item {
+  padding: 8px 14px; color: var(--t2); font-size: 13px; font-weight: 500;
+  text-decoration: none; border-radius: var(--r); transition: all 0.2s;
+}
+
+.nav-item:hover { background: var(--s2); color: var(--t0); }
+.nav-item.active { color: var(--amber); background: var(--amber-bg); }
+
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+
+.live-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--t3); transition: all 0.3s;
+}
+.live-dot.ok { background: var(--green); box-shadow: 0 0 10px var(--green); }
+
+/* ═══════════════════════════════════════════
+   DISPATCHER BOARD
+═══════════════════════════════════════════ */
+.grid-main {
+  display: grid; grid-template-columns: 1fr 340px; gap: 20px;
+  max-width: 1600px; margin: 20px auto; padding: 0 20px;
+}
+
+.panel {
+  background: var(--s1); border: 1px solid var(--b0);
+  border-radius: var(--r2); overflow: hidden; box-shadow: var(--sh);
+}
+
+.panel-hd {
+  padding: 14px 20px; border-bottom: 1px solid var(--b0);
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--s0);
+}
+
+.panel-title { font-family: var(--mono); font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--t2); letter-spacing: 1px; }
+
+/* Table Logic */
 .tbl-hd, .tbl-row {
   display: grid;
-  grid-template-columns: 100px 80px 120px 60px 80px 1fr 100px 220px;
-  align-items: center;
-  border-bottom: 1px solid var(--b0);
+  grid-template-columns: 100px 60px 110px 60px 80px 1fr 90px 120px;
+  align-items: center; padding: 10px 20px;
 }
 
-@media(max-width: 1024px) {
-  /* MOBILE CARD MODE: Force table rows into vertical cards */
-  .tbl-hd { display: none !important; }
-  .tbl-row {
-    display: flex !important;
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 16px !important;
-    gap: 8px;
-    border-left: 4px solid var(--b1);
-    margin-bottom: 8px;
-    background: var(--s1);
-    border-radius: 8px;
-  }
-  .tbl-row > span { padding: 0 !important; width: 100% !important; }
-  .t-num { font-size: 20px !important; color: var(--amber); }
-  .t-acts { margin-top: 10px; width: 100%; }
-}
+.tbl-hd { background: var(--s0); border-bottom: 1px solid var(--b0); font-size: 10px; color: var(--t3); text-transform: uppercase; }
 
-/* OUTSIDE CARRIER IDENTIFIER */
-.tbl-row.carrier-outside {
-  background: rgba(166, 124, 245, 0.05);
-  border-left: 4px solid var(--violet);
+.tbl-row { border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 13px; }
+.tbl-row:hover { background: rgba(255,255,255,0.02); }
+
+.t-num { font-family: var(--mono); font-weight: 700; color: var(--t0); }
+.t-door { color: var(--cyan); font-weight: 600; font-family: var(--mono); }
+
+/* Status Badges */
+.stag {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
 }
+.stag-incoming { background: var(--s2); color: var(--t2); }
+.stag-loading { background: var(--amber-bg); color: var(--amber); }
+.stag-ready { background: var(--green-bg); color: var(--green); }
+
+/* Outside Carrier Highlight */
+.tbl-row.carrier-outside { background: rgba(166, 124, 245, 0.04); border-left: 3px solid var(--violet); }
 
 /* ═══════════════════════════════════════════
-   TESLA DRIVER UI (Isolated)
+   DRIVER TESLA UI (Kiosk Mode)
 ═══════════════════════════════════════════ */
 #driverView {
-  position: fixed;
-  inset: 0;
-  z-index: 999;
-  background: #070a0f !important;
-  font-family: 'Outfit', sans-serif;
-  display: flex;
-  flex-direction: column;
+  background: var(--bg); height: 100vh; width: 100vw;
+  display: flex; flex-direction: column; z-index: 1000;
 }
 
-#driverView .ts-screen {
-  flex: 1;
-  display: none;
-  flex-direction: column;
-  padding: 20px;
-  animation: tsFadeIn 0.3s ease-out;
+.ts-screen {
+  flex: 1; display: none; flex-direction: column;
+  align-items: center; justify-content: center; padding: 40px;
+  animation: tsFadeIn 0.4s ease-out;
 }
+.ts-screen.ts-active { display: flex; }
 
-#driverView .ts-screen.ts-active { display: flex; }
+.ts-progress-track { height: 6px; background: var(--s2); width: 100%; position: absolute; top: 0; }
+.ts-progress-bar { height: 100%; background: var(--amber); transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
 
-/* BIG TOUCH TARGETS (GLOVE FRIENDLY) */
+.ts-title { font-family: var(--display); font-size: 48px; font-weight: 700; margin-bottom: 10px; }
+.ts-sub { font-size: 18px; color: var(--t2); margin-bottom: 40px; }
+
+/* Large Touch Inputs */
+.trailer-hero-input {
+  width: 100%; max-width: 600px; padding: 30px; border-radius: var(--r2);
+  border: 3px solid var(--b1); background: var(--s0);
+  color: var(--t0); font-family: var(--mono); font-size: 64px;
+  text-align: center; margin-bottom: 30px; outline: none;
+}
+.trailer-hero-input:focus { border-color: var(--amber); box-shadow: 0 0 0 10px var(--amber-bg); }
+
+.driver-submit {
+  width: 100%; max-width: 600px; padding: 24px; border-radius: var(--r2);
+  background: var(--amber); color: #000; font-size: 24px; font-weight: 700;
+  border: none; cursor: pointer; transition: transform 0.2s;
+}
+.driver-submit:active { transform: scale(0.96); }
+.driver-submit.green { background: var(--green); }
+
+/* Action Cards */
+.ts-dynamic-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%; max-width: 800px; }
+
 .ts-action-card {
-  background: var(--s1);
-  border: 2px solid var(--b1);
-  border-radius: 16px;
-  padding: 24px;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  margin-bottom: 12px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: var(--s1); border: 2px solid var(--b1); border-radius: 20px;
+  padding: 40px; text-align: center; cursor: pointer; transition: all 0.2s;
 }
-
-.ts-action-card:active { transform: scale(0.96); border-color: var(--t0); }
-
-/* PROGRESS BAR */
-.ts-progress-track { height: 4px; background: var(--s2); width: 100%; }
-.ts-progress-bar { height: 100%; background: var(--amber); transition: width 0.4s ease; }
-
-@keyframes tsFadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* ═══════════════════════════════════════════
-   DOCK VIEW (Map & Cards)
-═══════════════════════════════════════════ */
-.dock-map-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-  gap: 8px;
-}
-
-.dm-cell {
-  background: var(--s2);
-  border: 1px solid var(--b1);
-  border-radius: 6px;
-  padding: 10px;
-  text-align: center;
-  min-height: 60px;
-}
-
-.dm-cell.dm-occupied { border-color: var(--amber); background: var(--amber-bg); }
-.dm-cell.dm-ready { border-color: var(--green); background: var(--green-bg); }
-
-/* ═══════════════════════════════════════════
-   KIOSK AUTO-HIDE
-═══════════════════════════════════════════ */
-/* When driver view is active, kill the global layout */
-body:has(#driverView[style*="display: block"]) .topbar,
-body:has(#driverView[style*="display: block"]) .bottom-nav {
-  display: none !important;
-}
+.ts-action-card:active { border-color: var(--amber); background: var(--amber-bg); }
+.ts-action-icon { font-size: 48px; margin-bottom: 16px; }
+.ts-action-label { font-size: 20px; font-weight: 700; }
 
 /* ═══════════════════════════════════════════
    UTILITIES
 ═══════════════════════════════════════════ */
-.hidden { display: none !important; }
-.btn-full { width: 100%; padding: 16px; font-size: 16px; font-weight: 700; }
+.btn {
+  padding: 10px 20px; border-radius: var(--r); border: 1px solid var(--b1);
+  background: var(--s2); color: var(--t1); font-weight: 600; cursor: pointer;
+}
+.btn-primary { background: var(--amber); color: #000; border: none; }
+.btn-full { width: 100%; }
+
+.field { margin-bottom: 16px; }
+.fl { display: block; font-size: 11px; font-weight: 700; color: var(--t3); text-transform: uppercase; margin-bottom: 6px; }
+
+input, select, textarea {
+  width: 100%; padding: 12px; border-radius: var(--r);
+  border: 1px solid var(--b1); background: var(--s0); color: var(--t0);
+  font-family: var(--sans); font-size: 14px; outline: none;
+}
+input:focus { border-color: var(--amber); }
+
+@keyframes tsFadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══════════════════════════════════════════
+   RESPONSIVE
+═══════════════════════════════════════════ */
+@media (max-width: 1100px) {
+  .grid-main { grid-template-columns: 1fr; }
+  .side-sticky { position: static; }
+  .tbl-hd { display: none; }
+  .tbl-row { grid-template-columns: 1fr 1fr; gap: 10px; padding: 20px; border: 1px solid var(--b0); border-radius: var(--r2); margin-bottom: 10px; }
+}

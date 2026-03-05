@@ -149,9 +149,204 @@
 <!-- ═══════════════════════════════════════════
      DRIVER VIEW
 ═══════════════════════════════════════════ -->
-<div id="driverView" style="display:none;">
-  <div class="driver-shell">
-    <div class="driver-wrap">
+<div id="driverView">
+
+<div class="driver-shell">
+<div class="driver-wrap">
+
+<!-- Carrier Selection -->
+
+<div id="who-screen">
+
+<div class="driver-panel active-step">
+
+<div class="driver-phd">
+<span class="driver-phd-title">Select your carrier</span>
+</div>
+
+<div class="driver-pbody">
+
+<div class="who-grid">
+
+<button class="who-btn" data-who="wesbell">
+<span class="who-icon">🚛</span>
+<span class="who-label">Wesbell</span>
+</button>
+
+<button class="who-btn" data-who="outside">
+<span class="who-icon">🏢</span>
+<span class="who-label">Outside Carrier</span>
+</button>
+
+</div>
+
+</div>
+</div>
+</div>
+
+<!-- Wesbell Actions -->
+
+<div id="flow-screen" style="display:none;">
+
+<div class="driver-panel active-step">
+
+<div class="driver-phd">
+<span class="driver-phd-title">What are you here to do?</span>
+<button class="btn btn-default btn-sm" id="btnBackToWho">← Back</button>
+</div>
+
+<div class="driver-pbody">
+
+<div class="flow-grid">
+
+<button class="flow-btn" id="flowQuickDrop">
+<span class="flow-icon">⚡</span>
+<span class="flow-label">Quick Drop</span>
+<span class="flow-desc">Fast trailer drop</span>
+</button>
+
+<button class="flow-btn" id="flowArrive">
+<span class="flow-icon">📍</span>
+<span class="flow-label">I've Arrived</span>
+<span class="flow-desc">Get your door assignment</span>
+</button>
+
+</div>
+
+</div>
+</div>
+</div>
+
+<!-- Outside Carrier -->
+
+<div id="outside-arrive-screen" style="display:none;">
+
+<div class="driver-panel active-step">
+
+<div class="driver-phd">
+<span class="driver-phd-title">Arrival Check-In</span>
+</div>
+
+<div class="driver-pbody">
+
+<input id="outside_trailer"
+class="trailer-hero-input"
+placeholder="Trailer #"
+inputmode="numeric"
+autocomplete="off"/>
+
+<button class="btn btn-success driver-submit"
+id="btnOutsideArrive"
+disabled>
+
+📍 I've Arrived
+
+</button>
+
+<div class="no-safety-note">
+Door will automatically be assigned
+</div>
+
+</div>
+</div>
+</div>
+
+<!-- Quick Drop -->
+
+<div id="quick-drop-screen" style="display:none;">
+
+<div class="driver-panel active-step">
+
+<div class="driver-phd">
+<span class="driver-phd-title">⚡ Quick Drop</span>
+<button class="btn btn-default btn-sm" id="btnBackToFlow">← Back</button>
+</div>
+
+<div class="driver-pbody">
+
+<input id="quickDropTrailer"
+class="trailer-hero-input"
+placeholder="Trailer #"
+inputmode="numeric"
+autocomplete="off"/>
+
+<button class="btn btn-primary driver-submit"
+id="btnQuickDropSubmit"
+disabled>
+
+Record Drop
+
+</button>
+
+</div>
+</div>
+</div>
+
+<!-- Arrive -->
+
+<div id="arrive-screen" style="display:none;">
+
+<div class="driver-panel active-step">
+
+<div class="driver-phd">
+<span class="driver-phd-title">Arrival Check-In</span>
+<button class="btn btn-default btn-sm" id="btnBackToFlow2">← Back</button>
+</div>
+
+<div class="driver-pbody">
+
+<input id="arr_trailer"
+class="trailer-hero-input"
+placeholder="Trailer #"
+inputmode="numeric"
+autocomplete="off"/>
+
+<button class="btn btn-success driver-submit"
+id="btnArriveSubmit"
+disabled>
+
+Get My Door
+
+</button>
+
+</div>
+</div>
+</div>
+
+<!-- Door Confirmation -->
+
+<div id="arrive-confirm-screen" style="display:none;">
+
+<div class="driver-panel active-step" style="text-align:center">
+
+<div class="driver-pbody">
+
+<div style="font-size:48px;margin-bottom:10px;">🚪</div>
+
+<div style="font-size:22px;font-weight:700;margin-bottom:6px;">
+Your Door
+</div>
+
+<div class="assignment-card visible">
+
+<div class="ac-door" id="arrDoorNum">
+—
+</div>
+
+</div>
+
+<button class="btn btn-default" id="btnArrDone">
+Done
+</button>
+
+</div>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
 
       <!-- Offline banner -->
       <div class="offline-banner" id="offlineBanner" style="display:none;">

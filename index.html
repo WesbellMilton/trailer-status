@@ -637,14 +637,14 @@ body{background-image:none!important;background:transparent!important}
       
       if (act === 'qd') {
         try { 
-          await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: 'Loaded', carrierType: 'Wesbell' }) }); 
+          await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, dropType: 'Loaded', carrierType: 'Wesbell' }) }); 
           showSuccess('Quick Drop Logged', 'Trailer dropped to yard instantly.', [{k:'Trailer',v:state.trailer},{k:'Action',v:'Quick Drop'}]);
         } catch(e) { toast('Error connecting to server'); }
       } 
       else if (act === 'shunt') {
         showDoorSelector('Shunt <span>Trailer</span>', 'Move to which door?', async () => {
           try {
-            await fetch('/api/driver/shunt', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, newDoor: state.door }) });
+            await fetch('/api/driver/shunt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, newDoor: state.door }) });
             showSuccess('Shunt Complete', `Trailer moved to Door ${state.door}.`, [{k:'Trailer',v:state.trailer},{k:'New Door',v:state.door}]);
           } catch(e) { toast('Error shunting trailer'); }
         });
@@ -663,7 +663,7 @@ body{background-image:none!important;background:transparent!important}
       else if (act === 'arrive') {
         // REAL ARRIVAL FETCH
         try {
-          const res = await fetch('/api/driver/arrive', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer }) });
+          const res = await fetch('/api/driver/arrive', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer }) });
           if(res.ok) {
             const data = await res.json();
             updateLiveDoor(data.door);
@@ -691,7 +691,7 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Sending...';
       btn.disabled = true;
       try {
-        const res = await fetch('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, eta: state.eta }) });
+        const res = await fetch('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, eta: state.eta }) });
         if(res.ok) {
           const data = await res.json();
           updateLiveDoor(data.door);
@@ -720,7 +720,7 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Submitting...';
       btn.disabled = true;
       try {
-        await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: state.dropType, carrierType: 'Outside' }) });
+        await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, dropType: state.dropType, carrierType: 'Outside' }) });
         showSuccess('Drop Logged', 'Dispatch will assign your door on the board.', [{k:'Trailer',v:state.trailer},{k:'Type',v:state.dropType},{k:'Carrier',v:'Outside'}]);
       } catch(e) {
         toast('Network Error');
@@ -766,7 +766,7 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Confirming...';
       btn.disabled = true;
       try {
-        await fetch('/api/confirm-safety', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, door: state.door, action: 'depart' }) });
+        await fetch('/api/confirm-safety', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, door: state.door, action: 'depart' }) });
         updateLiveDoor(null); 
         showSuccess('Cross Dock Complete', 'Safe travels! Trip logged.', [{k:'Trailer',v:state.trailer},{k:'Door',v:state.door}]);
       } catch(e) {
@@ -961,6 +961,89 @@ body{background-image:none!important;background:transparent!important}
       </div>
     </div>
 
+    <!-- ══ LOAD STATUS TRACKER ══ -->
+    <div id="loadStatusPanel">
+      <style>
+        #loadStatusPanel{margin:10px 0 0;border-top:1px solid var(--b0);background:var(--s1);}
+        #lsp-toggle{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;cursor:pointer;background:var(--s2);border-bottom:1px solid var(--b0);user-select:none;}
+        #lsp-toggle-left{display:flex;align-items:center;gap:10px;}
+        #lsp-toggle-label{font-size:13px;font-weight:700;color:var(--t0);letter-spacing:.01em;}
+        #lsp-toggle-sub{font-size:11px;color:var(--t2);margin-top:1px;}
+        #lsp-toggle-chev{font-size:11px;color:var(--t3);transition:transform .25s;}
+        #lsp-toggle.lsp-open #lsp-toggle-chev{transform:rotate(180deg);}
+        #lsp-body{max-height:0;overflow:hidden;transition:max-height .35s cubic-bezier(.4,0,.2,1);}
+        #lsp-body.lsp-open{max-height:2000px;}
+        /* header bar */
+        #lsp-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 6px;}
+        #lsp-count{font-family:var(--mono);font-size:11px;color:var(--t2);}
+        #lsp-refresh{background:none;border:1px solid var(--b1);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--t1);cursor:pointer;font-family:inherit;}
+        #lsp-refresh:active{opacity:.7;}
+        /* table */
+        #lsp-table{width:100%;padding:0 10px 12px;}
+        .lsp-row{display:grid;grid-template-columns:90px 1fr 90px 110px 70px;gap:4px;align-items:center;padding:8px 10px;border-radius:8px;margin-bottom:4px;background:var(--s2);border:1px solid var(--b0);transition:background .15s;cursor:pointer;}
+        .lsp-row:hover{background:var(--s3,#1e2a3a);}
+        .lsp-row-hd{display:grid;grid-template-columns:90px 1fr 90px 110px 70px;gap:4px;padding:4px 10px;margin-bottom:2px;}
+        .lsp-hd-cell{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);font-family:var(--mono);}
+        .lsp-trailer{font-size:13px;font-weight:700;color:var(--t0);font-family:var(--mono);}
+        /* progress bar */
+        .lsp-progress-wrap{position:relative;height:20px;}
+        .lsp-progress-bg{height:6px;border-radius:3px;background:var(--b1);overflow:hidden;margin-top:7px;}
+        .lsp-progress-fill{height:100%;border-radius:3px;transition:width .4s;}
+        .lsp-step-dots{display:flex;gap:0;position:absolute;top:0;left:0;right:0;height:20px;align-items:center;}
+        .lsp-dot{width:8px;height:8px;border-radius:50%;border:2px solid var(--bg,#0a0d12);flex-shrink:0;transition:background .3s;}
+        .lsp-dot.done{background:var(--green);}
+        .lsp-dot.active{background:var(--amber);box-shadow:0 0 6px var(--amber);}
+        .lsp-dot.pending{background:var(--b1);}
+        .lsp-door{font-size:12px;font-weight:600;color:var(--t1);font-family:var(--mono);}
+        .lsp-door-none{font-size:11px;color:var(--t3);}
+        .lsp-time-in{font-size:11px;font-family:var(--mono);}
+        .lsp-time-ok{color:var(--green);}
+        .lsp-time-warn{color:var(--amber);}
+        .lsp-time-over{color:var(--red);}
+        .lsp-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;font-family:var(--mono);}
+        .lsp-badge-incoming{background:rgba(120,120,120,.12);color:var(--t2);}
+        .lsp-badge-dropped{background:rgba(176,82,217,.12);color:var(--violet);}
+        .lsp-badge-loading{background:rgba(245,166,35,.12);color:var(--amber);}
+        .lsp-badge-dockready{background:rgba(24,212,232,.12);color:var(--cyan);}
+        .lsp-badge-ready{background:rgba(25,224,154,.12);color:var(--green);}
+        .lsp-badge-departed{background:rgba(80,80,80,.12);color:var(--t3);}
+        /* empty state */
+        #lsp-empty{padding:24px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--t3);}
+        /* loading */
+        #lsp-loading{padding:16px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--t2);}
+        @keyframes lsp-spin{to{transform:rotate(360deg)}}
+        .lsp-spinner{display:inline-block;width:12px;height:12px;border:2px solid var(--b1);border-top-color:var(--t2);border-radius:50%;animation:lsp-spin .7s linear infinite;vertical-align:middle;margin-right:6px;}
+      </style>
+      <div id="lsp-toggle">
+        <div id="lsp-toggle-left">
+          <span style="font-size:18px;">📊</span>
+          <div>
+            <div id="lsp-toggle-label">Load Status Tracker</div>
+            <div id="lsp-toggle-sub">Live progress · time in each stage</div>
+          </div>
+        </div>
+        <span id="lsp-toggle-chev">▾</span>
+      </div>
+      <div id="lsp-body">
+        <div id="lsp-header">
+          <span id="lsp-count">—</span>
+          <button id="lsp-refresh">↻ Refresh</button>
+        </div>
+        <div id="lsp-loading" style="display:none;"><span class="lsp-spinner"></span>Loading…</div>
+        <div id="lsp-empty" style="display:none;">No active trailers on board.</div>
+        <div id="lsp-table">
+          <div class="lsp-row-hd">
+            <div class="lsp-hd-cell">Trailer</div>
+            <div class="lsp-hd-cell">Progress</div>
+            <div class="lsp-hd-cell">Door</div>
+            <div class="lsp-hd-cell">Time in Stage</div>
+            <div class="lsp-hd-cell">Status</div>
+          </div>
+          <div id="lsp-rows"></div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -1104,6 +1187,47 @@ body{background-image:none!important;background:transparent!important}
 
 </main>
 <script src="/app.js?v=3.6.0"></script>
+
+<!-- ══ LOAD STATUS HISTORY MODAL ══ -->
+<div class="modal-ov hidden" id="statusHistoryOv">
+  <div class="modal ss-modal" style="max-width:480px;">
+    <div class="m-hd">
+      <div>
+        <span class="m-title">📊 Load Status History</span>
+        <div id="sh-trailer-label" style="font-family:var(--mono);font-size:11px;color:var(--t2);margin-top:2px;"></div>
+      </div>
+      <button class="m-close" id="shClose">✕</button>
+    </div>
+    <div class="m-body" id="sh-body" style="padding:16px;overflow-y:auto;max-height:70vh;">
+      <style>
+        .sh-timeline{position:relative;padding-left:26px;}
+        .sh-timeline::before{content:"";position:absolute;left:9px;top:4px;bottom:4px;width:2px;background:var(--b1);}
+        .sh-step{position:relative;margin-bottom:16px;}
+        .sh-step:last-child{margin-bottom:0;}
+        .sh-dot{position:absolute;left:-22px;top:4px;width:14px;height:14px;border-radius:50%;border:2px solid var(--bg,#0a0d12);z-index:1;}
+        .sh-dot-done{background:var(--green);}
+        .sh-dot-active{background:var(--amber);box-shadow:0 0 8px var(--amber);}
+        .sh-dot-event{background:var(--cyan);}
+        .sh-dot-pending{background:var(--b1);}
+        .sh-step-header{display:flex;align-items:center;gap:8px;margin-bottom:3px;}
+        .sh-status-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;font-family:var(--mono);}
+        .sh-step-time{font-size:10px;color:var(--t3);font-family:var(--mono);}
+        .sh-step-meta{font-size:11px;color:var(--t2);font-family:var(--mono);}
+        .sh-duration{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;background:var(--s2);border:1px solid var(--b1);border-radius:6px;font-size:11px;font-family:var(--mono);color:var(--t1);margin-top:4px;}
+        .sh-dur-warn{border-color:rgba(245,166,35,.3);color:var(--amber);}
+        .sh-dur-over{border-color:rgba(255,69,58,.3);color:var(--red);}
+        .sh-current-badge{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--amber);margin-left:4px;}
+        .sh-summary{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;}
+        .sh-sum-card{background:var(--s2);border:1px solid var(--b1);border-radius:8px;padding:10px 12px;}
+        .sh-sum-lbl{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);font-family:var(--mono);margin-bottom:3px;}
+        .sh-sum-val{font-size:15px;font-weight:700;color:var(--t0);}
+        .sh-loading{padding:24px;text-align:center;font-family:var(--mono);font-size:12px;color:var(--t2);}
+        .sh-err{padding:16px;color:var(--red);font-size:12px;font-family:var(--mono);}
+      </style>
+      <div class="sh-loading" id="sh-loading"><span class="lsp-spinner"></span> Loading history…</div>
+    </div>
+  </div>
+</div>
 <div class="modal-ov hidden" id="staffLoginOv">
   <div class="modal" style="max-width:340px;">
     <h4>Staff Sign In</h4>

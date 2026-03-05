@@ -5,10 +5,9 @@
   let state = {
     role: 'driver',
     trailers: {},
-    driver: { trailer: '', mode: '', action: '', safety: { load: false, plate: false } }
+    driver: { trailer: '', carrierType: '', action: '', safety: { load: false, plate: false } }
   };
 
-  // --- VIEW CONTROLLER ---
   function init() {
     const path = window.location.pathname;
     if (path === '/driver') {
@@ -27,34 +26,33 @@
     document.querySelectorAll('.ts-screen').forEach(s => s.classList.remove('ts-active'));
     el(id)?.classList.add('ts-active');
     
-    const pMap = {'ts-s-home':15, 'ts-s-mode':40, 'ts-s-actions-wesbell':70, 'ts-s-actions-carrier':70, 'ts-s-safety':90, 'ts-s-result':100};
+    const pMap = {'ts-s-home':15, 'ts-s-carrier':40, 'ts-s-actions-wesbell':70, 'ts-s-actions-carrier':70, 'ts-s-safety':90, 'ts-s-result':100};
     if(pMap[id]) el('ts-pb').style.width = pMap[id] + '%';
   }
 
-  // --- INTERACTION HANDLERS ---
   document.addEventListener('click', async e => {
-    // 1. Trailer Entry
+    // 1. Trailer Search
     if (e.target.id === 'ts-home-go') {
       state.driver.trailer = el('ts-home-trailer').value.trim().toUpperCase();
       if (!state.driver.trailer) return alert("Enter Trailer #");
-      goto('ts-s-mode');
+      goto('ts-s-carrier');
     }
 
-    // 2. Mode Selection
-    const modeBtn = e.target.closest('[data-mode]');
-    if (modeBtn) {
-      state.driver.mode = modeBtn.dataset.mode;
-      goto(state.driver.mode === 'Wesbell' ? 'ts-s-actions-wesbell' : 'ts-s-actions-carrier');
+    // 2. Carrier Type
+    const carrierBtn = e.target.closest('[data-carrier]');
+    if (carrierBtn) {
+      state.driver.carrierType = carrierBtn.dataset.carrier;
+      goto(state.driver.carrierType === 'Wesbell' ? 'ts-s-actions-wesbell' : 'ts-s-actions-carrier');
     }
 
-    // 3. Action Selection
+    // 3. Actions
     const actionBtn = e.target.closest('[data-action]');
     if (actionBtn) {
       state.driver.action = actionBtn.dataset.action;
       if (state.driver.action === 'xdock') {
         goto('ts-s-safety');
       } else {
-        submitDriverData(); // Arrive, OMW, QD, Shunt
+        submitDriverData();
       }
     }
 
@@ -67,7 +65,7 @@
     }
 
     if (e.target.id === 'ts-safety-submit') submitDriverData();
-    
+
     // 5. Staff Auth
     if (e.target.id === 'btnStaffLogin') el('staffLoginOv').classList.remove('hidden');
     if (e.target.id === 'staffLoginCancel') el('staffLoginOv').classList.add('hidden');
@@ -85,7 +83,7 @@
       el('ts-res-door').textContent = data.door || "YARD";
       goto('ts-s-result');
     } catch (err) {
-      alert("Submission Error. Please check yard Wi-Fi.");
+      alert("Submission error. Check connection.");
     }
   }
 
@@ -96,21 +94,18 @@
     if (res.ok) {
       state.role = role;
       el('staffLoginOv').classList.add('hidden');
-      unlockControls();
+      unlockAdminPanel();
     } else {
       alert("Invalid PIN");
     }
   }
 
-  function unlockControls() {
+  function unlockAdminPanel() {
     el('panelBody').innerHTML = `
-      <div class="field"><label class="fl">Trailer</label><input type="text" id="ctrlTrailer"></div>
-      <div class="field"><label class="fl">Door</label><select id="ctrlDoor"></select></div>
-      <button class="btn btn-primary btn-full" id="btnAdminUpdate">Update Board</button>
+      <div class="field"><label class="fl">Trailer</label><input type="text" id="ctrlTrailer" placeholder="WB-0000"></div>
+      <div class="field"><label class="fl">Status</label><select id="ctrlStatus"><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Ready</option></select></div>
+      <button class="btn btn-primary btn-full" id="btnManualUpdate">Force Update</button>
     `;
-    // Populate doors 28-42
-    const sel = el('ctrlDoor');
-    for(let i=28; i<=42; i++) sel.add(new Option(`Door ${i}`, i));
   }
 
   function renderBoard() {
@@ -122,7 +117,7 @@
         <span><div class="stag stag-${r.status.toLowerCase()}">${r.status}</div></span>
         <span class="t-door">${r.door || '--'}</span>
         <span class="t-note">${r.note || ''}</span>
-        <button class="btn btn-sm" onclick="editTrailer('${t}')">Edit</button>
+        <button class="btn btn-sm">Edit</button>
       </div>
     `).join("");
   }

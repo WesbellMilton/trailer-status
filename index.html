@@ -1,866 +1,1372 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Dock Mode</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600&display=swap" rel="stylesheet">
 <style>
-:root {
-  --bg:    #080b11;
-  --card:  #0d1119;
-  --dim:   rgba(255,255,255,.055);
-  --dim2:  rgba(255,255,255,.03);
-  --dim3:  rgba(255,255,255,.018);
-
-  --t0: #e8eeff;
-  --t1: #8da0bc;
-  --t2: #445868;
-
-  --amber:  #f5a520;
-  --cyan:   #0dcfe0;
-  --green:  #18d690;
-  --red:    #e84444;
-  --violet: #9b6ef0;
-
-  --mono: 'IBM Plex Mono', monospace;
-  --ui:   'Inter', system-ui, sans-serif;
-  --ease: cubic-bezier(.22,1,.36,1);
-}
-
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{background:var(--bg);color:var(--t0);font-family:var(--ui);-webkit-font-smoothing:antialiased}
-button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent}
-::-webkit-scrollbar{display:none}
-
-/* ── NAV ──────────────────────────────────────────────────── */
-.nav{
-  position:sticky;top:0;z-index:40;height:48px;
-  display:flex;align-items:center;gap:0;padding:0 4px 0 16px;
-  background:var(--bg);border-bottom:1px solid var(--dim);
-}
-.wordmark{font-family:var(--mono);font-size:11px;letter-spacing:.07em;color:var(--t1);flex-shrink:0}
-.wordmark b{color:var(--t0)}
-.tabs{display:flex;align-items:stretch;margin-left:auto;height:48px;overflow-x:auto;scrollbar-width:none}
-.tab{
-  padding:0 14px;height:48px;display:flex;align-items:center;
-  font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--t2);
-  background:none;border-bottom:2px solid transparent;
-  border-top:none;border-left:none;border-right:none;
-  white-space:nowrap;transition:color .15s,border-color .15s;
-}
-.tab:hover{color:var(--t1)}
-.tab.on{color:var(--t0);border-bottom-color:var(--amber)}
-.tab:active{opacity:.65}
-.nav-count{font-family:var(--mono);font-size:10px;color:var(--t2);padding:0 12px;flex-shrink:0}
-.live{width:5px;height:5px;border-radius:50%;background:var(--green);flex-shrink:0;margin-right:8px;animation:breathe 2.6s ease-in-out infinite}
-@keyframes breathe{0%,100%{opacity:1}50%{opacity:.3}}
-
-/* ── SEARCH ───────────────────────────────────────────────── */
-.search{position:sticky;top:48px;z-index:30;padding:7px 12px;background:var(--bg);border-bottom:1px solid var(--dim)}
-.search-inner{position:relative}
-.search-inner svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:13px;height:13px;stroke:var(--t2);fill:none;stroke-width:2;stroke-linecap:round;pointer-events:none}
-.search input{
-  width:100%;height:32px;padding:0 10px 0 30px;
-  background:var(--card);border:1px solid var(--dim);border-radius:6px;
-  color:var(--t0);font-family:var(--mono);font-size:12px;outline:none;transition:border-color .18s;
-}
-.search input::placeholder{color:var(--t2)}
-.search input:focus{border-color:rgba(245,165,32,.3)}
-
-/* ── TRACKER ──────────────────────────────────────────────── */
-.tracker{overflow:hidden;max-height:34px;border-bottom:1px solid var(--dim);transition:max-height .38s var(--ease)}
-.tracker.open{max-height:300px}
-.tracker-hd{height:34px;display:flex;align-items:center;padding:0 12px;gap:8px;cursor:pointer;user-select:none}
-.tracker-label{font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--t2);flex:1}
-.tstat{font-family:var(--mono);font-size:9px;padding:1px 6px;border-radius:3px}
-.ts-a{color:var(--amber);background:rgba(245,165,32,.1)}
-.ts-g{color:var(--green);background:rgba(24,214,144,.1)}
-.ts-r{color:var(--red);background:rgba(232,68,68,.1)}
-.tracker-arrow{font-size:8px;color:var(--t2);transition:transform .32s var(--ease)}
-.tracker.open .tracker-arrow{transform:rotate(180deg)}
-.t-rows{border-top:1px solid var(--dim)}
-.t-row{
-  display:grid;grid-template-columns:78px 1fr 32px 40px 66px;
-  gap:10px;align-items:center;padding:5px 12px;
-  border-bottom:1px solid var(--dim2);cursor:pointer;transition:background .12s;
-}
-.t-row:last-child{border-bottom:none}
-.t-row:hover{background:rgba(255,255,255,.018)}
-.t-num{font-family:var(--mono);font-size:11px;color:var(--t0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.t-prog{display:flex;flex-direction:column;gap:3px;min-width:0}
-.t-rail{height:2px;background:var(--dim);border-radius:1px;overflow:hidden}
-.t-fill{height:100%;border-radius:1px}
-.t-pips{display:flex;justify-content:space-between}
-.p{width:3px;height:3px;border-radius:50%}
-.p-d{background:var(--green)}.p-n{background:var(--amber)}.p-f{background:var(--dim)}
-.t-dr{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--amber);text-align:center}
-.t-dr-x{font-family:var(--mono);font-size:10px;color:var(--t2);text-align:center}
-.t-age{font-family:var(--mono);font-size:10px;text-align:right}
-.ok{color:var(--t1)}.warn{color:var(--amber)}.over{color:var(--red)}
-.t-badge{font-family:var(--mono);font-size:8px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;padding:2px 5px;border-radius:3px;justify-self:end}
-.tb-ld{color:var(--amber);background:rgba(245,165,32,.1)}
-.tb-dr{color:var(--violet);background:rgba(155,110,240,.1)}
-.tb-dk{color:var(--cyan);background:rgba(13,207,224,.08)}
-.tb-rd{color:var(--green);background:rgba(24,214,144,.1)}
-
-/* ── CARDS LIST ───────────────────────────────────────────── */
-.cards{
-  flex:1;padding:10px;
-  display:flex;flex-direction:column;gap:8px;
-  overflow-y:auto;-webkit-overflow-scrolling:touch;
-  padding-bottom:max(80px,calc(20px + env(safe-area-inset-bottom)));
-}
-
-/* ═══════════════════════════════════════════════════════════
-   CARD — swipeable wrapper + expanding body
-═══════════════════════════════════════════════════════════ */
-
-/* Outer wrapper: clips the swipe reveal layers */
-.card-wrap {
-  border-radius: 10px;
-  overflow: hidden;
-  position: relative;
-  /* Touch action: pan-y keeps vertical scroll working,
-     horizontal swipe is captured by JS */
-  touch-action: pan-y;
-}
-
-/* Swipe reveal layers — sit behind the card */
-.swipe-left-reveal,
-.swipe-right-reveal {
-  position: absolute;
-  top: 0; bottom: 0;
-  width: 100%;
-  display: flex; align-items: center;
-  pointer-events: none;
-  transition: opacity .1s;
-}
-.swipe-left-reveal {
-  /* Issue — left swipe reveals red from right edge */
-  right: 0;
-  justify-content: flex-end;
-  background: linear-gradient(to left, rgba(232,68,68,.22), transparent);
-  padding-right: 20px;
-}
-.swipe-right-reveal {
-  /* Advance — right swipe reveals color from left edge */
-  left: 0;
-  justify-content: flex-start;
-  background: linear-gradient(to right, rgba(13,207,224,.16), transparent);
-  padding-left: 20px;
-}
-.swipe-right-reveal.amber-reveal {
-  background: linear-gradient(to right, rgba(245,165,32,.18), transparent);
-}
-.reveal-label {
-  font-family: var(--mono); font-size: 10px; font-weight: 500;
-  letter-spacing: .08em; text-transform: uppercase;
-  opacity: 0;
-  transition: opacity .15s;
-}
-.swipe-left-reveal .reveal-label  { color: var(--red);   }
-.swipe-right-reveal .reveal-label { color: var(--cyan);  }
-.swipe-right-reveal.amber-reveal .reveal-label { color: var(--amber); }
-
-/* The card itself — translates on swipe */
-.card {
-  background: var(--card);
-  border-radius: 10px;
-  overflow: hidden;
-  border-left: 3px solid var(--ac, var(--dim));
-  position: relative;
-  /* will-change tells the browser this moves */
-  will-change: transform;
-  transition: transform .35s var(--ease), box-shadow .2s;
-  /* No transition during active drag — JS removes this class */
-}
-.card.dragging { transition: none; }
-
-.c-ld { --ac: var(--amber); }
-.c-dk { --ac: var(--cyan);  }
-.c-rd { --ac: var(--green); }
-.c-dr { --ac: var(--violet);}
-.c-in { --ac: var(--dim);   }
-.c-gn { --ac: var(--dim2); opacity:.28; pointer-events:none; }
-
-@keyframes rp{0%,100%{border-color:var(--green)}50%{border-color:rgba(24,214,144,.18)}}
-.c-rd{animation:rp 2.2s ease-in-out infinite}
-
-/* Flash animations for confirmed swipe actions */
-@keyframes flashGreen{0%{background:rgba(24,214,144,.18)}100%{background:var(--card)}}
-@keyframes flashRed  {0%{background:rgba(232,68,68,.18)}  100%{background:var(--card)}}
-.card.flash-advance { animation: flashGreen .5s ease-out forwards; }
-.card.flash-issue   { animation: flashRed   .5s ease-out forwards; }
-
-/* ── Card header (tappable to expand) ─────────────────────── */
-.card-header {
-  display: flex; align-items: flex-start;
-  padding: 14px 14px 8px;
-  gap: 10px;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  user-select: none;
-}
-.card-lhs { flex: 1; min-width: 0; }
-.c-id {
-  font-family: var(--mono); font-size: 24px; font-weight: 400;
-  color: var(--t0); line-height: 1; letter-spacing: -.01em;
-  margin-bottom: 5px;
-}
-.c-note {
-  font-size: 12px; color: var(--t1);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.c-note-placeholder { font-size: 12px; color: var(--t2); font-style: italic; }
-.card-rhs {
-  display: flex; flex-direction: column;
-  align-items: flex-end; gap: 6px; flex-shrink: 0;
-}
-.c-door {
-  font-family: var(--mono); font-weight: 500; line-height: 1;
-  font-size: 28px; letter-spacing: .01em; color: var(--amber);
-  background: rgba(245,165,32,.07);
-  padding: 4px 11px 5px; border-radius: 6px;
-}
-.c-door-x {
-  font-family: var(--mono); font-size: 10px; color: var(--t2);
-  padding: 4px 8px; border-radius: 5px;
-  border: 1px dashed rgba(255,255,255,.08);
-}
-.c-status {
-  font-family: var(--mono); font-size: 9px; letter-spacing: .1em;
-  text-transform: uppercase; color: var(--t2);
-  display: flex; align-items: center; gap: 4px;
-}
-.c-status::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--sc,var(--t2));flex-shrink:0}
-
-/* Expand chevron — sits at bottom-right of header */
-.c-chevron {
-  align-self: flex-end;
-  font-size: 10px; color: var(--t2);
-  margin-top: 4px;
-  transition: transform .3s var(--ease), color .2s;
-  line-height: 1;
-}
-.card.expanded .c-chevron { transform: rotate(180deg); color: var(--t1); }
-
-/* ── Card meta (always visible) ─────────────────────────── */
-.card-meta {
-  padding: 0 14px 10px;
-  display: flex; align-items: center; gap: 6px;
-  font-family: var(--mono); font-size: 10px; color: var(--t2);
-}
-.c-tag{padding:1px 6px;border-radius:3px;font-size:8px;font-weight:500;letter-spacing:.05em}
-.t-out{color:var(--violet);background:rgba(155,110,240,.1)}
-.t-in {color:var(--cyan);  background:rgba(13,207,224,.08)}
-.c-eta{color:var(--cyan)}
-
-/* ─── EXPANDED PANEL ─────────────────────────────────────── */
-.card-expand {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height .38s var(--ease);
-}
-.card.expanded .card-expand { max-height: 280px; }
-
-.expand-inner {
-  border-top: 1px solid var(--dim2);
-  padding: 12px 14px;
-  display: flex; flex-direction: column; gap: 10px;
-}
-
-/* Mini progress track */
-.exp-progress {
-  display: flex; flex-direction: column; gap: 6px;
-}
-.exp-stages {
-  display: flex; gap: 0;
-}
-.exp-stage {
-  flex: 1; display: flex; flex-direction: column;
-  align-items: center; gap: 4px;
-  position: relative;
-}
-/* connecting line between dots */
-.exp-stage:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  top: 5px;
-  left: 50%; right: -50%;
-  height: 1px;
-  background: var(--dim);
-  z-index: 0;
-}
-.exp-stage.done::after,
-.exp-stage.now::after  { background: var(--green); }
-
-.exp-dot {
-  width: 10px; height: 10px; border-radius: 50%;
-  position: relative; z-index: 1;
-  flex-shrink: 0;
-  transition: background .2s, box-shadow .2s;
-}
-.exp-stage.done .exp-dot { background: var(--green); }
-.exp-stage.now  .exp-dot { background: var(--amber); box-shadow: 0 0 0 3px rgba(245,165,32,.2); }
-.exp-stage.todo .exp-dot { background: var(--dim); }
-.exp-lbl {
-  font-family: var(--mono); font-size: 7px; letter-spacing: .07em;
-  text-transform: uppercase; color: var(--t2); text-align: center;
-  white-space: nowrap;
-}
-.exp-stage.now  .exp-lbl { color: var(--amber); }
-.exp-stage.done .exp-lbl { color: var(--green); }
-
-/* Detail rows */
-.exp-rows { display: flex; flex-direction: column; gap: 6px; }
-.exp-row {
-  display: flex; justify-content: space-between; align-items: center;
-  font-family: var(--mono); font-size: 10px;
-}
-.exp-row-lbl { color: var(--t2); }
-.exp-row-val { color: var(--t0); text-align: right; }
-.exp-row-val.warn { color: var(--amber); }
-.exp-row-val.over { color: var(--red); }
-
-/* History button */
-.exp-history {
-  width: 100%; padding: 8px;
-  background: var(--dim3);
-  border-radius: 6px;
-  font-family: var(--mono); font-size: 10px; letter-spacing: .06em;
-  text-transform: uppercase; color: var(--t1);
-  text-align: center;
-  transition: background .15s, color .15s;
-}
-.exp-history:hover { background: var(--dim2); color: var(--t0); }
-.exp-history:active { opacity: .6; }
-
-/* ── Swipe hint (touch only, below card) ─────────────────── */
-.swipe-hint {
-  text-align: center;
-  font-family: var(--mono); font-size: 9px; color: var(--t2);
-  letter-spacing: .07em; opacity: 0;
-  margin-top: -4px; padding-bottom: 2px;
-  transition: opacity .4s;
-  pointer-events: none;
-}
-/* Show hints on first touch device interaction */
-body.touched .swipe-hint { opacity: 1; }
-/* Hide on precise pointer */
-@media (pointer: fine) { .swipe-hint { display: none; } }
-
-/* ── CTA ─────────────────────────────────────────────────── */
-.c-cta{
-  width:100%;padding:13px 14px;
-  background:transparent;border-top:1px solid var(--dim2);
-  font-family:var(--ui);font-size:14px;font-weight:600;
-  text-align:center;letter-spacing:.01em;
-  transition:background .18s var(--ease);
-}
-.c-cta:active{filter:brightness(1.18);transform:scale(.995)}
-.cta-a{color:var(--amber)}.cta-a:hover{background:rgba(245,165,32,.07)}
-.cta-c{color:var(--cyan)}.cta-c:hover{background:rgba(13,207,224,.06)}
-.c-wait{
-  padding:11px 14px;border-top:1px solid var(--dim2);
-  font-family:var(--mono);font-size:9px;letter-spacing:.1em;
-  text-transform:uppercase;color:var(--t2);text-align:center;
-}
-.c-sec{display:flex;border-top:1px solid var(--dim2)}
-.c-s{
-  flex:1;padding:10px;min-height:38px;background:transparent;
-  font-family:var(--mono);font-size:10px;letter-spacing:.04em;
-  text-align:center;transition:background .14s;
-}
-.c-s+.c-s{border-left:1px solid var(--dim2)}
-.c-issue{color:var(--red)}.c-issue:hover{background:rgba(232,68,68,.06)}
-.c-rsv{color:var(--t2)}.c-rsv:hover{background:rgba(13,207,224,.05);color:var(--cyan)}
-.c-s:active{opacity:.55}
-
-/* ── Toast ───────────────────────────────────────────────── */
-.toast {
-  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(0);
-  background: var(--card); border: 1px solid var(--dim);
-  border-radius: 8px; padding: 9px 18px;
-  font-family: var(--mono); font-size: 11px; letter-spacing: .04em;
-  color: var(--t0);
-  box-shadow: 0 8px 32px rgba(0,0,0,.5);
-  z-index: 200; white-space: nowrap;
-  opacity: 0; pointer-events: none;
-  transition: opacity .22s, transform .22s var(--ease);
-}
-.toast.show {
-  opacity: 1; pointer-events: auto;
-  transform: translateX(-50%) translateY(-4px);
-}
-.toast.toast-ok  { border-color: rgba(24,214,144,.3); color: var(--green); }
-.toast.toast-err { border-color: rgba(232,68,68,.3);  color: var(--red); }
-
-/* ── RESPONSIVE ──────────────────────────────────────────── */
-@media(min-width:640px){
-  .cards{display:grid!important;grid-template-columns:repeat(2,1fr);gap:8px;padding:10px;align-items:start}
-}
-@media(min-width:1060px){
-  .cards{grid-template-columns:repeat(3,1fr)!important}
-}
-@media(max-width:380px){
-  .c-id{font-size:20px!important}
-  .c-door{font-size:22px!important;padding:3px 9px 4px!important}
-}
-@media(pointer:coarse){
-  .c-cta{min-height:52px}
-  .c-s{min-height:42px}
-}
+/* GRADIENT KILL - prevents cyan blobs */
+body{background-image:none!important;background:transparent!important}
+#driverView,#dockView,#managementView{background-image:none!important}
+.driver-shell{background-image:none!important}
 </style>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+  <title>Wesbell Dispatch</title>
+  <link rel="manifest" href="/manifest.json"/>
+
+  <link rel="icon" type="image/x-icon" href="/icons/favicon.ico"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png"/>
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png"/>
+
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png"/>
+
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Dispatch"/>
+
+  <meta name="theme-color" content="#070a0f" media="(prefers-color-scheme: dark)"/>
+  <meta name="theme-color" content="#070a0f"/>
+  <meta name="msapplication-TileColor" content="#070a0f"/>
+  <meta name="msapplication-TileImage" content="/icon-192.png"/>
+
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="application-name" content="Dispatch"/>
+
+  <meta name="format-detection" content="telephone=no"/>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/style.css?v=3.6.0"/>
 </head>
 <body>
+<a class="skip-link" href="#main-content">Skip to main content</a>
 
-<!-- Nav -->
-<nav class="nav">
-  <span class="wordmark"><b>Wesbell</b> · Dock</span>
-  <div class="tabs">
-    <button class="tab on"  onclick="filt(this,'active')">Active</button>
-    <button class="tab"     onclick="filt(this,'all')">All</button>
-    <button class="tab"     onclick="filt(this,'loading')">Loading</button>
-    <button class="tab"     onclick="filt(this,'ready')">Ready</button>
+<div class="modal-ov hidden" id="modalOv">
+  <div class="modal">
+    <h4 id="modalTitle">Confirm</h4>
+    <div class="m-sub" id="modalBody"></div>
+    <div class="m-btns">
+      <button class="btn btn-default" id="modalCancel">Cancel</button>
+      <button class="btn btn-danger" id="modalConfirm">Confirm</button>
+    </div>
   </div>
-  <span class="nav-count" id="cnt">5</span>
-  <div class="live"></div>
+</div>
+
+<div class="modal-ov hidden" id="dmModalOv">
+  <div class="modal" style="max-width:320px;">
+    <h4 id="dmModalTitle">Update Status</h4>
+    <div class="m-sub" id="dmModalSub"></div>
+    <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:16px;" id="dmStatusBtns"></div>
+    <div class="m-btns">
+      <button class="btn btn-default" id="dmModalCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand-block">
+      <div class="brand-mark">W</div>
+      <div>
+        <div class="brand-name">WESBELL</div>
+        <div class="brand-sub">DISPATCH MGT</div>
+      </div>
+    </div>
+    <nav class="nav" aria-label="Main navigation">
+      <a href="/" class="nav-item" id="navDispatch">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x=".5" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor"/><rect x="7" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x=".5" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x="7" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".3"/></svg>
+        Dispatcher
+      </a>
+      <a href="/dock" class="nav-item" id="navDock">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 9h10M3 9V6l3-2.5L9 6v3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Dock
+      </a>
+      <a href="/driver" class="nav-item" id="navDriver">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="4" width="8" height="5" rx="1.2" stroke="currentColor" stroke-width="1.2"/><path d="M9 6.5h1.5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H9" stroke="currentColor" stroke-width="1.2"/><circle cx="3" cy="9" r="1" fill="currentColor"/><circle cx="7" cy="9" r="1" fill="currentColor"/><path d="M1 6.5 2.5 4h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        Driver
+      </a>
+      <a href="/management" class="nav-item" id="navManagement">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="4" r="2" stroke="currentColor" stroke-width="1.2"/><path d="M1.5 10.5c0-1.8 2-3 4.5-3s4.5 1.2 4.5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        Management
+      </a>
+    </nav>
+    <div class="topbar-right">
+      <div class="chip" role="status" aria-live="polite"><div class="live-dot" id="wsDot"></div><span id="wsText">Connecting</span></div>
+      <div class="chip" id="roleBadge" style="display:none;color:var(--amber);">—</div>
+      <div class="chip">v<span id="verText">—</span></div>
+      <button class="tb-btn" id="btnInstallPwa" style="display:none;" title="Add to home screen">⬇ Install</button>
+      <button class="tb-btn" id="btnAudit" style="display:none;">Audit</button>
+      <button class="tb-btn danger" id="btnLogout" style="display:none;">Sign Out</button>
+    </div>
+  </div>
+</div>
+
+<nav class="bottom-nav" aria-label="Mobile navigation">
+  <div class="bottom-nav-inner">
+    <a href="/" class="bn-item" id="bnDispatch">
+      <svg width="20" height="20" viewBox="0 0 12 12" fill="none"><rect x=".5" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor"/><rect x="7" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x=".5" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x="7" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".3"/></svg>
+      <span>Board</span>
+    </a>
+    <a href="/dock" class="bn-item" id="bnDock">
+      <svg width="20" height="20" viewBox="0 0 12 12" fill="none"><path d="M1 9h10M3 9V6l3-2.5L9 6v3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Dock</span>
+    </a>
+    <a href="/driver" class="bn-item" id="bnDriver">
+      <svg width="20" height="20" viewBox="0 0 12 12" fill="none"><rect x="1" y="4" width="8" height="5" rx="1.2" stroke="currentColor" stroke-width="1.2"/><path d="M9 6.5h1.5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H9" stroke="currentColor" stroke-width="1.2"/><circle cx="3" cy="9" r="1" fill="currentColor"/><circle cx="7" cy="9" r="1" fill="currentColor"/><path d="M1 6.5 2.5 4h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      <span>Driver</span>
+    </a>
+    <a href="/management" class="bn-item" id="bnManagement">
+      <svg width="20" height="20" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="4" r="2" stroke="currentColor" stroke-width="1.2"/><path d="M1.5 10.5c0-1.8 2-3 4.5-3s4.5 1.2 4.5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      <span>Mgmt</span>
+    </a>
+  </div>
 </nav>
 
-<!-- Search -->
-<div class="search">
-  <div class="search-inner">
-    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/></svg>
-    <input type="text" placeholder="Trailer, door, note…" oninput="srch(this.value)">
-  </div>
+<div class="ptr-indicator" id="ptrIndicator" style="display:none">
+  <div class="ptr-spinner" id="ptrSpinner" style="display:none"></div>
+  <span id="ptrText">↓ Pull to refresh</span>
 </div>
 
-<!-- Load status tracker -->
-<div class="tracker" id="tr">
-  <div class="tracker-hd" onclick="document.getElementById('tr').classList.toggle('open')">
-    <span class="tracker-label">Load Status</span>
-    <span class="tstat ts-a">4 loading</span>
-    <span class="tstat ts-g">1 ready</span>
-    <span class="tstat ts-r">1 overdue</span>
-    <span class="tracker-arrow">▾</span>
-  </div>
-  <div class="t-rows">
-    <div class="t-row"><span class="t-num">TRL-4821</span><div class="t-prog"><div class="t-rail"><div class="t-fill" style="width:40%;background:var(--amber)"></div></div><div class="t-pips"><div class="p p-d"></div><div class="p p-d"></div><div class="p p-n"></div><div class="p p-f"></div><div class="p p-f"></div></div></div><span class="t-dr">38</span><span class="t-age ok">42m</span><span class="t-badge tb-ld">Loading</span></div>
-    <div class="t-row"><span class="t-num">TRL-2204</span><div class="t-prog"><div class="t-rail"><div class="t-fill" style="width:20%;background:var(--violet)"></div></div><div class="t-pips"><div class="p p-d"></div><div class="p p-n"></div><div class="p p-f"></div><div class="p p-f"></div><div class="p p-f"></div></div></div><span class="t-dr-x">—</span><span class="t-age warn">28m</span><span class="t-badge tb-dr">Dropped</span></div>
-    <div class="t-row"><span class="t-num">TRL-9034</span><div class="t-prog"><div class="t-rail"><div class="t-fill" style="width:60%;background:var(--cyan)"></div></div><div class="t-pips"><div class="p p-d"></div><div class="p p-d"></div><div class="p p-d"></div><div class="p p-n"></div><div class="p p-f"></div></div></div><span class="t-dr">41</span><span class="t-age over">72m</span><span class="t-badge tb-dk">Dock Rdy</span></div>
-    <div class="t-row"><span class="t-num">TRL-0055</span><div class="t-prog"><div class="t-rail"><div class="t-fill" style="width:80%;background:var(--green)"></div></div><div class="t-pips"><div class="p p-d"></div><div class="p p-d"></div><div class="p p-d"></div><div class="p p-d"></div><div class="p p-n"></div></div></div><span class="t-dr">29</span><span class="t-age ok">8m</span><span class="t-badge tb-rd">Ready</span></div>
-  </div>
+<main id="main-content">
+
+<div id="legacyDriverView" style="display:none !important;">
+  <div class="driver-shell"></div>
 </div>
 
-<!-- Cards -->
-<div class="cards" id="cards">
-
-  <!-- LOADING -->
-  <div class="card-wrap">
-    <div class="swipe-left-reveal"><span class="reveal-label">⚠ Issue</span></div>
-    <div class="swipe-right-reveal"><span class="reveal-label">Dock Ready →</span></div>
-    <div class="card c-ld" data-s="loading" data-action="advance" data-next="Mark Dock Ready">
-      <div class="card-header" onclick="toggleExpand(this)">
-        <div class="card-lhs">
-          <div class="c-id">TRL-4821</div>
-          <div class="c-note">Walmart — Frozen goods</div>
-        </div>
-        <div class="card-rhs">
-          <div class="c-door">D38</div>
-          <div class="c-status" style="--sc:var(--amber)">Loading</div>
-        </div>
-        <span class="c-chevron">▾</span>
-      </div>
-      <div class="card-meta">
-        <span class="c-tag t-out">Outside</span><span>·</span>
-        <span>⏱ 42m on door</span>
-        <span style="margin-left:auto">2m ago</span>
-      </div>
-      <div class="card-expand">
-        <div class="expand-inner">
-          <div class="exp-progress">
-            <div class="exp-stages">
-              <div class="exp-stage done"><div class="exp-dot"></div><span class="exp-lbl">Incoming</span></div>
-              <div class="exp-stage done"><div class="exp-dot"></div><span class="exp-lbl">Dropped</span></div>
-              <div class="exp-stage now" ><div class="exp-dot"></div><span class="exp-lbl">Loading</span></div>
-              <div class="exp-stage todo"><div class="exp-dot"></div><span class="exp-lbl">Dock Rdy</span></div>
-              <div class="exp-stage todo"><div class="exp-dot"></div><span class="exp-lbl">Ready</span></div>
-            </div>
-          </div>
-          <div class="exp-rows">
-            <div class="exp-row"><span class="exp-row-lbl">Carrier</span><span class="exp-row-val">Outside carrier</span></div>
-            <div class="exp-row"><span class="exp-row-lbl">Time on door</span><span class="exp-row-val warn">42m</span></div>
-            <div class="exp-row"><span class="exp-row-lbl">Direction</span><span class="exp-row-val">Inbound</span></div>
-            <div class="exp-row"><span class="exp-row-lbl">Last update</span><span class="exp-row-val">2m ago — dock</span></div>
-          </div>
-          <button class="exp-history">View full history →</button>
-        </div>
-      </div>
-      <button class="c-cta cta-c">Mark Dock Ready</button>
-      <div class="c-sec">
-        <button class="c-s c-issue">⚠ Issue</button>
-      </div>
-    </div>
-    <div class="swipe-hint">← issue &nbsp;·&nbsp; advance →</div>
-  </div>
-
-  <!-- DROPPED -->
-  <div class="card-wrap">
-    <div class="swipe-left-reveal"><span class="reveal-label">⚠ Issue</span></div>
-    <div class="swipe-right-reveal amber-reveal"><span class="reveal-label">Mark Loading →</span></div>
-    <div class="card c-dr" data-s="dropped" data-action="advance" data-next="Mark Loading">
-      <div class="card-header" onclick="toggleExpand(this)">
-        <div class="card-lhs">
-          <div class="c-id">TRL-2204</div>
-          <div class="c-note-placeholder">No note</div>
-        </div>
-        <div class="card-rhs">
-          <div class="c-door-x">No door</div>
-          <div class="c-status" style="--sc:var(--violet)">Dropped</div>
-        </div>
-        <span class="c-chevron">▾</span>
-      </div>
-      <div class="card-meta">
-        <span class="c-tag t-in">Inside</span>
-        <span style="margin-left:auto">28m ago</span>
-      </div>
-      <div class="card-expand">
-        <div class="expand-inner">
-          <div class="exp-progress">
-            <div class="exp-stages">
-              <div class="exp-stage done"><div class="exp-dot"></div><span class="exp-lbl">Incoming</span></div>
-              <div class="exp-stage now" ><div class="exp-dot"></div><span class="exp-lbl">Dropped</span></div>
-              <div class="exp-stage todo"><div class="exp-dot"></div><span class="exp-lbl">Loading</span></div>
-              <div class="exp-stage todo"><div class="exp-dot"></div><span class="exp-lbl">Dock Rdy</span></div>
-              <div class="exp-stage todo"><div class="exp-dot"></div><span class="exp-lbl">Ready</span></div>
-            </div>
-          </div>
-          <div class="exp-rows">
-            <div class="exp-row"><span class="exp-row-lbl">Carrier</span><span class="exp-row-val">Inside carrier</span></div>
-            <div class="exp-row"><span class="exp-row-lbl">Door</span><span class="exp-row-val">Not assigned</span></div>
-            <div class="exp-row"><span class="exp-row-lbl">Drop type</span><span class="exp-row-val">Loaded</span></div>
-            <div class="exp-row"><span class="exp-row-lbl">Last update</span><span class="exp-row-val warn">28m ago — driver</span></div>
-          </div>
-          <button class="exp-history">View full history →</button>
-        </div>
-      </div>
-      <button class="c-cta cta-a">Mark Loading</button>
-      <div class="c-sec">
-        <button class="c-s c-issue">⚠ Issue</button>
-        <button class="c-s c-rsv">🚪 Reserve Door</button>
-      </div>
-    </div>
-    <div class="swipe-hint">← issue &nbsp;·&nbsp; advance →</div>
-  </div>
-
-  <!-- DOCK READY -->
-  <div class="card-wrap">
-    <div class="swipe-left-reveal"><span class="reveal-label">⚠ Issue</span></div>
-    <div class="swipe-right-reveal"><span class="reveal-label">No action</span></div>
-    <div class="card c-dk" data-s="dockready" data-action="none">
-      <div class="card-header" onclick="toggleExpand(this)">
-        <div class="card-lhs">
-          <div class="c-id">TRL-9034</div>
-          <div class="c-note">Target — Dry goods</div>
-        </div>
-        <div class="card-rhs">
-          <div class="c-door">D41</div>
-          <div class="c-status" style="--sc:var(--cyan)">Dock Ready</div>
-        </div>
-        <span class="c-chevron">▾</span>
-      </div>
-      <div class="card-meta">
-        <span class="c-tag t-out">Outside</span><span>·</span>
-        <span>⏱ 1h 12m on door</span>
-        <span style="margin-left:auto;color:var(--red)">72m overdue</span>
-      </div>
-      <div class="card-expand">
-        <div class="expand-inner">
-          <div class="exp-progress">
-            <div class="exp-stages">
-              <div class="exp-stage done"><div class="exp-dot"></div><span class="exp-lbl">Incoming</span></div>
-              <div class="exp-stage done"><div class="exp-dot"></div><span class="exp-lbl">Dropped</span></div>
-              <div class="exp-stage done"><div class="exp-dot"></div><span class="exp-lbl">Loading</span></div>
-              <div class="exp-stage now" ><div class="exp-dot"></div><span class="exp-lbl">Dock Rdy</span></div>
-              <div class="exp-stage todo"><div class="exp-dot"></div><span class="exp-lbl">Ready</span></div>
-            </div>
-          </div>
-          <div class="exp-rows">
-            <div class="exp-row"><span class="exp-row-lbl">Carrier</span><span class="exp-row-val">Outside carrier</span></div>
-            <div class="exp-row"><span class="exp-row-lbl">Time on door</span><span class="exp-row-val over">1h 12m — overdue</span></div>
-            <div class="exp-row"><span class="exp-row-lbl">Loading time</span><span class="exp-row-val">44m</span></div>
-            <div class="exp-row"><span class="exp-row-lbl">Last update</span><span class="exp-row-val over">72m ago — dock</span></div>
-          </div>
-          <button class="exp-history">View full history →</button>
-        </div>
-      </div>
-      <div class="c-wait">Awaiting dispatcher</div>
-      <div class="c-sec">
-        <button class="c-s c-issue">⚠ Issue</button>
-      </div>
-    </div>
-    <div class="swipe-hint">← issue &nbsp;·&nbsp; swipe →</div>
-  </div>
-
-  <!-- READY -->
-  <div class="card-wrap">
-    <div class="swipe-left-reveal"><span class="reveal-label">⚠ Issue</span></div>
-    <div class="swipe-right-reveal"><span class="reveal-label">No action</span></div>
-    <div class="card c-rd" data-s="ready" data-action="none">
-      <div class="card-header" onclick="toggleExpand(this)">
-        <div class="card-lhs">
-          <div class="c-id">TRL-0055</div>
-          <div class="c-note">Costco — Ready for pickup</div>
-        </div>
-        <div class="card-rhs">
-          <div class="c-door" style="color:var(--green);background:rgba(24,214,144,.07)">D29</div>
-          <div class="c-status" style="--sc:var(--green)">Ready</div>
-        </div>
-        <span class="c-chevron">▾</span>
-      </div>
-      <div class="card-meta">
-        <span class="c-tag t-in">Inside</span>
-        <span style="margin-left:auto">8m ago</span>
-      </div>
-      <div class="card-expand">
-        <div class="expand-inner">
-          <div class="exp-progress">
-            <div class="exp-stages">
-              <div class="exp-stage done"><div class="exp-dot"></div><span class="exp-lbl">Incoming</span></div>
-              <div class="exp-stage done"><div class="exp-dot"></div><span class="exp-lbl">Dropped</span></div>
-              <div class="exp-stage done"><div class="exp-dot"></div><span class="exp-lbl">Loading</span></div>
-              <div class="exp-stage done"><div class="exp-dot"></div><span class="exp-lbl">Dock Rdy</span></div>
-              <div class="exp-stage now" ><div class="exp-dot"></div><span class="exp-lbl">Ready</span></div>
-            </div>
-          </div>
-          <div class="exp-rows">
-            <div class="exp-row"><span class="exp-row-lbl">Carrier</span><span class="exp-row-val">Inside carrier</span></div>
-            <div class="exp-row"><span class="exp-row-lbl">Total time</span><span class="exp-row-val">3h 22m on board</span></div>
-            <div class="exp-row"><span class="exp-row-lbl">Loading time</span><span class="exp-row-val">2h 18m</span></div>
-            <div class="exp-row"><span class="exp-row-lbl">Last update</span><span class="exp-row-val">8m ago — dispatcher</span></div>
-          </div>
-          <button class="exp-history">View full history →</button>
-        </div>
-      </div>
-      <div class="c-wait">Ready for pickup</div>
-      <div class="c-sec">
-        <button class="c-s c-issue">⚠ Issue</button>
-      </div>
-    </div>
-    <div class="swipe-hint">← issue &nbsp;·&nbsp; swipe →</div>
-  </div>
-
-  <!-- INCOMING -->
-  <div class="card-wrap">
-    <div class="swipe-left-reveal"><span class="reveal-label">⚠ Issue</span></div>
-    <div class="swipe-right-reveal amber-reveal"><span class="reveal-label">Mark Loading →</span></div>
-    <div class="card c-in" data-s="incoming" data-action="advance" data-next="Mark Loading">
-      <div class="card-header" onclick="toggleExpand(this)">
-        <div class="card-lhs">
-          <div class="c-id">TRL-7710</div>
-          <div class="c-note-placeholder">No note</div>
-        </div>
-        <div class="card-rhs">
-          <div class="c-door-x">No door</div>
-          <span class="c-eta" style="font-family:var(--mono);font-size:10px">🚛 ~12m</span>
-          <div class="c-status" style="--sc:var(--t2)">Incoming</div>
-        </div>
-        <span class="c-chevron">▾</span>
-      </div>
-      <div class="card-meta">
-        <span>5m ago</span>
-      </div>
-      <div class="card-expand">
-        <div class="expand-inner">
-          <div class="exp-progress">
-            <div class="exp-stages">
-              <div class="exp-stage now" ><div class="exp-dot"></div><span class="exp-lbl">Incoming</span></div>
-              <div class="exp-stage todo"><div class="exp-dot"></div><span class="exp-lbl">Dropped</span></div>
-              <div class="exp-stage todo"><div class="exp-dot"></div><span class="exp-lbl">Loading</span></div>
-              <div class="exp-stage todo"><div class="exp-dot"></div><span class="exp-lbl">Dock Rdy</span></div>
-              <div class="exp-stage todo"><div class="exp-dot"></div><span class="exp-lbl">Ready</span></div>
-            </div>
-          </div>
-          <div class="exp-rows">
-            <div class="exp-row"><span class="exp-row-lbl">ETA</span><span class="exp-row-val">~12 minutes</span></div>
-            <div class="exp-row"><span class="exp-row-lbl">Door</span><span class="exp-row-val">Not reserved</span></div>
-            <div class="exp-row"><span class="exp-row-lbl">Direction</span><span class="exp-row-val">Inbound</span></div>
-            <div class="exp-row"><span class="exp-row-lbl">OMW logged</span><span class="exp-row-val">5m ago — driver</span></div>
-          </div>
-          <button class="exp-history">View full history →</button>
-        </div>
-      </div>
-      <button class="c-cta cta-a">Mark Loading</button>
-      <div class="c-sec">
-        <button class="c-s c-issue">⚠ Issue</button>
-        <button class="c-s c-rsv">🚪 Reserve Door</button>
-      </div>
-    </div>
-    <div class="swipe-hint">← issue &nbsp;·&nbsp; advance →</div>
-  </div>
-
-  <!-- DEPARTED -->
-  <div class="card-wrap">
-    <div class="swipe-left-reveal"><span class="reveal-label">⚠ Issue</span></div>
-    <div class="swipe-right-reveal"><span class="reveal-label"></span></div>
-    <div class="card c-gn" data-s="departed" data-action="none">
-      <div class="card-header" onclick="toggleExpand(this)">
-        <div class="card-lhs"><div class="c-id">TRL-3391</div></div>
-        <div class="card-rhs">
-          <div class="c-door">D33</div>
-          <div class="c-status" style="--sc:var(--t2)">Departed</div>
-        </div>
-        <span class="c-chevron">▾</span>
-      </div>
-      <div class="card-meta"><span>22m ago</span></div>
-      <div class="c-wait">Departed</div>
-    </div>
-  </div>
-
-</div>
-
-<!-- Toast -->
-<div class="toast" id="toast"></div>
-
-<script>
-// ── Filter & search ─────────────────────────────────────────
-function filt(btn,f){
-  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));
-  btn.classList.add('on');
-  const all=[...document.querySelectorAll('.card-wrap')];
-  all.forEach(w=>{
-    const s=w.querySelector('.card').dataset.s;
-    w.hidden=!(f==='all'||(f==='active'&&s!=='departed')||(f==='loading'&&s==='loading')||(f==='ready'&&(s==='ready'||s==='dockready')));
-  });
-  document.getElementById('cnt').textContent=all.filter(w=>!w.hidden).length;
-}
-function srch(q){
-  q=q.toLowerCase();
-  document.querySelectorAll('.card-wrap').forEach(w=>{
-    w.hidden=!w.textContent.toLowerCase().includes(q);
-  });
-}
-
-// ── Expand / collapse ───────────────────────────────────────
-function toggleExpand(header){
-  const card=header.closest('.card');
-  card.classList.toggle('expanded');
-}
-
-// ── Toast ───────────────────────────────────────────────────
-let toastTimer;
-function showToast(msg, type=''){
-  const t=document.getElementById('toast');
-  t.textContent=msg;
-  t.className='toast show'+(type?' toast-'+type:'');
-  clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>t.classList.remove('show'),2400);
-}
-
-// ── Swipe gestures ──────────────────────────────────────────
-// Threshold: 64px to commit, 32px to start showing reveal
-const COMMIT=64, SHOW=28;
-
-document.querySelectorAll('.card-wrap').forEach(wrap=>{
-  const card=wrap.querySelector('.card');
-  const leftReveal=wrap.querySelector('.swipe-left-reveal');
-  const rightReveal=wrap.querySelector('.swipe-right-reveal');
-  const leftLabel=leftReveal?.querySelector('.reveal-label');
-  const rightLabel=rightReveal?.querySelector('.reveal-label');
-
-  let startX=0, startY=0, curX=0, tracking=false, axis=null;
-
-  card.addEventListener('touchstart', e=>{
-    // Don't hijack taps on buttons inside card
-    if(e.target.closest('button, .card-expand')) return;
-    document.body.classList.add('touched');
-    startX=e.touches[0].clientX;
-    startY=e.touches[0].clientY;
-    curX=0; axis=null; tracking=true;
-    card.classList.add('dragging');
-  },{passive:true});
-
-  card.addEventListener('touchmove', e=>{
-    if(!tracking) return;
-    const dx=e.touches[0].clientX-startX;
-    const dy=e.touches[0].clientY-startY;
-
-    // Determine axis lock on first significant movement
-    if(!axis){
-      if(Math.abs(dx)<6 && Math.abs(dy)<6) return;
-      axis = Math.abs(dx)>Math.abs(dy) ? 'x' : 'y';
+<div id="driverView" style="display:none; padding:0; position:relative; min-height:calc(100vh - 54px); overflow:hidden; background:#070a0f;">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+    #driverView {
+      --bg:#070a0f; --surface:#101620; --surface2:#141c28; --border:#243350; --border2:#2e4265;
+      --t0:#ffffff; --t1:#dce8f5; --t2:#a8bdd4; --t3:#7a95b0;
+      --green:#19e09a; --blue:#2088ff; --yellow:#f5a623; --purple:#b052d9; --orange:#ff6b00;
+      --accent:var(--yellow); --accent2:#e05800;
+      --font:'Outfit',sans-serif; --r:16px; --r2:24px;
+      background: var(--bg); color: var(--t0); font-family: var(--font);
     }
-    if(axis==='y') return; // let scroll happen
+    #driverView * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-    e.preventDefault(); // prevent scroll during horizontal swipe
-    curX=dx;
-
-    // Rubber-band resistance beyond threshold
-    const resist = Math.abs(curX)>COMMIT
-      ? COMMIT + (Math.abs(curX)-COMMIT) * 0.25
-      : Math.abs(curX);
-    const tx = curX>0 ? resist : -resist;
-    card.style.transform=`translateX(${tx}px)`;
-
-    // Show/hide reveal labels based on direction & progress
-    const progress=Math.min(1,(Math.abs(curX)-SHOW)/Math.max(1,COMMIT-SHOW));
-    if(curX<-SHOW){
-      if(leftLabel) leftLabel.style.opacity=progress.toFixed(2);
-      if(rightLabel) rightLabel.style.opacity=0;
-    } else if(curX>SHOW){
-      if(rightLabel) rightLabel.style.opacity=progress.toFixed(2);
-      if(leftLabel) leftLabel.style.opacity=0;
-    } else {
-      if(leftLabel) leftLabel.style.opacity=0;
-      if(rightLabel) rightLabel.style.opacity=0;
+    /* Progress Bar & Banner */
+    #driverView .ts-progress-track { position:absolute; top:0; left:0; width:100%; height:4px; background:var(--surface); z-index:100; }
+    #driverView .ts-progress-bar { height:100%; width:15%; background:var(--accent); transition:width 0.4s cubic-bezier(0.4,0,0.2,1); }
+    #driverView .ts-live-banner { 
+      position:absolute; top:4px; left:0; width:100%; background:var(--green); color:#000; 
+      padding:12px 24px; font-size:14px; font-weight:700; display:flex; justify-content:space-between; align-items:center; 
+      transform:translateY(-100%); transition:transform 0.4s cubic-bezier(0.4,0,0.2,1); z-index:90; box-shadow:0 4px 12px rgba(25,224,154,0.2);
     }
-  },{passive:false});
+    #driverView .ts-live-banner.ts-show { transform:translateY(0); }
+    #driverView .ts-lb-tag { background:rgba(0,0,0,0.1); padding:4px 10px; border-radius:12px; font-size:12px; font-weight:600; letter-spacing:0.04em; }
 
-  card.addEventListener('touchend', e=>{
-    if(!tracking||axis!=='x'){card.classList.remove('dragging');tracking=false;return;}
-    card.classList.remove('dragging');
-    tracking=false;
+    /* Screen Transitions */
+    #driverView .ts-screen {
+      position:absolute;inset:0; display:flex;flex-direction:column;
+      padding:calc(env(safe-area-inset-top,0) + 4px) 0 env(safe-area-inset-bottom,0);
+      opacity:0;pointer-events:none;
+      transition:opacity .35s cubic-bezier(.4,0,.2,1), transform .35s cubic-bezier(.4,0,.2,1);
+      transform:translateY(24px); background: var(--bg); z-index: 10;
+    }
+    #driverView .ts-screen.ts-active { opacity:1; pointer-events:all; transform:translateY(0); z-index: 20; }
+    #driverView .ts-screen.ts-exit { opacity:0; transform:translateY(-24px); }
+    
+    #driverView .ts-topbar { display:flex; align-items:center; justify-content:space-between; padding:20px 24px 0; flex-shrink:0; }
+    #driverView .ts-logo { display:flex; align-items:center; gap:10px; }
+    #driverView .ts-logo-mark { width:34px; height:34px; border-radius:50%; background:linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#000; letter-spacing:-.5px; box-shadow:0 2px 12px rgba(245,166,35,.3); }
+    #driverView .ts-logo-text { font-size:13px; font-weight:600; letter-spacing:.06em; color:var(--t1); text-transform:uppercase; }
+    #driverView .ts-status-chip { display:flex; align-items:center; gap:6px; background:var(--surface2); border:1px solid var(--border); border-radius:20px; padding:6px 12px; font-size:11px; font-weight:500; color:var(--t1); letter-spacing:.04em; }
+    #driverView .ts-dot { width:6px; height:6px; border-radius:50%; background:var(--green); box-shadow:0 0 8px rgba(25,224,154,.6); }
+    
+    #driverView .ts-hero { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 24px 20px; text-align:center; }
+    #driverView .ts-hero-eyebrow { font-size:11px; font-weight:500; letter-spacing:.14em; color:var(--t2); text-transform:uppercase; margin-bottom:16px; }
+    #driverView .ts-hero-title { font-size:52px; font-weight:300; letter-spacing:-.02em; line-height:1; color:var(--t0); margin-bottom:8px; }
+    #driverView .ts-hero-title strong { font-weight:700; color:var(--accent); }
+    #driverView .ts-hero-sub { font-size:15px; color:var(--t1); font-weight:300; letter-spacing:.01em; margin-top:16px; line-height:1.5; }
+    
+    #driverView .ts-trailer-input-wrap { background:var(--surface); border:1px solid var(--border2); border-radius:var(--r2); padding:6px 6px 6px 20px; display:flex; align-items:center; gap:10px; margin:0 24px 40px; transition:border-color .2s; }
+    #driverView .ts-trailer-input-wrap:focus-within { border-color:var(--accent); }
+    #driverView .ts-trailer-input-wrap label { font-size:11px; font-weight:500; letter-spacing:.1em; color:var(--t2); text-transform:uppercase; flex-shrink:0; }
+    #driverView .ts-trailer-input { flex:1; background:none; border:none; outline:none; font-family:var(--font); font-size:22px; font-weight:600; color:var(--t0); letter-spacing:.04em; text-transform:uppercase; caret-color:var(--accent); }
+    #driverView .ts-trailer-input::placeholder { color:var(--border2); font-weight:300; }
+    #driverView .ts-go-btn { background:linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%); border:none; border-radius:14px; width:52px; height:52px; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:transform .15s,background .15s; }
+    #driverView .ts-go-btn:active { transform:scale(.93); filter:brightness(0.9); }
+    #driverView .ts-go-btn svg { width:20px; height:20px; fill:none; stroke:#000; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; }
 
-    // Reset reveal labels
-    if(leftLabel) leftLabel.style.opacity=0;
-    if(rightLabel) rightLabel.style.opacity=0;
+    /* BIG TAP AREAS & COLOR CODING */
+    #driverView .ts-action-grid { display:flex; flex-direction:column; gap:14px; padding:20px 24px 40px; }
+    #driverView .ts-action-card { 
+      background:var(--surface); border:2px solid var(--border); border-radius:var(--r2); 
+      padding:24px 20px; display:flex; align-items:center; gap:20px; cursor:pointer; 
+      transition:all .18s; position:relative; overflow:hidden; 
+    }
+    #driverView .ts-action-card:active { transform:scale(.97); border-color:var(--t0); }
+    #driverView .ts-action-card::after { content:""; position:absolute; right:20px; top:50%; transform:translateY(-50%); width:8px; height:14px; background:url('data:image/svg+xml;utf8,<svg viewBox="0 0 8 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L7 7L1 13" stroke="%237a95b0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>') no-repeat center; opacity:0.5; }
+    
+    #driverView .ts-action-icon { font-size:36px; line-height:1; flex-shrink:0; filter:drop-shadow(0 4px 12px rgba(0,0,0,0.3)); }
+    #driverView .ts-action-text { flex:1; display:flex; flex-direction:column; justify-content:center; }
+    #driverView .ts-action-label { font-size:18px; font-weight:700; letter-spacing:.01em; color:var(--t0); margin-bottom:4px; }
+    #driverView .ts-action-sub { font-size:13px; color:var(--t1); font-weight:400; line-height:1.3; padding-right:16px; }
 
-    if(curX<-COMMIT){
-      // Left swipe → Issue
-      card.style.transform='';
-      card.classList.add('flash-issue');
-      card.addEventListener('animationend',()=>card.classList.remove('flash-issue'),{once:true});
-      showToast('⚠ Issue flagged for '+card.querySelector('.c-id').textContent,'err');
-    } else if(curX>COMMIT){
-      const action=card.dataset.action;
-      if(action==='advance'){
-        // Right swipe → Advance status
-        card.style.transform='';
-        card.classList.add('flash-advance');
-        card.addEventListener('animationend',()=>card.classList.remove('flash-advance'),{once:true});
-        const next=card.dataset.next||'Updated';
-        showToast('✓ '+card.querySelector('.c-id').textContent+' → '+next,'ok');
-      } else {
-        card.style.transform='';
+    /* The specific color overrides */
+    #driverView .ts-action-card.ts-green { border-color:var(--green); background:rgba(25,224,154,0.08); }
+    #driverView .ts-action-card.ts-blue { border-color:var(--blue); background:rgba(32,136,255,0.08); }
+    #driverView .ts-action-card.ts-yellow { border-color:var(--yellow); background:rgba(245,166,35,0.08); }
+    #driverView .ts-action-card.ts-purple { border-color:var(--purple); background:rgba(176,82,217,0.08); }
+    #driverView .ts-action-card.ts-orange { border-color:var(--orange); background:rgba(255,107,0,0.08); }
+
+    /* Screen Headers & Inputs */
+    #driverView .ts-screen-header { padding:28px 24px 0; flex-shrink:0; }
+    #driverView .ts-back-btn { display:flex; align-items:center; gap:8px; background:none; border:none; color:var(--t1); font-family:var(--font); font-size:15px; font-weight:600; cursor:pointer; padding:0; margin-bottom:20px; }
+    #driverView .ts-back-btn svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; }
+    #driverView .ts-screen-title { font-size:36px; font-weight:700; letter-spacing:-.02em; color:var(--t0); line-height:1.1; }
+    #driverView .ts-screen-title span { color:var(--t1); font-weight:300; }
+    #driverView .ts-screen-body { flex:1; padding:24px; display:flex; flex-direction:column; gap:16px; overflow-y:auto; }
+    
+    #driverView .ts-eta-label { font-size:13px; font-weight:600; letter-spacing:.1em; color:var(--t2); text-transform:uppercase; margin-bottom:4px; }
+    #driverView .ts-eta-pills { display:flex; gap:10px; flex-wrap:wrap; }
+    #driverView .ts-eta-pill { background:var(--surface); border:2px solid var(--border); border-radius:14px; padding:16px 20px; font-size:16px; font-weight:600; color:var(--t1); cursor:pointer; transition:all .15s; flex:1; min-width:100px; text-align:center; }
+    #driverView .ts-eta-pill.ts-sel { background:var(--t0); border-color:var(--t0); color:var(--bg); }
+    #driverView .ts-eta-pill:active { transform:scale(.96); }
+
+    #driverView .ts-info-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r2); padding:18px 20px; display:flex; align-items:center; gap:14px; }
+    #driverView .ts-info-icon { font-size:24px; flex-shrink:0; }
+    #driverView .ts-info-text { flex:1; }
+    #driverView .ts-info-title { font-size:13px; font-weight:600; color:var(--t0); margin-bottom:3px; }
+    #driverView .ts-info-desc { font-size:12px; color:var(--t1); line-height:1.5; }
+
+    #driverView .ts-cta-btn { background:var(--t0); border:none; border-radius:var(--r2); padding:24px; width:100%; font-family:var(--font); font-size:18px; font-weight:700; color:var(--bg); letter-spacing:.03em; cursor:pointer; transition:all .18s; display:flex; align-items:center; justify-content:center; gap:10px; margin-top:auto; box-shadow:0 8px 24px rgba(0,0,0,0.4); }
+    #driverView .ts-cta-btn:active { transform:scale(.97); opacity:.9; }
+    #driverView .ts-cta-btn.ts-accent { background:linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%); color:#000; }
+    #driverView .ts-cta-btn.ts-green { background:var(--green); color:#000; }
+    #driverView .ts-cta-btn:disabled { opacity:.35; cursor:not-allowed; transform:none; }
+
+    #driverView .ts-door-hero { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 24px; text-align:center; position:relative; }
+    #driverView .ts-door-ring { width:220px; height:220px; border-radius:50%; border:2px solid var(--border); display:flex; align-items:center; justify-content:center; position:relative; margin-bottom:32px; background:radial-gradient(circle,var(--surface2),var(--bg)); }
+    #driverView .ts-door-ring.ts-done::before { content:""; position:absolute; inset:-1px; border-radius:50%; background:var(--green); -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 2px)); mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 2px)); }
+    #driverView .ts-door-number { font-size:80px; font-weight:700; letter-spacing:-.04em; color:var(--t0); line-height:1; }
+    #driverView .ts-door-headline { font-size:32px; font-weight:700; letter-spacing:-.01em; color:var(--t0); margin-bottom:8px; }
+    #driverView .ts-door-sub { font-size:16px; color:var(--t1); font-weight:300; max-width:260px; line-height:1.5; }
+    #driverView .ts-door-actions { padding:0 24px 40px; display:flex; flex-direction:column; gap:12px; }
+
+    /* Type grid for Empty/Loaded */
+    #driverView .ts-type-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    #driverView .ts-type-card { background:var(--surface); border:2px solid var(--border); border-radius:var(--r2); padding:24px 16px; cursor:pointer; transition:all .18s; text-align:center; }
+    #driverView .ts-type-card.ts-sel { border-color:var(--accent); background:rgba(245,166,35,0.08); }
+    #driverView .ts-type-card:active { transform:scale(.97); }
+    #driverView .ts-type-card .ts-icon { font-size:40px; margin-bottom:12px; }
+    #driverView .ts-type-card .ts-name { font-size:16px; font-weight:700; color:var(--t0); }
+    #driverView .ts-type-card .ts-desc { font-size:12px; color:var(--t1); margin-top:6px; }
+
+    #driverView .ts-success-icon { width:88px; height:88px; border-radius:50%; background:var(--green); display:flex; align-items:center; justify-content:center; margin:0 auto 28px; animation:ts-pop .4s cubic-bezier(.175,.885,.32,1.275) both; box-shadow: 0 0 40px rgba(25,224,154,.3); }
+    @keyframes ts-pop{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+    #driverView .ts-success-icon svg { width:40px; height:40px; fill:none; stroke:#000; stroke-width:3; stroke-linecap:round; stroke-linejoin:round; }
+    #driverView .ts-done-title { font-size:40px; font-weight:700; letter-spacing:-.02em; margin-bottom:10px; text-align:center; }
+    #driverView .ts-done-sub { font-size:16px; color:var(--t1); font-weight:300; line-height:1.6; max-width:280px; margin:0 auto 40px; text-align:center; }
+    #driverView .ts-done-detail { background:var(--surface); border:1px solid var(--border); border-radius:var(--r2); padding:24px; width:100%; max-width:340px; margin:0 auto 32px; }
+    #driverView .ts-done-row { display:flex; justify-content:space-between; align-items:center; padding:10px 0; }
+    #driverView .ts-done-row:not(:last-child) { border-bottom:1px solid var(--border); }
+    #driverView .ts-done-key { font-size:13px; color:var(--t2); font-weight:600; text-transform:uppercase; letter-spacing:.06em; }
+    #driverView .ts-done-val { font-size:15px; font-weight:700; color:var(--t0); }
+
+    /* Checkboxes (Safety) */
+    #driverView .ts-check-list { display:flex; flex-direction:column; gap:12px; }
+    #driverView .ts-check-item { background:var(--surface); border:2px solid var(--border); border-radius:var(--r2); padding:24px 20px; display:flex; align-items:center; gap:20px; cursor:pointer; transition:all .18s; }
+    #driverView .ts-check-item.ts-checked { border-color:var(--green); background:rgba(25,224,154,.08); }
+    #driverView .ts-check-item:active { transform:scale(.98); }
+    #driverView .ts-check-box { width:32px; height:32px; border-radius:50%; border:2px solid var(--border2); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:all .2s; }
+    #driverView .ts-check-item.ts-checked .ts-check-box { background:var(--green); border-color:var(--green); }
+    #driverView .ts-check-box svg { width:16px; height:16px; fill:none; stroke:#000; stroke-width:3; stroke-linecap:round; stroke-linejoin:round; opacity:0; transition:opacity .2s; }
+    #driverView .ts-check-item.ts-checked .ts-check-box svg { opacity:1; }
+    #driverView .ts-check-text { flex:1; }
+    #driverView .ts-check-title { font-size:18px; font-weight:700; color:var(--t0); margin-bottom:4px; }
+    #driverView .ts-check-desc { font-size:13px; color:var(--t1); line-height:1.4; }
+    
+    #driverView .ts-trailer-tag { display:inline-flex; align-items:center; gap:6px; background:var(--surface2); border:1px solid var(--border2); border-radius:8px; padding:6px 12px; font-size:13px; font-weight:700; letter-spacing:.06em; color:var(--t1); }
+    #driverView .ts-toast { position:absolute; bottom:20px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--surface2); border:1px solid var(--border2); border-radius:14px; padding:16px 24px; font-size:15px; font-weight:600; color:var(--t0); white-space:nowrap; z-index:999; transition:transform .3s cubic-bezier(.4,0,.2,1); pointer-events:none; box-shadow:0 10px 30px rgba(0,0,0,0.5); }
+    #driverView .ts-toast.ts-show { transform:translateX(-50%) translateY(0); }
+    @keyframes ts-fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+    #driverView .ts-anim { animation:ts-fadeUp .4s ease both; }
+  </style>
+
+  <div class="ts-progress-track">
+    <div class="ts-progress-bar" id="ts-pb"></div>
+  </div>
+
+  <div class="ts-live-banner" id="ts-live-banner">
+    <div>
+      <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.1em; opacity:0.8; margin-bottom:2px;">Assigned</div>
+      <div>Proceed to Door <span id="ts-lb-door" style="font-size:18px;">--</span></div>
+    </div>
+    <div class="ts-lb-tag" id="ts-lb-trailer">--</div>
+  </div>
+
+  <div class="ts-screen ts-active" id="ts-s-home">
+    <div class="ts-topbar ts-anim">
+      <div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div>
+      <div class="ts-status-chip"><div class="ts-dot"></div>Live</div>
+    </div>
+    <div class="ts-hero">
+      <div class="ts-hero-eyebrow ts-anim">Driver Portal</div>
+      <div class="ts-hero-title ts-anim">What's your<br/><strong>trailer?</strong></div>
+      <div class="ts-hero-sub ts-anim">Enter your number to get started</div>
+    </div>
+    <div class="ts-trailer-input-wrap ts-anim">
+      <label>Trailer</label>
+      <input class="ts-trailer-input" id="ts-home-trailer" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="e.g. WB4821" maxlength="12"/>
+      <button class="ts-go-btn" id="ts-home-go">
+        <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="ts-screen" id="ts-s-carrier">
+    <div class="ts-screen-header">
+      <div class="ts-topbar" style="padding:0"><div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div></div>
+      <div style="padding-top:28px">
+        <button class="ts-back-btn" data-back="ts-s-home"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg> Back</button>
+        <div class="ts-screen-title">Who are you<br/><span>driving for?</span></div>
+      </div>
+    </div>
+    <div class="ts-screen-body" style="justify-content:center; padding-bottom:60px;">
+      <div class="ts-action-grid" style="padding:0;">
+        <div class="ts-action-card" data-carrier="Wesbell" style="border-color:var(--accent); background:rgba(245,166,35,0.06);">
+          <div class="ts-action-icon">🚛</div>
+          <div class="ts-action-text">
+            <div class="ts-action-label">Wesbell Internal</div>
+            <div class="ts-action-sub">I am a Wesbell driver</div>
+          </div>
+        </div>
+        <div class="ts-action-card" data-carrier="Outside">
+          <div class="ts-action-icon">🏢</div>
+          <div class="ts-action-text">
+            <div class="ts-action-label">Outside Carrier</div>
+            <div class="ts-action-sub">I drive for another company</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ts-screen" id="ts-s-actions">
+    <div class="ts-screen-header">
+      <div class="ts-topbar" style="padding:0">
+        <div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div>
+        <div id="ts-actions-trailer-tag" class="ts-trailer-tag"></div>
+      </div>
+      <div style="padding-top:28px">
+        <button class="ts-back-btn" data-back="ts-s-carrier"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg> Back</button>
+        <div class="ts-screen-title">Select an<br/><span>activity</span></div>
+      </div>
+    </div>
+    <div class="ts-screen-body" style="padding:10px 0 24px;">
+      <div class="ts-action-grid" id="ts-dynamic-actions"></div>
+    </div>
+  </div>
+
+  <div class="ts-screen" id="ts-s-omw">
+    <div class="ts-screen-header">
+      <div class="ts-topbar" style="padding:0"><div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div></div>
+      <div style="padding-top:28px">
+        <button class="ts-back-btn" data-back="ts-s-actions"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg> Back</button>
+        <div class="ts-screen-title">On My <span>Way</span></div>
+        <div style="font-size:15px;color:var(--t1);margin-top:8px">We'll assign your door now</div>
+      </div>
+    </div>
+    <div class="ts-screen-body">
+      <div class="ts-eta-selector">
+        <div class="ts-eta-label">ETA to dock</div>
+        <div class="ts-eta-pills">
+          <div class="ts-eta-pill ts-sel" data-eta="10">10 min</div>
+          <div class="ts-eta-pill" data-eta="20">20 min</div>
+          <div class="ts-eta-pill" data-eta="30">30 min</div>
+          <div class="ts-eta-pill" data-eta="45">45 min</div>
+          <div class="ts-eta-pill" data-eta="60">1 hr</div>
+        </div>
+      </div>
+      <div class="ts-info-card" style="margin-top:10px;">
+        <div class="ts-info-icon">📍</div>
+        <div class="ts-info-text">
+          <div class="ts-info-title">Door assigned instantly</div>
+          <div class="ts-info-desc">Your door is held for 30 minutes. Head straight in when you arrive.</div>
+        </div>
+      </div>
+    </div>
+    <div style="padding:0 24px 20px">
+      <button class="ts-cta-btn ts-accent" id="ts-omw-submit" style="background:var(--blue); color:#fff;">Send On My Way →</button>
+    </div>
+  </div>
+
+  <div class="ts-screen" id="ts-s-door">
+    <div class="ts-topbar ts-anim">
+      <div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div>
+      <div id="ts-door-trailer-tag2" class="ts-trailer-tag"></div>
+    </div>
+    <div class="ts-door-hero">
+      <div class="ts-door-ring ts-done ts-anim" id="ts-door-ring">
+        <div>
+          <div style="font-size:13px;font-weight:600;letter-spacing:.14em;color:var(--t2);text-transform:uppercase;text-align:center;margin-bottom:6px">Your Door</div>
+          <div class="ts-door-number" id="ts-door-number">--</div>
+        </div>
+      </div>
+      <div class="ts-door-headline ts-anim" id="ts-door-headline">Head to Dock</div>
+      <div class="ts-door-sub ts-anim" id="ts-door-sub">Pull straight to your assigned door.</div>
+    </div>
+    <div class="ts-door-actions">
+      <button class="ts-cta-btn ts-green ts-anim" id="ts-door-safety-btn" style="display:none;">✓ Arrived — Start Safety Check</button>
+      <button class="ts-cta-btn ts-anim" id="ts-door-done-btn" style="background:var(--surface);border:2px solid var(--border);color:var(--t0);">Got it</button>
+    </div>
+  </div>
+
+  <div class="ts-screen" id="ts-s-drop">
+    <div class="ts-screen-header">
+      <div class="ts-topbar" style="padding:0"><div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div></div>
+      <div style="padding-top:28px">
+        <button class="ts-back-btn" data-back="ts-s-actions"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Back</button>
+        <div class="ts-screen-title">Drop <span>Trailer</span></div>
+        <div style="font-size:15px;color:var(--t1);margin-top:8px">What are you dropping?</div>
+      </div>
+    </div>
+    <div class="ts-screen-body">
+      <div class="ts-type-grid">
+        <div class="ts-type-card ts-sel" data-type="Loaded">
+          <div class="ts-icon">📦</div>
+          <div class="ts-name">Loaded</div>
+          <div class="ts-desc">Full trailer</div>
+        </div>
+        <div class="ts-type-card" data-type="Empty">
+          <div class="ts-icon">🪣</div>
+          <div class="ts-name">Empty</div>
+          <div class="ts-desc">Empty trailer</div>
+        </div>
+      </div>
+      <div class="ts-info-card" style="margin-top:10px;">
+        <div class="ts-info-icon">ℹ️</div>
+        <div class="ts-info-text">
+          <div class="ts-info-title">Door assigned by dispatch</div>
+          <div class="ts-info-desc">Your dispatcher will assign you a door after submission.</div>
+        </div>
+      </div>
+    </div>
+    <div style="padding:0 24px 20px">
+      <button class="ts-cta-btn ts-accent" id="ts-drop-submit" style="background:var(--green); color:#000;">Confirm Drop →</button>
+    </div>
+  </div>
+
+  <div class="ts-screen" id="ts-s-door-select">
+    <div class="ts-screen-header">
+      <div class="ts-topbar" style="padding:0"><div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div></div>
+      <div style="padding-top:28px">
+        <button class="ts-back-btn" data-back="ts-s-actions"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Back</button>
+        <div class="ts-screen-title" id="ts-ds-title">Select <span>Door</span></div>
+      </div>
+    </div>
+    <div class="ts-screen-body">
+      <div class="ts-eta-label" style="margin-bottom:10px">Which door?</div>
+      <div class="ts-eta-pills" id="ts-ds-door-pills">
+        </div>
+    </div>
+    <div style="padding:0 24px 20px">
+      <button class="ts-cta-btn ts-accent" id="ts-ds-submit">Confirm Door →</button>
+    </div>
+  </div>
+
+  <div class="ts-screen" id="ts-s-safety">
+    <div class="ts-screen-header">
+      <div class="ts-topbar" style="padding:0"><div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div></div>
+      <div style="padding-top:28px">
+        <button class="ts-back-btn" data-back="ts-s-door-select"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Back</button>
+        <div class="ts-screen-title">Safety <span>Check</span></div>
+        <div style="font-size:15px;color:var(--t1);margin-top:8px">Confirm before departing</div>
+      </div>
+    </div>
+    <div class="ts-screen-body">
+      <div class="ts-check-list">
+        <div class="ts-check-item" data-key="load">
+          <div class="ts-check-box"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div class="ts-check-text">
+            <div class="ts-check-title">Load Secured</div>
+            <div class="ts-check-desc">All cargo is properly secured and doors are closed</div>
+          </div>
+        </div>
+        <div class="ts-check-item" data-key="plate">
+          <div class="ts-check-box"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div class="ts-check-text">
+            <div class="ts-check-title">Dock Plate Up</div>
+            <div class="ts-check-desc">Dock plate is in the raised position</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="padding:0 24px 20px">
+      <button class="ts-cta-btn ts-green" id="ts-safety-submit" disabled>Confirm &amp; Complete →</button>
+    </div>
+  </div>
+
+  <div class="ts-screen" id="ts-s-done" style="padding-top:60px;">
+    <div class="ts-success-icon"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+    <div class="ts-done-title" id="ts-done-title">All Done!</div>
+    <div class="ts-done-sub" id="ts-done-sub">Dispatch has been notified.</div>
+    <div class="ts-done-detail" id="ts-done-detail"></div>
+    <button class="ts-cta-btn" id="ts-done-restart" style="max-width:340px; background:var(--surface); border:2px solid var(--border); color:var(--t0); margin:0 auto;">← Start Over</button>
+  </div>
+
+  <div class="ts-toast" id="ts-toast"></div>
+
+  <script>
+  (function(){
+    let state = { trailer: '', carrier: '', action: '', eta: 10, dropType: 'Loaded', door: null, assignedDoor: null, safetyChecks: { load: false, plate: false } };
+
+    // --- Kiosk Mode (Isolate Driver View) ---
+    const driverWrap = document.getElementById('driverView');
+    const globalTopbar = document.querySelector('.topbar');
+    const globalBottomNav = document.querySelector('.bottom-nav');
+
+    function checkIsolation() {
+      const active = driverWrap.style.display !== 'none';
+      if (globalTopbar) globalTopbar.style.display = active ? 'none' : '';
+      if (globalBottomNav) globalBottomNav.style.display = active ? 'none' : '';
+    }
+    
+    // Lock the view immediately and watch for routing changes
+    checkIsolation();
+    new MutationObserver(checkIsolation).observe(driverWrap, { attributes: true, attributeFilter: ['style'] });
+
+    // --- Progress & Navigation Manager ---
+    function show(id) {
+      document.querySelectorAll('#driverView .ts-screen').forEach(s => {
+        if (s.classList.contains('ts-active')) {
+          s.classList.add('ts-exit');
+          s.classList.remove('ts-active');
+          setTimeout(() => s.classList.remove('ts-exit'), 400);
+        }
+      });
+      const next = document.getElementById(id);
+      if(next) {
+        next.classList.add('ts-active');
+        next.querySelectorAll('.ts-anim').forEach(el => { el.style.animation = 'none'; el.offsetHeight; el.style.animation = ''; });
       }
-    } else {
-      // Snap back
-      card.style.transform='';
+      
+      // Update Progress Bar
+      const prog = {
+        'ts-s-home': 15, 'ts-s-carrier': 35, 'ts-s-actions': 55, 
+        'ts-s-omw': 75, 'ts-s-drop': 75, 'ts-s-door-select': 75, 
+        'ts-s-safety': 90, 'ts-s-door': 100, 'ts-s-done': 100
+      };
+      if(prog[id]) document.getElementById('ts-pb').style.width = prog[id] + '%';
     }
-    curX=0;
-  });
 
-  // Cancel on touchcancel
-  card.addEventListener('touchcancel',()=>{
-    card.classList.remove('dragging');
-    card.style.transform='';
-    if(leftLabel) leftLabel.style.opacity=0;
-    if(rightLabel) rightLabel.style.opacity=0;
-    tracking=false; curX=0;
-  });
-});
-</script>
+    // --- Live Door Status Banner ---
+    function updateLiveDoor(door) {
+      const banner = document.getElementById('ts-live-banner');
+      state.assignedDoor = door;
+      if (door) {
+        document.getElementById('ts-lb-door').textContent = door;
+        document.getElementById('ts-lb-trailer').textContent = `🚛 ${state.trailer}`;
+        banner.classList.add('ts-show');
+      } else {
+        banner.classList.remove('ts-show');
+      }
+    }
+
+    function toast(msg, dur = 2500) {
+      const t = document.getElementById('ts-toast');
+      t.textContent = msg; t.classList.add('ts-show');
+      setTimeout(() => t.classList.remove('ts-show'), dur);
+    }
+
+    document.querySelectorAll('#driverView [data-back]').forEach(btn => {
+      btn.addEventListener('click', () => show(btn.dataset.back));
+    });
+
+    // 1. Trailer Input
+    const homeTrailer = document.getElementById('ts-home-trailer');
+    homeTrailer.addEventListener('input', e => { state.trailer = e.target.value.trim().toUpperCase(); e.target.value = state.trailer; });
+    document.getElementById('ts-home-go').addEventListener('click', () => {
+      if (!state.trailer) { toast('Enter your trailer number'); homeTrailer.focus(); return; }
+      show('ts-s-carrier');
+    });
+
+    // 2. Carrier Selection
+    document.querySelectorAll('#driverView [data-carrier]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.carrier = btn.dataset.carrier;
+        document.getElementById('ts-actions-trailer-tag').textContent = `🚛 ${state.trailer}`;
+        buildActions();
+        show('ts-s-actions');
+      });
+    });
+
+    // 3. Action Board (Dynamic Build with Colors/Big Layout)
+    function buildActions() {
+      const grid = document.getElementById('ts-dynamic-actions');
+      grid.innerHTML = '';
+      
+      let actions = [];
+      if (state.carrier === 'Wesbell') {
+        actions = [
+          { id: 'arrive', icon: '📍', label: "I've Arrived", sub: 'Get door right now', cls: 'ts-yellow' },
+          { id: 'qd', icon: '📦', label: 'Quick Drop', sub: 'Drop trailer in yard (No prompts)', cls: 'ts-green' },
+          { id: 'omw', icon: '🚛', label: 'On My Way', sub: 'Assign door before arrival', cls: 'ts-blue' },
+          { id: 'shunt', icon: '🔀', label: 'Shunt Trailer', sub: 'Move trailer to a new door', cls: 'ts-purple' },
+          { id: 'xdock', icon: '🔄', label: 'Cross Dock', sub: 'Load or offload a trailer', cls: 'ts-orange' }
+        ];
+      } else {
+        actions = [
+          // Drop Trailer removed for outside carriers
+          { id: 'xdock', icon: '🔄', label: 'Cross Dock', sub: 'Load or offload a trailer', cls: 'ts-orange' }
+        ];
+      }
+
+      actions.forEach(a => {
+        const card = document.createElement('div');
+        card.className = `ts-action-card ${a.cls}`;
+        card.innerHTML = `
+          <div class="ts-action-icon">${a.icon}</div>
+          <div class="ts-action-text">
+            <div class="ts-action-label">${a.label}</div>
+            <div class="ts-action-sub">${a.sub}</div>
+          </div>
+        `;
+        card.addEventListener('click', () => handleAction(a.id));
+        grid.appendChild(card);
+      });
+    }
+
+    // 4. Handle Actions (REAL API SYNC)
+    async function handleAction(act) {
+      state.action = act;
+      
+      if (act === 'qd') {
+        try { 
+          await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, dropType: 'Loaded', carrierType: 'Wesbell' }) }); 
+          showSuccess('Quick Drop Logged', 'Trailer dropped to yard instantly.', [{k:'Trailer',v:state.trailer},{k:'Action',v:'Quick Drop'}]);
+        } catch(e) { toast('Error connecting to server'); }
+      } 
+      else if (act === 'shunt') {
+        showDoorSelector('Shunt <span>Trailer</span>', 'Move to which door?', async () => {
+          try {
+            await fetch('/api/driver/shunt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, newDoor: state.door }) });
+            showSuccess('Shunt Complete', `Trailer moved to Door ${state.door}.`, [{k:'Trailer',v:state.trailer},{k:'New Door',v:state.door}]);
+          } catch(e) { toast('Error shunting trailer'); }
+        });
+      }
+      else if (act === 'xdock') {
+        showDoorSelector('Cross <span>Dock</span>', 'Select your door', () => {
+          state.safetyChecks = { load: false, plate: false };
+          document.querySelectorAll('#ts-s-safety .ts-check-item').forEach(c => c.classList.remove('ts-checked'));
+          document.getElementById('ts-safety-submit').disabled = true;
+          show('ts-s-safety');
+        });
+      }
+      else if (act === 'omw') {
+        show('ts-s-omw');
+      }
+      else if (act === 'arrive') {
+        // REAL ARRIVAL FETCH
+        try {
+          const res = await fetch('/api/driver/arrive', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer }) });
+          if(res.ok) {
+            const data = await res.json();
+            updateLiveDoor(data.door);
+            showDoorAssigned('Arrived!', `Pull straight into Door ${data.door}.`);
+          } else {
+            toast('Failed to get door assignment.');
+          }
+        } catch(e) { toast('Network error'); }
+      }
+      else if (act === 'drop') {
+        show('ts-s-drop');
+      }
+    }
+
+    // -- OMW Logic (REAL API SYNC) --
+    document.querySelectorAll('#ts-s-omw .ts-eta-pill').forEach(p => {
+      p.addEventListener('click', () => {
+        document.querySelectorAll('#ts-s-omw .ts-eta-pill').forEach(x => x.classList.remove('ts-sel'));
+        p.classList.add('ts-sel');
+        state.eta = parseInt(p.dataset.eta);
+      });
+    });
+    document.getElementById('ts-omw-submit').addEventListener('click', async () => {
+      const btn = document.getElementById('ts-omw-submit');
+      btn.textContent = 'Sending...';
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, eta: state.eta }) });
+        if(res.ok) {
+          const data = await res.json();
+          updateLiveDoor(data.door);
+          showDoorAssigned('OMW Confirmed', `Head to door ${data.door}. Dispatch notified.`); 
+        } else {
+          toast('Error assigning door');
+        }
+      } catch(e) {
+        toast('Network Error');
+      } finally {
+        btn.textContent = 'Send On My Way →'; 
+        btn.disabled = false;
+      }
+    });
+
+    // -- Drop Logic (REAL API SYNC) --
+    document.querySelectorAll('#ts-s-drop .ts-type-card').forEach(c => {
+      c.addEventListener('click', () => {
+        document.querySelectorAll('#ts-s-drop .ts-type-card').forEach(x => x.classList.remove('ts-sel'));
+        c.classList.add('ts-sel');
+        state.dropType = c.dataset.type;
+      });
+    });
+    document.getElementById('ts-drop-submit').addEventListener('click', async () => {
+      const btn = document.getElementById('ts-drop-submit');
+      btn.textContent = 'Submitting...';
+      btn.disabled = true;
+      try {
+        await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, dropType: state.dropType, carrierType: 'Outside' }) });
+        showSuccess('Drop Logged', 'Dispatch will assign your door on the board.', [{k:'Trailer',v:state.trailer},{k:'Type',v:state.dropType},{k:'Carrier',v:'Outside'}]);
+      } catch(e) {
+        toast('Network Error');
+      } finally {
+        btn.textContent = 'Confirm Drop →';
+        btn.disabled = false;
+      }
+    });
+
+    // -- Door Selector Helper --
+    function showDoorSelector(titleHTML, subtitle, onConfirm) {
+      document.getElementById('ts-ds-title').innerHTML = titleHTML;
+      const pills = document.getElementById('ts-ds-door-pills');
+      pills.innerHTML = '';
+      for (let d = 28; d <= 42; d++) {
+        const p = document.createElement('div');
+        p.className = 'ts-eta-pill' + (d === 28 ? ' ts-sel' : '');
+        p.textContent = 'Door ' + d;
+        p.addEventListener('click', () => { pills.querySelectorAll('.ts-eta-pill').forEach(x => x.classList.remove('ts-sel')); p.classList.add('ts-sel'); state.door = d; });
+        pills.appendChild(p);
+      }
+      state.door = 28;
+      
+      const submitBtn = document.getElementById('ts-ds-submit');
+      const newBtn = submitBtn.cloneNode(true);
+      submitBtn.parentNode.replaceChild(newBtn, submitBtn);
+      
+      newBtn.addEventListener('click', onConfirm);
+      show('ts-s-door-select');
+    }
+
+    // -- Safety / Departure Logic (REAL API SYNC) --
+    document.querySelectorAll('#ts-s-safety .ts-check-item').forEach(item => {
+      item.addEventListener('click', () => {
+        item.classList.toggle('ts-checked');
+        state.safetyChecks[item.dataset.key] = item.classList.contains('ts-checked');
+        const allDone = Object.values(state.safetyChecks).every(Boolean);
+        document.getElementById('ts-safety-submit').disabled = !allDone;
+      });
+    });
+    document.getElementById('ts-safety-submit').addEventListener('click', async () => {
+      const btn = document.getElementById('ts-safety-submit');
+      btn.textContent = 'Confirming...';
+      btn.disabled = true;
+      try {
+        await fetch('/api/confirm-safety', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, door: state.door, action: 'depart' }) });
+        updateLiveDoor(null); 
+        showSuccess('Cross Dock Complete', 'Safe travels! Trip logged.', [{k:'Trailer',v:state.trailer},{k:'Door',v:state.door}]);
+      } catch(e) {
+        toast('Network Error');
+      } finally {
+        btn.textContent = 'Confirm & Complete →';
+        btn.disabled = false;
+      }
+    });
+
+    // -- Door Display Helper --
+    function showDoorAssigned(headline, sub) {
+      document.getElementById('ts-door-number').textContent = state.assignedDoor;
+      document.getElementById('ts-door-headline').textContent = headline;
+      document.getElementById('ts-door-sub').textContent = sub;
+      document.getElementById('ts-door-trailer-tag2').textContent = `🚛 ${state.trailer}`;
+      show('ts-s-door');
+    }
+    document.getElementById('ts-door-done-btn').addEventListener('click', () => {
+       show('ts-s-home');
+       document.getElementById('ts-home-trailer').value = '';
+       state.trailer = '';
+    });
+
+    // -- Success Helper --
+    function showSuccess(title, sub, rows) {
+      document.getElementById('ts-done-title').textContent = title;
+      document.getElementById('ts-done-sub').textContent = sub;
+      document.getElementById('ts-done-detail').innerHTML = rows.map(r => `<div class="ts-done-row"><span class="ts-done-key">${r.k}</span><span class="ts-done-val">${r.v}</span></div>`).join('');
+      show('ts-s-done');
+    }
+
+    // -- Restart --
+    document.getElementById('ts-done-restart').addEventListener('click', () => {
+      state = { trailer: '', carrier: '', action: '', eta: 10, dropType: 'Loaded', door: null, assignedDoor: null, safetyChecks: { load: false, plate: false } };
+      updateLiveDoor(null);
+      document.getElementById('ts-home-trailer').value = '';
+      show('ts-s-home');
+    });
+
+  })();
+  </script>
+</div>
+
+<div id="managementView" style="display:none;">
+  <div class="sup-shell">
+    <div class="kpi-row" id="supKpis"></div>
+    <div class="sup-grid">
+
+      <div class="panel" style="grid-column:1/-1;">
+        <div class="panel-hd">
+          <div class="panel-title"><div class="ptdot" style="background:var(--amber)"></div>Live Trailer Board</div>
+          <span class="badge badge-num" id="supCountsPill">0</span>
+        </div>
+        <div class="filter-bar">
+          <div class="field"><label class="fl">Search</label><input id="supSearch" inputmode="search" autocomplete="off" aria-label="Search trailers" placeholder="Trailer / door / note…"/></div>
+          <div class="field"><label class="fl">Direction</label>
+            <select id="supFilterDir" aria-label="Filter by direction"><option value="">All Directions</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
+          </div>
+          <div class="field"><label class="fl">Status</label>
+            <select id="supFilterStatus" aria-label="Filter by status"><option value="">All Statuses</option><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select>
+          </div>
+          <div class="tight"><button class="btn btn-default btn-sm" id="btnSupClearFilters" style="margin-top:14px;">Clear</button></div>
+        </div>
+        <div class="tbl-hd"><span>Trailer</span><span>Dir</span><span>Status</span><span>Door</span><span>Type</span><span>Note</span><span>Updated</span><span></span></div>
+        <div id="supTbody"></div>
+        <div class="board-footer" role="status" aria-live="polite"><span id="supLastUpdated">—</span><span id="supCountStr">—</span></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-hd">
+          <div class="panel-title"><div class="ptdot" style="background:var(--cyan)"></div>Recent Activity</div>
+          <span class="badge badge-num" id="supAuditCount">0</span>
+        </div>
+        <div class="panel-body" id="supFeed"><div style="color:var(--t2);font-size:11px;font-family:var(--mono);">Loading…</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-hd">
+          <div class="panel-title"><div class="ptdot" style="background:var(--green)"></div>Safety Confirmations</div>
+          <span class="badge badge-num" id="supConfCount">0</span>
+        </div>
+        <div class="panel-body-flush">
+          <div class="data-tbl-wrap">
+            <table><thead><tr><th>Time</th><th>Trailer</th><th>Door</th><th>Type</th><th>IP</th></tr></thead>
+            <tbody id="supConfBody"><tr><td colspan="5" style="padding:16px;color:var(--t2);">Loading…</td></tr></tbody></table>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" style="grid-column:1/-1;">
+        <div class="panel-hd">
+          <div class="panel-title"><div class="ptdot" style="background:var(--red)"></div>Trailer Issue Reports</div>
+          <span class="badge badge-num" id="supIssueCount">0</span>
+        </div>
+        <div class="panel-body-flush" id="supIssueBody">
+          <div style="padding:24px;text-align:center;color:var(--t3);font-family:var(--mono);font-size:11px;">No issue reports yet.</div>
+        </div>
+      </div>
+
+      <div class="panel" style="grid-column:1/-1;">
+        <button class="acc-head" id="pinMgmtToggle" aria-expanded="false">
+          <span style="display:flex;align-items:center;gap:9px;">
+            <span>🔒</span>
+            <span>PIN Management</span>
+            <span class="badge" style="color:var(--amber);border-color:var(--amber-bd);background:var(--amber-bg);font-size:9px;">Restricted</span>
+          </span>
+          <span class="chev">▾</span>
+        </button>
+        <div class="acc-body" id="pinMgmtBody" style="max-height:0px;overflow:hidden;transition:max-height .3s ease;">
+        <div class="panel-body">
+          <div class="infobox infobox-amber" style="margin-bottom:14px;">
+            <div class="ib-title">Security Notice</div>
+            PINs are hashed server-side — cannot be viewed, only reset. All changes are audit-logged and active sessions are invalidated immediately. Management can change Dispatcher, Dock and Management PINs. Only Admin can change the Admin PIN.
+          </div>
+          <div class="pin-row">
+            <div><label class="fl">Dispatcher PIN</label><input type="password" id="pin_dispatcher" placeholder="New PIN (min 4)" aria-label="Dispatcher new PIN" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_dispatcher_confirm" placeholder="Repeat" aria-label="Confirm dispatcher PIN" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetDispatcherPin" style="padding:7px 13px;">Update</button>
+          </div>
+          <div class="pin-row">
+            <div><label class="fl">Dock PIN</label><input type="password" id="pin_dock" placeholder="New PIN (min 4)" aria-label="Dock new PIN" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_dock_confirm" placeholder="Repeat" aria-label="Confirm dock PIN" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetDockPin" style="padding:7px 13px;">Update</button>
+          </div>
+          <div class="pin-row">
+            <div><label class="fl">Management PIN</label><input type="password" id="pin_management" placeholder="New PIN (min 4)" aria-label="Management new PIN" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_management_confirm" placeholder="Repeat" aria-label="Confirm management PIN" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetManagementPin" style="padding:7px 13px;">Update</button>
+          </div>
+          <div class="pin-row" id="adminPinRow" style="display:none;">
+            <div><label class="fl">Admin PIN</label><input type="password" id="pin_admin_sup" placeholder="New PIN (min 4)" aria-label="Admin new PIN" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm PIN</label><input type="password" id="pin_admin_sup_confirm" placeholder="Repeat" aria-label="Confirm admin PIN" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetAdminPinSup" style="padding:7px 13px;">Update</button>
+          </div>
+        </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div id="dockView" style="display:none;">
+  <div class="dock-shell">
+
+    <div class="dock-toolbar">
+      <div class="dock-toolbar-left">
+        <div class="live-dot" id="dockWsDot"></div>
+        <span id="dockWsText">Connecting…</span>
+      </div>
+      <div class="dock-filter-wrap">
+        <button class="dock-filter-btn active" data-dock-filter="active" aria-pressed="true">Active</button>
+        <button class="dock-filter-btn" data-dock-filter="all" aria-pressed="false">All</button>
+      </div>
+      <div class="dock-toolbar-right">
+        <span class="badge badge-num" id="dockCount">0</span>
+        <button class="tb-btn" id="btnDockViewToggle" data-view="cards" title="Toggle map view">🗺 Map</button>
+        <button class="tb-btn" id="btnDockBulk" title="Bulk select">☑ Bulk</button>
+        <button class="tb-btn" id="btnDimMode" title="Toggle dim mode">🌙 Dim</button>
+        <button class="tb-btn" id="btnDockStaffLogin" style="font-size:10px;padding:4px 9px;" title="Staff sign in">🔑 Staff</button>
+      </div>
+    </div>
+
+    <div class="dock-search-bar">
+      <div class="dock-scan-wrap">
+        <input id="dockScanInput" class="dock-scan-input" placeholder="⚡ Scan or type trailer # — auto-advances status" autocomplete="off" inputmode="text" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go"/>
+        <button class="tb-btn" id="btnVoiceDock" title="Voice input">🎙</button>
+      </div>
+      <input id="dockSearch" placeholder="🔍 Filter cards…" autocomplete="off" aria-label="Search dock trailers" inputmode="search"/>
+    </div>
+
+    <div class="dock-bulk-bar" id="dockBulkBar">
+      <span id="dockBulkCount" style="font-family:var(--mono);font-size:11px;color:var(--t2)">0 selected</span>
+      <button class="btn btn-sm" style="border-color:var(--amber-bd);color:var(--amber);background:rgba(245,166,35,.1);" id="btnBulkLoading">→ Loading</button>
+      <button class="btn btn-sm" style="border-color:rgba(24,212,232,.4);color:var(--cyan);background:rgba(24,212,232,.08);" id="btnBulkDockReady">→ Dock Ready</button>
+    </div>
+
+    <div id="dockLoginNudge" class="infobox infobox-amber" style="margin:10px 14px 0;display:none;"><div class="ib-title">Not signed in</div>Sign in as <a href="/login">Dock</a> to update trailer statuses.</div>
+    <div class="dock-cards" id="dockCards">
+      <div class="dock-empty">Loading…</div>
+    </div>
+
+    <div class="dock-plates-inline" id="dockPlatesInline">
+      <button class="acc-head" id="dockPlatesToggle2" aria-expanded="false">
+        <span style="display:flex;align-items:center;gap:9px;">Dock Plates (28–42) <span class="badge" id="platesMini2">—</span></span>
+        <span class="chev">▾</span>
+      </button>
+      <div class="acc-body" id="dockPlatesBody2" style="max-height:0px;overflow:hidden;transition:max-height .3s ease;">
+        <div class="plate-grid" id="platesGrid2"></div>
+        <div style="padding:0 12px 10px;font-family:var(--mono);font-size:9px;color:var(--t3);letter-spacing:.04em;">Tap Edit on any door to update status or note.</div>
+      </div>
+    </div>
+
+    <!-- ══ LOAD STATUS TRACKER ══ -->
+    <div id="loadStatusPanel">
+      <style>
+        #loadStatusPanel{margin:10px 0 0;border-top:1px solid var(--b0);background:var(--s1);}
+        #lsp-toggle{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;cursor:pointer;background:var(--s2);border-bottom:1px solid var(--b0);user-select:none;}
+        #lsp-toggle-left{display:flex;align-items:center;gap:10px;}
+        #lsp-toggle-label{font-size:13px;font-weight:700;color:var(--t0);letter-spacing:.01em;}
+        #lsp-toggle-sub{font-size:11px;color:var(--t2);margin-top:1px;}
+        #lsp-toggle-chev{font-size:11px;color:var(--t3);transition:transform .25s;}
+        #lsp-toggle.lsp-open #lsp-toggle-chev{transform:rotate(180deg);}
+        #lsp-body{max-height:0;overflow:hidden;transition:max-height .35s cubic-bezier(.4,0,.2,1);}
+        #lsp-body.lsp-open{max-height:2000px;}
+        /* header bar */
+        #lsp-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 6px;}
+        #lsp-count{font-family:var(--mono);font-size:11px;color:var(--t2);}
+        #lsp-refresh{background:none;border:1px solid var(--b1);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--t1);cursor:pointer;font-family:inherit;}
+        #lsp-refresh:active{opacity:.7;}
+        /* table */
+        #lsp-table{width:100%;padding:0 10px 12px;}
+        .lsp-row{display:grid;grid-template-columns:90px 1fr 90px 110px 70px;gap:4px;align-items:center;padding:8px 10px;border-radius:8px;margin-bottom:4px;background:var(--s2);border:1px solid var(--b0);transition:background .15s;cursor:pointer;}
+        .lsp-row:hover{background:var(--s3,#1e2a3a);}
+        .lsp-row-hd{display:grid;grid-template-columns:90px 1fr 90px 110px 70px;gap:4px;padding:4px 10px;margin-bottom:2px;}
+        .lsp-hd-cell{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);font-family:var(--mono);}
+        .lsp-trailer{font-size:13px;font-weight:700;color:var(--t0);font-family:var(--mono);}
+        /* progress bar */
+        .lsp-progress-wrap{position:relative;height:20px;}
+        .lsp-progress-bg{height:6px;border-radius:3px;background:var(--b1);overflow:hidden;margin-top:7px;}
+        .lsp-progress-fill{height:100%;border-radius:3px;transition:width .4s;}
+        .lsp-step-dots{display:flex;gap:0;position:absolute;top:0;left:0;right:0;height:20px;align-items:center;}
+        .lsp-dot{width:8px;height:8px;border-radius:50%;border:2px solid var(--bg,#0a0d12);flex-shrink:0;transition:background .3s;}
+        .lsp-dot.done{background:var(--green);}
+        .lsp-dot.active{background:var(--amber);box-shadow:0 0 6px var(--amber);}
+        .lsp-dot.pending{background:var(--b1);}
+        .lsp-door{font-size:12px;font-weight:600;color:var(--t1);font-family:var(--mono);}
+        .lsp-door-none{font-size:11px;color:var(--t3);}
+        .lsp-time-in{font-size:11px;font-family:var(--mono);}
+        .lsp-time-ok{color:var(--green);}
+        .lsp-time-warn{color:var(--amber);}
+        .lsp-time-over{color:var(--red);}
+        .lsp-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;font-family:var(--mono);}
+        .lsp-badge-incoming{background:rgba(120,120,120,.12);color:var(--t2);}
+        .lsp-badge-dropped{background:rgba(176,82,217,.12);color:var(--violet);}
+        .lsp-badge-loading{background:rgba(245,166,35,.12);color:var(--amber);}
+        .lsp-badge-dockready{background:rgba(24,212,232,.12);color:var(--cyan);}
+        .lsp-badge-ready{background:rgba(25,224,154,.12);color:var(--green);}
+        .lsp-badge-departed{background:rgba(80,80,80,.12);color:var(--t3);}
+        /* empty state */
+        #lsp-empty{padding:24px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--t3);}
+        /* loading */
+        #lsp-loading{padding:16px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--t2);}
+        @keyframes lsp-spin{to{transform:rotate(360deg)}}
+        .lsp-spinner{display:inline-block;width:12px;height:12px;border:2px solid var(--b1);border-top-color:var(--t2);border-radius:50%;animation:lsp-spin .7s linear infinite;vertical-align:middle;margin-right:6px;}
+      </style>
+      <div id="lsp-toggle">
+        <div id="lsp-toggle-left">
+          <span style="font-size:18px;">📊</span>
+          <div>
+            <div id="lsp-toggle-label">Load Status Tracker</div>
+            <div id="lsp-toggle-sub">Live progress · time in each stage</div>
+          </div>
+        </div>
+        <span id="lsp-toggle-chev">▾</span>
+      </div>
+      <div id="lsp-body">
+        <div id="lsp-header">
+          <span id="lsp-count">—</span>
+          <button id="lsp-refresh">↻ Refresh</button>
+        </div>
+        <div id="lsp-loading" style="display:none;"><span class="lsp-spinner"></span>Loading…</div>
+        <div id="lsp-empty" style="display:none;">No active trailers on board.</div>
+        <div id="lsp-table">
+          <div class="lsp-row-hd">
+            <div class="lsp-hd-cell">Trailer</div>
+            <div class="lsp-hd-cell">Progress</div>
+            <div class="lsp-hd-cell">Door</div>
+            <div class="lsp-hd-cell">Time in Stage</div>
+            <div class="lsp-hd-cell">Status</div>
+          </div>
+          <div id="lsp-rows"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="dispatchView" style="display:none;">
+  <div class="page">
+    <div class="grid-main">
+
+      <div class="col-stack">
+
+        <div class="disp-kpi-bar">
+          <div id="dispKpis" class="kpi-row"></div>
+          <div class="disp-actions">
+            <button class="btn btn-default btn-sm" id="btnShiftSummary">📊 Shift Summary</button>
+            <button class="btn btn-default btn-sm" id="btnHistoryBoard">🕐 History</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-hd">
+            <div class="panel-title"><div class="ptdot" style="background:var(--amber)"></div>Trailer Board</div>
+            <span class="badge badge-num" id="countsPill">0</span>
+          </div>
+          <div class="filter-bar">
+            <div class="field"><label class="fl">Search</label><input id="search" placeholder="Trailer, door, note…" aria-label="Search trailers" inputmode="search" autocomplete="off"/></div>
+            <div class="field"><label class="fl">Direction</label>
+              <select id="filterDir" aria-label="Filter by direction"><option value="">All Directions</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
+            </div>
+            <div class="field"><label class="fl">Status</label>
+              <select id="filterStatus" aria-label="Filter by status"><option value="">All Statuses</option><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select>
+            </div>
+            <div class="tight"><button class="btn btn-default btn-sm" id="btnClearFilters" style="margin-top:14px;">Clear</button></div>
+          </div>
+          <div class="tbl-hd">
+            <span>Trailer</span><span>Dir</span><span>Status</span><span>Door</span>
+            <span>Type</span><span>Note</span><span>Updated</span><span id="actionsColHead">Actions</span>
+          </div>
+          <div id="tbody"></div>
+          <div class="board-footer" role="status" aria-live="polite"><span id="lastUpdated">—</span><span id="boardCountStr">—</span></div>
+        </div>
+
+        <div class="panel" id="dockMapCard">
+          <div class="panel-hd">
+            <div class="panel-title"><div class="ptdot" style="background:var(--cyan)"></div>Door Occupancy Map</div>
+            <span class="badge" id="dockMapFreeCount" style="color:var(--green);">—</span>
+          </div>
+          <div class="panel-body" style="padding:10px 12px;">
+            <div class="dock-map-grid" id="dockMapGrid"></div>
+          </div>
+        </div>
+
+        <div class="panel" id="auditCard" style="display:none;">
+          <div class="panel-hd">
+            <div class="panel-title"><div class="ptdot" style="background:var(--t2)"></div>Audit Log</div>
+            <span class="badge badge-num" id="auditCount">0</span>
+          </div>
+          <div class="panel-body-flush">
+            <div class="data-tbl-wrap">
+              <table style="min-width:740px;">
+                <thead><tr><th>Time</th><th>Role</th><th>Action</th><th>Entity</th><th>ID</th><th>Details</th><th>IP</th></tr></thead>
+                <tbody id="auditBody"><tr><td colspan="7" style="padding:16px;color:var(--t2);">Click Audit to load.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel" id="dockPlatesCard">
+          <button class="acc-head" id="dockPlatesToggle" aria-expanded="false">
+            <span style="display:flex;align-items:center;gap:9px;">Dock Plates (28–42) <span class="badge" id="platesMini">—</span></span>
+            <span class="chev">▾</span>
+          </button>
+          <div class="acc-body" id="dockPlatesBody" style="max-height:0px;overflow:hidden;transition:max-height .3s ease;">
+            <div class="plate-grid" id="platesGrid"></div>
+            <div style="padding:0 12px 10px;font-family:var(--mono);font-size:9px;color:var(--t3);letter-spacing:.04em;">Click Edit on any door to update status or note.</div>
+          </div>
+        </div>
+
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;">
+
+        <div id="adminPanel" class="panel" style="display:none;">
+          <div class="panel-hd">
+            <div class="panel-title"><span class="ptdot" style="background:var(--amber)"></span>⚡ Admin Controls</div>
+          </div>
+          <div class="panel-body">
+            <div class="infobox infobox-amber" style="margin-bottom:12px;">
+              <div class="ib-title">Master Access</div>
+              Full control over all roles and settings.
+            </div>
+            <div class="divider"></div>
+            <button class="btn btn-danger btn-sm" id="btnClearAll" style="width:100%;margin-bottom:16px;">⚠ Clear All Trailers</button>
+            <div class="divider" style="margin-bottom:0;"></div>
+            <button class="acc-head" id="adminPinToggle" aria-expanded="false" style="border-radius:0;border:none;border-bottom:1px solid var(--b0);margin:0 -14px;padding:10px 14px;width:calc(100% + 28px);">
+              <span style="display:flex;align-items:center;gap:7px;font-size:10px;">🔒 PIN Management</span>
+              <span class="chev">▾</span>
+            </button>
+            <div id="adminPinBody" style="max-height:0px;overflow:hidden;transition:max-height .35s ease;">
+            <div style="padding-top:12px;">
+            <div class="pin-row">
+              <div><label class="fl">Dispatcher PIN</label><input type="password" id="pin_dispatcher_a" placeholder="New PIN" aria-label="Dispatcher PIN" autocomplete="new-password"/></div>
+              <div><label class="fl">Confirm</label><input type="password" id="pin_dispatcher_a_confirm" placeholder="Repeat" aria-label="Confirm" autocomplete="new-password"/></div>
+              <button class="btn btn-success btn-sm" id="btnSetDispatcherPinA" style="padding:7px 13px;">Set</button>
+            </div>
+            <div class="pin-row">
+              <div><label class="fl">Dock PIN</label><input type="password" id="pin_dock_a" placeholder="New PIN" aria-label="Dock PIN" autocomplete="new-password"/></div>
+              <div><label class="fl">Confirm</label><input type="password" id="pin_dock_a_confirm" placeholder="Repeat" aria-label="Confirm" autocomplete="new-password"/></div>
+              <button class="btn btn-success btn-sm" id="btnSetDockPinA" style="padding:7px 13px;">Set</button>
+            </div>
+            <div class="pin-row">
+              <div><label class="fl">Management PIN</label><input type="password" id="pin_management_a" placeholder="New PIN" aria-label="Management PIN" autocomplete="new-password"/></div>
+              <div><label class="fl">Confirm</label><input type="password" id="pin_management_a_confirm" placeholder="Repeat" aria-label="Confirm" autocomplete="new-password"/></div>
+              <button class="btn btn-success btn-sm" id="btnSetManagementPinA" style="padding:7px 13px;">Set</button>
+            </div>
+            <div class="pin-row">
+              <div><label class="fl">Admin PIN</label><input type="password" id="pin_admin_a" placeholder="New PIN" aria-label="Admin PIN" autocomplete="new-password"/></div>
+              <div><label class="fl">Confirm</label><input type="password" id="pin_admin_a_confirm" placeholder="Repeat" aria-label="Confirm" autocomplete="new-password"/></div>
+              <button class="btn btn-success btn-sm" id="btnSetAdminPinA" style="padding:7px 13px;">Set</button>
+            </div>
+            </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel side-sticky">
+          <div class="panel-hd">
+            <div class="panel-title" id="panelTitle">Controls</div>
+            <span class="badge" id="panelSub">—</span>
+          </div>
+          <div class="panel-body" id="panelBody"></div>
+        </div>
+
+      </div>
+      </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true">
+  <div class="toast-bar" id="toastBar"></div>
+  <strong id="toastTitle">Notification</strong>
+  <div class="t-body" id="toastBody"></div>
+</div>
+
+</main>
+<script src="/app.js?v=3.6.0"></script>
+
+<!-- ══ LOAD STATUS HISTORY MODAL ══ -->
+<div class="modal-ov hidden" id="statusHistoryOv">
+  <div class="modal ss-modal" style="max-width:480px;">
+    <div class="m-hd">
+      <div>
+        <span class="m-title">📊 Load Status History</span>
+        <div id="sh-trailer-label" style="font-family:var(--mono);font-size:11px;color:var(--t2);margin-top:2px;"></div>
+      </div>
+      <button class="m-close" id="shClose">✕</button>
+    </div>
+    <div class="m-body" id="sh-body" style="padding:16px;overflow-y:auto;max-height:70vh;">
+      <style>
+        .sh-timeline{position:relative;padding-left:26px;}
+        .sh-timeline::before{content:"";position:absolute;left:9px;top:4px;bottom:4px;width:2px;background:var(--b1);}
+        .sh-step{position:relative;margin-bottom:16px;}
+        .sh-step:last-child{margin-bottom:0;}
+        .sh-dot{position:absolute;left:-22px;top:4px;width:14px;height:14px;border-radius:50%;border:2px solid var(--bg,#0a0d12);z-index:1;}
+        .sh-dot-done{background:var(--green);}
+        .sh-dot-active{background:var(--amber);box-shadow:0 0 8px var(--amber);}
+        .sh-dot-event{background:var(--cyan);}
+        .sh-dot-pending{background:var(--b1);}
+        .sh-step-header{display:flex;align-items:center;gap:8px;margin-bottom:3px;}
+        .sh-status-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;font-family:var(--mono);}
+        .sh-step-time{font-size:10px;color:var(--t3);font-family:var(--mono);}
+        .sh-step-meta{font-size:11px;color:var(--t2);font-family:var(--mono);}
+        .sh-duration{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;background:var(--s2);border:1px solid var(--b1);border-radius:6px;font-size:11px;font-family:var(--mono);color:var(--t1);margin-top:4px;}
+        .sh-dur-warn{border-color:rgba(245,166,35,.3);color:var(--amber);}
+        .sh-dur-over{border-color:rgba(255,69,58,.3);color:var(--red);}
+        .sh-current-badge{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--amber);margin-left:4px;}
+        .sh-summary{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;}
+        .sh-sum-card{background:var(--s2);border:1px solid var(--b1);border-radius:8px;padding:10px 12px;}
+        .sh-sum-lbl{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);font-family:var(--mono);margin-bottom:3px;}
+        .sh-sum-val{font-size:15px;font-weight:700;color:var(--t0);}
+        .sh-loading{padding:24px;text-align:center;font-family:var(--mono);font-size:12px;color:var(--t2);}
+        .sh-err{padding:16px;color:var(--red);font-size:12px;font-family:var(--mono);}
+      </style>
+      <div class="sh-loading" id="sh-loading"><span class="lsp-spinner"></span> Loading history…</div>
+    </div>
+  </div>
+</div>
+<div class="modal-ov hidden" id="staffLoginOv">
+  <div class="modal" style="max-width:340px;">
+    <h4>Staff Sign In</h4>
+    <div class="m-sub">Sign in to access management or admin controls on this page.</div>
+    <div class="field">
+      <label class="fl" for="staffLoginRole">Role</label>
+      <select id="staffLoginRole">
+        <option value="management">Management</option>
+        <option value="admin">⚡ Admin</option>
+        <option value="dispatcher">Dispatcher</option>
+      </select>
+    </div>
+    <div class="field">
+      <label class="fl" for="staffLoginPin">PIN</label>
+      <input id="staffLoginPin" type="password" inputmode="numeric" placeholder="Enter PIN" autocomplete="current-password"/>
+    </div>
+    <div id="staffLoginErr" style="display:none;color:var(--red);font-size:12px;margin-bottom:8px;font-family:var(--mono);"></div>
+    <div class="m-btns">
+      <button class="btn btn-default" id="staffLoginCancel">Cancel</button>
+      <button class="btn btn-primary" id="staffLoginGo">Sign In →</button>
+    </div>
+    <div id="staffLogoutRow" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--b0);">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--t1);margin-bottom:8px;">Signed in as <strong id="staffCurrentRole" style="color:var(--amber);"></strong></div>
+      <button class="btn btn-danger btn-sm btn-full" id="staffLogoutBtn">Sign Out</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-ov hidden" id="dockIssueOv">
+  <div class="modal" style="max-width:420px;">
+    <h4>⚠ Report Trailer Issue</h4>
+    <div class="m-sub" id="dockIssueCtx" style="margin-bottom:14px;font-family:var(--mono);font-size:11px;color:var(--t2);letter-spacing:.04em;"></div>
+
+    <label for="dockIssuePhotoInput" class="issue-photo-zone" id="dockIssuePhotoZone" style="cursor:pointer;">
+    <input type="file" id="dockIssuePhotoInput" accept="image/*" capture="environment" style="display:none;position:absolute;width:0;height:0;opacity:0;" aria-label="Take photo"/>
+      <div id="dockIssueEmpty" class="ipz-empty">
+        <span class="ipz-icon">📷</span>
+        <span class="ipz-label">Tap to take photo</span>
+        <span class="ipz-sub">Optional — helps document the issue</span>
+      </div>
+      <img class="ipz-preview" id="dockIssuePrev" alt="Issue photo preview" style="display:none;"/>
+      <button class="ipz-remove" id="dockIssueRemovePhoto" style="display:none;" aria-label="Remove photo">✕</button>
+    </label>
+
+    <div class="field" style="margin-top:14px;">
+      <label class="fl" for="dockIssueNote">Describe the issue</label>
+      <textarea id="dockIssueNote" rows="3" placeholder="e.g. Rear door damaged, missing load bar, spill in bay 3…" style="resize:none;font-size:16px;line-height:1.5;"></textarea>
+    </div>
+
+    <div id="dockIssueErr" style="display:none;padding:8px 10px;border-radius:6px;background:var(--red-bg);border:1px solid var(--red-bd);color:var(--red);font-size:12px;font-family:var(--mono);margin-top:8px;"></div>
+
+    <div class="m-btns" style="margin-top:16px;">
+      <button class="btn" id="dockIssueCancelBtn">Cancel</button>
+      <button class="btn btn-red" id="dockIssueSubmitBtn">Submit Report</button>
+    </div>
+  </div>
+</div>
+
+<div class="issue-lightbox" id="issueLightbox">
+  <button class="issue-lightbox-close" id="issueLightboxClose" aria-label="Close photo">✕</button>
+  <img id="issueLightboxImg" src="" alt="Issue photo"/>
+</div>
+
+
+<div class="modal-ov hidden" id="quickIssueOv">
+  <div class="modal qi-modal">
+    <div class="m-hd">
+      <div>
+        <span class="m-title">⚠ Report Issue</span>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--t2);margin-top:2px">
+          <span id="qi_trailer" style="color:var(--amber)"></span> · <span id="qi_door"></span>
+        </div>
+      </div>
+      <button class="m-close" onclick="document.getElementById('quickIssueOv').classList.add('hidden')">✕</button>
+    </div>
+    <div class="m-body" style="padding:16px;">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--t3);margin-bottom:10px;letter-spacing:.06em;">SELECT REASON(S)</div>
+      <div class="qi-reasons">
+        <button class="qi-reason-btn" data-reason="Damage">🔨 Damage</button>
+        <button class="qi-reason-btn" data-reason="Wrong trailer">❌ Wrong trailer</button>
+        <button class="qi-reason-btn" data-reason="Blocked door">🚧 Blocked door</button>
+        <button class="qi-reason-btn" data-reason="Load not ready">📦 Load not ready</button>
+        <button class="qi-reason-btn" data-reason="Seal broken">🔓 Seal broken</button>
+        <button class="qi-reason-btn" data-reason="Safety hazard">⚠ Safety hazard</button>
+        <button class="qi-reason-btn" data-reason="No paperwork">📋 No paperwork</button>
+        <button class="qi-reason-btn" data-reason="Mechanical issue">🔧 Mechanical</button>
+      </div>
+      <textarea id="qi_note" placeholder="Additional notes (optional)…" style="width:100%;margin-top:12px;padding:10px;background:var(--s2);border:1px solid var(--b1);border-radius:var(--r);color:var(--t0);font-size:13px;min-height:70px;resize:vertical;box-sizing:border-box;"></textarea>
+      <button class="btn btn-danger btn-full" id="btnQuickIssueSubmit" style="margin-top:12px;min-height:52px;font-size:15px;">Submit Issue Report</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-ov hidden" id="dockReserveOv">
+  <div class="modal qi-modal">
+    <div class="m-hd">
+      <div>
+        <span class="m-title">🚪 Reserve Door</span>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--t2);margin-top:2px">for trailer <span id="dr_trailer" style="color:var(--amber)"></span></div>
+      </div>
+      <button class="m-close" onclick="document.getElementById('dockReserveOv').classList.add('hidden')">✕</button>
+    </div>
+    <div class="m-body" style="padding:16px;">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--t3);margin-bottom:10px;letter-spacing:.06em;">SELECT DOOR</div>
+      <div class="dr-door-grid" id="dr_door_grid"></div>
+      <button class="btn btn-primary btn-full" id="btnDockReserveSubmit" style="margin-top:14px;min-height:52px;font-size:15px;">Reserve Door</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-ov hidden" id="serverLogsOv">
+  <div class="modal ss-modal">
+    <div class="m-hd">
+      <span class="m-title">🖥 Server Logs</span>
+      <button class="m-close" onclick="document.getElementById('serverLogsOv').classList.add('hidden')">✕</button>
+    </div>
+    <div class="m-body" id="serverLogsBody" style="padding:0;overflow-y:auto;max-height:70vh;"></div>
+  </div>
+</div>
+
+<div class="modal-ov hidden" id="shiftSummaryOv">
+  <div class="modal ss-modal">
+    <div class="m-hd">
+      <span class="m-title">📊 Shift Summary</span>
+      <button class="m-close" onclick="document.getElementById('shiftSummaryOv').classList.add('hidden')">✕</button>
+    </div>
+    <div class="m-body ss-body" id="shiftSummaryBody"></div>
+  </div>
+</div>
+
+<div class="modal-ov hidden" id="historyBoardOv">
+  <div class="modal ss-modal">
+    <div class="m-hd">
+      <span class="m-title">🕐 Trailer History</span>
+      <button class="m-close" onclick="document.getElementById('historyBoardOv').classList.add('hidden')">✕</button>
+    </div>
+    <div class="m-body" id="historyBoardBody" style="padding:0;overflow-y:auto;max-height:70vh;"></div>
+  </div>
+</div>
+
 </body>
 </html>

@@ -707,6 +707,12 @@
   async function initPush(){
     if(!("serviceWorker" in navigator))return;
     try{
+      // FIX #3: Unregister any stale sw.js registrations so only sw2.js is active.
+      const allRegs=await navigator.serviceWorker.getRegistrations();
+      for(const reg of allRegs){
+        const swUrl=reg.active?.scriptURL||reg.installing?.scriptURL||reg.waiting?.scriptURL||"";
+        if(swUrl.endsWith("/sw.js"))await reg.unregister();
+      }
       const reg=await navigator.serviceWorker.register("/sw2.js",{scope:"/"});
       navigator.serviceWorker.addEventListener("message",e=>{if(e.data?.type==="SW_UPDATED")location.reload();});
       reg.addEventListener("updatefound",()=>{
@@ -1514,7 +1520,7 @@
     ws.onmessage=evt=>{
       lastMsg=Date.now();let msg;try{msg=JSON.parse(evt.data);}catch{return;}
       const{type,payload}=msg||{};
-      if(type==="state"){trailers=payload||{};renderBoard();if(isSuper())renderSupBoard();if(isDock()){renderDockView();if(window._loadStatusRefresh&&document.getElementById("lsp-body")?.classList.contains("lsp-open"))window._loadStatusRefresh();}if(isAdmin()&&!isSuper())renderBoard();}
+      if(type==="state"){trailers=payload||{};renderBoard();if(isSuper())renderSupBoard();if(isDock()){renderDockView();window._lspAutoRefresh?.();if(window._loadStatusRefresh&&document.getElementById("lsp-body")?.classList.contains("lsp-open"))window._loadStatusRefresh();}if(isAdmin()&&!isSuper())renderBoard();}
       else if(type==="dockplates"){dockPlates=payload||{};if(!isDriver())renderPlates();}
       else if(type==="doorblocks"){doorBlocks=payload||{};renderDockMap();renderBoard();}
       else if(type==="confirmations"){confirmations=Array.isArray(payload)?payload:[];if(isSuper())renderSupConf();}
@@ -1570,82 +1576,81 @@
     syncStaffButtons();initStaffLogin._sync=syncStaffButtons;
   }
 
+  // FIX #2: These functions are defined at module scope so the global click
+  // handler can reach them regardless of when loadInitial() resolves.
+
+  async function openServerLogs(){
+    const ov=el("serverLogsOv");if(!ov)return;
+    ov.classList.remove("hidden");el("serverLogsBody").innerHTML='<div style="text-align:center;padding:20px;color:var(--t2)">Loading…</div>';
+    try{
+      const logs=await apiJson("/api/logs");
+      const levelColor={error:"var(--red)",warn:"var(--amber)",info:"var(--t2)"};
+      const fmt=ts=>new Date(ts).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+      if(!logs.length){el("serverLogsBody").innerHTML='<div style="color:var(--t3);padding:16px">No logs yet</div>';return;}
+      el("serverLogsBody").innerHTML=logs.map(l=>`<div class="log-row"><span class="log-time">${fmt(l.at)}</span><span class="log-level" style="color:${levelColor[l.level]||"var(--t2)"}">${(l.level||"").toUpperCase()}</span><span class="log-ctx" style="color:var(--cyan)">${l.context||""}</span><span class="log-msg">${l.message||""}</span>${l.detail?`<span class="log-detail">${l.detail}</span>`:""}</div>`).join("");
+    }catch{el("serverLogsBody").innerHTML='<div style="color:var(--red);padding:16px">Failed to load logs (admin only)</div>';}
+  }
+
+  async function openShiftSummary(){
+    const ov=el("shiftSummaryOv");if(!ov)return;
+    ov.classList.remove("hidden");el("shiftSummaryBody").innerHTML='<div style="text-align:center;padding:30px;color:var(--t2)">Loading…</div>';
+    try{
+      const data=await apiJson("/api/shift-summary?hours=12");
+      const fmt=ts=>ts?new Date(ts).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):"—";
+      const statusColors={Incoming:"var(--t2)",Dropped:"var(--amber)",Loading:"var(--amber)","Dock Ready":"var(--cyan)",Ready:"var(--green)",Departed:"var(--t3)"};
+      const kpiHtml=[
+        {v:data.total,l:"Total Trailers",c:"var(--amber)"},{v:data.active,l:"Still Active",c:"var(--cyan)"},
+        {v:data.departed,l:"Departed",c:"var(--t3)"},{v:data.arrivals,l:"Arrivals",c:"var(--green)"},
+        {v:data.omw,l:"OMW Events",c:"var(--t2)"},{v:data.issues,l:"Issues Filed",c:"var(--red)"},
+      ].map(k=>`<div class="ss-kpi"><div class="ss-kval" style="color:${k.c}">${k.v}</div><div class="ss-klbl">${k.l}</div></div>`).join("");
+      const byStatusHtml=Object.entries(data.byStatus||{}).map(([s,n])=>`<div class="ss-stat-row"><span style="color:${statusColors[s]||"var(--t1)"}">${s}</span><span class="ss-stat-n">${n}×</span></div>`).join("")||"<div style='color:var(--t3)'>No changes</div>";
+      const eventsHtml=(data.recentEvents||[]).slice(0,30).map(e=>{
+        const detail=e.details?.status||e.details?.door||e.details?.eta?` <span style="color:var(--t3);font-size:10px">${e.details.status||e.details.door||""}</span>`:"";
+        return`<div class="ss-ev"><span class="ss-ev-time">${fmt(e.at)}</span><span class="ss-ev-actor" style="color:var(--amber)">${e.actor}</span><span class="ss-ev-action">${e.action.replace(/_/g," ")}</span><span class="ss-ev-entity" style="color:var(--cyan)">${e.entity||""}</span>${detail}</div>`;
+      }).join("")||"<div style='color:var(--t3)'>No events</div>";
+      el("shiftSummaryBody").innerHTML=`
+        <div class="ss-section"><div class="ss-title">Last 12 Hours — ${new Date(data.since).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})} to now</div></div>
+        <div class="ss-kpi-row">${kpiHtml}</div>
+        <div class="ss-cols"><div class="ss-col"><div class="ss-section-hd">Status Changes</div>${byStatusHtml}</div><div class="ss-col"><div class="ss-section-hd">Recent Activity</div><div class="ss-events">${eventsHtml}</div></div></div>`;
+    }catch{el("shiftSummaryBody").innerHTML='<div style="color:var(--red);padding:20px">Failed to load summary</div>';}
+  }
+
+  async function openHistoryBoard(){
+    const ov=el("historyBoardOv");if(!ov)return;
+    ov.classList.remove("hidden");el("historyBoardBody").innerHTML='<div style="text-align:center;padding:30px;color:var(--t2)">Loading audit log…</div>';
+    try{
+      const data=await apiJson("/api/audit?limit=200");
+      const events=(data||[]).filter(e=>["trailer_update","trailer_create","trailer_status_set","upsert"].includes(e.action));
+      const fmt=ts=>new Date(ts).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
+      const statusColors={Incoming:"var(--t2)",Dropped:"var(--amber)",Loading:"var(--amber)","Dock Ready":"var(--cyan)",Ready:"var(--green)",Departed:"var(--t3)"};
+      if(!events.length){el("historyBoardBody").innerHTML='<div style="color:var(--t3);padding:20px">No trailer history found</div>';return;}
+      el("historyBoardBody").innerHTML=`<div class="hist-hd"><span>Time</span><span>Actor</span><span>Trailer</span><span>Change</span></div>${events.map(e=>{
+        let det={};try{det=JSON.parse(e.details||"{}");}catch{}
+        const status=det.status||det.after?.status||"",door=det.door||det.after?.door||"";
+        const change=[status&&`<span style="color:${statusColors[status]||"var(--t1)"}">${status}</span>`,door&&`Door ${door}`].filter(Boolean).join(" · ")||e.action.replace(/_/g," ");
+        return`<div class="hist-row"><span class="hist-time">${fmt(e.at)}</span><span class="hist-actor" style="color:var(--amber)">${e.actorRole||"—"}</span><span class="hist-trailer" style="color:var(--cyan);font-family:var(--mono)">${e.entityId||"—"}</span><span class="hist-change">${change}</span></div>`;
+      }).join("")}`;
+    }catch{el("historyBoardBody").innerHTML='<div style="color:var(--red);padding:20px">Failed to load history</div>';}
+  }
+
+  function initQuickDrop(){
+    const input=el("quickDropTrailer");if(!input)return;
+    let debounce;
+    input.addEventListener("input",()=>{
+      clearTimeout(debounce);const val=input.value.trim().toUpperCase();if(val.length<3)return;
+      debounce=setTimeout(async()=>{
+        try{
+          await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer:val,direction:"Inbound",status:"Dropped",dropType:"Loaded",carrierType:"Outside"})});
+          showToast(`✅ Trailer ${val} dropped!`,"ok");
+          input.value="";input.classList.add("quick-drop-success");setTimeout(()=>input.classList.remove("quick-drop-success"),1500);
+        }catch{showToast("Quick drop failed","err");}
+      },800);
+    });
+  }
+
   loadInitial().then(()=>{
     syncBottomNav();initToastSwipe();initPullToRefresh();initKeyboardAvoidance();initSwipeViews();initPwaInstall();
     initStaffLogin();initStaffLogin._sync?.();initIssueCamera();initIssueLightbox();initDockIssueModal();
-
-    async function openServerLogs(){
-      const ov=el("serverLogsOv");if(!ov)return;
-      ov.classList.remove("hidden");el("serverLogsBody").innerHTML='<div style="text-align:center;padding:20px;color:var(--t2)">Loading…</div>';
-      try{
-        // BUG FIX: was calling undefined apiFetch — now uses apiJson
-        const logs=await apiJson("/api/logs");
-        const levelColor={error:"var(--red)",warn:"var(--amber)",info:"var(--t2)"};
-        const fmt=ts=>new Date(ts).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"});
-        if(!logs.length){el("serverLogsBody").innerHTML='<div style="color:var(--t3);padding:16px">No logs yet</div>';return;}
-        el("serverLogsBody").innerHTML=logs.map(l=>`<div class="log-row"><span class="log-time">${fmt(l.at)}</span><span class="log-level" style="color:${levelColor[l.level]||"var(--t2)"}">${(l.level||"").toUpperCase()}</span><span class="log-ctx" style="color:var(--cyan)">${l.context||""}</span><span class="log-msg">${l.message||""}</span>${l.detail?`<span class="log-detail">${l.detail}</span>`:""}</div>`).join("");
-      }catch{el("serverLogsBody").innerHTML='<div style="color:var(--red);padding:16px">Failed to load logs (admin only)</div>';}
-    }
-
-    async function openShiftSummary(){
-      const ov=el("shiftSummaryOv");if(!ov)return;
-      ov.classList.remove("hidden");el("shiftSummaryBody").innerHTML='<div style="text-align:center;padding:30px;color:var(--t2)">Loading…</div>';
-      try{
-        // BUG FIX: was calling undefined apiFetch — now uses apiJson
-        const data=await apiJson("/api/shift-summary?hours=12");
-        const fmt=ts=>ts?new Date(ts).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):"—";
-        const statusColors={Incoming:"var(--t2)",Dropped:"var(--amber)",Loading:"var(--amber)","Dock Ready":"var(--cyan)",Ready:"var(--green)",Departed:"var(--t3)"};
-        const kpiHtml=[
-          {v:data.total,l:"Total Trailers",c:"var(--amber)"},{v:data.active,l:"Still Active",c:"var(--cyan)"},
-          {v:data.departed,l:"Departed",c:"var(--t3)"},{v:data.arrivals,l:"Arrivals",c:"var(--green)"},
-          {v:data.omw,l:"OMW Events",c:"var(--t2)"},{v:data.issues,l:"Issues Filed",c:"var(--red)"},
-        ].map(k=>`<div class="ss-kpi"><div class="ss-kval" style="color:${k.c}">${k.v}</div><div class="ss-klbl">${k.l}</div></div>`).join("");
-        const byStatusHtml=Object.entries(data.byStatus||{}).map(([s,n])=>`<div class="ss-stat-row"><span style="color:${statusColors[s]||"var(--t1)"}">${s}</span><span class="ss-stat-n">${n}×</span></div>`).join("")||"<div style='color:var(--t3)'>No changes</div>";
-        const eventsHtml=(data.recentEvents||[]).slice(0,30).map(e=>{
-          const detail=e.details?.status||e.details?.door||e.details?.eta?` <span style="color:var(--t3);font-size:10px">${e.details.status||e.details.door||""}</span>`:"";
-          return`<div class="ss-ev"><span class="ss-ev-time">${fmt(e.at)}</span><span class="ss-ev-actor" style="color:var(--amber)">${e.actor}</span><span class="ss-ev-action">${e.action.replace(/_/g," ")}</span><span class="ss-ev-entity" style="color:var(--cyan)">${e.entity||""}</span>${detail}</div>`;
-        }).join("")||"<div style='color:var(--t3)'>No events</div>";
-        el("shiftSummaryBody").innerHTML=`
-          <div class="ss-section"><div class="ss-title">Last 12 Hours — ${new Date(data.since).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})} to now</div></div>
-          <div class="ss-kpi-row">${kpiHtml}</div>
-          <div class="ss-cols"><div class="ss-col"><div class="ss-section-hd">Status Changes</div>${byStatusHtml}</div><div class="ss-col"><div class="ss-section-hd">Recent Activity</div><div class="ss-events">${eventsHtml}</div></div></div>`;
-      }catch{el("shiftSummaryBody").innerHTML='<div style="color:var(--red);padding:20px">Failed to load summary</div>';}
-    }
-
-    async function openHistoryBoard(){
-      const ov=el("historyBoardOv");if(!ov)return;
-      ov.classList.remove("hidden");el("historyBoardBody").innerHTML='<div style="text-align:center;padding:30px;color:var(--t2)">Loading audit log…</div>';
-      try{
-        // BUG FIX: was calling undefined apiFetch — now uses apiJson, and data is already parsed
-        const data=await apiJson("/api/audit?limit=200");
-        const events=(data||[]).filter(e=>["trailer_update","trailer_create","trailer_status_set","upsert"].includes(e.action));
-        const fmt=ts=>new Date(ts).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
-        const statusColors={Incoming:"var(--t2)",Dropped:"var(--amber)",Loading:"var(--amber)","Dock Ready":"var(--cyan)",Ready:"var(--green)",Departed:"var(--t3)"};
-        if(!events.length){el("historyBoardBody").innerHTML='<div style="color:var(--t3);padding:20px">No trailer history found</div>';return;}
-        el("historyBoardBody").innerHTML=`<div class="hist-hd"><span>Time</span><span>Actor</span><span>Trailer</span><span>Change</span></div>${events.map(e=>{
-          let det={};try{det=JSON.parse(e.details||"{}");}catch{}
-          const status=det.status||det.after?.status||"",door=det.door||det.after?.door||"";
-          const change=[status&&`<span style="color:${statusColors[status]||"var(--t1)"}">${status}</span>`,door&&`Door ${door}`].filter(Boolean).join(" · ")||e.action.replace(/_/g," ");
-          return`<div class="hist-row"><span class="hist-time">${fmt(e.at)}</span><span class="hist-actor" style="color:var(--amber)">${e.actorRole||"—"}</span><span class="hist-trailer" style="color:var(--cyan);font-family:var(--mono)">${e.entityId||"—"}</span><span class="hist-change">${change}</span></div>`;
-        }).join("")}`;
-      }catch{el("historyBoardBody").innerHTML='<div style="color:var(--red);padding:20px">Failed to load history</div>';}
-    }
-
-    function initQuickDrop(){
-      const input=el("quickDropTrailer");if(!input)return;
-      let debounce;
-      input.addEventListener("input",()=>{
-        clearTimeout(debounce);const val=input.value.trim().toUpperCase();if(val.length<3)return;
-        debounce=setTimeout(async()=>{
-          // BUG FIX: was calling undefined apiFetch — now uses apiJson
-          try{
-            await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer:val,direction:"Inbound",status:"Dropped",dropType:"Loaded",carrierType:"Outside"})});
-            showToast(`✅ Trailer ${val} dropped!`,"ok");
-            input.value="";input.classList.add("quick-drop-success");setTimeout(()=>input.classList.remove("quick-drop-success"),1500);
-          }catch{showToast("Quick drop failed","err");}
-        },800);
-      });
-    }
 
     /* ══════════════════════════════════════════════════════
        LOAD STATUS TRACKER — dock view panel + history modal
@@ -1833,15 +1838,17 @@
       q("statusHistoryOv")?.addEventListener("click",e=>{if(e.target===q("statusHistoryOv")){q("statusHistoryOv").classList.add("hidden");unlockScroll();}});
       document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!q("statusHistoryOv")?.classList.contains("hidden")){q("statusHistoryOv").classList.add("hidden");unlockScroll();}});
 
-      // ── Re-render on WS state update if panel is open ──
-      const _origRenderDock=renderDockView;
-      window._lspRenderDock=function(){
-        _origRenderDock.apply(this,arguments);
+      // FIX #1: Actually replace the renderDockView reference so WS state
+      // updates trigger a load-status refresh when the panel is open.
+      // We patch the module-level renderDockView via a wrapper stored on
+      // the shared _lspRenderDock symbol and called from the WS onmessage.
+      window._loadStatusRefresh=loadStatusData;
+
+      // Expose hook so the WS handler (which runs after this IIFE) can call
+      // loadStatusData whenever it re-renders the dock view.
+      window._lspAutoRefresh=function(){
         if(q("lsp-body")?.classList.contains("lsp-open"))loadStatusData();
       };
-
-      // Expose for WS hook
-      window._loadStatusRefresh=loadStatusData;
 
     })(); // end initLoadStatusTracker
 

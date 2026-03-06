@@ -959,7 +959,7 @@ body{background-image:none!important;background:transparent!important}
     transition:border-color .15s; white-space:nowrap;
   }
   #dockView .dv-chip:active { opacity:.8; }
-  #dockView .dv-ws-dot { width:6px; height:6px; border-radius:50%; background:var(--green); box-shadow:0 0 7px rgba(25,224,154,.7); flex-shrink:0; }
+  #dockView .dv-ws-dot { width:6px; height:6px; border-radius:50%; background:#f5a623; box-shadow:0 0 7px rgba(245,166,35,.5); flex-shrink:0; transition:background .3s, box-shadow .3s; }
   #dockView .dv-ws-dot.dv-bad { background:var(--red); box-shadow:0 0 7px rgba(240,74,74,.5); }
 
   /* ── Incoming banner ── */
@@ -1154,6 +1154,9 @@ body{background-image:none!important;background:transparent!important}
     max-width:calc(100vw - 40px); text-align:center; white-space:nowrap;
   }
   #dockView .dv-toast.dv-on { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* Loading spinner */
+  @keyframes dv-load-spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
 
   /* Card entrance animation */
   @keyframes dv-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }

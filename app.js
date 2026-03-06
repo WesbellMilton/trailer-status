@@ -667,8 +667,11 @@
 
   function syncDockWsDot(state){
     const dot=el("dockWsDot"),txt=el("dockWsText");if(!dot||!txt)return;
-    dot.className="live-dot "+state;
-    txt.textContent=state==="ok"?"Live":state==="bad"?"Offline":"Connecting…";
+    dot.classList.remove("dv-bad");
+    if(state==="ok"){dot.style.background="var(--green, #19e09a)";dot.style.boxShadow="0 0 7px rgba(25,224,154,.7)";}
+    else if(state==="bad"){dot.style.background="var(--red,#f04a4a)";dot.style.boxShadow="0 0 7px rgba(240,74,74,.5)";}
+    else{dot.style.background="#f5a623";dot.style.boxShadow="0 0 7px rgba(245,166,35,.5)";}
+    txt.textContent=state==="ok"?"Live":state==="bad"?"Offline":"Connecting";
   }
 
   function renderRolePanel(){
@@ -1426,13 +1429,30 @@
       try{const p2=await apiJson("/api/dockplates");dockPlates=p2||{};}catch{dockPlates={};}
       try{const b=await apiJson("/api/doorblocks");doorBlocks=b||{};}catch{doorBlocks={};}
     }
+    // If dock and trailers still empty, schedule a retry in case of slow mobile network
+    if(isDock()&&Object.keys(trailers).length===0){
+      setTimeout(async()=>{
+        try{const t=await apiJson("/api/state");if(t&&Object.keys(t).length){trailers=t;renderDockView();}}catch{}
+      },2500);
+      setTimeout(async()=>{
+        try{const t=await apiJson("/api/state");if(t&&Object.keys(t).length){trailers=t;renderDockView();}}catch{}
+      },6000);
+    }
     if(isSuper()){
       renderSupBoard();renderSupConf();loadAuditInto(null,el("supAuditCount"),0);loadIssueReports();renderPlates();
       const adminPinRow=el("adminPinRow");if(adminPinRow)adminPinRow.style.display=ROLE==="admin"?"":"none";
     }
     if(ROLE==="admin"&&!isSuper()){renderBoard();renderRolePanel();let open=false;try{open=localStorage.getItem("platesOpen")==="1";}catch{}setPlatesOpen(open);}
     else if(ROLE==="management"&&!isSuper()){renderRolePanel();renderBoard();let open=false;try{open=localStorage.getItem("platesOpen")==="1";}catch{}setPlatesOpen(open);}
-    else if(isDock()){initDockView();renderDockView();renderPlates();}
+    else if(isDock()){
+      initDockView();
+      // Show loading skeleton immediately
+      const cards=el("dockCards");
+      if(cards&&Object.keys(trailers).length===0){
+        cards.innerHTML=`<div class="dv-empty"><div class="dv-empty-icon" style="opacity:.2;animation:dv-load-spin 1.2s linear infinite">⟳</div><div class="dv-empty-msg" style="color:var(--t3,#6b8ba8)">Connecting…</div><div style="font-size:12px;color:var(--t3,#6b8ba8);margin-top:4px">Waiting for live data</div></div>`;
+      }
+      renderDockView();renderPlates();
+    }
     else if(!isDriver()&&!isSuper()){renderRolePanel();renderBoard();let open=false;try{open=localStorage.getItem("platesOpen")==="1";}catch{}setPlatesOpen(open);}
   }
 
@@ -1620,7 +1640,14 @@
     const ws=new WebSocket(`${location.protocol==="https:"?"wss":"ws"}://${location.host}`);
     let lastMsg=Date.now();
     const watchdog=setInterval(()=>{if(Date.now()-lastMsg>35000){try{ws.close();}catch{}}},5000);
-    ws.onopen=()=>{wsRetry=0;wsStatus("ok");};
+    ws.onopen=()=>{
+      wsRetry=0;wsStatus("ok");
+      // If dock view is active and trailers is empty, request a state refresh
+      if(isDock()&&Object.keys(trailers).length===0){
+        // Send a ping-like request to trigger state broadcast, or just re-fetch
+        apiJson("/api/state").then(t=>{if(t){trailers=t;renderDockView();}}).catch(()=>{});
+      }
+    };
     ws.onclose=()=>{
       clearInterval(watchdog);wsStatus("bad");
       const base=Math.min(8000,500+wsRetry++*650),jitter=base*0.3*(Math.random()*2-1);

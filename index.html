@@ -1170,6 +1170,57 @@ body{background-image:none!important;background:transparent!important}
   /* Loading spinner */
   @keyframes dv-load-spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
 
+  /* ── Flashing animations ── */
+  /* Soft glow-pulse for status dots */
+  @keyframes dv-flash-amber  { 0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(245,166,35,0)}  50%{opacity:.7;box-shadow:0 0 0 5px rgba(245,166,35,.18)} }
+  @keyframes dv-flash-cyan   { 0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(24,212,232,0)}   50%{opacity:.7;box-shadow:0 0 0 5px rgba(24,212,232,.18)} }
+  @keyframes dv-flash-green  { 0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(25,224,154,0)}   50%{opacity:.7;box-shadow:0 0 0 5px rgba(25,224,154,.18)} }
+  @keyframes dv-flash-violet { 0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(176,82,217,0)}   50%{opacity:.7;box-shadow:0 0 0 5px rgba(176,82,217,.18)} }
+
+  /* Card left-stripe flash */
+  @keyframes dv-stripe-amber  { 0%,100%{opacity:1} 50%{opacity:.35} }
+  @keyframes dv-stripe-cyan   { 0%,100%{opacity:1} 50%{opacity:.3} }
+  @keyframes dv-stripe-green  { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+  /* Incoming truck icon — more dramatic swing + scale */
+  @keyframes dv-truck-bounce { 0%{transform:translateX(0) scale(1)} 40%{transform:translateX(5px) scale(1.15)} 70%{transform:translateX(-2px) scale(.95)} 100%{transform:translateX(0) scale(1)} }
+
+  /* Arriving now — urgent flash */
+  @keyframes dv-arriving-flash { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(.97)} }
+
+  /* WS connecting dot */
+  @keyframes dv-ws-blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+  /* Filter pill dots */
+  @keyframes dv-pill-dot { 0%,100%{transform:scale(1)} 50%{transform:scale(1.5)} }
+
+  /* Apply flashing ── */
+
+  /* Status badge dots */
+  #dockView .dv-st-loading::before   { animation:dv-flash-amber  1.6s ease-in-out infinite; }
+  #dockView .dv-st-dockready::before { animation:dv-flash-cyan   2s   ease-in-out infinite; }
+  #dockView .dv-st-ready::before     { animation:dv-flash-green  2.4s ease-in-out infinite; }
+  #dockView .dv-st-dropped::before   { animation:dv-flash-violet 2s   ease-in-out infinite; }
+  #dockView .dv-st-incoming::before  { animation:dv-flash-amber  1.2s ease-in-out infinite; }
+
+  /* Card left accent stripe */
+  #dockView .dv-card.dv-loading::before   { animation:dv-stripe-amber 1.6s ease-in-out infinite; }
+  #dockView .dv-card.dv-dockready::before { animation:dv-stripe-cyan  2s   ease-in-out infinite; }
+  #dockView .dv-card.dv-ready::before     { animation:dv-stripe-green 2.4s ease-in-out infinite; }
+  #dockView .dv-card.dv-incoming::before  { animation:dv-stripe-amber 1.2s ease-in-out infinite; }
+
+  /* Filter pill dots — only active filter pulses */
+  #dockView .dv-fpill.dv-on .dv-fpill-dot { animation:dv-pill-dot 1.8s ease-in-out infinite; }
+
+  /* Incoming truck icon */
+  #dockView .dv-incoming-icon { animation:dv-truck-bounce 1s cubic-bezier(.4,0,.2,1) infinite; }
+
+  /* ETA arriving badge */
+  #dockView .dv-eta.dv-arriving { animation:dv-arriving-flash .7s ease-in-out infinite !important; }
+
+  /* WS dot — blink when connecting, steady glow when live */
+  #dockView .dv-ws-dot[style*="f5a623"] { animation:dv-ws-blink .9s ease-in-out infinite; }
+
   /* Card entrance animation */
   @keyframes dv-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
   #dockView .dv-cards .dv-card { animation:dv-in .2s cubic-bezier(.4,0,.2,1) both; }

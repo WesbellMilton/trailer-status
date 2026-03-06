@@ -359,161 +359,236 @@
     <div class="infobox infobox-cyan"><div class="ib-title">Dock Workflow</div>1. Trailer arrives → tap <strong>Loading</strong><br/>2. Loading done → tap <strong>Dock Ready</strong><br/>3. Dispatcher confirms → driver notified.</div>
     <div style="font-size:11px;color:var(--t2);">No dispatch controls on Dock role.</div>`;}
 
+  // ── DOCK VIEW ──────────────────────────────────────────────────────────
   let dockFilter="active";
   const DOCK_STATUS_NEXT={
-    Incoming:{label:"Mark Loading",to:"Loading",cls:"dc-btn-default"},
-    Dropped:{label:"Mark Loading",to:"Loading",cls:"dc-btn-default"},
-    Loading:{label:"Mark Dock Ready",to:"Dock Ready",cls:"dc-btn-cyan"},
-    "Dock Ready":{label:"Awaiting dispatcher",to:null,cls:""},
-    Ready:{label:"Ready for pickup",to:null,cls:""},
-    Departed:{label:"Departed",to:null,cls:""},
+    Incoming:   {label:"Mark Loading",   to:"Loading",    cta:"dv-cta-amber"},
+    Dropped:    {label:"Mark Loading",   to:"Loading",    cta:"dv-cta-amber"},
+    Loading:    {label:"Mark Dock Ready",to:"Dock Ready", cta:"dv-cta-cyan"},
+    "Dock Ready":{label:"Awaiting dispatcher",to:null,    cta:"dv-cta-locked"},
+    Ready:      {label:"Ready for pickup",to:null,        cta:"dv-cta-locked"},
+    Departed:   {label:"Departed",       to:null,         cta:"dv-cta-locked"},
   };
-  const DOCK_STATUS_COLOR={Incoming:"dc-incoming",Dropped:"dc-dropped",Loading:"dc-loading","Dock Ready":"dc-dockready",Ready:"dc-ready",Departed:"dc-departed"};
+  const DV_COLOR_MAP={Incoming:"dv-c-incoming",Dropped:"dv-c-dropped",Loading:"dv-c-loading","Dock Ready":"dv-c-dockready",Ready:"dv-c-ready",Departed:"dv-c-departed"};
+  const DV_BADGE_MAP={Incoming:"dv-sb-incoming",Dropped:"dv-sb-dropped",Loading:"dv-sb-loading","Dock Ready":"dv-sb-dockready",Ready:"dv-sb-ready",Departed:"dv-sb-departed"};
+  const DV_DOT_COLOR={Loading:"var(--amber)","Dock Ready":"var(--cyan)",Ready:"var(--green)",Dropped:"var(--violet)",Incoming:"var(--t3)",Departed:"var(--b1)"};
+
+  function dvShow(id){
+    document.querySelectorAll("#dockView .dv-screen").forEach(s=>{
+      if(s.classList.contains("dv-active")){s.classList.add("dv-exit");s.classList.remove("dv-active");setTimeout(()=>s.classList.remove("dv-exit"),350);}
+    });
+    const next=el(id);if(next)next.classList.add("dv-active");
+  }
+
+  function dvToast(msg,dur=3000){
+    const t=el("dvToast");if(!t)return;
+    t.textContent=msg;t.classList.add("dv-toast-on");
+    clearTimeout(dvToast._t);dvToast._t=setTimeout(()=>t.classList.remove("dv-toast-on"),dur);
+  }
+
+  function dvUpdateHome(){
+    const vals=Object.values(trailers);
+    const loading=vals.filter(r=>r.status==="Loading").length;
+    const dockReady=vals.filter(r=>r.status==="Dock Ready").length;
+    const active=vals.filter(r=>r.status!=="Departed").length;
+    const all=vals.length;
+    if(el("dvHeroNum"))el("dvHeroNum").textContent=active;
+    if(el("dvHeroSub")){
+      const parts=[];
+      if(loading)parts.push(`${loading} loading`);
+      if(dockReady)parts.push(`${dockReady} dock ready`);
+      el("dvHeroSub").textContent=parts.length?parts.join(" · "):"Board is clear";
+    }
+    if(el("dvBadgeLoading"))el("dvBadgeLoading").textContent=loading;
+    if(el("dvBadgeDockReady"))el("dvBadgeDockReady").textContent=dockReady;
+    if(el("dvBadgeAll"))el("dvBadgeAll").textContent=all;
+    if(el("dvRoleLabel"))el("dvRoleLabel").textContent=ROLE?ROLE.charAt(0).toUpperCase()+ROLE.slice(1):"Sign in";
+  }
 
   function renderDockView(){
-    const cards=el("dockCards"),countEl=el("dockCount");
-    if(!cards)return;
+    const cards=el("dockCards");if(!cards)return;
+    dvUpdateHome();
     const q=(el("dockSearch")?.value||"").trim().toLowerCase();
     const rows=Object.entries(trailers).map(([t,r])=>({trailer:t,...r}))
       .filter(r=>{
         if(dockFilter==="active"&&r.status==="Departed")return false;
+        if(dockFilter==="loading"&&r.status!=="Loading")return false;
+        if(dockFilter==="dockready"&&r.status!=="Dock Ready")return false;
         if(q&&!`${r.trailer} ${r.door||""} ${r.note||""} ${r.status||""}`.toLowerCase().includes(q))return false;
         return true;
       })
       .sort((a,b)=>{
-        const order={Loading:0,Dropped:1,Incoming:2,"Dock Ready":3,Ready:4,Departed:5};
-        const so=(order[a.status]??9)-(order[b.status]??9);
-        return so!==0?so:(a.updatedAt||0)-(b.updatedAt||0);
+        const ord={Loading:0,Dropped:1,Incoming:2,"Dock Ready":3,Ready:4,Departed:5};
+        const d=(ord[a.status]??9)-(ord[b.status]??9);
+        return d!==0?d:(a.updatedAt||0)-(b.updatedAt||0);
       });
-    if(countEl)countEl.textContent=rows.length;
     const canAct=ROLE==="dock"||ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin";
-    const loginNudge=el("dockLoginNudge");
-    if(loginNudge)loginNudge.style.display=canAct?"none":"";
+    if(el("dockLoginNudge"))el("dockLoginNudge").classList.toggle("dv-show",!canAct);
     clearInterval(_omwTimer);
     if(!rows.length){
-      cards.innerHTML=`<div class="dock-empty">${q?"No trailers match search.":dockFilter==="active"?"No active trailers.":"No trailers on board."}</div>`;
+      const msg=q?"No trailers match.":dockFilter==="active"?"No active trailers.":"No trailers on board.";
+      cards.innerHTML=`<div class="dv-empty"><div class="dv-empty-icon">🏭</div><div class="dv-empty-text">${msg}</div><div class="dv-empty-sub">Board is clear</div></div>`;
       return;
     }
-    if(el("btnDockViewToggle")?.dataset.view==="map"){renderDockDoorMapView(cards,rows,canAct);return;}
-    const statusDot={Loading:"var(--amber)","Dock Ready":"var(--cyan)",Ready:"var(--green)",Dropped:"var(--violet)",Incoming:"var(--t2)",Departed:"var(--t3)"};
     cards.innerHTML=rows.map(r=>{
-      const colorCls=DOCK_STATUS_COLOR[r.status]||"",next=DOCK_STATUS_NEXT[r.status];
-      const hasAction=next?.to&&canAct,isSelected=dockSelected.has(r.trailer);
-      const dot=statusDot[r.status]||"var(--t3)";
+      const colorCls=DV_COLOR_MAP[r.status]||"";
+      const badgeCls=DV_BADGE_MAP[r.status]||"";
+      const next=DOCK_STATUS_NEXT[r.status];
+      const hasAction=next?.to&&canAct;
+      const isSelected=dockSelected.has(r.trailer);
       let etaHtml="";
       if(r.omwAt&&r.status==="Incoming"){
-        if(r.omwEta){
-          const remaining=Math.max(0,Math.ceil((r.omwAt+r.omwEta*60000-Date.now())/60000));
-          etaHtml=`<div class="dc-eta-badge ${remaining===0?"dc-eta-now":""}" data-arrives="${r.omwAt+r.omwEta*60000}">🚛 ${remaining===0?"Arriving now":`~${remaining}m`}</div>`;
-        } else {
-          etaHtml=`<div class="dc-eta-badge">🚛 OMW</div>`;
-        }
+        const rem=r.omwEta?Math.max(0,Math.ceil((r.omwAt+r.omwEta*60000-Date.now())/60000)):null;
+        etaHtml=`<span class="dv-eta-tag${rem===0?" dv-eta-now":""}"${rem!==null?` data-arrives="${r.omwAt+r.omwEta*60000}"`:""}>🚛 ${rem===null?"OMW":rem===0?"Arriving now":`~${rem}m`}</span>`;
       }
-      return`<div class="dock-card ${colorCls}${isSelected?" dc-selected":""}" data-trailer="${esc(r.trailer)}" data-swipe-trailer="${esc(r.trailer)}">
-        ${dockBulkMode?`<button class="dc-select-btn ${isSelected?"dc-sel-active":""}" data-act="dockSelect" data-trailer-id="${esc(r.trailer)}">${isSelected?"✓":""}</button>`:""}
-        <div class="dc-top">
-          <div class="dc-trailer-block">
-            <div class="dc-trailer">${esc(r.trailer)}</div>
-            ${r.note?`<div class="dc-note">${esc(r.note)}</div>`:""}
+      const carrierHtml=r.carrierType?`<span class="dv-carrier ${r.carrierType==="Wesbell"?"dv-carrier-wb":"dv-carrier-ext"}">${esc(r.carrierType)}</span>`:"";
+      const doorHtml=r.door?`<div class="dv-door-badge">D${esc(r.door)}</div>`:`<div class="dv-no-door">No door</div>`;
+      const ctaBtn=hasAction
+        ?`<button class="dv-cta ${next.cta}" data-act="dockSet" data-to="${esc(next.to)}" data-trailer-id="${esc(r.trailer)}">${esc(next.label)} →</button>`
+        :next?.to
+          ?`<button class="dv-cta dv-cta-ghost" data-act="openStaffLogin">🔑 Sign in to update</button>`
+          :`<div class="dv-cta dv-cta-locked" style="cursor:default;pointer-events:none">${esc(next?.label||"—")}</div>`;
+      return`<div class="dv-card ${colorCls}${isSelected?" dv-selected":""}" data-trailer="${esc(r.trailer)}" data-swipe-trailer="${esc(r.trailer)}">
+        <div class="dv-card-top">
+          <div>
+            <div class="dv-trailer-num">${esc(r.trailer)}</div>
+            ${r.note?`<div class="dv-card-note" style="margin-top:4px">${esc(r.note)}</div>`:""}
           </div>
-          <div class="dc-right-block">
-            ${r.door?`<div class="dc-door-badge">D${esc(r.door)}</div>`:`<div class="dc-door-empty">No door</div>`}
-            ${r.doorAt&&r.door?`<div class="dc-time-on-door">⏱ ${timeAgo(r.doorAt)}</div>`:""}
-            ${etaHtml}
-            <div class="dc-status-pill" style="--dot:${dot}">${esc(r.status)}</div>
+          <div class="dv-card-right">
+            ${doorHtml}
+            ${r.doorAt&&r.door?`<div style="font-size:10px;color:var(--t3);text-align:right">⏱ ${timeAgo(r.doorAt)}</div>`:""}
+            <div class="dv-status-badge ${badgeCls}">${esc(r.status)}</div>
           </div>
         </div>
-        <div class="dc-meta-row">
-          ${r.carrierType?carrierTag(r.carrierType):""}
-          ${r.updatedAt?`<span class="dc-ago">${esc(timeAgo(r.updatedAt))}</span>`:""}
+        <div class="dv-card-info">
+          ${carrierHtml}${etaHtml}
+          ${r.updatedAt?`<span class="dv-card-ago">${esc(timeAgo(r.updatedAt))}</span>`:""}
         </div>
-        ${hasAction
-          ?`<button class="dc-action-btn ${next.cls}" data-act="dockSet" data-to="${esc(next.to)}" data-trailer-id="${esc(r.trailer)}">${esc(next.label)}</button>`
-          :next?.to
-            ?`<button class="dc-action-btn dc-btn-signin" data-act="openStaffLogin">🔑 Sign in to update</button>`
-            :`<div class="dc-no-action">${esc(next?.label||"—")}</div>`}
-        <div class="dc-bottom-row">
-          ${canAct?`<button class="dc-issue-btn" data-act="dockReportIssue" data-trailer-id="${esc(r.trailer)}" data-door="${esc(r.door||"")}">⚠ Issue</button>`:""}
-          ${canAct&&!r.door?`<button class="dc-reserve-btn" data-act="dockReserveDoor" data-trailer-id="${esc(r.trailer)}">🚪 Reserve Door</button>`:""}
+        ${ctaBtn}
+        <div class="dv-sec-row">
+          ${canAct?`<button class="dv-sec-btn dv-issue-btn" data-act="dockReportIssue" data-trailer-id="${esc(r.trailer)}" data-door="${esc(r.door||"")}">⚠ Issue</button>`:""}
+          ${canAct&&!r.door?`<button class="dv-sec-btn dv-reserve-btn" data-act="dockReserveDoor" data-trailer-id="${esc(r.trailer)}">🚪 Reserve</button>`:""}
         </div>
-        <div class="dc-swipe-hint">← Issue &nbsp;&nbsp; Advance →</div>
+        <div class="dv-swipe-hint">← Issue &nbsp;&nbsp; Advance →</div>
       </div>`;
     }).join("");
     const etaBadges=cards.querySelectorAll("[data-arrives]");
     if(etaBadges.length){
       _omwTimer=setInterval(()=>{
-        etaBadges.forEach(badge=>{
-          const remaining=Math.max(0,Math.ceil((parseInt(badge.dataset.arrives)-Date.now())/60000));
-          badge.textContent=remaining===0?"🚛 Arriving now":`🚛 ~${remaining}m`;
-          if(remaining===0)badge.classList.add("dc-eta-now");
+        etaBadges.forEach(b=>{
+          const rem=Math.max(0,Math.ceil((parseInt(b.dataset.arrives)-Date.now())/60000));
+          b.textContent=rem===0?"🚛 Arriving now":`🚛 ~${rem}m`;
+          if(rem===0)b.classList.add("dv-eta-now");
         });
       },30000);
     }
     initDockCardSwipes();
   }
 
-  function renderDockDoorMapView(cards,rows,canAct){
-    const byDoor={};
-    rows.forEach(r=>{if(r.door)byDoor[r.door]=r;});
+  function renderDockDoorMapView(){
+    const grid=el("dvMapGrid");if(!grid)return;
+    const rows=Object.entries(trailers).map(([t,r])=>({trailer:t,...r}));
+    const byDoor={};rows.forEach(r=>{if(r.door)byDoor[r.door]=r;});
     const doors=[];for(let d=28;d<=42;d++)doors.push(String(d));
-    const statusDot={Loading:"var(--amber)","Dock Ready":"var(--cyan)",Ready:"var(--green)",Dropped:"var(--violet)",Incoming:"var(--t2)",Departed:"var(--t3)"};
-    cards.innerHTML=`<div class="dock-map-full">
-      <div class="dmf-header"><span class="dmf-title">Door Occupancy</span><span class="dmf-free">${doors.filter(d=>!byDoor[d]).length} free</span></div>
-      <div class="dmf-grid">${doors.map(door=>{
-        const r=byDoor[door],blocked=doorBlocks[door];
-        if(blocked)return`<div class="dmf-cell dmf-blocked"><div class="dmf-door">D${door}</div><div class="dmf-status">Blocked</div><div class="dmf-trailer" style="font-size:9px;color:var(--t3)">${esc(blocked.note||"")}</div></div>`;
-        if(!r)return`<div class="dmf-cell dmf-free"><div class="dmf-door">D${door}</div><div class="dmf-status" style="color:var(--green)">Free</div></div>`;
-        return`<div class="dmf-cell dmf-occupied" data-act="dockMapCard" data-trailer-id="${esc(r.trailer)}">
-          <div class="dmf-door">D${door}</div><div class="dmf-trailer-num">${esc(r.trailer)}</div>
-          <div class="dmf-status-dot" style="background:${statusDot[r.status]||"var(--t3)"}"></div>
-          <div class="dmf-status-lbl">${esc(r.status)}</div>
-          ${r.doorAt?`<div class="dmf-age">${timeAgo(r.doorAt)}</div>`:""}
-        </div>`;
-      }).join("")}</div>
-    </div>`;
+    grid.innerHTML=doors.map(door=>{
+      const r=byDoor[door],blocked=doorBlocks[door];
+      if(blocked)return`<div class="dv-map-cell dv-map-blocked"><div class="dv-map-door-num">D${door}</div><div class="dv-map-status">Blocked</div></div>`;
+      if(!r)return`<div class="dv-map-cell dv-map-free"><div class="dv-map-door-num">D${door}</div><div class="dv-map-free-lbl">Free</div></div>`;
+      return`<div class="dv-map-cell dv-map-occupied" data-act="dockMapCard" data-trailer-id="${esc(r.trailer)}">
+        <div class="dv-map-door-num">D${door}</div>
+        <div class="dv-map-trailer">${esc(r.trailer)}</div>
+        <div class="dv-map-dot" style="background:${DV_DOT_COLOR[r.status]||"var(--t3)"}"></div>
+        <div class="dv-map-status">${esc(r.status)}</div>
+        ${r.doorAt?`<div style="font-size:8px;color:var(--t3);font-family:monospace">${timeAgo(r.doorAt)}</div>`:""}
+      </div>`;
+    }).join("");
   }
 
   let _omwTimer=null,dockBulkMode=false,dockSelected=new Set();
 
   function toggleDockBulkMode(){
     dockBulkMode=!dockBulkMode;dockSelected.clear();
-    const btn=el("btnDockBulk");
-    if(btn){btn.textContent=dockBulkMode?"✕ Cancel":"☑ Bulk";btn.classList.toggle("btn-cyan",dockBulkMode);}
-    const bar=el("dockBulkBar");if(bar)bar.style.display=dockBulkMode?"flex":"none";
+    const bar=el("dockBulkBar");if(bar)bar.classList.toggle("dv-show",dockBulkMode);
     renderDockView();
   }
 
   async function applyBulkStatus(status){
     if(!dockSelected.size)return;
-    const trailerList=[...dockSelected];haptic("medium");
+    const list=[...dockSelected];haptic("medium");
     try{
-      await Promise.all(trailerList.map(t=>apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer:t,status})})));
-      showToast(`✓ ${trailerList.length} trailers → ${status}`,"ok");
-      dockSelected.clear();dockBulkMode=false;renderDockView();
-    }catch{showToast("Bulk update failed","err");}
+      await Promise.all(list.map(t=>apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer:t,status})})));
+      showToast(`✓ ${list.length} trailers → ${status}`,"ok");dvToast(`✓ ${list.length} → ${status}`);
+      dockSelected.clear();dockBulkMode=false;
+      const bar=el("dockBulkBar");if(bar)bar.classList.remove("dv-show");
+      renderDockView();
+    }catch{showToast("Bulk update failed","err");dvToast("Update failed");}
   }
 
   function initDockCardSwipes(){
-    document.querySelectorAll(".dock-card[data-swipe-trailer]").forEach(card=>{
-      let startX=0,startY=0,swiping=false;
+    document.querySelectorAll("#dockView .dv-card[data-swipe-trailer]").forEach(card=>{
+      let sx=0,sy=0,going=false;
       const trailer=card.dataset.swipeTrailer;
-      card.addEventListener("touchstart",e=>{startX=e.touches[0].clientX;startY=e.touches[0].clientY;swiping=true;card.style.transition="none";},{passive:true});
+      card.addEventListener("touchstart",e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY;going=true;card.style.transition="none";},{passive:true});
       card.addEventListener("touchmove",e=>{
-        if(!swiping)return;
-        const dx=e.touches[0].clientX-startX,dy=e.touches[0].clientY-startY;
-        if(Math.abs(dy)>Math.abs(dx)+10){swiping=false;card.style.transform="";return;}
+        if(!going)return;
+        const dx=e.touches[0].clientX-sx,dy=e.touches[0].clientY-sy;
+        if(Math.abs(dy)>Math.abs(dx)+10){going=false;card.style.transform="";return;}
         if(Math.abs(dx)>8)e.preventDefault();
         card.style.transform=`translateX(${Math.max(-100,Math.min(100,dx))}px)`;
         card.style.opacity=1-Math.abs(Math.max(-100,Math.min(100,dx)))/200;
       },{passive:false});
       card.addEventListener("touchend",e=>{
-        if(!swiping)return;swiping=false;
-        const dx=e.changedTouches[0].clientX-startX;
-        card.style.transition="transform .2s ease,opacity .2s ease";card.style.transform="";card.style.opacity="";
-        if(dx>60){const r=trailers[trailer],next=DOCK_STATUS_NEXT[r?.status];if(next?.to&&(ROLE==="dock"||ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin")){haptic("medium");dockSet(trailer,next.to);}}
-        else if(dx<-60){openQuickIssue(trailer,trailers[trailer]?.door||"");}
+        if(!going)return;going=false;
+        const dx=e.changedTouches[0].clientX-sx;
+        card.style.transition="transform .2s,opacity .2s";card.style.transform="";card.style.opacity="";
+        if(dx>60){const r=trailers[trailer],nx=DOCK_STATUS_NEXT[r?.status];if(nx?.to&&(ROLE==="dock"||ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin")){haptic("medium");dockSet(trailer,nx.to);}}
+        else if(dx<-60)openQuickIssue(trailer,trailers[trailer]?.door||"");
       });
     });
+  }
+
+  function initDockView(){
+    // Home action cards → cards screen
+    el("dvGoLoading")?.addEventListener("click",()=>{dockFilter="loading";dvShow("dv-s-cards");renderDockView();haptic("light");});
+    el("dvGoDockReady")?.addEventListener("click",()=>{dockFilter="dockready";dvShow("dv-s-cards");renderDockView();haptic("light");});
+    el("dvGoAll")?.addEventListener("click",()=>{dockFilter="all";dvShow("dv-s-cards");renderDockView();haptic("light");});
+    // Back buttons
+    el("dvCardsBack")?.addEventListener("click",()=>{dvShow("dv-s-home");dvUpdateHome();haptic("light");});
+    el("dvMapBack")?.addEventListener("click",()=>{dvShow("dv-s-home");dvUpdateHome();haptic("light");});
+    // Staff chip
+    el("dvStaffChip")?.addEventListener("click",()=>{el("btnDockStaffLogin")?.click();});
+    // Filter pills inside cards screen
+    document.querySelectorAll("#dv-s-cards .dv-pill[data-dv-filter]").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        document.querySelectorAll("#dv-s-cards .dv-pill").forEach(b=>b.classList.remove("dv-pill-active"));
+        btn.classList.add("dv-pill-active");
+        dockFilter=btn.dataset.dvFilter;renderDockView();haptic("light");
+      });
+    });
+    // Scan input on home
+    const scanInput=el("dockScanInput");
+    const doScan=()=>{
+      const v=(scanInput?.value||"").trim().toUpperCase();if(!v)return;
+      const r=trailers[v];
+      if(!r){dvToast(`⚠ ${v} not on board`);haptic("error");scanInput.value="";return;}
+      const nx=DOCK_STATUS_NEXT[r.status];
+      if(!nx?.to){dvToast(`${v} is ${r.status}`);scanInput.value="";return;}
+      const canAct=ROLE==="dock"||ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin";
+      if(!canAct){dvToast("Sign in to update");el("btnDockStaffLogin")?.click();return;}
+      haptic("medium");dockSet(v,nx.to);dvToast(`✓ ${v} → ${nx.to}`);scanInput.value="";
+    };
+    el("dvScanGo")?.addEventListener("click",doScan);
+    scanInput?.addEventListener("keydown",e=>{if(e.key==="Enter")doScan();});
+    // Search
+    el("dockSearch")?.addEventListener("input",()=>renderDockView());
+    // Bulk action buttons
+    el("btnBulkLoading")?.addEventListener("click",()=>applyBulkStatus("Loading"));
+    el("btnBulkDockReady")?.addEventListener("click",()=>applyBulkStatus("Dock Ready"));
+    // Dim mode toggle (still wired to global btnDimMode)
+    el("btnDimMode")?.addEventListener("click",toggleDimMode);
+    el("btnDockBulk")?.addEventListener("click",toggleDockBulkMode);
+    el("btnDockStaffLogin")?.addEventListener("click",()=>el("staffLoginOv")?.classList.remove("hidden"));
+    el("btnVoiceDock")?.addEventListener("click",startVoiceInput);
   }
 
   function openQuickIssue(trailer,door){
@@ -1291,8 +1366,12 @@
     }catch{ROLE=null;VERSION="";}
     el("verText").textContent=VERSION||"—";
     ["driverView","managementView","dockView","dispatchView"].forEach(id=>el(id).style.display="none");
+    const _topbar=document.querySelector(".topbar"),_bnav=document.querySelector(".bottom-nav");
+    const _hideChrome=()=>{if(_topbar)_topbar.style.display="none";if(_bnav)_bnav.style.display="none";};
+    const _showChrome=()=>{if(_topbar)_topbar.style.display="";if(_bnav)_bnav.style.display="";};
     const p=path();
     if(p.startsWith("/driver")){
+      _hideChrome();
       el("driverView").style.display="";
       const logoutBtn=el("btnLogout");
       if(logoutBtn){logoutBtn.style.display="";logoutBtn.textContent="↩ Start Over";logoutBtn.onclick=e=>{e.stopImmediatePropagation();try{sessionStorage.removeItem("wb_whoType");}catch{}driverRestart();};}
@@ -1300,12 +1379,14 @@
       try{const savedWho=sessionStorage.getItem("wb_whoType");if(savedWho){driverState.whoType=savedWho;const isOutside=savedWho==="outside";if(el("flowBtnDrop"))el("flowBtnDrop").style.display=isOutside?"none":"";const sb=document.querySelector("[data-flow='shunt']");if(sb)sb.style.display=isOutside?"none":"";showScreen("flow-screen");}else showScreen("who-screen");}catch{showScreen("who-screen");}
       renderSessionHistory();initPush();
     }else if(p.startsWith("/management")){
+      _showChrome();
       el("managementView").style.display="";el("managementView").classList.add("view-fade");
       el("btnLogout").style.display="";el("btnAudit").style.display=(ROLE==="management"||ROLE==="admin")?"":"none";
     }else if(p.startsWith("/dock")){
-      el("dockView").style.display="";el("dockView").classList.add("view-fade");
-      el("btnLogout").style.display=ROLE?"":"none";el("btnAudit").style.display="none";
+      _hideChrome();
+      el("dockView").style.display="";
     }else{
+      _showChrome();
       el("dispatchView").style.display="";el("dispatchView").classList.add("view-fade");
       el("btnLogout").style.display=ROLE?"":"none";
       el("btnAudit").style.display=(ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin")?"":"none";
@@ -1323,7 +1404,7 @@
     }
     if(ROLE==="admin"&&!isSuper()){renderBoard();renderRolePanel();let open=false;try{open=localStorage.getItem("platesOpen")==="1";}catch{}setPlatesOpen(open);}
     else if(ROLE==="management"&&!isSuper()){renderRolePanel();renderBoard();let open=false;try{open=localStorage.getItem("platesOpen")==="1";}catch{}setPlatesOpen(open);}
-    else if(isDock()){renderDockView();renderPlates();}
+    else if(isDock()){initDockView();renderDockView();renderPlates();}
     else if(!isDriver()&&!isSuper()){renderRolePanel();renderBoard();let open=false;try{open=localStorage.getItem("platesOpen")==="1";}catch{}setPlatesOpen(open);}
   }
 
@@ -1424,8 +1505,8 @@
     }
     if(act==="dockReserveDoor"&&trId){openDockReserveDoor(trId);return;}
     if(act==="dockMapCard"&&trId){
-      el("btnDockViewToggle").dataset.view="cards";el("btnDockViewToggle").textContent="🗺 Map";renderDockView();
-      setTimeout(()=>{document.querySelector(`[data-trailer="${trId}"]`)?.scrollIntoView({behavior:"smooth",block:"center"});},100);return;
+      dockFilter="active";dvShow("dv-s-cards");renderDockView();
+      setTimeout(()=>{document.querySelector(`#dockCards [data-trailer="${trId}"]`)?.scrollIntoView({behavior:"smooth",block:"center"});},300);return;
     }
     if(act==="dockReportIssue"){const door=direct?.dataset?.door||direct?.closest?.("[data-door]")?.dataset?.door||"";if(trId)return openDockIssueModal(trId,door);}
     if(act==="markReady"&&trId)return markReady(trId);

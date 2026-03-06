@@ -637,14 +637,14 @@ body{background-image:none!important;background:transparent!important}
       
       if (act === 'qd') {
         try { 
-          await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: 'Loaded', carrierType: 'Wesbell' }) }); 
+          await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, dropType: 'Loaded', carrierType: 'Wesbell' }) }); 
           showSuccess('Quick Drop Logged', 'Trailer dropped to yard instantly.', [{k:'Trailer',v:state.trailer},{k:'Action',v:'Quick Drop'}]);
         } catch(e) { toast('Error connecting to server'); }
       } 
       else if (act === 'shunt') {
         showDoorSelector('Shunt <span>Trailer</span>', 'Move to which door?', async () => {
           try {
-            await fetch('/api/driver/shunt', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, newDoor: state.door }) });
+            await fetch('/api/driver/shunt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, newDoor: state.door }) });
             showSuccess('Shunt Complete', `Trailer moved to Door ${state.door}.`, [{k:'Trailer',v:state.trailer},{k:'New Door',v:state.door}]);
           } catch(e) { toast('Error shunting trailer'); }
         });
@@ -663,18 +663,13 @@ body{background-image:none!important;background:transparent!important}
       else if (act === 'arrive') {
         // REAL ARRIVAL FETCH
         try {
-          const res = await fetch('/api/driver/arrive', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, carrierType: state.carrier || 'Wesbell' }) });
+          const res = await fetch('/api/driver/arrive', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer }) });
           if(res.ok) {
             const data = await res.json();
-            if (data.door) {
-              updateLiveDoor(data.door);
-              showDoorAssigned('Arrived!', data.alreadyActive ? `Head to your assigned Door ${data.door}.` : `Pull straight into Door ${data.door}.`);
-            } else {
-              toast('No door available — please ask dispatch.');
-            }
+            updateLiveDoor(data.door);
+            showDoorAssigned('Arrived!', `Pull straight into Door ${data.door}.`);
           } else {
-            const msg = await res.text().catch(() => '');
-            toast(msg || 'Failed to get door assignment — please ask dispatch.');
+            toast('Failed to get door assignment.');
           }
         } catch(e) { toast('Network error'); }
       }
@@ -696,18 +691,13 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Sending...';
       btn.disabled = true;
       try {
-        const res = await fetch('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, eta: state.eta }) });
+        const res = await fetch('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, eta: state.eta }) });
         if(res.ok) {
           const data = await res.json();
-          if (data.door) {
-            updateLiveDoor(data.door);
-            showDoorAssigned('Door Assigned!', data.alreadyActive ? `Your trailer is already at Door ${data.door}.` : `Head to Door ${data.door}. Dispatch notified.`);
-          } else {
-            toast('No door available — please ask dispatch.');
-          }
+          updateLiveDoor(data.door);
+          showDoorAssigned('OMW Confirmed', `Head to door ${data.door}. Dispatch notified.`); 
         } else {
-          const msg = await res.text().catch(() => '');
-          toast(msg || 'Error assigning door — please ask dispatch.');
+          toast('Error assigning door');
         }
       } catch(e) {
         toast('Network Error');
@@ -730,7 +720,7 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Submitting...';
       btn.disabled = true;
       try {
-        await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: state.dropType, carrierType: 'Outside' }) });
+        await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, dropType: state.dropType, carrierType: 'Outside' }) });
         showSuccess('Drop Logged', 'Dispatch will assign your door on the board.', [{k:'Trailer',v:state.trailer},{k:'Type',v:state.dropType},{k:'Carrier',v:'Outside'}]);
       } catch(e) {
         toast('Network Error');
@@ -776,9 +766,9 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Confirming...';
       btn.disabled = true;
       try {
-        await fetch('/api/confirm-safety', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, door: state.door, action: 'depart', loadSecured: true, dockPlateUp: true }) });
+        await fetch('/api/confirm-safety', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, door: state.door, action: 'depart' }) });
         updateLiveDoor(null); 
-        showSuccess('Departed! ✓', 'Safe travels! Trailer marked departed.', [{k:'Trailer',v:state.trailer},{k:'Door',v:state.door||'—'}]);
+        showSuccess('Cross Dock Complete', 'Safe travels! Trip logged.', [{k:'Trailer',v:state.trailer},{k:'Door',v:state.door}]);
       } catch(e) {
         toast('Network Error');
       } finally {
@@ -920,143 +910,415 @@ body{background-image:none!important;background:transparent!important}
   </div>
 </div>
 
-<div id="dockView" style="display:none;">
-  <div class="dock-shell">
+<div id="dockView" style="display:none; padding:0; position:relative; min-height:100vh; overflow:hidden; background:#070a0f;">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+  #dockView {
+    --bg:#070a0f; --s1:#0d1520; --s2:#111d2e; --s3:#16243a;
+    --b0:#1a2e48; --b1:#243d5c; --b2:#2e4e6e;
+    --t0:#ffffff; --t1:#dce8f5; --t2:#a8bdd4; --t3:#6b8ba8;
+    --green:#19e09a; --cyan:#18d4e8; --amber:#f5a623; --red:#f04a4a; --violet:#b052d9;
+    --font:'Outfit',sans-serif; --r:16px; --r2:24px;
+    background:var(--bg); color:var(--t0); font-family:var(--font);
+  }
+  #dockView * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 
-    <div class="dock-toolbar">
-      <div class="dock-toolbar-left">
-        <div class="live-dot" id="dockWsDot"></div>
-        <span id="dockWsText">Connecting…</span>
+  /* ── Shell & Screens ── */
+  #dockView .dv-wrap { position:relative; width:100%; height:100vh; overflow:hidden; }
+  #dockView .dv-screen {
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    padding-top:calc(env(safe-area-inset-top,0px) + 0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+    opacity:0; pointer-events:none;
+    transition:opacity .32s cubic-bezier(.4,0,.2,1), transform .32s cubic-bezier(.4,0,.2,1);
+    transform:translateY(22px); background:var(--bg); z-index:10; overflow:hidden;
+  }
+  #dockView .dv-screen.dv-active { opacity:1; pointer-events:all; transform:translateY(0); z-index:20; }
+  #dockView .dv-screen.dv-exit   { opacity:0; transform:translateY(-22px); z-index:10; }
+
+  /* ── Shared topbar ── */
+  #dockView .dv-topbar { display:flex; align-items:center; justify-content:space-between; padding:20px 24px 0; flex-shrink:0; }
+  #dockView .dv-logo   { display:flex; align-items:center; gap:10px; }
+  #dockView .dv-logo-mark {
+    width:34px; height:34px; border-radius:10px;
+    background:linear-gradient(135deg,#18d4e8,#0a7a8c);
+    display:flex; align-items:center; justify-content:center;
+    font-size:14px; font-weight:700; color:#000; box-shadow:0 2px 12px rgba(24,212,232,.3);
+  }
+  #dockView .dv-logo-text { font-size:13px; font-weight:600; letter-spacing:.06em; color:var(--t2); text-transform:uppercase; }
+  #dockView .dv-topbar-right { display:flex; align-items:center; gap:8px; }
+  #dockView .dv-chip {
+    display:flex; align-items:center; gap:6px;
+    background:var(--s2); border:1px solid var(--b0); border-radius:20px;
+    padding:6px 12px; font-size:11px; font-weight:600; color:var(--t2);
+    letter-spacing:.03em; cursor:pointer; transition:border-color .15s; white-space:nowrap;
+  }
+  #dockView .dv-chip:active { opacity:.8; }
+  #dockView .dv-dot { width:6px; height:6px; border-radius:50%; background:var(--green); box-shadow:0 0 8px rgba(25,224,154,.6); flex-shrink:0; }
+  #dockView .dv-dot-err { background:var(--red); box-shadow:0 0 8px rgba(240,74,74,.5); }
+
+  /* ── HOME SCREEN ── */
+  #dockView .dv-hero { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px 24px 12px; text-align:center; }
+  #dockView .dv-eyebrow { font-size:11px; font-weight:500; letter-spacing:.14em; color:var(--t3); text-transform:uppercase; margin-bottom:14px; }
+  #dockView .dv-big-num { font-size:72px; font-weight:300; letter-spacing:-.04em; line-height:1; color:var(--t0); }
+  #dockView .dv-big-num strong { font-weight:700; color:var(--cyan); }
+  #dockView .dv-hero-sub { font-size:15px; color:var(--t2); font-weight:300; margin-top:10px; line-height:1.5; }
+
+  /* Scan input */
+  #dockView .dv-scan-wrap {
+    margin:0 24px 20px; background:var(--s1); border:1px solid var(--b1);
+    border-radius:var(--r2); padding:6px 6px 6px 20px;
+    display:flex; align-items:center; gap:10px; transition:border-color .2s, box-shadow .2s;
+  }
+  #dockView .dv-scan-wrap:focus-within { border-color:var(--cyan); box-shadow:0 0 0 3px rgba(24,212,232,.1); }
+  #dockView .dv-scan-wrap label { font-size:11px; font-weight:500; letter-spacing:.1em; color:var(--t3); text-transform:uppercase; flex-shrink:0; }
+  #dockView .dv-scan-input {
+    flex:1; background:none; border:none; outline:none;
+    font-family:var(--font); font-size:22px; font-weight:600;
+    color:var(--t0); letter-spacing:.04em; text-transform:uppercase; caret-color:var(--cyan); min-width:0;
+  }
+  #dockView .dv-scan-input::placeholder { color:var(--b2); font-weight:300; font-size:16px; }
+  #dockView .dv-scan-go {
+    background:linear-gradient(135deg,var(--cyan),#0a7a8c); border:none;
+    border-radius:14px; width:52px; height:52px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:transform .15s, filter .15s;
+  }
+  #dockView .dv-scan-go:active { transform:scale(.93); filter:brightness(.88); }
+  #dockView .dv-scan-go svg { width:20px; height:20px; fill:none; stroke:#000; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; }
+
+  /* Status action cards on home */
+  #dockView .dv-action-grid { display:flex; flex-direction:column; gap:12px; padding:0 24px 24px; }
+  #dockView .dv-action-card {
+    background:var(--s1); border:2px solid var(--b0); border-radius:var(--r2);
+    padding:20px; display:flex; align-items:center; gap:18px;
+    cursor:pointer; transition:all .18s; position:relative; overflow:hidden;
+  }
+  #dockView .dv-action-card:active { transform:scale(.97); }
+  #dockView .dv-action-card::after { content:""; position:absolute; right:20px; top:50%; transform:translateY(-50%); width:8px; height:14px; background:url('data:image/svg+xml;utf8,<svg viewBox="0 0 8 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L7 7L1 13" stroke="%236b8ba8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>') no-repeat center; }
+  #dockView .dv-action-card.dv-cyan  { border-color:var(--cyan);  background:rgba(24,212,232,.06); }
+  #dockView .dv-action-card.dv-amber { border-color:var(--amber); background:rgba(245,166,35,.06); }
+  #dockView .dv-action-card.dv-dim   { border-color:var(--b1); }
+  #dockView .dv-action-icon { font-size:34px; line-height:1; flex-shrink:0; }
+  #dockView .dv-action-text { flex:1; }
+  #dockView .dv-action-label { font-size:17px; font-weight:700; color:var(--t0); margin-bottom:3px; }
+  #dockView .dv-action-sub   { font-size:13px; color:var(--t2); line-height:1.3; padding-right:16px; }
+  #dockView .dv-action-badge {
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:26px; height:26px; border-radius:13px; padding:0 8px;
+    font-size:14px; font-weight:700; background:var(--s3); color:var(--t1);
+  }
+  #dockView .dv-action-badge.dv-badge-amber { background:rgba(245,166,35,.15); color:var(--amber); }
+  #dockView .dv-action-badge.dv-badge-cyan  { background:rgba(24,212,232,.15); color:var(--cyan); }
+
+  /* ── CARDS SCREEN ── */
+  #dockView .dv-screen-header { padding:20px 24px 0; flex-shrink:0; }
+  #dockView .dv-back-btn {
+    display:flex; align-items:center; gap:8px; background:none; border:none;
+    color:var(--t2); font-family:var(--font); font-size:15px; font-weight:600;
+    cursor:pointer; padding:0 0 16px 0;
+  }
+  #dockView .dv-back-btn svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; }
+  #dockView .dv-screen-title { font-size:34px; font-weight:700; letter-spacing:-.02em; color:var(--t0); line-height:1.1; margin-bottom:4px; }
+  #dockView .dv-screen-title span { color:var(--t2); font-weight:300; }
+
+  /* Filter pills row */
+  #dockView .dv-filter-row { display:flex; gap:8px; padding:14px 24px 12px; flex-shrink:0; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+  #dockView .dv-filter-row::-webkit-scrollbar { display:none; }
+  #dockView .dv-pill {
+    padding:8px 16px; border-radius:20px; border:1.5px solid var(--b0);
+    background:var(--s1); font-family:var(--font); font-size:12px; font-weight:600;
+    color:var(--t2); cursor:pointer; transition:all .15s; white-space:nowrap; flex-shrink:0;
+  }
+  #dockView .dv-pill.dv-pill-active { border-color:var(--cyan); color:var(--cyan); background:rgba(24,212,232,.08); }
+
+  /* Search bar */
+  #dockView .dv-search-bar {
+    margin:0 24px 12px; background:var(--s1); border:1px solid var(--b0);
+    border-radius:14px; padding:10px 14px; display:flex; align-items:center; gap:10px;
+  }
+  #dockView .dv-search-bar:focus-within { border-color:var(--b1); }
+  #dockView .dv-search-icon { color:var(--t3); font-size:15px; flex-shrink:0; }
+  #dockView .dv-search-input { flex:1; background:none; border:none; outline:none; font-family:var(--font); font-size:15px; color:var(--t0); }
+  #dockView .dv-search-input::placeholder { color:var(--t3); }
+
+  /* Login nudge */
+  #dockView .dv-nudge {
+    margin:0 24px 8px; padding:12px 16px; border-radius:14px; display:none;
+    border:1px solid rgba(245,166,35,.3); background:rgba(245,166,35,.06);
+    font-size:13px; color:var(--t1); align-items:center; gap:10px;
+  }
+  #dockView .dv-nudge.dv-show { display:flex; }
+
+  /* Cards list */
+  #dockView .dv-cards { flex:1; overflow-y:auto; padding:0 16px 32px; display:flex; flex-direction:column; gap:10px; -webkit-overflow-scrolling:touch; }
+
+  /* Individual card — driver style */
+  #dockView .dv-card {
+    background:var(--s1); border:2px solid var(--b0);
+    border-radius:var(--r2); padding:20px;
+    display:flex; flex-direction:column; gap:14px;
+    transition:border-color .15s; position:relative; overflow:hidden;
+  }
+  #dockView .dv-card::before { content:""; position:absolute; left:0; top:0; bottom:0; width:4px; border-radius:4px 0 0 4px; }
+  #dockView .dv-card.dv-c-loading   { border-color:rgba(245,166,35,.35); }  #dockView .dv-card.dv-c-loading::before   { background:var(--amber); }
+  #dockView .dv-card.dv-c-dockready { border-color:rgba(24,212,232,.35); }  #dockView .dv-card.dv-c-dockready::before { background:var(--cyan); }
+  #dockView .dv-card.dv-c-ready     { border-color:rgba(25,224,154,.35); }  #dockView .dv-card.dv-c-ready::before     { background:var(--green); }
+  #dockView .dv-card.dv-c-dropped::before   { background:var(--violet); }
+  #dockView .dv-card.dv-c-incoming::before  { background:var(--t3); }
+  #dockView .dv-card.dv-c-departed::before  { background:var(--b1); }
+
+  /* Card — top row */
+  #dockView .dv-card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  #dockView .dv-trailer-num { font-size:30px; font-weight:700; letter-spacing:-.02em; color:var(--t0); line-height:1; }
+  #dockView .dv-card-right { display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0; }
+  #dockView .dv-door-badge {
+    font-size:20px; font-weight:700; color:var(--t0);
+    background:var(--s2); border:1px solid var(--b1);
+    border-radius:10px; padding:4px 12px; line-height:1.3;
+    font-family:monospace; letter-spacing:.02em;
+  }
+  #dockView .dv-no-door { font-size:11px; color:var(--t3); font-weight:500; }
+  #dockView .dv-status-badge {
+    display:inline-flex; align-items:center; gap:5px;
+    padding:4px 10px; border-radius:8px; font-size:11px; font-weight:600; letter-spacing:.03em;
+  }
+  #dockView .dv-status-badge::before { content:""; width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+  #dockView .dv-sb-incoming  { background:rgba(107,139,168,.12); color:var(--t2); } #dockView .dv-sb-incoming::before  { background:var(--t3); }
+  #dockView .dv-sb-dropped   { background:rgba(176,82,217,.12);  color:var(--violet); } #dockView .dv-sb-dropped::before   { background:var(--violet); }
+  #dockView .dv-sb-loading   { background:rgba(245,166,35,.12);  color:var(--amber); } #dockView .dv-sb-loading::before   { background:var(--amber); }
+  #dockView .dv-sb-dockready { background:rgba(24,212,232,.12);  color:var(--cyan); }  #dockView .dv-sb-dockready::before { background:var(--cyan); }
+  #dockView .dv-sb-ready     { background:rgba(25,224,154,.12);  color:var(--green); } #dockView .dv-sb-ready::before     { background:var(--green); }
+  #dockView .dv-sb-departed  { background:rgba(80,80,80,.1);     color:var(--t3); }    #dockView .dv-sb-departed::before  { background:var(--b1); }
+
+  /* Card info row */
+  #dockView .dv-card-info { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  #dockView .dv-carrier {
+    font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+    padding:3px 8px; border-radius:5px; border:1px solid;
+  }
+  #dockView .dv-carrier-wb  { color:var(--amber); border-color:rgba(245,166,35,.3); background:rgba(245,166,35,.08); }
+  #dockView .dv-carrier-ext { color:var(--t2);    border-color:var(--b0); background:var(--s2); }
+  #dockView .dv-card-note { font-size:12px; color:var(--t2); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #dockView .dv-card-ago  { font-size:11px; color:var(--t3); margin-left:auto; flex-shrink:0; }
+  #dockView .dv-eta-tag {
+    font-size:11px; font-weight:600; color:var(--cyan);
+    background:rgba(24,212,232,.1); border:1px solid rgba(24,212,232,.25); border-radius:6px; padding:2px 8px;
+  }
+  #dockView .dv-eta-now { color:var(--green) !important; background:rgba(25,224,154,.1) !important; border-color:rgba(25,224,154,.3) !important; }
+
+  /* Primary action button — big, driver-style */
+  #dockView .dv-cta {
+    width:100%; padding:20px; border:none; border-radius:var(--r2);
+    font-family:var(--font); font-size:17px; font-weight:700; letter-spacing:.01em;
+    cursor:pointer; touch-action:manipulation; min-height:62px;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    transition:all .16s; box-shadow:0 6px 20px rgba(0,0,0,.35);
+  }
+  #dockView .dv-cta:active   { transform:scale(.97); }
+  #dockView .dv-cta:disabled { opacity:.35; cursor:not-allowed; transform:none; }
+  #dockView .dv-cta-amber  { background:linear-gradient(135deg,#f5a623,#d47a00); color:#000; }
+  #dockView .dv-cta-cyan   { background:linear-gradient(135deg,#18d4e8,#0a7a8c); color:#000; }
+  #dockView .dv-cta-ghost  { background:var(--s2); border:1.5px solid var(--b1); color:var(--t1); box-shadow:none; }
+  #dockView .dv-cta-locked { background:var(--s2); border:1.5px solid var(--b0); color:var(--t3); box-shadow:none; cursor:default; }
+
+  /* Secondary buttons */
+  #dockView .dv-sec-row { display:flex; gap:8px; }
+  #dockView .dv-sec-btn {
+    flex:1; padding:12px; border-radius:14px; border:1.5px solid var(--b0);
+    background:var(--s2); font-family:var(--font); font-size:13px; font-weight:600;
+    color:var(--t2); cursor:pointer; touch-action:manipulation; transition:all .15s; min-height:46px;
+  }
+  #dockView .dv-sec-btn:active { transform:scale(.97); }
+  #dockView .dv-issue-btn { border-color:rgba(240,74,74,.25); color:var(--red); background:rgba(240,74,74,.05); }
+  #dockView .dv-reserve-btn:active { border-color:var(--b1); }
+
+  /* Swipe hint */
+  #dockView .dv-swipe-hint { font-size:10px; color:var(--t3); text-align:center; letter-spacing:.05em; }
+  @media(pointer:fine) { #dockView .dv-swipe-hint { display:none; } }
+
+  /* ── MAP SCREEN ── */
+  #dockView .dv-map-grid {
+    flex:1; overflow-y:auto; padding:16px;
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(90px,1fr)); gap:8px;
+    -webkit-overflow-scrolling:touch;
+  }
+  #dockView .dv-map-cell {
+    border-radius:14px; border:1.5px solid var(--b0); padding:10px 8px;
+    min-height:88px; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:4px; cursor:pointer; touch-action:manipulation;
+    transition:transform .12s, border-color .15s;
+  }
+  #dockView .dv-map-cell:active { transform:scale(.94); }
+  #dockView .dv-map-free     { border-color:rgba(25,224,154,.25); background:rgba(25,224,154,.04); cursor:default; }
+  #dockView .dv-map-blocked  { border-color:rgba(240,74,74,.25);  background:rgba(240,74,74,.04);  cursor:default; }
+  #dockView .dv-map-occupied { border-color:var(--b1); background:var(--s1); }
+  #dockView .dv-map-door-num { font-size:10px; font-weight:700; color:var(--t3); font-family:monospace; letter-spacing:.04em; }
+  #dockView .dv-map-trailer  { font-size:12px; font-weight:700; color:var(--t0); font-family:monospace; }
+  #dockView .dv-map-dot      { width:8px; height:8px; border-radius:50%; }
+  #dockView .dv-map-status   { font-size:9px; color:var(--t3); }
+  #dockView .dv-map-free-lbl { font-size:11px; color:var(--green); font-weight:600; }
+
+  /* Empty state */
+  #dockView .dv-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; text-align:center; padding:40px 24px; }
+  #dockView .dv-empty-icon { font-size:52px; opacity:.35; }
+  #dockView .dv-empty-text { font-size:17px; font-weight:600; color:var(--t2); }
+  #dockView .dv-empty-sub  { font-size:13px; color:var(--t3); }
+
+  /* Toast */
+  #dockView .dv-toast {
+    position:fixed; bottom:calc(28px + env(safe-area-inset-bottom,0px)); left:50%;
+    transform:translateX(-50%) translateY(20px); background:var(--s2);
+    border:1px solid var(--b1); border-radius:14px; padding:13px 22px;
+    font-size:14px; font-weight:600; color:var(--t0);
+    box-shadow:0 8px 32px rgba(0,0,0,.6); opacity:0; pointer-events:none;
+    transition:opacity .25s, transform .25s; z-index:999; white-space:nowrap;
+    max-width:calc(100vw - 48px); text-align:center;
+  }
+  #dockView .dv-toast.dv-toast-on { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* Bulk bar */
+  #dockView .dv-bulk-bar {
+    display:none; align-items:center; gap:10px; padding:10px 24px;
+    background:rgba(24,212,232,.05); border-bottom:1px solid rgba(24,212,232,.15); flex-wrap:wrap; flex-shrink:0;
+  }
+  #dockView .dv-bulk-bar.dv-show { display:flex; }
+
+  /* Card animation */
+  @keyframes dv-slide-in { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+  #dockView .dv-cards .dv-card { animation:dv-slide-in .22s cubic-bezier(.4,0,.2,1) both; }
+  #dockView .dv-cards .dv-card:nth-child(1){animation-delay:.02s}
+  #dockView .dv-cards .dv-card:nth-child(2){animation-delay:.05s}
+  #dockView .dv-cards .dv-card:nth-child(3){animation-delay:.08s}
+  #dockView .dv-cards .dv-card:nth-child(4){animation-delay:.11s}
+  #dockView .dv-cards .dv-card:nth-child(5){animation-delay:.13s}
+</style>
+
+<div class="dv-wrap">
+
+  <!-- ══ HOME SCREEN ══ -->
+  <div class="dv-screen dv-active" id="dv-s-home">
+    <div class="dv-topbar">
+      <div class="dv-logo">
+        <div class="dv-logo-mark">D</div>
+        <div class="dv-logo-text">Dock Board</div>
       </div>
-      <div class="dock-filter-wrap">
-        <button class="dock-filter-btn active" data-dock-filter="active" aria-pressed="true">Active</button>
-        <button class="dock-filter-btn" data-dock-filter="all" aria-pressed="false">All</button>
-      </div>
-      <div class="dock-toolbar-right">
-        <span class="badge badge-num" id="dockCount">0</span>
-        <button class="tb-btn" id="btnDockViewToggle" data-view="cards" title="Toggle map view">🗺 Map</button>
-        <button class="tb-btn" id="btnDockBulk" title="Bulk select">☑ Bulk</button>
-        <button class="tb-btn" id="btnDimMode" title="Toggle dim mode">🌙 Dim</button>
-        <button class="tb-btn" id="btnDockStaffLogin" style="font-size:10px;padding:4px 9px;" title="Staff sign in">🔑 Staff</button>
+      <div class="dv-topbar-right">
+        <div class="dv-chip" id="dvWsChip"><div class="dv-dot" id="dockWsDot"></div><span id="dockWsText">Connecting</span></div>
+        <div class="dv-chip" id="dvStaffChip">🔑&nbsp;<span id="dvRoleLabel">Sign in</span></div>
       </div>
     </div>
 
-    <div class="dock-search-bar">
-      <div class="dock-scan-wrap">
-        <input id="dockScanInput" class="dock-scan-input" placeholder="⚡ Scan or type trailer # — auto-advances status" autocomplete="off" inputmode="text" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go"/>
-        <button class="tb-btn" id="btnVoiceDock" title="Voice input">🎙</button>
-      </div>
-      <input id="dockSearch" placeholder="🔍 Filter cards…" autocomplete="off" aria-label="Search dock trailers" inputmode="search"/>
+    <div class="dv-hero">
+      <div class="dv-eyebrow">Active Trailers</div>
+      <div class="dv-big-num"><strong id="dvHeroNum">—</strong></div>
+      <div class="dv-hero-sub" id="dvHeroSub">Loading board…</div>
     </div>
 
-    <div class="dock-bulk-bar" id="dockBulkBar">
-      <span id="dockBulkCount" style="font-family:var(--mono);font-size:11px;color:var(--t2)">0 selected</span>
-      <button class="btn btn-sm" style="border-color:var(--amber-bd);color:var(--amber);background:rgba(245,166,35,.1);" id="btnBulkLoading">→ Loading</button>
-      <button class="btn btn-sm" style="border-color:rgba(24,212,232,.4);color:var(--cyan);background:rgba(24,212,232,.08);" id="btnBulkDockReady">→ Dock Ready</button>
-    </div>
-
-    <div id="dockLoginNudge" class="infobox infobox-amber" style="margin:10px 14px 0;display:none;"><div class="ib-title">Not signed in</div>Sign in as <a href="/login">Dock</a> to update trailer statuses.</div>
-    <div class="dock-cards" id="dockCards">
-      <div class="dock-empty">Loading…</div>
-    </div>
-
-    <div class="dock-plates-inline" id="dockPlatesInline">
-      <button class="acc-head" id="dockPlatesToggle2" aria-expanded="false">
-        <span style="display:flex;align-items:center;gap:9px;">Dock Plates (28–42) <span class="badge" id="platesMini2">—</span></span>
-        <span class="chev">▾</span>
+    <div class="dv-scan-wrap">
+      <label>SCAN</label>
+      <input class="dv-scan-input" id="dockScanInput" placeholder="Trailer # to advance…" autocomplete="off" inputmode="text" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go"/>
+      <button class="dv-scan-go" id="dvScanGo">
+        <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
       </button>
-      <div class="acc-body" id="dockPlatesBody2" style="max-height:0px;overflow:hidden;transition:max-height .3s ease;">
-        <div class="plate-grid" id="platesGrid2"></div>
-        <div style="padding:0 12px 10px;font-family:var(--mono);font-size:9px;color:var(--t3);letter-spacing:.04em;">Tap Edit on any door to update status or note.</div>
-      </div>
     </div>
 
-    <!-- ══ LOAD STATUS TRACKER ══ -->
-    <div id="loadStatusPanel">
-      <style>
-        #loadStatusPanel{margin:10px 0 0;border-top:1px solid var(--b0);background:var(--s1);}
-        #lsp-toggle{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;cursor:pointer;background:var(--s2);border-bottom:1px solid var(--b0);user-select:none;}
-        #lsp-toggle-left{display:flex;align-items:center;gap:10px;}
-        #lsp-toggle-label{font-size:13px;font-weight:700;color:var(--t0);letter-spacing:.01em;}
-        #lsp-toggle-sub{font-size:11px;color:var(--t2);margin-top:1px;}
-        #lsp-toggle-chev{font-size:11px;color:var(--t3);transition:transform .25s;}
-        #lsp-toggle.lsp-open #lsp-toggle-chev{transform:rotate(180deg);}
-        #lsp-body{max-height:0;overflow:hidden;transition:max-height .35s cubic-bezier(.4,0,.2,1);}
-        #lsp-body.lsp-open{max-height:2000px;}
-        /* header bar */
-        #lsp-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 6px;}
-        #lsp-count{font-family:var(--mono);font-size:11px;color:var(--t2);}
-        #lsp-refresh{background:none;border:1px solid var(--b1);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--t1);cursor:pointer;font-family:inherit;}
-        #lsp-refresh:active{opacity:.7;}
-        /* table */
-        #lsp-table{width:100%;padding:0 10px 12px;}
-        .lsp-row{display:grid;grid-template-columns:90px 1fr 90px 110px 70px;gap:4px;align-items:center;padding:8px 10px;border-radius:8px;margin-bottom:4px;background:var(--s2);border:1px solid var(--b0);transition:background .15s;cursor:pointer;}
-        .lsp-row:hover{background:var(--s3,#1e2a3a);}
-        .lsp-row-hd{display:grid;grid-template-columns:90px 1fr 90px 110px 70px;gap:4px;padding:4px 10px;margin-bottom:2px;}
-        .lsp-hd-cell{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);font-family:var(--mono);}
-        .lsp-trailer{font-size:13px;font-weight:700;color:var(--t0);font-family:var(--mono);}
-        /* progress bar */
-        .lsp-progress-wrap{position:relative;height:20px;}
-        .lsp-progress-bg{height:6px;border-radius:3px;background:var(--b1);overflow:hidden;margin-top:7px;}
-        .lsp-progress-fill{height:100%;border-radius:3px;transition:width .4s;}
-        .lsp-step-dots{display:flex;gap:0;position:absolute;top:0;left:0;right:0;height:20px;align-items:center;}
-        .lsp-dot{width:8px;height:8px;border-radius:50%;border:2px solid var(--bg,#0a0d12);flex-shrink:0;transition:background .3s;}
-        .lsp-dot.done{background:var(--green);}
-        .lsp-dot.active{background:var(--amber);box-shadow:0 0 6px var(--amber);}
-        .lsp-dot.pending{background:var(--b1);}
-        .lsp-door{font-size:12px;font-weight:600;color:var(--t1);font-family:var(--mono);}
-        .lsp-door-none{font-size:11px;color:var(--t3);}
-        .lsp-time-in{font-size:11px;font-family:var(--mono);}
-        .lsp-time-ok{color:var(--green);}
-        .lsp-time-warn{color:var(--amber);}
-        .lsp-time-over{color:var(--red);}
-        .lsp-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;font-family:var(--mono);}
-        .lsp-badge-incoming{background:rgba(120,120,120,.12);color:var(--t2);}
-        .lsp-badge-dropped{background:rgba(176,82,217,.12);color:var(--violet);}
-        .lsp-badge-loading{background:rgba(245,166,35,.12);color:var(--amber);}
-        .lsp-badge-dockready{background:rgba(24,212,232,.12);color:var(--cyan);}
-        .lsp-badge-ready{background:rgba(25,224,154,.12);color:var(--green);}
-        .lsp-badge-departed{background:rgba(80,80,80,.12);color:var(--t3);}
-        /* empty state */
-        #lsp-empty{padding:24px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--t3);}
-        /* loading */
-        #lsp-loading{padding:16px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--t2);}
-        @keyframes lsp-spin{to{transform:rotate(360deg)}}
-        .lsp-spinner{display:inline-block;width:12px;height:12px;border:2px solid var(--b1);border-top-color:var(--t2);border-radius:50%;animation:lsp-spin .7s linear infinite;vertical-align:middle;margin-right:6px;}
-      </style>
-      <div id="lsp-toggle">
-        <div id="lsp-toggle-left">
-          <span style="font-size:18px;">📊</span>
-          <div>
-            <div id="lsp-toggle-label">Load Status Tracker</div>
-            <div id="lsp-toggle-sub">Live progress · time in each stage</div>
-          </div>
+    <div class="dv-action-grid">
+      <div class="dv-action-card dv-amber" id="dvGoLoading">
+        <div class="dv-action-icon">🔄</div>
+        <div class="dv-action-text">
+          <div class="dv-action-label">Loading</div>
+          <div class="dv-action-sub">Trailers currently being loaded</div>
         </div>
-        <span id="lsp-toggle-chev">▾</span>
+        <div class="dv-action-badge dv-badge-amber" id="dvBadgeLoading">0</div>
       </div>
-      <div id="lsp-body">
-        <div id="lsp-header">
-          <span id="lsp-count">—</span>
-          <button id="lsp-refresh">↻ Refresh</button>
+      <div class="dv-action-card dv-cyan" id="dvGoDockReady">
+        <div class="dv-action-icon">✅</div>
+        <div class="dv-action-text">
+          <div class="dv-action-label">Dock Ready</div>
+          <div class="dv-action-sub">Loaded and waiting for pickup</div>
         </div>
-        <div id="lsp-loading" style="display:none;"><span class="lsp-spinner"></span>Loading…</div>
-        <div id="lsp-empty" style="display:none;">No active trailers on board.</div>
-        <div id="lsp-table">
-          <div class="lsp-row-hd">
-            <div class="lsp-hd-cell">Trailer</div>
-            <div class="lsp-hd-cell">Progress</div>
-            <div class="lsp-hd-cell">Door</div>
-            <div class="lsp-hd-cell">Time in Stage</div>
-            <div class="lsp-hd-cell">Status</div>
-          </div>
-          <div id="lsp-rows"></div>
+        <div class="dv-action-badge dv-badge-cyan" id="dvBadgeDockReady">0</div>
+      </div>
+      <div class="dv-action-card dv-dim" id="dvGoAll">
+        <div class="dv-action-icon">📋</div>
+        <div class="dv-action-text">
+          <div class="dv-action-label">All Trailers</div>
+          <div class="dv-action-sub">Full board — incoming, dropped, all</div>
         </div>
+        <div class="dv-action-badge" id="dvBadgeAll">0</div>
       </div>
     </div>
-
   </div>
-</div>
 
+  <!-- ══ CARDS SCREEN ══ -->
+  <div class="dv-screen" id="dv-s-cards">
+    <div class="dv-screen-header">
+      <button class="dv-back-btn" id="dvCardsBack">
+        <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Back
+      </button>
+      <div class="dv-screen-title" id="dvCardsTitle">Trailers <span id="dvCardsSub"></span></div>
+    </div>
+
+    <div class="dv-filter-row">
+      <button class="dv-pill dv-pill-active" data-dv-filter="active">Active</button>
+      <button class="dv-pill" data-dv-filter="loading">Loading</button>
+      <button class="dv-pill" data-dv-filter="dockready">Dock Ready</button>
+      <button class="dv-pill" data-dv-filter="all">All</button>
+    </div>
+
+    <div class="dv-search-bar">
+      <span class="dv-search-icon">🔍</span>
+      <input class="dv-search-input" id="dockSearch" placeholder="Filter trailers…" autocomplete="off" inputmode="search"/>
+    </div>
+
+    <div class="dv-nudge" id="dockLoginNudge">🔑 Sign in to update trailer statuses.</div>
+
+    <div class="dv-bulk-bar" id="dockBulkBar">
+      <span id="dockBulkCount" style="font-size:12px;color:var(--t2);flex:1">0 selected</span>
+      <button class="dv-sec-btn" style="flex:unset;padding:8px 16px;border-color:rgba(245,166,35,.3);color:var(--amber);background:rgba(245,166,35,.08);" id="btnBulkLoading">→ Loading</button>
+      <button class="dv-sec-btn" style="flex:unset;padding:8px 16px;border-color:rgba(24,212,232,.3);color:var(--cyan);background:rgba(24,212,232,.08);" id="btnBulkDockReady">→ Dock Ready</button>
+    </div>
+
+    <div class="dv-cards" id="dockCards">
+      <div class="dv-empty"><div class="dv-empty-icon">🏭</div><div class="dv-empty-text">Loading…</div></div>
+    </div>
+
+    <!-- toolbar row — bulk/dim/staff hidden at bottom so IDs remain for JS -->
+    <div style="display:none">
+      <button id="btnDockBulk"></button>
+      <button id="btnDimMode"></button>
+      <button id="btnDockStaffLogin"></button>
+      <button id="btnVoiceDock"></button>
+      <button id="btnDockViewToggle" data-view="cards"></button>
+      <span id="dockCount">0</span>
+    </div>
+  </div>
+
+  <!-- ══ MAP SCREEN ══ -->
+  <div class="dv-screen" id="dv-s-map">
+    <div class="dv-screen-header">
+      <button class="dv-back-btn" id="dvMapBack">
+        <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Back
+      </button>
+      <div class="dv-screen-title">Door <span>Map</span></div>
+    </div>
+    <div class="dv-map-grid" id="dvMapGrid"></div>
+  </div>
+
+  <div class="dv-toast" id="dvToast"></div>
+
+  <!-- KEEP legacy IDs for app.js load status tracker -->
+  <div id="dockPlatesInline" style="display:none">
+    <button id="dockPlatesToggle2" aria-expanded="false"></button>
+    <div id="dockPlatesBody2"><div id="platesGrid2"></div></div>
+  </div>
+  <div id="loadStatusPanel" style="display:none">
+    <div id="lsp-toggle"></div><div id="lsp-body"><div id="lsp-rows"></div><span id="lsp-count"></span><button id="lsp-refresh"></button><div id="lsp-loading"></div><div id="lsp-empty"></div><div id="lsp-table"></div></div>
+  </div>
+
+</div>
+</div>
 <div id="dispatchView" style="display:none;">
   <div class="page">
     <div class="grid-main">

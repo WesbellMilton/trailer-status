@@ -36,7 +36,6 @@
       const qrCarrier = urlParams.get('carrier');
       if (qrCarrier === 'outside') {
         const dropTypeSelect = document.getElementById('dr_drop_type'); 
-        if (dropTypeSelect) dropTypeSelect.value = 'Outside Carrier';
       }
     }, 100);
   }

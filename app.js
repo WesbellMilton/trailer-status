@@ -1249,7 +1249,7 @@
         if(isDock())dvUpdateIncoming();
       }
       else if(type==="omw"){showToast(`🚛 ${payload.trailer} on way → Door ${payload.door}${payload.eta?` · ETA ~${payload.eta}min`:""}`, "ok",6000);renderBoard();if(isDock())renderDockView();updateTrackingMap();updateTrackingList();}
-      else if(type==="arrive"){showToast(`✅ ${payload.trailer} arrived at Door ${payload.door}`,"ok",6000);renderBoard();if(isDock())renderDockView();updateTrackingMap();updateTrackingList();}
+      else if(type==="arrive"){showToast(`✅ ${payload.trailer} arrived at Door ${payload.door}${payload.carrierType==="Outside"?" · Outside carrier":""}`,"ok",6000);renderBoard();if(isDock())renderDockView();updateTrackingMap();updateTrackingList();}
       else if(type==="version"){VERSION=payload?.version||VERSION;el("verText").textContent=VERSION||"—";}
       else if(type==="notify"&&payload?.kind==="ready"){
         toast("🟢 Trailer Ready",`${payload.trailer} is READY${payload.door?" at door "+payload.door:""}.`,"ok",8000);

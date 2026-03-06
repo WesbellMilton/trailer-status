@@ -382,6 +382,40 @@ async function pickBestDoor(excludeTrailer=null){
   return candidates[0]?.door||null;
 }
 
+// Door assignment for Outside carriers:
+// Close doors first (33, 34), then far doors (28, 42), then anything remaining.
+// This lets inside carriers keep mid-range doors while outside trucks get
+// the doors closest to / farthest from the building as configured.
+const OUTSIDE_DOOR_PRIORITY = ["33","34","28","42"];
+
+async function pickOutsideDoor(excludeTrailer=null){
+  const occupiedSet=await getOccupiedDoorSet(excludeTrailer);
+  const plates=await all(`SELECT door,status FROM dockplates`);
+  const plateMap={};
+  plates.forEach(p=>{plateMap[String(p.door)]=p.status});
+
+  const isAvail=ds=>{
+    if(occupiedSet.has(ds))return false;
+    const ps=plateMap[ds]||"Unknown";
+    return ps!=="Out of Order";
+  };
+
+  // 1. Try preferred outside doors in priority order
+  for(const ds of OUTSIDE_DOOR_PRIORITY){
+    if(isAvail(ds))return ds;
+  }
+  // 2. Fall back to any remaining available door (same plate-status priority as generic)
+  const candidates=[];
+  for(let d=28;d<=42;d++){
+    const ds=String(d);
+    if(!isAvail(ds))continue;
+    const ps=plateMap[ds]||"Unknown";
+    candidates.push({door:ds,priority:ps==="OK"?0:ps==="Unknown"?1:2});
+  }
+  candidates.sort((a,b)=>a.priority-b.priority);
+  return candidates[0]?.door||null;
+}
+
 async function reserveDoor(door,trailer,carrierType){
   const now=Date.now();
   await run(`INSERT INTO door_reservations(door,trailer,carrierType,reservedAt,expiresAt) VALUES(?,?,?,?,?) ON CONFLICT(door) DO UPDATE SET trailer=excluded.trailer,carrierType=excluded.carrierType,reservedAt=excluded.reservedAt,expiresAt=excluded.expiresAt`,[door,trailer,carrierType,now,now+RESERVATION_TTL_MS]);
@@ -897,6 +931,55 @@ app.post("/api/driver/arrive",requireXHR,requireDriverRate,async(req,res)=>{
   }catch(e){console.error("[arrive]",e);res.status(500).send("Arrival failed")}
 });
 
+// ── Outside carrier QR scan → auto-assign close/far door ──────────────────
+// Called when an outside carrier scans the yard QR code on their phone.
+// No session required — rate-limited like all other driver routes.
+// Priority: close doors 33 → 34, then far doors 28 → 42, then any remaining.
+app.post("/api/driver/qr-arrive",requireXHR,requireDriverRate,async(req,res)=>{
+  try{
+    const trailer  =String(req.body.trailer  ||"").trim().toUpperCase();
+    const dropType =String(req.body.dropType ||"Loaded").trim();
+    const direction=String(req.body.direction||"Inbound").trim();
+    if(!trailer)return res.status(400).send("Missing trailer number");
+    if(trailer.length>20)return res.status(400).send("Trailer number too long");
+    if(!/^[A-Z0-9\-_. ]+$/.test(trailer))return res.status(400).send("Invalid trailer number");
+    if(!["Empty","Loaded"].includes(dropType))return res.status(400).send("Invalid drop type");
+
+    // Idempotent — if already on board return existing assignment
+    const existing=await get(`SELECT * FROM trailers WHERE trailer=?`,[trailer]);
+    const ACTIVE=["Incoming","Dropped","Loading","Dock Ready","Ready"];
+    if(existing&&ACTIVE.includes(existing.status)&&existing.door){
+      return res.json({ok:true,door:existing.door,alreadyActive:true,status:existing.status,assigned:false,trailer});
+    }
+
+    // Pick door using outside-carrier priority (close → far)
+    const assignedDoor=await pickOutsideDoor(trailer);
+    if(!assignedDoor)return res.status(409).send("No doors available right now. Please contact dispatch.");
+
+    await reserveDoor(assignedDoor,trailer,"Outside");
+    const now=Date.now();
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt,doorAt)
+       VALUES(?,?,?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET
+         direction=excluded.direction, status=excluded.status, door=excluded.door,
+         dropType=excluded.dropType, carrierType=excluded.carrierType,
+         updatedAt=excluded.updatedAt, doorAt=excluded.doorAt`,
+      [trailer,direction,"Incoming",assignedDoor,"",dropType,"Outside",now,now]
+    );
+    await audit(req,"driver","qr_arrive","trailer",trailer,{door:assignedDoor,dropType,carrierType:"Outside"});
+    await logEvent("info","qr_arrive",`QR scan: Outside carrier ${trailer} → Door ${assignedDoor}`);
+
+    // Broadcast to ALL connected clients simultaneously
+    await broadcastTrailers();
+    wsBroadcast("arrive",{trailer,door:assignedDoor,at:now,carrierType:"Outside"});
+    broadcastPush("🏢 Outside Carrier Arrived",`Trailer ${trailer} → Door ${assignedDoor}`,{type:"qr_arrive",trailer,door:assignedDoor}).catch(()=>{});
+    fireWebhook("driver.qr_arrived",{trailer,door:assignedDoor,dropType});
+
+    res.json({ok:true,door:assignedDoor,alreadyActive:false,assigned:true,trailer});
+  }catch(e){console.error("[qr-arrive]",e);res.status(500).send("QR arrival failed");}
+});
+
 app.post("/api/driver/drop",requireXHR,requireDriverRate,requireDriverAccess,async(req,res)=>{
   try{
     const trailer    =String(req.body.trailer    ||"").trim();
@@ -1030,6 +1113,108 @@ app.get("/api/shift-summary",requireRole(["dispatcher","management","admin"]),as
     const issues=await all(`SELECT id,at,trailer,door,note FROM issue_reports WHERE at > ? ORDER BY at DESC`,[since]);
     res.json({hours,since,active:active.length,departed:trailerRows.filter(r=>r.status==="Departed").length,total:trailerRows.length,byStatus,issues:issues.length,confirmations:events.filter(e=>e.action==="confirm_safety").length,omw:events.filter(e=>e.action==="omw").length,arrivals:events.filter(e=>e.action==="arrive").length,issueList:issues,recentEvents:events.slice(0,60).map(e=>({at:e.at,action:e.action,actor:e.actorRole,entity:e.entityId,details:(()=>{try{return JSON.parse(e.details||"{}");}catch{return{};}})()}))});
   }catch(e){console.error("[shift-summary]",e);res.status(500).send("Failed")}
+});
+
+// ── QR scan landing page — served at /qr (no auth required) ──────────────
+// The physical QR code in the yard points to  /qr
+// The driver enters their trailer number and taps "Arrive" — that calls
+// POST /api/driver/qr-arrive and shows the assigned door instantly.
+app.get("/qr",(req,res)=>{
+  res.setHeader("Content-Type","text/html; charset=utf-8");
+  res.setHeader("Cache-Control","no-cache, no-store, must-revalidate");
+  res.end(`<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<title>Wesbell — Outside Carrier Arrival</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#060b10;--card:#0d1620;--border:#1a2535;--amber:#f0a030;--cyan:#20c0d0;--green:#20d090;--red:#e84848;--t0:#e8eef8;--t1:#8a9db8;--t2:#4a5e78;--mono:"DM Mono",monospace;--sans:"DM Sans",system-ui,sans-serif}
+html,body{height:100%;-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--t0);font-family:var(--sans);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 20px;min-height:100%;min-height:100dvh}
+.logo{font-family:var(--mono);font-size:11px;letter-spacing:.15em;color:var(--t2);text-transform:uppercase;margin-bottom:28px;display:flex;align-items:center;gap:10px}
+.logo-mark{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--amber),#c07020);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#000;flex-shrink:0}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px 24px;width:100%;max-width:360px}
+.heading{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--t0);letter-spacing:.04em;margin-bottom:4px}
+.sub{font-family:var(--mono);font-size:12px;color:var(--t2);letter-spacing:.04em;margin-bottom:24px;line-height:1.5}
+.lbl{display:block;font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--t2);margin-bottom:8px}
+.inp{width:100%;padding:16px;border-radius:10px;border:2px solid var(--border);background:#080f18;color:var(--t0);font-family:var(--mono);font-size:22px;font-weight:700;letter-spacing:.12em;text-align:center;outline:none;-webkit-appearance:none;transition:border-color .15s;margin-bottom:16px;text-transform:uppercase}
+.inp:focus{border-color:var(--amber)}
+.inp::placeholder{color:var(--t2);font-size:16px;letter-spacing:.04em}
+.drop-row{display:flex;gap:8px;margin-bottom:20px}
+.drop-btn{flex:1;padding:12px 8px;border-radius:8px;border:2px solid var(--border);background:transparent;color:var(--t1);font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.06em;cursor:pointer;transition:all .15s;text-align:center}
+.drop-btn.sel{border-color:var(--amber);background:rgba(240,160,48,.1);color:var(--amber)}
+.btn{width:100%;padding:18px;border-radius:12px;border:none;background:linear-gradient(135deg,var(--amber),#c07020);color:#000;font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:.08em;cursor:pointer;touch-action:manipulation;transition:opacity .15s,transform .1s;-webkit-tap-highlight-color:transparent}
+.btn:active{opacity:.85;transform:scale(.98)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.err{display:none;margin-top:14px;padding:10px 14px;border-radius:8px;background:rgba(232,72,72,.1);border:1px solid rgba(232,72,72,.25);color:var(--red);font-family:var(--mono);font-size:12px;letter-spacing:.03em;text-align:center;line-height:1.4}
+.err.show{display:block}
+/* Success screen */
+.success{display:none;text-align:center;padding:4px 0}
+.door-badge{font-family:var(--mono);font-size:72px;font-weight:700;color:var(--amber);line-height:1;letter-spacing:-.02em;margin:8px 0 4px}
+.door-label{font-family:var(--mono);font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--t2);margin-bottom:20px}
+.trailer-conf{font-family:var(--mono);font-size:14px;color:var(--t1);margin-bottom:24px}
+.restart-btn{background:transparent;border:1px solid var(--border);color:var(--t2);padding:12px 20px;border-radius:10px;font-family:var(--mono);font-size:12px;letter-spacing:.06em;cursor:pointer;transition:all .15s;width:100%;margin-top:0}
+.restart-btn:hover{border-color:var(--amber);color:var(--amber)}
+.already-badge{background:rgba(32,192,208,.1);border:1px solid rgba(32,192,208,.25);border-radius:8px;padding:10px 14px;font-family:var(--mono);font-size:12px;color:var(--cyan);text-align:center;margin-bottom:16px;display:none}
+.already-badge.show{display:block}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.logo,.card{animation:fadeUp .3s ease both}
+.card{animation-delay:.06s}
+</style>
+</head><body>
+<div class="logo"><div class="logo-mark">W</div>WESBELL DISPATCH</div>
+<div class="card">
+  <!-- Entry screen -->
+  <div id="entryScreen">
+    <div class="heading">CARRIER ARRIVAL</div>
+    <div class="sub">Enter your trailer number to receive your assigned door.</div>
+    <label class="lbl" for="trailerInput">Trailer Number</label>
+    <input id="trailerInput" class="inp" type="text" inputmode="numeric" placeholder="e.g. 5312" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" maxlength="20"/>
+    <label class="lbl">Drop Type</label>
+    <div class="drop-row">
+      <button class="drop-btn sel" id="dtLoaded" onclick="setDrop('Loaded')">Loaded</button>
+      <button class="drop-btn" id="dtEmpty" onclick="setDrop('Empty')">Empty</button>
+    </div>
+    <button class="btn" id="arriveBtn" onclick="doArrive()">GET DOOR ASSIGNMENT</button>
+    <div class="err" id="errMsg"></div>
+  </div>
+  <!-- Success screen -->
+  <div class="success" id="successScreen">
+    <div id="alreadyNote" class="already-badge">Already assigned — showing existing door.</div>
+    <div style="font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--t2);margin-bottom:6px">YOUR ASSIGNED DOOR</div>
+    <div class="door-badge" id="doorBig">—</div>
+    <div class="door-label">PROCEED TO THIS DOOR</div>
+    <div class="trailer-conf" id="trailerConf"></div>
+    <button class="restart-btn" onclick="restart()">↩ New arrival</button>
+  </div>
+</div>
+<script>
+var dropType="Loaded";
+function setDrop(t){dropType=t;document.getElementById("dtLoaded").classList.toggle("sel",t==="Loaded");document.getElementById("dtEmpty").classList.toggle("sel",t==="Empty");}
+function restart(){document.getElementById("entryScreen").style.display="";document.getElementById("successScreen").style.display="none";document.getElementById("trailerInput").value="";document.getElementById("errMsg").classList.remove("show");document.getElementById("alreadyNote").classList.remove("show");}
+async function doArrive(){
+  var t=document.getElementById("trailerInput").value.trim().toUpperCase();
+  var err=document.getElementById("errMsg");
+  if(!t){err.textContent="Enter your trailer number.";err.classList.add("show");return;}
+  var btn=document.getElementById("arriveBtn");
+  btn.disabled=true;btn.textContent="ASSIGNING DOOR…";err.classList.remove("show");
+  try{
+    var res=await fetch("/api/driver/qr-arrive",{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},body:JSON.stringify({trailer:t,dropType:dropType,direction:"Inbound"})});
+    if(res.status===409){var txt=await res.text();err.textContent=txt;err.classList.add("show");return;}
+    if(!res.ok){var txt=await res.text();err.textContent=txt||"Server error. Try again.";err.classList.add("show");return;}
+    var data=await res.json();
+    document.getElementById("doorBig").textContent="D"+data.door;
+    document.getElementById("trailerConf").textContent="Trailer "+data.trailer;
+    if(data.alreadyActive)document.getElementById("alreadyNote").classList.add("show");
+    document.getElementById("entryScreen").style.display="none";
+    document.getElementById("successScreen").style.display="block";
+  }catch(e){err.textContent="Connection error. Try again.";err.classList.add("show");}
+  finally{btn.disabled=false;btn.textContent="GET DOOR ASSIGNMENT";}
+}
+document.getElementById("trailerInput").addEventListener("keydown",function(e){if(e.key==="Enter")doArrive();});
+document.getElementById("trailerInput").focus();
+</script>
+</body></html>`);
 });
 
 // ── Health ──

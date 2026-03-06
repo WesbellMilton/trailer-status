@@ -675,7 +675,7 @@ body{background-image:none!important;background:transparent!important}
             const data = await res.json();
             if (data.door) {
               updateLiveDoor(data.door);
-              showDoorAssigned('Arrived!', data.alreadyActive ? `Head to your assigned Door ${data.door}.` : `Pull straight into Door ${data.door}.`);
+              showDoorAssigned('Arrived!', data.alreadyActive ? `Head to your assigned Door ${data.door}.` : `Pull straight into Door ${data.door}.`, true);
             } else {
               toast('No door available — please ask dispatch.');
             }
@@ -708,7 +708,7 @@ body{background-image:none!important;background:transparent!important}
           const data = await res.json();
           if (data.door) {
             updateLiveDoor(data.door);
-            showDoorAssigned('Door Assigned!', data.alreadyActive ? `Your trailer is at Door ${data.door}.` : `Head to Door ${data.door}. Dispatch notified.`);
+            showDoorAssigned('Door Assigned!', data.alreadyActive ? `Your trailer is at Door ${data.door}.` : `Head to Door ${data.door}. Dispatch notified.`, true);
           } else {
             toast('No door available — please ask dispatch.');
           }
@@ -783,9 +783,11 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Confirming...';
       btn.disabled = true;
       try {
-        await fetch('/api/confirm-safety', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, door: state.door, action: 'depart', loadSecured: true, dockPlateUp: true }) });
+        const confirmDoor = state.door || state.assignedDoor || '';
+        await fetch('/api/confirm-safety', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, door: confirmDoor, action: 'depart', loadSecured: true, dockPlateUp: true }) });
         updateLiveDoor(null); 
-        showSuccess('Departed! ✓', 'Safe travels! Trailer marked departed.', [{k:'Trailer',v:state.trailer},{k:'Door',v:state.door||'—'}]);
+        if(window._driverOmwStop) window._driverOmwStop();
+        showSuccess('Departed! ✓', 'Safe travels! Trailer marked departed.', [{k:'Trailer',v:state.trailer},{k:'Door',v:confirmDoor||'—'}]);
       } catch(e) {
         toast('Network Error');
       } finally {
@@ -795,13 +797,23 @@ body{background-image:none!important;background:transparent!important}
     });
 
     // -- Door Display Helper --
-    function showDoorAssigned(headline, sub) {
-      document.getElementById('ts-door-number').textContent = state.assignedDoor;
+    function showDoorAssigned(headline, sub, showSafety) {
+      document.getElementById('ts-door-number').textContent = state.assignedDoor || state.door || '--';
       document.getElementById('ts-door-headline').textContent = headline;
       document.getElementById('ts-door-sub').textContent = sub;
       document.getElementById('ts-door-trailer-tag2').textContent = `🚛 ${state.trailer}`;
+      // Show safety button only for OMW flow (driver needs to confirm when they actually arrive)
+      const safetyBtn = document.getElementById('ts-door-safety-btn');
+      if(safetyBtn) safetyBtn.style.display = showSafety ? '' : 'none';
       show('ts-s-door');
     }
+    document.getElementById('ts-door-safety-btn').addEventListener('click', () => {
+      state.safetyChecks = { load: false, plate: false };
+      document.querySelectorAll('#ts-s-safety .ts-check-item').forEach(c => c.classList.remove('ts-checked'));
+      document.getElementById('ts-safety-submit').disabled = true;
+      state.door = state.assignedDoor || state.door;
+      show('ts-s-safety');
+    });
     document.getElementById('ts-door-done-btn').addEventListener('click', () => {
        show('ts-s-home');
        document.getElementById('ts-home-trailer').value = '';

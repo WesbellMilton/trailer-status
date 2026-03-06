@@ -8,33 +8,6 @@
   const isSuper=()=>path().startsWith("/management");
   const isDock=()=>path().startsWith("/dock");
   const isAdmin=()=>ROLE==="admin";
-(() => {
-  const CSRF = {"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"};
-  let ROLE=null, VERSION="", trailers={}, dockPlates={}, doorBlocks={}, confirmations=[];
-  const plateEditOpen={}, shuntOpen={};
-  const el=id=>document.getElementById(id);
-  const path=()=>location.pathname.toLowerCase();
-  const isDriver=()=>path().startsWith("/driver");
-  const isSuper=()=>path().startsWith("/management");
-  const isDock=()=>path().startsWith("/dock");
-  const isAdmin=()=>ROLE==="admin";
-
-  // 👇 --- PASTE THIS NEW QR LOGIC HERE --- 👇
-  if (isDriver()) {
-    // Wait a split second for the HTML to finish loading
-    setTimeout(() => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const qrCarrier = urlParams.get('carrier');
-
-      if (qrCarrier === 'outside') {
-        const dropTypeSelect = document.getElementById('dr_drop_type'); 
-        if (dropTypeSelect) {
-           dropTypeSelect.value = 'Outside Carrier';
-        }
-      }
-    }, 100);
-  }
-  // 👆 ------------------------------------- 👆
 
   const fmtTime=ms=>{
     if(!ms)return"";

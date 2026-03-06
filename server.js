@@ -33,9 +33,21 @@ app.use((req,res,next)=>{
 
 // ── Security headers ──
 app.use((req,res,next)=>{
+  res.removeHeader("X-Powered-By");
   res.setHeader("X-Content-Type-Options","nosniff");
   res.setHeader("X-Frame-Options","DENY");
   res.setHeader("Referrer-Policy","strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy","geolocation=(self),camera=(self)");
+  res.setHeader("Content-Security-Policy",
+    "default-src 'self'; "+
+    "script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "+
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; "+
+    "font-src 'self' https://fonts.gstatic.com; "+
+    "img-src 'self' data: blob:; "+
+    "connect-src 'self' wss: ws:; "+
+    "worker-src 'self'; "+
+    "frame-ancestors 'none';"
+  );
   next();
 });
 
@@ -200,6 +212,11 @@ async function broadcastPush(title,body,data){
 
 // ── DB Init ──
 async function initDb(){
+  // WAL mode: massively better concurrent read performance
+  await run("PRAGMA journal_mode=WAL");
+  await run("PRAGMA synchronous=NORMAL");
+  await run("PRAGMA cache_size=-16000"); // 16 MB page cache
+  await run("PRAGMA temp_store=MEMORY");
   await run(`CREATE TABLE IF NOT EXISTS trailers(trailer TEXT PRIMARY KEY,direction TEXT,status TEXT,door TEXT,note TEXT,dropType TEXT,carrierType TEXT DEFAULT '',updatedAt INTEGER,omwAt INTEGER DEFAULT NULL,omwEta INTEGER DEFAULT NULL,doorAt INTEGER DEFAULT NULL)`);
   await run(`CREATE TABLE IF NOT EXISTS doorblocks(door TEXT PRIMARY KEY,note TEXT NOT NULL DEFAULT '',setAt INTEGER NOT NULL DEFAULT 0)`);
   await run(`CREATE TABLE IF NOT EXISTS dockplates(door TEXT PRIMARY KEY,status TEXT,note TEXT,updatedAt INTEGER)`);
@@ -210,6 +227,16 @@ async function initDb(){
   await run(`CREATE TABLE IF NOT EXISTS pins(role TEXT PRIMARY KEY,salt BLOB,hash BLOB,iter INTEGER)`);
   await run(`CREATE TABLE IF NOT EXISTS logs(id INTEGER PRIMARY KEY AUTOINCREMENT,at INTEGER,level TEXT,context TEXT,message TEXT,detail TEXT)`);
   await run(`CREATE TABLE IF NOT EXISTS door_reservations(door TEXT PRIMARY KEY,trailer TEXT NOT NULL,carrierType TEXT NOT NULL DEFAULT 'Outside',reservedAt INTEGER NOT NULL,expiresAt INTEGER NOT NULL)`);
+
+  // Performance indexes — IF NOT EXISTS makes these safe to re-run
+  await run("CREATE INDEX IF NOT EXISTS idx_trailers_status ON trailers(status)");
+  await run("CREATE INDEX IF NOT EXISTS idx_trailers_updatedAt ON trailers(updatedAt DESC)");
+  await run("CREATE INDEX IF NOT EXISTS idx_audit_at ON audit(at DESC)");
+  await run("CREATE INDEX IF NOT EXISTS idx_audit_entityId ON audit(entityId)");
+  await run("CREATE INDEX IF NOT EXISTS idx_audit_action ON audit(action)");
+  await run("CREATE INDEX IF NOT EXISTS idx_reservations_expires ON door_reservations(expiresAt)");
+  await run("CREATE INDEX IF NOT EXISTS idx_issues_at ON issue_reports(at DESC)");
+  await run("CREATE INDEX IF NOT EXISTS idx_issues_trailer ON issue_reports(trailer)");
 
   db.run("ALTER TABLE trailers ADD COLUMN omwAt INTEGER DEFAULT NULL",()=>{});
   db.run("ALTER TABLE trailers ADD COLUMN omwEta INTEGER DEFAULT NULL",()=>{});
@@ -350,7 +377,19 @@ function wsBroadcast(type,payload){
   for(const client of wss.clients) if(client.readyState===WebSocket.OPEN) try{client.send(msg)}catch{}
 }
 
-async function broadcastTrailers(){ try{invalidateTrailers();wsBroadcast("state",await getTrailersCache())}catch(e){console.error("[WS] broadcastTrailers:",e.message)} }
+let _broadcastTimer=null;
+function broadcastTrailers(){
+  // Debounce: collapse multiple calls within 80ms into one broadcast
+  return new Promise(resolve=>{
+    if(_broadcastTimer)clearTimeout(_broadcastTimer);
+    _broadcastTimer=setTimeout(async()=>{
+      _broadcastTimer=null;
+      try{invalidateTrailers();wsBroadcast("state",await getTrailersCache());}
+      catch(e){console.error("[WS] broadcastTrailers:",e.message);}
+      resolve();
+    },80);
+  });
+}
 async function broadcastPlates(){   try{invalidatePlates();  wsBroadcast("dockplates",await getPlatesCache())}catch(e){console.error("[WS] broadcastPlates:",e.message)} }
 async function broadcastBlocks(){   try{invalidateBlocks();  wsBroadcast("doorblocks",await getBlocksCache())}catch(e){console.error("[WS] broadcastBlocks:",e.message)} }
 async function broadcastConfirmations(){ try{wsBroadcast("confirmations",await loadConfirmations(250))}catch(e){console.error("[WS] broadcastConfirmations:",e.message)} }
@@ -936,6 +975,8 @@ app.post("/api/crossdock/pickup",requireXHR,requireDriverRate,requireDriverAcces
     const trailer=String(req.body.trailer||"").trim().toUpperCase();
     const door   =String(req.body.door   ||"").trim();
     if(!trailer)return res.status(400).send("Missing trailer");
+    if(trailer.length>20)return res.status(400).send("Trailer number too long");
+    if(!/^[A-Z0-9\-_. ]+$/.test(trailer))return res.status(400).send("Invalid trailer number");
     const dNum=Number(door);
     if(!Number.isFinite(dNum)||dNum<28||dNum>42)return res.status(400).send("Invalid door (28–42)");
     const existing=await get(`SELECT * FROM trailers WHERE trailer=?`,[trailer]);
@@ -951,6 +992,8 @@ app.post("/api/crossdock/offload",requireXHR,requireDriverRate,requireDriverAcce
     const trailer=String(req.body.trailer||"").trim().toUpperCase();
     const door   =String(req.body.door   ||"").trim();
     if(!trailer)return res.status(400).send("Missing trailer");
+    if(trailer.length>20)return res.status(400).send("Trailer number too long");
+    if(!/^[A-Z0-9\-_. ]+$/.test(trailer))return res.status(400).send("Invalid trailer number");
     const dNum=Number(door);
     if(!Number.isFinite(dNum)||dNum<28||dNum>42)return res.status(400).send("Invalid door (28–42)");
     const existing=await get(`SELECT * FROM trailers WHERE trailer=?`,[trailer]);
@@ -963,6 +1006,25 @@ app.post("/api/crossdock/offload",requireXHR,requireDriverRate,requireDriverAcce
     await broadcastTrailers();
     res.json({ok:true});
   }catch{res.status(500).send("Cross dock offload failed")}
+});
+
+// ── Driver GPS location update ──
+app.post("/api/driver/location",requireXHR,requireDriverRate,async(req,res)=>{
+  try{
+    const trailer=String(req.body.trailer||"").trim().toUpperCase();
+    const lat=parseFloat(req.body.lat);
+    const lng=parseFloat(req.body.lng);
+    const eta=req.body.eta!=null?parseInt(req.body.eta):null;
+    if(!trailer||!Number.isFinite(lat)||!Number.isFinite(lng))return res.status(400).send("Invalid payload");
+    if(lat<42||lat>57||lng<-96||lng>-60)return res.status(400).send("Coordinates out of range"); // Ontario bounds
+    const now=Date.now();
+    // Only update if trailer is actively Incoming
+    const row=await get(`SELECT status FROM trailers WHERE trailer=?`,[trailer]);
+    if(!row||row.status!=="Incoming")return res.json({ok:true,ignored:true});
+    if(eta!=null)await run(`UPDATE trailers SET omwEta=?,updatedAt=? WHERE trailer=? AND status='Incoming'`,[eta,now,trailer]);
+    wsBroadcast("location",{trailer,lat,lng,eta:eta??null,locAt:now});
+    res.json({ok:true});
+  }catch(e){console.error("[location]",e);res.status(500).send("Location update failed");}
 });
 
 app.post("/api/driver/shunt",requireXHR,requireDriverRate,async(req,res)=>{
@@ -1013,7 +1075,7 @@ app.get("/api/push/vapid-public-key",(req,res)=>{
   res.json({publicKey:VAPID_KEYS.publicKey});
 });
 
-app.post("/api/push/subscribe",requireXHR,async(req,res)=>{
+app.post("/api/push/subscribe",requireXHR,requireDriverRate,async(req,res)=>{
   try{
     const sub=req.body;
     if(!sub?.endpoint||!sub?.keys?.p256dh||!sub?.keys?.auth)return res.status(400).send("Invalid subscription");
@@ -1164,6 +1226,25 @@ app.get("/api/load-status",requireRole(["dispatcher","management","admin","dock"
   }catch(err){console.error("[load-status]",err);res.status(500).send("Load status failed");}
 });
 
+// ── Shift notes (dispatcher handoff messages) ──
+let _shiftNote={text:"",setAt:0,setBy:""};
+// Restore from DB on startup
+(async()=>{try{const r=await get("SELECT message,context,at FROM logs WHERE context='shift_note' ORDER BY at DESC LIMIT 1");if(r){_shiftNote={text:r.message||"",setAt:r.at||0,setBy:r.context||""};}}catch{}})();
+
+app.get("/api/shift-note",(req,res)=>{
+  res.json({text:_shiftNote.text,setAt:_shiftNote.setAt,setBy:_shiftNote.setBy});
+});
+
+app.post("/api/shift-note",requireXHR,requireRole(["dispatcher","management","admin"]),async(req,res)=>{
+  const actor=req.user?.role||"unknown";
+  const text=String(req.body.text||"").trim().slice(0,500);
+  _shiftNote={text,setAt:Date.now(),setBy:actor};
+  await logEvent("info","shift_note",text,actor);
+  await audit(req,actor,"shift_note_set","system","shift",{text:text.slice(0,80)});
+  wsBroadcast("shift_note",{text,setAt:_shiftNote.setAt,setBy:actor});
+  res.json({ok:true});
+});
+
 // ── PIN management ──
 app.post("/api/management/set-pin",requireXHR,requireRole(["management","admin"]),async(req,res)=>{
   const actor=req.user?.role||"unknown";
@@ -1215,7 +1296,8 @@ app.post("/api/report-issue",requireXHR,requireIssueAccess,async(req,res)=>{
   try{
     const trailer  =String(req.body.trailer ||"").trim().toUpperCase();
     const door     =String(req.body.door    ||"").trim();
-    const note     =String(req.body.note    ||"").trim().slice(0,1000);
+    const note     =String(req.body.note    ||"").trim().slice(0,500);
+    if(note&&/<script/i.test(note))return res.status(400).send("Invalid note content");
     const photoData=req.body.photo_data?String(req.body.photo_data):null;
     const photoMime=req.body.photo_mime?String(req.body.photo_mime).slice(0,32):null;
     if(!trailer)return res.status(400).send("Missing trailer");
@@ -1234,7 +1316,9 @@ app.post("/api/report-issue",requireXHR,requireIssueAccess,async(req,res)=>{
 app.get("/api/issue-reports",requireRole(["dispatcher","management","admin"]),async(req,res)=>{
   try{
     const limit=Math.max(1,Math.min(200,Number(req.query.limit||50)));
-    res.json(await all(`SELECT id,at,trailer,door,note,photo_data,photo_mime,ip FROM issue_reports ORDER BY at DESC LIMIT ?`,[limit]));
+    // Exclude photo_data from list — clients fetch photo via /api/issue-reports/:id/photo
+    const rows=await all(`SELECT id,at,trailer,door,note,photo_mime,ip,(CASE WHEN photo_data IS NOT NULL THEN 1 ELSE 0 END) as has_photo FROM issue_reports ORDER BY at DESC LIMIT ?`,[limit]);
+    res.json(rows);
   }catch{res.status(500).send("Fetch failed")}
 });
 

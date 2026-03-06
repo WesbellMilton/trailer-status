@@ -346,6 +346,18 @@
     <div class="field"><label class="fl" for="d_note">Note</label><textarea id="d_note" placeholder="Optional note…"></textarea></div>
     <button class="btn btn-primary btn-full" id="btnSaveTrailer" style="min-height:48px;">Save Trailer Record</button>
     <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--b0)">
+      <div class="panel-title" style="margin-bottom:10px"><div class="ptdot" style="background:var(--violet,#9b6dff)"></div>Shift Handoff Note</div>
+      <div id="shiftNoteWrap" style="display:none;padding:8px 10px;border-radius:6px;background:rgba(155,109,255,.08);border:1px solid rgba(155,109,255,.2);margin-bottom:8px;">
+        <div id="shiftNoteDisplay" style="font-size:12px;color:var(--t1);line-height:1.5;"></div>
+        <div id="shiftNoteMeta" style="font-size:10px;color:var(--t2);margin-top:3px;font-family:var(--mono);"></div>
+      </div>
+      <textarea id="shiftNoteInput" placeholder="Leave a note for the next shift… (e.g. Door 34 jammed, trailer 5312 priority pickup)" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--b1);background:var(--s1,#101620);color:var(--t0);font-size:12px;min-height:60px;resize:vertical;box-sizing:border-box;font-family:var(--sans);"></textarea>
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <button class="btn btn-primary btn-sm" id="btnSaveShiftNote">💬 Save Note</button>
+        <button class="btn btn-default btn-sm" id="btnClearShiftNote">Clear</button>
+      </div>
+    </div>
+    <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--b0)">
       <div class="panel-title" style="margin-bottom:10px"><div class="ptdot" style="background:var(--cyan)"></div>Export & Logs</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;">
         <a href="/api/export/trailers.csv" class="btn btn-default btn-sm" download>⬇ Trailers CSV</a>
@@ -1238,6 +1250,9 @@
       else if(type==="doorblocks"){doorBlocks=payload||{};renderDockMap();renderBoard();}
       else if(type==="confirmations"){confirmations=Array.isArray(payload)?payload:[];if(isSuper())renderSupConf();}
       else if(type==="ping"){/* keepalive */}
+      else if(type==="shift_note"){
+        renderShiftNote(payload);
+      }
       else if(type==="location"){
         if(trailers[payload.trailer]){
           trailers[payload.trailer].lat=payload.lat;
@@ -1373,7 +1388,7 @@
 
   loadInitial().then(()=>{
     syncBottomNav();initToastSwipe();initPullToRefresh();initKeyboardAvoidance();initSwipeViews();initPwaInstall();
-    initStaffLogin();initStaffLogin._sync?.();initIssueCamera();initIssueLightbox();initDockIssueModal();
+    initStaffLogin();initStaffLogin._sync?.();initIssueCamera();initIssueLightbox();initDockIssueModal();initShiftNote();
     // Init push for all views — drivers get auto-subscribed, others get auto-subscribed if permission already granted
     if(!path().startsWith("/driver"))initPush();
 
@@ -1580,6 +1595,45 @@
     initQuickDrop();initVoiceInput();initDockScan();initDimMode();initDockRememberLogin();
   });
   // Start WS immediately — don't wait for loadInitial, server sends state on connect
+  // ── Shift Notes ───────────────────────────────────────────────────────────
+  function renderShiftNote(data){
+    const wrap=el("shiftNoteWrap");
+    const banner=el("shiftNoteBanner");
+    const txt=data?.text||"";
+    const metaStr=(data?.setBy?data.setBy+" · ":"")+( data?.setAt?timeAgo(data.setAt):"");
+    // Sidebar editor section (dispatcher panel)
+    if(wrap)wrap.style.display=txt?"":"none";
+    const disp=el("shiftNoteDisplay");if(disp)disp.textContent=txt;
+    const meta=el("shiftNoteMeta");if(meta)meta.textContent=metaStr;
+    // Read-only banner on the board (visible to all roles)
+    if(banner){
+      banner.style.display=txt?"":"none";
+      const bt=el("shiftNoteBannerText");if(bt)bt.textContent=txt;
+      const bm=el("shiftNoteBannerMeta");if(bm)bm.textContent=metaStr;
+    }
+    // Sync textarea if it's empty (don't overwrite in-progress edits)
+    const inp=el("shiftNoteInput");if(inp&&!inp.value&&txt)inp.value=txt;
+  }
+  async function loadShiftNote(){
+    try{const d=await apiJson("/api/shift-note");renderShiftNote(d);}catch{}
+  }
+  function initShiftNote(){
+    const inp=el("shiftNoteInput"),btn=el("btnSaveShiftNote"),clr=el("btnClearShiftNote");
+    if(!inp||!btn)return;
+    btn.addEventListener("click",async()=>{
+      const text=(inp.value||"").trim();
+      try{
+        await apiJson("/api/shift-note",{method:"POST",headers:CSRF,body:JSON.stringify({text})});
+        toast("Shift note saved","",text?"ok":"warn");
+      }catch(e){toast("Failed",e.message,"err");}
+    });
+    clr?.addEventListener("click",async()=>{
+      inp.value="";
+      try{await apiJson("/api/shift-note",{method:"POST",headers:CSRF,body:JSON.stringify({text:""})});toast("Note cleared","","warn");}catch{}
+    });
+    loadShiftNote();
+  }
+
   // ── Issue Reports (management view) ──────────────────────────────────
   async function loadIssueReports(){
     const body=el("supIssueBody"),count=el("supIssueCount");if(!body)return;
@@ -1588,7 +1642,7 @@
       if(count)count.textContent=rows.length;
       if(!rows.length){body.innerHTML='<div style="padding:20px;text-align:center;color:var(--t3);font-size:12px;font-family:var(--mono);">No issue reports yet.</div>';return;}
       body.innerHTML=rows.map(r=>{
-        const hasPhoto=!!r.photo_data;
+        const hasPhoto=!!r.has_photo||!!r.photo_data;
         return`<div class="issue-row" style="padding:12px 16px;border-bottom:1px solid var(--b0);display:grid;grid-template-columns:auto 1fr auto;gap:8px 12px;align-items:start;">
           <div style="font-family:var(--mono);font-size:10px;color:var(--t2);white-space:nowrap;padding-top:2px;">${esc(fmtTime(r.at))}</div>
           <div>

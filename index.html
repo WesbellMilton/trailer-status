@@ -1330,6 +1330,13 @@ body{background-image:none!important;background:transparent!important}
 
       <div class="col-stack">
 
+        <!-- Shift note read banner (shown to all roles when a note exists) -->
+        <div id="shiftNoteBanner" style="display:none;padding:10px 14px;border-radius:8px;background:rgba(155,109,255,.08);border:1px solid rgba(155,109,255,.2);margin-bottom:4px;display:none;">
+          <span style="font-size:10px;font-family:var(--mono);color:var(--t2);letter-spacing:.06em;text-transform:uppercase;">Shift Note</span>
+          <div id="shiftNoteBannerText" style="font-size:13px;color:var(--t1);margin-top:3px;line-height:1.5;"></div>
+          <div id="shiftNoteBannerMeta" style="font-size:10px;color:var(--t2);margin-top:2px;font-family:var(--mono);"></div>
+        </div>
+
         <div class="disp-kpi-bar">
           <div id="dispKpis" class="kpi-row"></div>
           <div class="disp-actions">

@@ -1164,7 +1164,7 @@ app.post("/api/confirm-safety",requireXHR,requireDriverAccess,async(req,res)=>{
     // FIX #7: Both xdock_pickup and xdock_offload complete the trailer's journey —
     // previously only xdock_pickup advanced the status to Departed, leaving offload
     // trailers lingering on the board until manually advanced.
-    if((action==="xdock_pickup"||action==="xdock_offload")&&trailer){
+    if((action==="xdock_pickup"||action==="xdock_offload"||action==="depart")&&trailer){
       await run(`UPDATE trailers SET status='Departed',updatedAt=? WHERE trailer=?`,[at,trailer]);
       await releaseReservation(trailer);
     }

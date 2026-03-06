@@ -766,9 +766,9 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Confirming...';
       btn.disabled = true;
       try {
-        await fetch('/api/confirm-safety', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, door: state.door, action: 'depart' }) });
+        await fetch('/api/confirm-safety', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, door: state.door, action: 'depart', loadSecured: true, dockPlateUp: true }) });
         updateLiveDoor(null); 
-        showSuccess('Cross Dock Complete', 'Safe travels! Trip logged.', [{k:'Trailer',v:state.trailer},{k:'Door',v:state.door}]);
+        showSuccess('Departed! ✓', 'Safe travels! Trailer marked departed.', [{k:'Trailer',v:state.trailer},{k:'Door',v:state.door||'—'}]);
       } catch(e) {
         toast('Network Error');
       } finally {

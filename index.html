@@ -637,14 +637,14 @@ body{background-image:none!important;background:transparent!important}
       
       if (act === 'qd') {
         try { 
-          await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, dropType: 'Loaded', carrierType: 'Wesbell' }) }); 
+          await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: 'Loaded', carrierType: 'Wesbell' }) }); 
           showSuccess('Quick Drop Logged', 'Trailer dropped to yard instantly.', [{k:'Trailer',v:state.trailer},{k:'Action',v:'Quick Drop'}]);
         } catch(e) { toast('Error connecting to server'); }
       } 
       else if (act === 'shunt') {
         showDoorSelector('Shunt <span>Trailer</span>', 'Move to which door?', async () => {
           try {
-            await fetch('/api/driver/shunt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, newDoor: state.door }) });
+            await fetch('/api/driver/shunt', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, newDoor: state.door }) });
             showSuccess('Shunt Complete', `Trailer moved to Door ${state.door}.`, [{k:'Trailer',v:state.trailer},{k:'New Door',v:state.door}]);
           } catch(e) { toast('Error shunting trailer'); }
         });
@@ -663,7 +663,7 @@ body{background-image:none!important;background:transparent!important}
       else if (act === 'arrive') {
         // REAL ARRIVAL FETCH
         try {
-          const res = await fetch('/api/driver/arrive', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer }) });
+          const res = await fetch('/api/driver/arrive', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, carrierType: state.carrier || 'Wesbell' }) });
           if(res.ok) {
             const data = await res.json();
             updateLiveDoor(data.door);
@@ -691,7 +691,7 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Sending...';
       btn.disabled = true;
       try {
-        const res = await fetch('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, eta: state.eta }) });
+        const res = await fetch('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, eta: state.eta }) });
         if(res.ok) {
           const data = await res.json();
           updateLiveDoor(data.door);
@@ -720,7 +720,7 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Submitting...';
       btn.disabled = true;
       try {
-        await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, dropType: state.dropType, carrierType: 'Outside' }) });
+        await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: state.dropType, carrierType: 'Outside' }) });
         showSuccess('Drop Logged', 'Dispatch will assign your door on the board.', [{k:'Trailer',v:state.trailer},{k:'Type',v:state.dropType},{k:'Carrier',v:'Outside'}]);
       } catch(e) {
         toast('Network Error');
@@ -766,7 +766,7 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Confirming...';
       btn.disabled = true;
       try {
-        await fetch('/api/confirm-safety', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trailer: state.trailer, door: state.door, action: 'depart', loadSecured: true, dockPlateUp: true }) });
+        await fetch('/api/confirm-safety', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, door: state.door, action: 'depart', loadSecured: true, dockPlateUp: true }) });
         updateLiveDoor(null); 
         showSuccess('Departed! ✓', 'Safe travels! Trailer marked departed.', [{k:'Trailer',v:state.trailer},{k:'Door',v:state.door||'—'}]);
       } catch(e) {

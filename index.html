@@ -1298,26 +1298,33 @@ body{background-image:none!important;background:transparent!important}
       <div class="col-stack">
 
         <!-- ── Live Tracking Panel ── -->
-        <div id="trackingPanel" style="display:none;margin-bottom:14px;">
+        <div id="trackingPanel" style="margin-bottom:14px;">
           <div class="panel" style="padding:0;overflow:hidden;">
-            <div class="panel-hd" style="cursor:pointer;user-select:none;" id="trackingToggle">
-              <div style="display:flex;align-items:center;gap:8px;">
+            <div class="panel-hd" style="user-select:none;">
+              <div style="display:flex;align-items:center;gap:8px;flex:1;flex-wrap:wrap;">
                 <span style="font-size:14px;">🚛</span>
                 <span style="font-size:13px;font-weight:600;color:var(--t0);">Live Tracking</span>
-                <span id="trackingCount" style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:rgba(24,212,232,.15);color:var(--cyan,#18d4e8);border:1px solid rgba(24,212,232,.25);">0 active</span>
+                <span id="trackingCount" style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:rgba(24,212,232,.12);color:var(--cyan,#18d4e8);border:1px solid rgba(24,212,232,.2);">standby</span>
                 <span id="trackingPulseDot" style="width:7px;height:7px;border-radius:50%;background:var(--green,#19e09a);box-shadow:0 0 7px rgba(25,224,154,.7);flex-shrink:0;animation:tr-pulse 2s ease-in-out infinite;"></span>
+                <button id="btnSimTruck" style="margin-left:auto;font-size:11px;padding:4px 10px;border-radius:8px;border:1px solid var(--b1,#243d5c);background:var(--s2,#111d2e);color:var(--t2);cursor:pointer;font-family:var(--mono);white-space:nowrap;">📍 Test: place truck here</button>
               </div>
-              <button id="trackingCollapseBtn" style="background:none;border:none;color:var(--t3);font-size:11px;cursor:pointer;padding:4px 8px;border-radius:6px;font-family:var(--mono);">▲ Hide</button>
+              <button id="trackingCollapseBtn" style="background:none;border:none;color:var(--t3);font-size:11px;cursor:pointer;padding:4px 8px;border-radius:6px;font-family:var(--mono);flex-shrink:0;margin-left:8px;">▲ Hide</button>
             </div>
             <div id="trackingBody">
-              <div id="trackingMap" style="width:100%;height:240px;background:var(--s1,#0d1520);position:relative;overflow:hidden;border-bottom:1px solid var(--b0,#1a2e48);">
+              <div style="position:relative;width:100%;height:320px;background:#0a0f18;border-bottom:1px solid var(--b0,#1a2e48);">
                 <div id="trackingMapInner" style="width:100%;height:100%;"></div>
-                <div id="trackingNoGps" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--t3);font-size:13px;">
-                  <span style="font-size:28px;opacity:.3">📡</span>
-                  <span>Waiting for GPS from drivers…</span>
+                <!-- overlay: no GPS yet -->
+                <div id="trackingNoGps" style="display:none;position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--t3);font-size:13px;background:rgba(7,10,15,.55);backdrop-filter:blur(2px);">
+                  <span style="font-size:32px;opacity:.4">📡</span>
+                  <span>Waiting for GPS from drivers</span>
+                  <span style="font-size:11px;opacity:.6">GPS updates every 30s when a driver is OMW</span>
+                </div>
+                <!-- overlay: standby (no trucks at all) -->
+                <div id="trackingWaiting" style="position:absolute;bottom:12px;left:50%;transform:translateX(-50%);pointer-events:none;background:rgba(7,10,15,.75);border:1px solid var(--b0);border-radius:10px;padding:6px 14px;font-size:11px;color:var(--t3);white-space:nowrap;backdrop-filter:blur(4px);">
+                  No incoming trucks · Dock pin shown
                 </div>
               </div>
-              <div id="trackingList" style="padding:10px 14px 14px;display:flex;flex-direction:column;gap:8px;max-height:280px;overflow-y:auto;"></div>
+              <div id="trackingList" style="padding:10px 14px 14px;display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;"></div>
             </div>
           </div>
         </div>

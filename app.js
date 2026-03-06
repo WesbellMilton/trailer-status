@@ -2104,35 +2104,52 @@
   function initTrackingMap(){
     const mapEl=document.getElementById("trackingMapInner");
     if(!mapEl||_map) return;
-    if(typeof L==="undefined") return; // Leaflet not loaded yet
+    if(typeof L==="undefined"){
+      // Leaflet not yet loaded — retry
+      setTimeout(initTrackingMap,500); return;
+    }
     _map=L.map(mapEl,{zoomControl:false,attributionControl:false})
-      .setView([DOCK_LAT,DOCK_LNG],10);
+      .setView([DOCK_LAT,DOCK_LNG],11);
     L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{
       maxZoom:18,subdomains:"abcd"
     }).addTo(_map);
     L.control.zoom({position:"topright"}).addTo(_map);
-    // Dock marker
+    // Dock marker — always shown
     const dockIcon=L.divIcon({html:`<div class="tr-dock-marker">🏭</div>`,className:"",iconSize:[28,28],iconAnchor:[14,14]});
-    _dockMarker=L.marker([DOCK_LAT,DOCK_LNG],{icon:dockIcon}).addTo(_map)
+    _dockMarker=L.marker([DOCK_LAT,DOCK_LNG],{icon:dockIcon,zIndexOffset:1000}).addTo(_map)
       .bindPopup(`<strong>${DOCK_LABEL}</strong><br>Doors 28–42`);
+  }
+
+  function ensureMap(){
+    if(!_map) initTrackingMap();
+    else if(_map) setTimeout(()=>_map.invalidateSize(),50);
   }
 
   function updateTrackingMap(){
     const panel=document.getElementById("trackingPanel");
     const noGps=document.getElementById("trackingNoGps");
     if(!panel) return;
+    // Always show panel for dispatch/management/admin
+    const showForRole=!isDriver()&&!isDock();
+    if(!showForRole&&!isDock()){panel.style.display="none";return;}
+    panel.style.display="";
     const tracked=getTrackedTrailers();
     const hasGps=tracked.some(r=>r.lat);
-    // Show/hide panel
-    panel.style.display=(tracked.length>0)?"":"none";
     const countEl=document.getElementById("trackingCount");
-    if(countEl)countEl.textContent=`${tracked.length} active`;
-    if(!_map&&tracked.length>0) initTrackingMap();
+    if(countEl)countEl.textContent=tracked.length?`${tracked.length} incoming`:"standby";
+    // Init map if needed
+    if(!_map) initTrackingMap();
     if(!_map) return;
-    if(noGps)noGps.style.display=hasGps?"none":"flex";
+    if(noGps)noGps.style.display=(hasGps||tracked.length===0)?"none":"flex";
+    // Show "waiting" message when no trucks
+    const waiting=document.getElementById("trackingWaiting");
+    if(waiting) waiting.style.display=tracked.length===0?"flex":"none";
     // Remove stale markers
     const currentIds=new Set(tracked.map(r=>r.trailer));
-    Object.keys(_markers).forEach(t=>{if(!currentIds.has(t)){_map.removeLayer(_markers[t]);delete _markers[t];}});
+    Object.keys(_markers).forEach(t=>{
+      if(t==="__sim__") return; // keep sim marker
+      if(!currentIds.has(t)){_map.removeLayer(_markers[t]);delete _markers[t];}
+    });
     const bounds=[L.latLng(DOCK_LAT,DOCK_LNG)];
     tracked.forEach(r=>{
       if(!r.lat) return;
@@ -2145,7 +2162,7 @@
       if(_markers[r.trailer]){
         _markers[r.trailer].setLatLng([r.lat,r.lng]);
         _markers[r.trailer].setIcon(icon);
-        _markers[r.trailer].getPopup().setContent(popup);
+        _markers[r.trailer].getPopup()?.setContent(popup);
       } else {
         _markers[r.trailer]=L.marker([r.lat,r.lng],{icon}).addTo(_map).bindPopup(popup);
       }
@@ -2153,6 +2170,39 @@
     });
     if(hasGps&&bounds.length>1)_map.fitBounds(L.latLngBounds(bounds).pad(.25),{maxZoom:13});
   }
+  
+  // ── Simulate a truck at your current browser location ──
+  let _simActive=false;
+  function toggleSimTruck(){
+    const btn=document.getElementById("btnSimTruck");
+    if(_simActive){
+      // Remove sim
+      _simActive=false;
+      if(_markers.__sim__){_map.removeLayer(_markers.__sim__);delete _markers.__sim__;}
+      if(btn){btn.textContent="📍 Test: place truck here";btn.style.background="";}
+      return;
+    }
+    if(!navigator.geolocation){alert("Geolocation not available in this browser.");return;}
+    if(btn){btn.textContent="Getting location…";btn.disabled=true;}
+    navigator.geolocation.getCurrentPosition(pos=>{
+      _simActive=true;
+      const lat=pos.coords.latitude,lng=pos.coords.longitude;
+      const dist=haversine(lat,lng,DOCK_LAT,DOCK_LNG);
+      const eta=kmToMin(dist);
+      if(!_map)initTrackingMap();
+      const icon=L.divIcon({html:`<div class="tr-truck-marker" style="border:2px dashed #f5a623;box-shadow:0 0 12px rgba(245,166,35,.5)">🚛</div>`,className:"",iconSize:[32,32],iconAnchor:[16,16]});
+      if(_markers.__sim__)_map.removeLayer(_markers.__sim__);
+      _markers.__sim__=L.marker([lat,lng],{icon}).addTo(_map)
+        .bindPopup(`<strong>📍 You (test)</strong><br>${dist.toFixed(1)} km from dock · ~${eta} min`)
+        .openPopup();
+      _map.flyTo([lat,lng],12,{duration:1.2});
+      if(btn){btn.textContent="✕ Remove test truck";btn.disabled=false;btn.style.background="rgba(240,74,74,.15)";}
+    },err=>{
+      if(btn){btn.textContent="📍 Test: place truck here";btn.disabled=false;}
+      alert("Could not get location: "+(err.message||"denied"));
+    },{enableHighAccuracy:true,timeout:10000});
+  }
+  document.addEventListener("click",e=>{if(e.target.closest("#btnSimTruck"))toggleSimTruck();});
 
   function updateTrackingList(){
     const list=document.getElementById("trackingList");
@@ -2186,7 +2236,7 @@
 
   // Collapse toggle
   document.addEventListener("click",ev=>{
-    if(ev.target.closest("#trackingToggle")||ev.target.closest("#trackingCollapseBtn")){
+    if(ev.target.closest("#trackingCollapseBtn")){
       const body=document.getElementById("trackingBody");
       const btn=document.getElementById("trackingCollapseBtn");
       if(!body||!btn)return;
@@ -2206,10 +2256,17 @@
   // Poll location age every 30s to mark stale
   setInterval(updateTrackingList,30000);
 
-  // Init on load
-  document.addEventListener("DOMContentLoaded",()=>{
-    updateTrackingMap();
-    updateTrackingList();
-  });
+  // Init map immediately for dispatch/management
+  function tryInitTracking(){
+    if(typeof L !== "undefined"){
+      if(!isDock()&&!isDriver()) initTrackingMap();
+      updateTrackingMap();
+      updateTrackingList();
+    } else {
+      setTimeout(tryInitTracking, 300);
+    }
+  }
+  // Run after a short delay to let Leaflet load and page render
+  setTimeout(tryInitTracking, 400);
 
 })();

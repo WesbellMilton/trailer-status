@@ -38,35 +38,6 @@ body{background-image:none!important;background:transparent!important}
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="/style.css?v=3.6.0"/>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
-
-<style id="tracking-styles">
-@keyframes tr-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.3)}}
-@keyframes tr-ripple{0%{box-shadow:0 0 0 0 rgba(25,224,154,.5)}100%{box-shadow:0 0 0 16px rgba(25,224,154,0)}}
-
-#trackingPanel .panel-hd{padding:10px 14px;}
-.tr-card{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;background:var(--s2,#111d2e);border:1px solid var(--b0,#1a2e48);}
-.tr-card-icon{width:36px;height:36px;border-radius:50%;background:rgba(24,212,232,.1);border:2px solid rgba(24,212,232,.3);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;animation:tr-ripple 2s ease-out infinite;}
-.tr-card-icon.tr-arriving{background:rgba(25,224,154,.1);border-color:rgba(25,224,154,.4);animation:tr-ripple 1.2s ease-out infinite;}
-.tr-card-info{flex:1;min-width:0;}
-.tr-card-trailer{font-size:16px;font-weight:700;color:var(--t0,#fff);font-family:var(--mono,monospace);}
-.tr-card-meta{font-size:11px;color:var(--t2,#a8bdd4);margin-top:2px;}
-.tr-card-eta{text-align:right;flex-shrink:0;}
-.tr-card-eta-val{font-size:18px;font-weight:700;color:var(--cyan,#18d4e8);}
-.tr-card-eta-val.tr-arriving{color:var(--green,#19e09a);}
-.tr-card-eta-lbl{font-size:9px;color:var(--t3,#6b8ba8);text-transform:uppercase;letter-spacing:.06em;}
-.tr-card-door{font-size:11px;font-weight:600;color:var(--t2);background:var(--s1);border:1px solid var(--b0);border-radius:6px;padding:2px 7px;font-family:var(--mono);}
-.tr-card-nodoor{font-size:10px;color:var(--t3);}
-.tr-no-loc{font-size:11px;color:var(--amber,#f5a623);}
-
-/* Leaflet truck marker */
-.tr-truck-marker{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#18d4e8,#0a7a8c);display:flex;align-items:center;justify-content:center;font-size:16px;border:2px solid rgba(24,212,232,.5);box-shadow:0 2px 12px rgba(24,212,232,.4);cursor:pointer;}
-.tr-truck-marker.tr-arriving{background:linear-gradient(135deg,#19e09a,#0a8c5c);border-color:rgba(25,224,154,.6);box-shadow:0 2px 12px rgba(25,224,154,.5);animation:tr-ripple 1.2s ease-out infinite;}
-.tr-dock-marker{width:28px;height:28px;border-radius:6px;background:var(--amber,#f5a623);display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 2px 8px rgba(245,166,35,.4);}
-.leaflet-popup-content-wrapper{background:var(--s1,#0d1520)!important;border:1px solid var(--b0,#1a2e48)!important;border-radius:12px!important;color:var(--t0,#fff)!important;box-shadow:0 4px 20px rgba(0,0,0,.5)!important;}
-.leaflet-popup-content{margin:10px 14px!important;font-family:var(--font,'Outfit',sans-serif);font-size:13px;}
-.leaflet-popup-tip-container{display:none}
-</style>
 </head>
 <body>
 <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -1297,38 +1268,6 @@ body{background-image:none!important;background:transparent!important}
 
       <div class="col-stack">
 
-        <!-- ── Live Tracking Panel ── -->
-        <div id="trackingPanel" style="margin-bottom:14px;">
-          <div class="panel" style="padding:0;overflow:hidden;">
-            <div class="panel-hd" style="user-select:none;">
-              <div style="display:flex;align-items:center;gap:8px;flex:1;flex-wrap:wrap;">
-                <span style="font-size:14px;">🚛</span>
-                <span style="font-size:13px;font-weight:600;color:var(--t0);">Live Tracking</span>
-                <span id="trackingCount" style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:rgba(24,212,232,.12);color:var(--cyan,#18d4e8);border:1px solid rgba(24,212,232,.2);">standby</span>
-                <span id="trackingPulseDot" style="width:7px;height:7px;border-radius:50%;background:var(--green,#19e09a);box-shadow:0 0 7px rgba(25,224,154,.7);flex-shrink:0;animation:tr-pulse 2s ease-in-out infinite;"></span>
-                <button id="btnSimTruck" style="margin-left:auto;font-size:11px;padding:4px 10px;border-radius:8px;border:1px solid var(--b1,#243d5c);background:var(--s2,#111d2e);color:var(--t2);cursor:pointer;font-family:var(--mono);white-space:nowrap;">📍 Test: place truck here</button>
-              </div>
-              <button id="trackingCollapseBtn" style="background:none;border:none;color:var(--t3);font-size:11px;cursor:pointer;padding:4px 8px;border-radius:6px;font-family:var(--mono);flex-shrink:0;margin-left:8px;">▲ Hide</button>
-            </div>
-            <div id="trackingBody">
-              <div style="position:relative;width:100%;height:320px;background:#0a0f18;border-bottom:1px solid var(--b0,#1a2e48);">
-                <div id="trackingMapInner" style="width:100%;height:100%;"></div>
-                <!-- overlay: no GPS yet -->
-                <div id="trackingNoGps" style="display:none;position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--t3);font-size:13px;background:rgba(7,10,15,.55);backdrop-filter:blur(2px);">
-                  <span style="font-size:32px;opacity:.4">📡</span>
-                  <span>Waiting for GPS from drivers</span>
-                  <span style="font-size:11px;opacity:.6">GPS updates every 30s when a driver is OMW</span>
-                </div>
-                <!-- overlay: standby (no trucks at all) -->
-                <div id="trackingWaiting" style="position:absolute;bottom:12px;left:50%;transform:translateX(-50%);pointer-events:none;background:rgba(7,10,15,.75);border:1px solid var(--b0);border-radius:10px;padding:6px 14px;font-size:11px;color:var(--t3);white-space:nowrap;backdrop-filter:blur(4px);">
-                  No incoming trucks · Dock pin shown
-                </div>
-              </div>
-              <div id="trackingList" style="padding:10px 14px 14px;display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;"></div>
-            </div>
-          </div>
-        </div>
-
         <div class="disp-kpi-bar">
           <div id="dispKpis" class="kpi-row"></div>
           <div class="disp-actions">
@@ -1464,7 +1403,6 @@ body{background-image:none!important;background:transparent!important}
 </div>
 
 </main>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="/app.js?v=3.6.0"></script>
 
 <!-- ══ LOAD STATUS HISTORY MODAL ══ -->

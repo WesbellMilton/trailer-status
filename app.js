@@ -19,55 +19,24 @@
   const isDock=()=>path().startsWith("/dock");
   const isAdmin=()=>ROLE==="admin";
 
-  // --- 1. THE HELPER FUNCTION (Paste this first) ---
-  function urlBase64ToUint8Array(base64String) {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) { outputArray[i] = rawData.charCodeAt(i); }
-    return outputArray;
-  }
-
-  // --- 2. THE DRIVER QR CODE LOGIC (From earlier) ---
+  // 👇 --- PASTE THIS NEW QR LOGIC HERE --- 👇
   if (isDriver()) {
+    // Wait a split second for the HTML to finish loading
     setTimeout(() => {
       const urlParams = new URLSearchParams(window.location.search);
       const qrCarrier = urlParams.get('carrier');
+
       if (qrCarrier === 'outside') {
         const dropTypeSelect = document.getElementById('dr_drop_type'); 
+        if (dropTypeSelect) {
+           dropTypeSelect.value = 'Outside Carrier';
+        }
       }
     }, 100);
   }
-
-  // 👇 --- 3. PASTE THE NEW PUSH NOTIFICATION LOGIC HERE --- 👇
-  if (isSuper() || isDock()) {
-    if ('serviceWorker' in navigator && 'PushManager' in window) {
-      navigator.serviceWorker.ready.then(function(registration) {
-        
-        // REPLACE WITH YOUR PUBLIC KEY FROM RENDER
-        const publicVapidKey = 'YOUR_PUBLIC_KEY'; 
-  
-        registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-        }).then(function(subscription) {
-          fetch('/api/push/subscribe', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(subscription)
-          });
-          console.log("Push notifications enabled!");
-        }).catch(function(err) {
-          console.log("Failed to subscribe to push", err);
-        });
-      });
-    }
-  }
-  // 👆 ----------------------------------------------------- 👆
+  // 👆 ------------------------------------- 👆
 
   const fmtTime=ms=>{
-    // ... rest of your existing app.js code continues down here ..
     if(!ms)return"";
     try{return new Date(ms).toLocaleString(undefined,{month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"});}
     catch{return String(ms);}

@@ -41,11 +41,6 @@
     try{return new Date(ms).toLocaleString(undefined,{month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"});}
     catch{return String(ms);}
   };
-  const fmtTime=ms=>{
-    if(!ms)return"";
-    try{return new Date(ms).toLocaleString(undefined,{month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"});}
-    catch{return String(ms);}
-  };
   const timeAgo=ms=>{
     if(!ms)return"";
     const s=Math.floor((Date.now()-ms)/1000);

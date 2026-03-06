@@ -360,21 +360,36 @@
     <div style="font-size:11px;color:var(--t2);">No dispatch controls on Dock role.</div>`;}
 
   let dockFilter="active";
+  // Status → next action for dock role (no shunt)
   const DOCK_STATUS_NEXT={
-    Incoming:{label:"Mark Loading",to:"Loading",cls:"dc-btn-default"},
-    Dropped:{label:"Mark Loading",to:"Loading",cls:"dc-btn-default"},
-    Loading:{label:"Mark Dock Ready",to:"Dock Ready",cls:"dc-btn-cyan"},
-    "Dock Ready":{label:"Awaiting dispatcher",to:null,cls:""},
-    Ready:{label:"Ready for pickup",to:null,cls:""},
+    Incoming:{label:"Start Loading",to:"Loading",cls:"dc-btn-loading"},
+    Dropped:{label:"Start Loading",to:"Loading",cls:"dc-btn-loading"},
+    Loading:{label:"Dock Ready",to:"Dock Ready",cls:"dc-btn-cyan"},
+    "Dock Ready":{label:"Awaiting Dispatch",to:null,cls:""},
+    Ready:{label:"Ready for Pickup",to:null,cls:""},
     Departed:{label:"Departed",to:null,cls:""},
   };
-  const DOCK_STATUS_COLOR={Incoming:"dc-incoming",Dropped:"dc-dropped",Loading:"dc-loading","Dock Ready":"dc-dockready",Ready:"dc-ready",Departed:"dc-departed"};
+  // Status color classes — used for card border accent + status pill bg
+  const DOCK_STATUS_COLOR={
+    Incoming:"dc-incoming",Dropped:"dc-dropped",Loading:"dc-loading",
+    "Dock Ready":"dc-dockready",Ready:"dc-ready",Departed:"dc-departed"
+  };
+  // Status pill dot colors
+  const STATUS_DOT={
+    Loading:"var(--amber)","Dock Ready":"var(--cyan)",Ready:"var(--green)",
+    Dropped:"var(--violet)",Incoming:"var(--t2)",Departed:"var(--t3)"
+  };
 
   function renderDockView(){
     const cards=el("dockCards"),countEl=el("dockCount");
     if(!cards)return;
     const q=(el("dockSearch")?.value||"").trim().toLowerCase();
-    const rows=Object.entries(trailers).map(([t,r])=>({trailer:t,...r}))
+    const allRows=Object.entries(trailers).map(([t,r])=>({trailer:t,...r}));
+    // Incoming count for the indicator banner
+    const incomingRows=allRows.filter(r=>r.status==="Incoming");
+    renderIncomingBanner(incomingRows);
+
+    const rows=allRows
       .filter(r=>{
         if(dockFilter==="active"&&r.status==="Departed")return false;
         if(q&&!`${r.trailer} ${r.door||""} ${r.note||""} ${r.status||""}`.toLowerCase().includes(q))return false;
@@ -395,46 +410,48 @@
       return;
     }
     if(el("btnDockViewToggle")?.dataset.view==="map"){renderDockDoorMapView(cards,rows,canAct);return;}
-    const statusDot={Loading:"var(--amber)","Dock Ready":"var(--cyan)",Ready:"var(--green)",Dropped:"var(--violet)",Incoming:"var(--t2)",Departed:"var(--t3)"};
     cards.innerHTML=rows.map(r=>{
       const colorCls=DOCK_STATUS_COLOR[r.status]||"",next=DOCK_STATUS_NEXT[r.status];
+      const dot=STATUS_DOT[r.status]||"var(--t3)";
       const hasAction=next?.to&&canAct,isSelected=dockSelected.has(r.trailer);
-      const dot=statusDot[r.status]||"var(--t3)";
+      const isOmw=r.omwAt&&r.status==="Incoming";
       let etaHtml="";
-      if(r.omwAt&&r.status==="Incoming"){
-        if(r.omwEta){
-          const remaining=Math.max(0,Math.ceil((r.omwAt+r.omwEta*60000-Date.now())/60000));
-          etaHtml=`<div class="dc-eta-badge ${remaining===0?"dc-eta-now":""}" data-arrives="${r.omwAt+r.omwEta*60000}">🚛 ${remaining===0?"Arriving now":`~${remaining}m`}</div>`;
-        } else {
-          etaHtml=`<div class="dc-eta-badge">🚛 OMW</div>`;
-        }
+      if(isOmw){
+        if(r.omwEta){const rem=Math.max(0,Math.ceil((r.omwAt+r.omwEta*60000-Date.now())/60000));etaHtml=`<div class="dc-eta-badge${rem===0?" dc-eta-now":""}" data-arrives="${r.omwAt+r.omwEta*60000}">🚛 ${rem===0?"Arriving now":`~${rem}m`}</div>`;}
+        else etaHtml=`<div class="dc-eta-badge">🚛 OMW</div>`;
       }
-      return`<div class="dock-card ${colorCls}${isSelected?" dc-selected":""}" data-trailer="${esc(r.trailer)}" data-swipe-trailer="${esc(r.trailer)}">
-        ${dockBulkMode?`<button class="dc-select-btn ${isSelected?"dc-sel-active":""}" data-act="dockSelect" data-trailer-id="${esc(r.trailer)}">${isSelected?"✓":""}</button>`:""}
+      // Time on board badge (amber if >2h, red if >4h)
+      const ageMs=r.updatedAt?Date.now()-r.updatedAt:0;
+      const ageCls=ageMs>14400000?"dc-age-over":ageMs>7200000?"dc-age-warn":"";
+      return`<div class="dock-card ${colorCls}${isSelected?" dc-selected":""}${isOmw?" dc-incoming-live":""}" data-trailer="${esc(r.trailer)}" data-swipe-trailer="${esc(r.trailer)}">
+        ${dockBulkMode?`<button class="dc-select-btn${isSelected?" dc-sel-active":""}" data-act="dockSelect" data-trailer-id="${esc(r.trailer)}">${isSelected?"✓":""}</button>`:""}
+        <div class="dc-status-bar" style="background:${dot}"></div>
         <div class="dc-top">
           <div class="dc-trailer-block">
-            <div class="dc-trailer">${esc(r.trailer)}</div>
+            <div class="dc-trailer-num">${esc(r.trailer)}</div>
+            <div class="dc-status-pill" style="background:${dot}22;color:${dot};border:1px solid ${dot}55;">
+              <span class="dc-status-dot" style="background:${dot}"></span>${esc(r.status)}
+            </div>
             ${r.note?`<div class="dc-note">${esc(r.note)}</div>`:""}
           </div>
           <div class="dc-right-block">
-            ${r.door?`<div class="dc-door-badge">D${esc(r.door)}</div>`:`<div class="dc-door-empty">No door</div>`}
-            ${r.doorAt&&r.door?`<div class="dc-time-on-door">⏱ ${timeAgo(r.doorAt)}</div>`:""}
+            ${r.door?`<div class="dc-door-badge">D${esc(r.door)}</div><div class="dc-door-lbl">${r.doorAt?`⏱ ${timeAgo(r.doorAt)}`:""}</div>`:`<div class="dc-door-empty">No Door</div>`}
             ${etaHtml}
-            <div class="dc-status-pill" style="--dot:${dot}">${esc(r.status)}</div>
           </div>
         </div>
         <div class="dc-meta-row">
           ${r.carrierType?carrierTag(r.carrierType):""}
-          ${r.updatedAt?`<span class="dc-ago">${esc(timeAgo(r.updatedAt))}</span>`:""}
+          ${r.direction?`<span class="dc-dir-tag">${esc(r.direction)}</span>`:""}
+          ${r.updatedAt?`<span class="dc-ago${ageCls?" "+ageCls:""}">${esc(timeAgo(r.updatedAt))}</span>`:""}
         </div>
-        ${hasAction
-          ?`<button class="dc-action-btn ${next.cls}" data-act="dockSet" data-to="${esc(next.to)}" data-trailer-id="${esc(r.trailer)}">${esc(next.label)}</button>`
-          :next?.to
-            ?`<button class="dc-action-btn dc-btn-signin" data-act="openStaffLogin">🔑 Sign in to update</button>`
-            :`<div class="dc-no-action">${esc(next?.label||"—")}</div>`}
-        <div class="dc-bottom-row">
-          ${canAct?`<button class="dc-issue-btn" data-act="dockReportIssue" data-trailer-id="${esc(r.trailer)}" data-door="${esc(r.door||"")}">⚠ Issue</button>`:""}
-          ${canAct&&!r.door?`<button class="dc-reserve-btn" data-act="dockReserveDoor" data-trailer-id="${esc(r.trailer)}">🚪 Reserve Door</button>`:""}
+        <div class="dc-actions-row">
+          ${hasAction
+            ?`<button class="dc-action-btn ${next.cls}" data-act="dockSet" data-to="${esc(next.to)}" data-trailer-id="${esc(r.trailer)}">${esc(next.label)}</button>`
+            :next?.to
+              ?`<button class="dc-action-btn dc-btn-signin" data-act="openStaffLogin">🔑 Sign in</button>`
+              :`<div class="dc-no-action">${esc(next?.label||"—")}</div>`}
+          ${canAct?`<button class="dc-issue-btn" data-act="dockReportIssue" data-trailer-id="${esc(r.trailer)}" data-door="${esc(r.door||"")}">⚠</button>`:""}
+          ${canAct&&!r.door?`<button class="dc-reserve-btn" data-act="dockReserveDoor" data-trailer-id="${esc(r.trailer)}">🚪 Door</button>`:""}
         </div>
         <div class="dc-swipe-hint">← Issue &nbsp;&nbsp; Advance →</div>
       </div>`;
@@ -450,6 +467,18 @@
       },30000);
     }
     initDockCardSwipes();
+  }
+
+  function renderIncomingBanner(incomingRows){
+    const banner=el("dockIncomingBanner");if(!banner)return;
+    const omwRows=incomingRows.filter(r=>r.omwAt);
+    if(!incomingRows.length){banner.style.display="none";return;}
+    banner.style.display="";
+    const total=incomingRows.length,omw=omwRows.length;
+    const parts=[];
+    if(omw){const next=omwRows.sort((a,b)=>(a.omwAt+(a.omwEta||0)*60000)-(b.omwAt+(b.omwEta||0)*60000))[0];const rem=next.omwEta?Math.max(0,Math.ceil((next.omwAt+next.omwEta*60000-Date.now())/60000)):null;parts.push(`🚛 <strong>${omw}</strong> truck${omw>1?"s":""} on the way${rem!==null?` · next ~${rem}min`:" · ETA unknown"}`);}
+    if(total-omw>0)parts.push(`<strong>${total-omw}</strong> incoming · no ETA`);
+    banner.innerHTML=`<div class="dib-icon">🔔</div><div class="dib-text">${parts.join(" &nbsp;·&nbsp; ")}</div><div class="dib-count">${total}</div>`;
   }
 
   function renderDockDoorMapView(cards,rows,canAct){
@@ -1520,9 +1549,20 @@
     ws.onmessage=evt=>{
       lastMsg=Date.now();let msg;try{msg=JSON.parse(evt.data);}catch{return;}
       const{type,payload}=msg||{};
-      if(type==="state"){trailers=payload||{};renderBoard();if(isSuper())renderSupBoard();if(isDock()){renderDockView();window._lspAutoRefresh?.();if(window._loadStatusRefresh&&document.getElementById("lsp-body")?.classList.contains("lsp-open"))window._loadStatusRefresh();}if(isAdmin()&&!isSuper())renderBoard();}
+      if(type==="state"){
+        trailers=payload||{};
+        // Always re-render every active view
+        renderBoard();
+        if(isSuper())renderSupBoard();
+        if(isDock()){
+          renderDockView();
+          if(window._loadStatusRefresh&&document.getElementById("lsp-body")?.classList.contains("lsp-open"))
+            window._loadStatusRefresh();
+        }
+        if(isAdmin()&&!isSuper())renderBoard();
+      }
       else if(type==="dockplates"){dockPlates=payload||{};if(!isDriver())renderPlates();}
-      else if(type==="doorblocks"){doorBlocks=payload||{};renderDockMap();renderBoard();}
+      else if(type==="doorblocks"){doorBlocks=payload||{};renderDockMap();renderBoard();if(isDock())renderDockView();}
       else if(type==="confirmations"){confirmations=Array.isArray(payload)?payload:[];if(isSuper())renderSupConf();}
       else if(type==="ping"){/* keepalive */}
       else if(type==="omw"){showToast(`🚛 ${payload.trailer} on way → Door ${payload.door}${payload.eta?` · ETA ~${payload.eta}min`:""}`, "ok",6000);renderBoard();if(isDock())renderDockView();}

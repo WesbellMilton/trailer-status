@@ -14,8 +14,14 @@ app.use((req,res,next)=>{
   const orig=res.json.bind(res);
   res.json=data=>{
     const buf=Buffer.from(JSON.stringify(data));
+    // FIX #6: Only fall back to uncompressed on error. Previously the condition
+    // `err || buf.length < 1024` always skipped gzip for small payloads even on
+    // success — that is fine for performance but was unintentional. Now small
+    // payloads are still served uncompressed (< 1 KB saves nothing), but only
+    // because we explicitly choose that, not as a side-effect of the error path.
+    if(buf.length<1024)return orig(data);
     zlib.gzip(buf,(err,compressed)=>{
-      if(err||buf.length<1024)return orig(data);
+      if(err)return orig(data);
       res.setHeader("Content-Encoding","gzip");
       res.setHeader("Content-Type","application/json");
       res.setHeader("Vary","Accept-Encoding");
@@ -50,6 +56,21 @@ function checkLoginRate(ip){
   return ++e.count<=15;
 }
 setInterval(()=>{ const now=Date.now(); for(const[ip,e]of loginAttempts)if(now>e.resetAt)loginAttempts.delete(ip); },120000);
+
+// FIX #4: Rate limiting for unauthenticated driver endpoints to prevent abuse.
+const driverAttempts=new Map();
+function checkDriverRate(ip){
+  const now=Date.now();
+  let e=driverAttempts.get(ip);
+  if(!e||now>e.resetAt){ e={count:0,resetAt:now+60000}; driverAttempts.set(ip,e); }
+  return ++e.count<=30; // 30 driver submissions per minute per IP
+}
+setInterval(()=>{ const now=Date.now(); for(const[ip,e]of driverAttempts)if(now>e.resetAt)driverAttempts.delete(ip); },120000);
+function requireDriverRate(req,res,next){
+  const ip=ipOf(req);
+  if(!checkDriverRate(ip))return res.status(429).send("Too many requests. Try again in a minute.");
+  next();
+}
 
 app.use(express.json({limit:"6mb"}));
 app.use(express.urlencoded({extended:true}));
@@ -796,7 +817,7 @@ app.post("/api/dockplates/set",requireXHR,requireRole(["dock","dispatcher","mana
 });
 
 // ── Driver API ──
-app.post("/api/driver/omw",requireXHR,async(req,res)=>{
+app.post("/api/driver/omw",requireXHR,requireDriverRate,async(req,res)=>{
   try{
     const trailer=String(req.body.trailer||"").trim().toUpperCase();
     const eta=parseInt(req.body.eta)||null;
@@ -848,7 +869,7 @@ app.get("/api/available-doors",async(req,res)=>{
   }catch{res.status(500).send("Available doors error")}
 });
 
-app.post("/api/driver/arrive",requireXHR,async(req,res)=>{
+app.post("/api/driver/arrive",requireXHR,requireDriverRate,async(req,res)=>{
   try{
     const trailer    =String(req.body.trailer    ||"").trim().toUpperCase();
     const carrierType=String(req.body.carrierType||"Outside").trim();
@@ -876,7 +897,7 @@ app.post("/api/driver/arrive",requireXHR,async(req,res)=>{
   }catch(e){console.error("[arrive]",e);res.status(500).send("Arrival failed")}
 });
 
-app.post("/api/driver/drop",requireXHR,requireDriverAccess,async(req,res)=>{
+app.post("/api/driver/drop",requireXHR,requireDriverRate,requireDriverAccess,async(req,res)=>{
   try{
     const trailer    =String(req.body.trailer    ||"").trim();
     const door       =String(req.body.door       ||"").trim();
@@ -899,7 +920,7 @@ app.post("/api/driver/drop",requireXHR,requireDriverAccess,async(req,res)=>{
   }catch{res.status(500).send("Drop failed")}
 });
 
-app.post("/api/crossdock/pickup",requireXHR,requireDriverAccess,async(req,res)=>{
+app.post("/api/crossdock/pickup",requireXHR,requireDriverRate,requireDriverAccess,async(req,res)=>{
   try{
     const trailer=String(req.body.trailer||"").trim();
     const door   =String(req.body.door   ||"").trim();
@@ -914,7 +935,7 @@ app.post("/api/crossdock/pickup",requireXHR,requireDriverAccess,async(req,res)=>
   }catch{res.status(500).send("Cross dock pickup failed")}
 });
 
-app.post("/api/crossdock/offload",requireXHR,requireDriverAccess,async(req,res)=>{
+app.post("/api/crossdock/offload",requireXHR,requireDriverRate,requireDriverAccess,async(req,res)=>{
   try{
     const trailer=String(req.body.trailer||"").trim();
     const door   =String(req.body.door   ||"").trim();
@@ -936,8 +957,11 @@ app.post("/api/crossdock/offload",requireXHR,requireDriverAccess,async(req,res)=
 app.post("/api/shunt",requireXHR,async(req,res)=>{
   try{
     const session=getSession(req);
-    const actor=session?.role||"driver";
-    if(session&&!["dispatcher","dock","management","admin"].includes(session.role))return res.status(403).send("Unauthorized");
+    // FIX #5: Unauthenticated requests must be rejected — previously a missing
+    // session bypassed the role check entirely and allowed anonymous shunting.
+    if(!session)return res.status(401).send("Unauthorized");
+    const actor=session.role;
+    if(!["dispatcher","dock","management","admin"].includes(actor))return res.status(403).send("Unauthorized");
     const trailer=String(req.body.trailer||"").trim();
     const door   =String(req.body.door   ||"").trim();
     if(!trailer)return res.status(400).send("Missing trailer");
@@ -1137,7 +1161,13 @@ app.post("/api/confirm-safety",requireXHR,requireDriverAccess,async(req,res)=>{
     if(!loadSecured||!dockPlateUp)return res.status(400).send("Both confirmations required");
     const action=String(req.body.action||"safety").trim();
     const at=Date.now();
-    if(action==="xdock_pickup"&&trailer){ await run(`UPDATE trailers SET status='Departed',updatedAt=? WHERE trailer=?`,[at,trailer]); await releaseReservation(trailer); }
+    // FIX #7: Both xdock_pickup and xdock_offload complete the trailer's journey —
+    // previously only xdock_pickup advanced the status to Departed, leaving offload
+    // trailers lingering on the board until manually advanced.
+    if((action==="xdock_pickup"||action==="xdock_offload")&&trailer){
+      await run(`UPDATE trailers SET status='Departed',updatedAt=? WHERE trailer=?`,[at,trailer]);
+      await releaseReservation(trailer);
+    }
     await run(`INSERT INTO confirmations(at,trailer,door,action,ip,userAgent) VALUES(?,?,?,?,?,?)`,[at,trailer||"",door||"",action,ipOf(req),req.headers["user-agent"]||""]);
     await audit(req,"driver","safety_confirmed","safety",trailer||"-",{trailer,door,action,loadSecured,dockPlateUp});
     await broadcastTrailers();
@@ -1236,7 +1266,10 @@ initDb()
     async function backupDb(){
       try{
         const backupFile=path.join(path.dirname(DB_FILE),"wesbell-backup.sqlite");
-        db.run("PRAGMA wal_checkpoint(TRUNCATE)");
+        // FIX #8: Wait for WAL checkpoint to complete before copying the file.
+        // Previously db.run() was fire-and-forget so fs.copyFileSync could run
+        // before the WAL was fully flushed, risking a corrupt backup.
+        await new Promise((resolve,reject)=>db.run("PRAGMA wal_checkpoint(TRUNCATE)",err=>err?reject(err):resolve()));
         fs.copyFileSync(DB_FILE,backupFile);
         await logEvent("info","backup","DB backup completed",backupFile);
         console.log(`[BACKUP] DB backed up to ${backupFile}`);

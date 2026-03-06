@@ -404,6 +404,8 @@
     dvUpdateIncoming();
     // update role label
     if(el("dvRoleLabel"))el("dvRoleLabel").textContent=ROLE?ROLE.charAt(0).toUpperCase()+ROLE.slice(1):"Sign in";
+    // Show back-to-dispatch for dispatchers viewing dock
+    const bb=el("dvBackBtn");if(bb)bb.style.display=(ROLE&&ROLE!=="dock")?"":"none";
     const q=(el("dockSearch")?.value||"").trim().toLowerCase();
     const rows=Object.entries(trailers).map(([t,r])=>({trailer:t,...r}))
       .filter(r=>{
@@ -542,6 +544,10 @@
   }
 
   function initDockView(){
+    // Show "← Dispatch" back button for non-dock roles
+    if(ROLE&&ROLE!=="dock"){
+      const bb=el("dvBackBtn");if(bb)bb.style.display="";
+    }
     // Staff chip sign-in
     el("dvStaffChip")?.addEventListener("click",()=>el("btnDockStaffLogin")?.click());
     // Bell chip — toggle push notifications
@@ -1424,20 +1430,15 @@
       const adminPanel=el("adminPanel");if(adminPanel)adminPanel.style.display=ROLE==="admin"?"":"none";
     }
     highlightNav();
-    try{const t=await apiJson("/api/state");trailers=t||{};}catch{trailers={};}
+    // Fetch state in parallel with WS — whichever arrives first wins
+    apiJson("/api/state").then(t=>{
+      if(t&&Object.keys(t).length>0){trailers=t;if(isDock())renderDockView();if(isAdmin()&&!isSuper())renderBoard();}
+    }).catch(()=>{});
     if(!isDriver()){
       try{const p2=await apiJson("/api/dockplates");dockPlates=p2||{};}catch{dockPlates={};}
       try{const b=await apiJson("/api/doorblocks");doorBlocks=b||{};}catch{doorBlocks={};}
     }
-    // If dock and trailers still empty, schedule a retry in case of slow mobile network
-    if(isDock()&&Object.keys(trailers).length===0){
-      setTimeout(async()=>{
-        try{const t=await apiJson("/api/state");if(t&&Object.keys(t).length){trailers=t;renderDockView();}}catch{}
-      },2500);
-      setTimeout(async()=>{
-        try{const t=await apiJson("/api/state");if(t&&Object.keys(t).length){trailers=t;renderDockView();}}catch{}
-      },6000);
-    }
+
     if(isSuper()){
       renderSupBoard();renderSupConf();loadAuditInto(null,el("supAuditCount"),0);loadIssueReports();renderPlates();
       const adminPinRow=el("adminPinRow");if(adminPinRow)adminPinRow.style.display=ROLE==="admin"?"":"none";
@@ -1640,14 +1641,7 @@
     const ws=new WebSocket(`${location.protocol==="https:"?"wss":"ws"}://${location.host}`);
     let lastMsg=Date.now();
     const watchdog=setInterval(()=>{if(Date.now()-lastMsg>35000){try{ws.close();}catch{}}},5000);
-    ws.onopen=()=>{
-      wsRetry=0;wsStatus("ok");
-      // If dock view is active and trailers is empty, request a state refresh
-      if(isDock()&&Object.keys(trailers).length===0){
-        // Send a ping-like request to trigger state broadcast, or just re-fetch
-        apiJson("/api/state").then(t=>{if(t){trailers=t;renderDockView();}}).catch(()=>{});
-      }
-    };
+    ws.onopen=()=>{wsRetry=0;wsStatus("ok");};
     ws.onclose=()=>{
       clearInterval(watchdog);wsStatus("bad");
       const base=Math.min(8000,500+wsRetry++*650),jitter=base*0.3*(Math.random()*2-1);
@@ -1990,6 +1984,8 @@
 
     })(); // end initLoadStatusTracker
 
-    connectWs();initQuickDrop();initVoiceInput();initDockScan();initDimMode();initDockRememberLogin();
+    initQuickDrop();initVoiceInput();initDockScan();initDimMode();initDockRememberLogin();
   });
+  // Start WS immediately — don't wait for loadInitial, server sends state on connect
+  connectWs();
 })();

@@ -823,6 +823,11 @@ body{background-image:none!important;background:transparent!important}
 
 <div id="managementView" style="display:none;">
   <div class="sup-shell">
+    <div style="display:flex;gap:8px;padding:0 0 12px;flex-wrap:wrap;">
+      <a href="/"      class="btn btn-default btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px;"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x=".5" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor"/><rect x="7" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x=".5" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x="7" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".3"/></svg>Dispatch</a>
+      <a href="/dock"  class="btn btn-default btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px;"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 9h10M3 9V6l3-2.5L9 6v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Dock</a>
+      <a href="/driver" class="btn btn-default btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px;"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="4" width="8" height="5" rx="1.2" stroke="currentColor" stroke-width="1.4"/><path d="M9 6.5h1.5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H9" stroke="currentColor" stroke-width="1.4"/><circle cx="3" cy="9" r="1" fill="currentColor"/><circle cx="7" cy="9" r="1" fill="currentColor"/><path d="M1 6.5 2.5 4h4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Driver</a>
+    </div>
     <div class="kpi-row" id="supKpis"></div>
     <div class="sup-grid">
 
@@ -1176,7 +1181,9 @@ body{background-image:none!important;background:transparent!important}
       <div class="dv-logo-mark">D</div>
       <div class="dv-logo-text">Dock</div>
     </div>
-    <div class="dv-topbar-center"></div>
+    <div class="dv-topbar-center" style="display:flex;align-items:center;justify-content:center;">
+      <a href="/" id="dvBackBtn" style="display:none;text-decoration:none;padding:5px 12px;border-radius:20px;border:1px solid var(--b0);background:var(--s2);font-size:11px;font-weight:600;color:var(--t2);letter-spacing:.03em;transition:border-color .15s;" onmouseover="this.style.borderColor='var(--b1)'" onmouseout="this.style.borderColor='var(--b0)'">← Dispatch</a>
+    </div>
     <div class="dv-topbar-right">
       <div class="dv-chip" id="dvWsChip"><div class="dv-ws-dot" id="dockWsDot"></div><span id="dockWsText">Connecting</span></div>
       <div class="dv-chip" id="dvStaffChip">🔑&nbsp;<span id="dvRoleLabel">Sign in</span></div>
@@ -1257,6 +1264,8 @@ body{background-image:none!important;background:transparent!important}
         <div class="disp-kpi-bar">
           <div id="dispKpis" class="kpi-row"></div>
           <div class="disp-actions">
+            <a href="/dock"  class="btn btn-default btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px;" id="btnNavDock"><svg width="13" height="13" viewBox="0 0 12 12" fill="none"><path d="M1 9h10M3 9V6l3-2.5L9 6v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Dock</a>
+            <a href="/driver" class="btn btn-default btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px;" id="btnNavDriver"><svg width="13" height="13" viewBox="0 0 12 12" fill="none"><rect x="1" y="4" width="8" height="5" rx="1.2" stroke="currentColor" stroke-width="1.4"/><path d="M9 6.5h1.5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H9" stroke="currentColor" stroke-width="1.4"/><circle cx="3" cy="9" r="1" fill="currentColor"/><circle cx="7" cy="9" r="1" fill="currentColor"/><path d="M1 6.5 2.5 4h4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Driver</a>
             <button class="btn btn-default btn-sm" id="btnShiftSummary">📊 Shift Summary</button>
             <button class="btn btn-default btn-sm" id="btnHistoryBoard">🕐 History</button>
           </div>

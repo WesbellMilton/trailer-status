@@ -411,23 +411,21 @@
       }
       return`<div class="dock-card ${colorCls}${isSelected?" dc-selected":""}" data-trailer="${esc(r.trailer)}" data-swipe-trailer="${esc(r.trailer)}">
         ${dockBulkMode?`<button class="dc-select-btn ${isSelected?"dc-sel-active":""}" data-act="dockSelect" data-trailer-id="${esc(r.trailer)}">${isSelected?"✓":""}</button>`:""}
-        <div class="dc-main">
-          <div class="dc-top">
-            <div class="dc-trailer-block">
-              <div class="dc-trailer">${esc(r.trailer)}</div>
-              ${r.note?`<div class="dc-note">${esc(r.note)}</div>`:""}
-            </div>
-            <div class="dc-right-block">
-              ${r.door?`<div class="dc-door-badge">D${esc(r.door)}</div>`:`<div class="dc-door-empty">No door</div>`}
-              ${r.doorAt&&r.door?`<div class="dc-time-on-door">⏱ ${timeAgo(r.doorAt)}</div>`:""}
-              ${etaHtml}
-              <div class="dc-status-pill" style="--dot:${dot}">${esc(r.status)}</div>
-            </div>
+        <div class="dc-top">
+          <div class="dc-trailer-block">
+            <div class="dc-trailer">${esc(r.trailer)}</div>
+            ${r.note?`<div class="dc-note">${esc(r.note)}</div>`:""}
           </div>
-          <div class="dc-meta-row">
-            ${r.carrierType?carrierTag(r.carrierType):""}
-            ${r.updatedAt?`<span class="dc-ago">${esc(timeAgo(r.updatedAt))}</span>`:""}
+          <div class="dc-right-block">
+            ${r.door?`<div class="dc-door-badge">D${esc(r.door)}</div>`:`<div class="dc-door-empty">No door</div>`}
+            ${r.doorAt&&r.door?`<div class="dc-time-on-door">⏱ ${timeAgo(r.doorAt)}</div>`:""}
+            ${etaHtml}
+            <div class="dc-status-pill" style="--dot:${dot}">${esc(r.status)}</div>
           </div>
+        </div>
+        <div class="dc-meta-row">
+          ${r.carrierType?carrierTag(r.carrierType):""}
+          ${r.updatedAt?`<span class="dc-ago">${esc(timeAgo(r.updatedAt))}</span>`:""}
         </div>
         ${hasAction
           ?`<button class="dc-action-btn ${next.cls}" data-act="dockSet" data-to="${esc(next.to)}" data-trailer-id="${esc(r.trailer)}">${esc(next.label)}</button>`

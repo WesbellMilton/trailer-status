@@ -666,10 +666,15 @@ body{background-image:none!important;background:transparent!important}
           const res = await fetch('/api/driver/arrive', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, carrierType: state.carrier || 'Wesbell' }) });
           if(res.ok) {
             const data = await res.json();
-            updateLiveDoor(data.door);
-            showDoorAssigned('Arrived!', `Pull straight into Door ${data.door}.`);
+            if (data.door) {
+              updateLiveDoor(data.door);
+              showDoorAssigned('Arrived!', data.alreadyActive ? `Head to your assigned Door ${data.door}.` : `Pull straight into Door ${data.door}.`);
+            } else {
+              toast('No door available — please ask dispatch.');
+            }
           } else {
-            toast('Failed to get door assignment.');
+            const msg = await res.text().catch(() => '');
+            toast(msg || 'Failed to get door assignment — please ask dispatch.');
           }
         } catch(e) { toast('Network error'); }
       }
@@ -694,10 +699,15 @@ body{background-image:none!important;background:transparent!important}
         const res = await fetch('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, eta: state.eta }) });
         if(res.ok) {
           const data = await res.json();
-          updateLiveDoor(data.door);
-          showDoorAssigned('OMW Confirmed', `Head to door ${data.door}. Dispatch notified.`); 
+          if (data.door) {
+            updateLiveDoor(data.door);
+            showDoorAssigned('Door Assigned!', data.alreadyActive ? `Your trailer is already at Door ${data.door}.` : `Head to Door ${data.door}. Dispatch notified.`);
+          } else {
+            toast('No door available — please ask dispatch.');
+          }
         } else {
-          toast('Error assigning door');
+          const msg = await res.text().catch(() => '');
+          toast(msg || 'Error assigning door — please ask dispatch.');
         }
       } catch(e) {
         toast('Network Error');

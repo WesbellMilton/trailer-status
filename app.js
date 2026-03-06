@@ -1100,7 +1100,7 @@
 
     if(id==="btnArrDone"||id==="btnOmwDone")return driverRestart();
     if(id==="btnBackToFlow"){
-      const sb=document.querySelector("[data-flow='shunt']");if(sb)sb.style.display=isOutside?"none":"";
+      const _isOutside=driverState.whoType==="outside";const sb=document.querySelector("[data-flow='shunt']");if(sb)sb.style.display=_isOutside?"none":"";
     }
     if(id==="btnDriverDrop")return driverDrop();
     if(id==="btnXdockPickup")return xdockPickup();
@@ -1249,7 +1249,7 @@
         if(isDock())dvUpdateIncoming();
       }
       else if(type==="omw"){showToast(`🚛 ${payload.trailer} on way → Door ${payload.door}${payload.eta?` · ETA ~${payload.eta}min`:""}`, "ok",6000);renderBoard();if(isDock())renderDockView();updateTrackingMap();updateTrackingList();}
-      else if(type==="arrive"){showToast(`✅ ${payload.trailer} arrived at Door ${payload.door}${payload.carrierType==="Outside"?" · Outside carrier":""}`,"ok",6000);renderBoard();if(isDock())renderDockView();updateTrackingMap();updateTrackingList();}
+      else if(type==="arrive"){showToast(`✅ ${payload.trailer} arrived at Door ${payload.door}`,"ok",6000);renderBoard();if(isDock())renderDockView();updateTrackingMap();updateTrackingList();}
       else if(type==="version"){VERSION=payload?.version||VERSION;el("verText").textContent=VERSION||"—";}
       else if(type==="notify"&&payload?.kind==="ready"){
         toast("🟢 Trailer Ready",`${payload.trailer} is READY${payload.door?" at door "+payload.door:""}.`,"ok",8000);
@@ -1580,6 +1580,131 @@
     initQuickDrop();initVoiceInput();initDockScan();initDimMode();initDockRememberLogin();
   });
   // Start WS immediately — don't wait for loadInitial, server sends state on connect
+  // ── Issue Reports (management view) ──────────────────────────────────
+  async function loadIssueReports(){
+    const body=el("supIssueBody"),count=el("supIssueCount");if(!body)return;
+    try{
+      const rows=await apiJson("/api/issue-reports?limit=50");
+      if(count)count.textContent=rows.length;
+      if(!rows.length){body.innerHTML='<div style="padding:20px;text-align:center;color:var(--t3);font-size:12px;font-family:var(--mono);">No issue reports yet.</div>';return;}
+      body.innerHTML=rows.map(r=>{
+        const hasPhoto=!!r.photo_data;
+        return`<div class="issue-row" style="padding:12px 16px;border-bottom:1px solid var(--b0);display:grid;grid-template-columns:auto 1fr auto;gap:8px 12px;align-items:start;">
+          <div style="font-family:var(--mono);font-size:10px;color:var(--t2);white-space:nowrap;padding-top:2px;">${esc(fmtTime(r.at))}</div>
+          <div>
+            <span style="font-family:var(--mono);font-weight:600;color:var(--amber);">${esc(r.trailer||"—")}</span>
+            ${r.door?`<span style="font-size:11px;color:var(--t2);margin-left:6px;">D${esc(r.door)}</span>`:""}
+            <div style="font-size:12px;color:var(--t1);margin-top:3px;">${esc(r.note||"—")}</div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            ${hasPhoto?`<button class="btn btn-default btn-sm" data-issue-photo="${r.id}" style="font-size:10px;">📷 Photo</button>`:""}
+          </div>
+        </div>`;
+      }).join("");
+    }catch(e){if(body)body.innerHTML=`<div style="padding:16px;color:var(--red);font-size:12px;">Failed to load: ${e.message}</div>`;}
+  }
+
+  // ── Photo lightbox (management issue photos) ─────────────────────────
+  function initIssueLightbox(){
+    const lb=el("issueLightbox"),img=el("issueLightboxImg"),closeBtn=el("issueLightboxClose");
+    if(!lb)return;
+    document.addEventListener("click",ev=>{
+      const btn=ev.target.closest("[data-issue-photo]");
+      if(!btn)return;
+      const id=btn.dataset.issuePhoto;
+      if(img)img.src=`/api/issue-reports/${encodeURIComponent(id)}/photo`;
+      lb.classList.add("lb-open");
+    });
+    closeBtn?.addEventListener("click",()=>lb.classList.remove("lb-open"));
+    lb.addEventListener("click",e=>{if(e.target===lb)lb.classList.remove("lb-open");});
+    document.addEventListener("keydown",e=>{if(e.key==="Escape")lb.classList.remove("lb-open");});
+  }
+
+  // ── Dock issue modal (photo capture + note) ──────────────────────────
+  let _dockIssueTrailer="",_dockIssueDoor="",_dockIssuePhotoB64=null,_dockIssuePhotoMime=null;
+
+  function initIssueCamera(){
+    const input=el("dockIssuePhotoInput");
+    if(!input)return;
+    input.addEventListener("change",()=>{
+      const file=input.files?.[0];if(!file)return;
+      if(!file.type.startsWith("image/"))return;
+      const reader=new FileReader();
+      reader.onload=e=>{
+        _dockIssuePhotoB64=e.target.result.split(",")[1];
+        _dockIssuePhotoMime=file.type;
+        const prev=el("dockIssuePrev"),empty=el("dockIssueEmpty"),rm=el("dockIssueRemovePhoto");
+        if(prev){prev.src=e.target.result;prev.style.display="";}
+        if(empty)empty.style.display="none";
+        if(rm)rm.style.display="";
+      };
+      reader.readAsDataURL(file);
+    });
+    el("dockIssueRemovePhoto")?.addEventListener("click",e=>{
+      e.preventDefault();_dockIssuePhotoB64=null;_dockIssuePhotoMime=null;
+      const prev=el("dockIssuePrev"),empty=el("dockIssueEmpty"),rm=el("dockIssueRemovePhoto"),inp=el("dockIssuePhotoInput");
+      if(prev)prev.style.display="none";if(empty)empty.style.display="";if(rm)rm.style.display="none";if(inp)inp.value="";
+    });
+  }
+
+  function initDockIssueModal(){
+    el("dockIssueCancelBtn")?.addEventListener("click",()=>{el("dockIssueOv")?.classList.add("hidden");unlockScroll();});
+    el("dockIssueOv")?.addEventListener("click",e=>{if(e.target===el("dockIssueOv")){el("dockIssueOv").classList.add("hidden");unlockScroll();}});
+    el("dockIssueSubmitBtn")?.addEventListener("click",submitDockIssue);
+  }
+
+  function openDockIssueModal(trailer,door){
+    _dockIssueTrailer=trailer;_dockIssueDoor=door||"";
+    _dockIssuePhotoB64=null;_dockIssuePhotoMime=null;
+    const ctx=el("dockIssueCtx");
+    if(ctx)ctx.textContent=`Trailer ${trailer}${door?" · Door "+door:""}`;
+    const note=el("dockIssueNote");if(note)note.value="";
+    const err=el("dockIssueErr");if(err)err.style.display="none";
+    const prev=el("dockIssuePrev"),empty=el("dockIssueEmpty"),rm=el("dockIssueRemovePhoto"),inp=el("dockIssuePhotoInput");
+    if(prev)prev.style.display="none";if(empty)empty.style.display="";if(rm)rm.style.display="none";if(inp)inp.value="";
+    el("dockIssueOv")?.classList.remove("hidden");
+    lockScroll();
+    setTimeout(()=>el("dockIssueNote")?.focus(),100);
+  }
+
+  async function submitDockIssue(){
+    const note=(el("dockIssueNote")?.value||"").trim();
+    const errEl=el("dockIssueErr"),submitBtn=el("dockIssueSubmitBtn");
+    if(!note){if(errEl){errEl.textContent="Please describe the issue.";errEl.style.display="";}return;}
+    if(errEl)errEl.style.display="none";
+    if(submitBtn){submitBtn.disabled=true;submitBtn.textContent="Submitting…";}
+    try{
+      await apiJson("/api/report-issue",{method:"POST",headers:CSRF,body:JSON.stringify({
+        trailer:_dockIssueTrailer,door:_dockIssueDoor,note,
+        photo_data:_dockIssuePhotoB64||undefined,photo_mime:_dockIssuePhotoMime||undefined
+      })});
+      el("dockIssueOv")?.classList.add("hidden");unlockScroll();
+      toast("Issue reported",`${_dockIssueTrailer} issue logged.`,"ok");
+      haptic("success");
+    }catch(e){if(errEl){errEl.textContent=`Failed: ${e.message}`;errEl.style.display="";}}
+    finally{if(submitBtn){submitBtn.disabled=false;submitBtn.textContent="Submit Report";}}
+  }
+
+  // ── Legacy driver function stubs (old UI removed, new UI in index.html) ──
+  // These IDs no longer exist in the DOM but the click handler still references
+  // them. Guard with no-ops so no ReferenceError is thrown if somehow triggered.
+  function driverDrop(){}
+  function xdockPickup(){}
+  function xdockOffload(){}
+  function confSafety(){}
+  function driverShunt(){}
+  function updateDropSubmitState(){}
+  function updateOffloadSubmitState(){}
+  function updateSafetySubmitState(){}
+  function buildShuntDoorPicker(){}
+  function updateShuntSubmitState(){}
+  function showDoorPicker(){}
+  function buildDoorPicker(){}
+  function onTrailerInput(){}
+  function onPickupTrailerInput(){}
+  function onOffloadTrailerInput(){}
+  function selectFlow(){}
+
   connectWs();
 })();
 

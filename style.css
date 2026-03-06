@@ -614,12 +614,12 @@ textarea{min-height:60px;resize:vertical}
 /* ═══════════════════════════════════════════
    DOCK VIEW
 ═══════════════════════════════════════════ */
-.dock-shell{min-height:calc(100vh - 52px);background:var(--bg);display:flex;flex-direction:column;max-width:680px;margin:0 auto;padding:0 0 80px}
+.dock-shell{min-height:100vh;background:var(--bg);display:flex;flex-direction:column;max-width:680px;margin:0 auto;padding:0 0 80px}
 
 .dock-toolbar{
   display:flex;align-items:center;gap:12px;padding:10px 16px;
   border-bottom:1px solid var(--b1);
-  position:sticky;top:52px;
+  position:sticky;top:0;
   background:rgba(7,10,15,.95);
   backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
   z-index:10;
@@ -907,7 +907,7 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
   .kpi .k-lbl{font-size:8px}
 
   /* Dock toolbar */
-  .dock-toolbar{padding:8px 12px;gap:8px;top:48px}
+  .dock-toolbar{padding:8px 12px;gap:8px;top:0}
   .dock-filter-btn{padding:6px 12px;font-size:11px;min-height:38px}
   .dock-search-bar{padding:8px 12px 4px}
   .dock-search-bar input{font-size:15px;padding:10px 14px}
@@ -1868,7 +1868,7 @@ input, select, textarea {
     padding-right:env(safe-area-inset-right);
   }
   .dock-toolbar {
-    top:calc(54px + env(safe-area-inset-top));
+    top:env(safe-area-inset-top);
     padding-left:max(16px, env(safe-area-inset-left));
     padding-right:max(16px, env(safe-area-inset-right));
   }
@@ -2638,3 +2638,87 @@ img,video,embed,object,iframe {
   .dock-plates-inline .plate-grid { grid-template-columns:repeat(3,1fr); }
 }
 
+
+/* ══════════════════════════════════════════════════════════════
+   NEW DOCK VIEW (dv-*) — MOBILE RESPONSIVE
+══════════════════════════════════════════════════════════════ */
+
+/* Fullscreen fixed overlay — works on all screen sizes */
+#dockView, #driverView {
+  position:fixed !important;
+  inset:0 !important;
+  z-index:200 !important;
+  overflow:hidden !important;
+}
+
+/* Coarse pointer (touch) — bigger tap targets */
+@media(pointer:coarse){
+  #dockView .dv-cta    { min-height:60px !important; font-size:16px !important; }
+  #dockView .dv-sec    { min-height:46px !important; font-size:13px !important; }
+  #dockView .dv-scan-go { width:42px !important; height:42px !important; }
+  #dockView .dv-fpill  { min-height:36px !important; padding:6px 16px !important; }
+}
+
+/* ── Small phones (≤480px) ── */
+@media(max-width:480px){
+  #dockView .dv-topbar  { padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 10px; }
+  #dockView .dv-chip    { padding:4px 9px; font-size:10px; }
+  #dockView .dv-logo-text { display:none; }
+
+  #dockView .dv-incoming-banner { padding:8px 14px; }
+  #dockView .dv-incoming-text   { font-size:12px; }
+
+  #dockView .dv-scan-bar   { padding:8px 12px; gap:6px; }
+  #dockView .dv-scan-input { font-size:16px !important; } /* prevent iOS zoom */
+  #dockView .dv-search-wrap { width:80px; }
+  #dockView .dv-search-wrap:focus-within { width:100px; }
+  #dockView .dv-search-input { font-size:14px; }
+
+  #dockView .dv-filters { padding:8px 12px 6px; gap:5px; }
+  #dockView .dv-fpill   { padding:5px 11px; font-size:10px; }
+
+  #dockView .dv-cards   { padding:8px 10px 24px; gap:8px; }
+
+  #dockView .dv-card    { padding:14px 15px; border-radius:16px; gap:10px; }
+  #dockView .dv-trailer { font-size:22px !important; }
+  #dockView .dv-door    { font-size:15px !important; padding:2px 9px !important; }
+  #dockView .dv-cta     { padding:14px 16px !important; font-size:15px !important; border-radius:14px !important; min-height:54px !important; }
+  #dockView .dv-sec     { padding:9px !important; font-size:12px !important; min-height:40px !important; border-radius:10px !important; }
+}
+
+/* ── Extra small (≤360px) ── */
+@media(max-width:360px){
+  #dockView .dv-trailer { font-size:20px !important; }
+  #dockView .dv-cta     { font-size:14px !important; min-height:50px !important; }
+  #dockView .dv-card    { padding:12px 13px; gap:9px; }
+  #dockView .dv-fpill   { padding:4px 10px; font-size:10px; }
+  #dockView .dv-chip    { padding:3px 7px; font-size:10px; }
+  #dockView .dv-search-wrap { display:none; } /* too cramped — use scan only */
+}
+
+/* ── Landscape phones ── */
+@media(max-height:500px) and (max-width:900px){
+  #dockView .dv-topbar         { padding-top:calc(env(safe-area-inset-top,0px) + 6px); padding-bottom:6px; }
+  #dockView .dv-incoming-banner { padding:6px 14px; }
+  #dockView .dv-scan-bar        { padding:6px 12px; }
+  #dockView .dv-filters         { padding:5px 12px 4px; }
+  #dockView .dv-cards           { padding:6px 10px 16px; gap:7px; }
+  #dockView .dv-card            { padding:10px 13px; gap:8px; }
+  #dockView .dv-cta             { padding:12px !important; min-height:46px !important; }
+  #dockView .dv-sec             { min-height:38px !important; }
+}
+
+/* ── iOS safe area ── */
+@supports(padding:env(safe-area-inset-bottom)){
+  #dockView .dv-cards {
+    padding-bottom:calc(16px + env(safe-area-inset-bottom));
+  }
+  #dockView .dv-toast {
+    bottom:calc(20px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ── svh fix for iOS Safari ── */
+@supports(height:100svh){
+  #dockView, #driverView { height:100svh !important; }
+}

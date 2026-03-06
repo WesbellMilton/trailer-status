@@ -544,6 +544,8 @@
   function initDockView(){
     // Staff chip sign-in
     el("dvStaffChip")?.addEventListener("click",()=>el("btnDockStaffLogin")?.click());
+    // Bell chip — toggle push notifications
+    el("dvBellChip")?.addEventListener("click",()=>{_pushSub?unsubscribePush():subscribePush();});
     // Filter pills
     document.querySelectorAll("#dockView .dv-fpill[data-dv-filter]").forEach(btn=>{
       btn.addEventListener("click",()=>{
@@ -763,57 +765,99 @@
   }
 
   /* ── PUSH ── */
-  let _pushSub=null;
-  async function initPush(){
-    if(!("serviceWorker" in navigator))return;
-    try{
-      // FIX #3: Unregister any stale sw.js registrations so only sw2.js is active.
-      const allRegs=await navigator.serviceWorker.getRegistrations();
-      for(const reg of allRegs){
-        const swUrl=reg.active?.scriptURL||reg.installing?.scriptURL||reg.waiting?.scriptURL||"";
-        if(swUrl.endsWith("/sw.js"))await reg.unregister();
-      }
-      const reg=await navigator.serviceWorker.register("/sw2.js",{scope:"/"});
-      navigator.serviceWorker.addEventListener("message",e=>{if(e.data?.type==="SW_UPDATED")location.reload();});
-      reg.addEventListener("updatefound",()=>{
-        const nw=reg.installing;if(!nw)return;
-        nw.addEventListener("statechange",()=>{if(nw.state==="installed"&&navigator.serviceWorker.controller)toast("Update available","Reload to get the latest version.","warn",10000);});
-      });
-      await navigator.serviceWorker.ready;
-      if(!("PushManager" in window))return;
-      _pushSub=await reg.pushManager.getSubscription();
-      updatePushBtn();
-      if(isDriver()&&!_pushSub)await subscribePush();
-    }catch(e){console.warn("SW registration failed:",e);}
-  }
-  async function subscribePush(){
-    if(!("serviceWorker" in navigator))return toast("Not supported","Push not supported in this browser.","err");
-    try{
-      const reg=await navigator.serviceWorker.ready;
-      const{publicKey}=await apiJson("/api/push/vapid-public-key");
-      _pushSub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(publicKey)});
-      await apiJson("/api/push/subscribe",{method:"POST",headers:CSRF,body:JSON.stringify(_pushSub)});
-      updatePushBtn();toast("Notifications on","You'll be notified when your trailer is ready.","ok");
-    }catch{toast("Notifications blocked","Enable notifications in browser settings.","err");}
-  }
-  async function unsubscribePush(){
-    if(!_pushSub)return;
-    try{
-      await apiJson("/api/push/unsubscribe",{method:"POST",headers:CSRF,body:JSON.stringify({endpoint:_pushSub.endpoint})});
-      await _pushSub.unsubscribe();_pushSub=null;updatePushBtn();toast("Notifications off","Push notifications disabled.","warn");
-    }catch(e){toast("Error",e.message,"err");}
-  }
-  function updatePushBtn(){
-    const btn=el("btnPushToggle");if(!btn)return;
-    if(isDriver()||!("PushManager" in window)){btn.style.display="none";return;}
-    btn.style.display="";
-    if(_pushSub){btn.textContent="🔔 Notifications On";btn.classList.add("push-on");}
-    else{btn.textContent="🔕 Enable Notifications";btn.classList.remove("push-on");}
-  }
+  // ── PUSH NOTIFICATIONS (browser-native, zero cost) ──────────────────────
+  let _pushSub=null,_swReg=null;
+
   function urlBase64ToUint8Array(b64){
     const padding="=".repeat((4-b64.length%4)%4);
     const raw=atob((b64+padding).replace(/-/g,"+").replace(/_/g,"/"));
     return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
+  }
+
+  // Register SW and restore any existing subscription — called on every page load
+  async function initPush(){
+    if(!("serviceWorker" in navigator))return;
+    try{
+      // Clean up legacy sw.js registrations
+      const allRegs=await navigator.serviceWorker.getRegistrations();
+      for(const reg of allRegs){
+        const url=reg.active?.scriptURL||reg.installing?.scriptURL||reg.waiting?.scriptURL||"";
+        if(url.endsWith("/sw.js"))await reg.unregister();
+      }
+      _swReg=await navigator.serviceWorker.register("/sw2.js",{scope:"/"});
+      navigator.serviceWorker.addEventListener("message",e=>{if(e.data?.type==="SW_UPDATED")location.reload();});
+      _swReg.addEventListener("updatefound",()=>{
+        const nw=_swReg.installing;if(!nw)return;
+        nw.addEventListener("statechange",()=>{if(nw.state==="installed"&&navigator.serviceWorker.controller)toast("Update available","Reload to get the latest version.","warn",10000);});
+      });
+      await navigator.serviceWorker.ready;
+      if(!("PushManager" in window)){updatePushUI();return;}
+      // Restore existing subscription silently
+      _pushSub=await _swReg.pushManager.getSubscription();
+      updatePushUI();
+      // Auto-subscribe drivers immediately (they expect it)
+      if(isDriver()&&!_pushSub)await subscribePush(true);
+      // Auto-subscribe dock/dispatcher/management if permission already granted
+      if(!isDriver()&&!_pushSub&&Notification.permission==="granted")await subscribePush(true);
+    }catch(e){console.warn("[Push] SW init:",e.message);}
+  }
+
+  // Subscribe — silent=true means no toast on failure (used for auto-subscribe)
+  async function subscribePush(silent=false){
+    if(!("serviceWorker" in navigator)||!("PushManager" in window))return;
+    try{
+      const reg=_swReg||await navigator.serviceWorker.ready;
+      const{publicKey}=await apiJson("/api/push/vapid-public-key");
+      _pushSub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(publicKey)});
+      await apiJson("/api/push/subscribe",{method:"POST",headers:CSRF,body:JSON.stringify(_pushSub)});
+      updatePushUI();
+      if(!silent){
+        const msg=isDriver()?"You'll be notified when your trailer is ready.":"You'll receive alerts for arrivals, issues, and status changes.";
+        toast("🔔 Notifications on",msg,"ok");
+      }
+    }catch(e){
+      if(!silent){
+        if(Notification.permission==="denied")toast("Notifications blocked","Enable notifications in your browser settings, then reload.","err",8000);
+        else toast("Notifications error","Could not enable push notifications.","err");
+      }
+      console.warn("[Push] Subscribe failed:",e.message);
+    }
+  }
+
+  async function unsubscribePush(){
+    if(!_pushSub)return;
+    try{
+      await apiJson("/api/push/unsubscribe",{method:"POST",headers:CSRF,body:JSON.stringify({endpoint:_pushSub.endpoint})});
+      await _pushSub.unsubscribe();_pushSub=null;updatePushUI();
+      toast("🔕 Notifications off","Push notifications disabled.","warn");
+    }catch(e){toast("Error",e.message,"err");}
+  }
+
+  // Update all push UI elements across all views
+  function updatePushUI(){
+    const supported="PushManager" in window;
+    const on=!!_pushSub;
+    // Legacy btnPushToggle (dispatch/management sidebar)
+    const btn=el("btnPushToggle");
+    if(btn){
+      if(!supported){btn.style.display="none";}
+      else{
+        btn.style.display="";
+        btn.textContent=on?"🔔 Notifications On":"🔕 Enable Notifications";
+        btn.classList.toggle("push-on",on);
+      }
+    }
+    // Dock bell chip
+    const dockBell=el("dvBellChip");
+    if(dockBell){
+      if(!supported){dockBell.style.display="none";}
+      else{
+        dockBell.style.display="";
+        dockBell.title=on?"Notifications on — tap to disable":"Enable push notifications";
+        dockBell.textContent=on?"🔔":"🔕";
+        dockBell.style.opacity=on?"1":"0.6";
+      }
+    }
   }
 
   /* ── DRIVER STATE ── */
@@ -1351,12 +1395,11 @@
     }catch{ROLE=null;VERSION="";}
     el("verText").textContent=VERSION||"—";
     ["driverView","managementView","dockView","dispatchView"].forEach(id=>el(id).style.display="none");
-    const _tb=document.querySelector(".topbar"),_bn=document.querySelector(".bottom-nav");
-    const _hideChrome=()=>{if(_tb)_tb.style.display="none";if(_bn)_bn.style.display="none";};
-    const _showChrome=()=>{if(_tb)_tb.style.display="";if(_bn)_bn.style.display="";};
     const p=path();
+    const _lockScroll=()=>{document.body.style.overflow="hidden";document.body.style.position="fixed";document.body.style.width="100%";};
+    const _unlockScroll=()=>{document.body.style.overflow="";document.body.style.position="";document.body.style.width="";};
     if(p.startsWith("/driver")){
-      _hideChrome();
+      _lockScroll();
       el("driverView").style.display="";
       const logoutBtn=el("btnLogout");
       if(logoutBtn){logoutBtn.style.display="";logoutBtn.textContent="↩ Start Over";logoutBtn.onclick=e=>{e.stopImmediatePropagation();try{sessionStorage.removeItem("wb_whoType");}catch{}driverRestart();};}
@@ -1364,14 +1407,14 @@
       try{const savedWho=sessionStorage.getItem("wb_whoType");if(savedWho){driverState.whoType=savedWho;const isOutside=savedWho==="outside";if(el("flowBtnDrop"))el("flowBtnDrop").style.display=isOutside?"none":"";const sb=document.querySelector("[data-flow='shunt']");if(sb)sb.style.display=isOutside?"none":"";showScreen("flow-screen");}else showScreen("who-screen");}catch{showScreen("who-screen");}
       renderSessionHistory();initPush();
     }else if(p.startsWith("/management")){
-      _showChrome();
+      _unlockScroll();
       el("managementView").style.display="";el("managementView").classList.add("view-fade");
       el("btnLogout").style.display="";el("btnAudit").style.display=(ROLE==="management"||ROLE==="admin")?"":"none";
     }else if(p.startsWith("/dock")){
-      _hideChrome();
+      _lockScroll();
       el("dockView").style.display="";
     }else{
-      _showChrome();
+      _unlockScroll();
       el("dispatchView").style.display="";el("dispatchView").classList.add("view-fade");
       el("btnLogout").style.display=ROLE?"":"none";
       el("btnAudit").style.display=(ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin")?"":"none";
@@ -1717,6 +1760,8 @@
   loadInitial().then(()=>{
     syncBottomNav();initToastSwipe();initPullToRefresh();initKeyboardAvoidance();initSwipeViews();initPwaInstall();
     initStaffLogin();initStaffLogin._sync?.();initIssueCamera();initIssueLightbox();initDockIssueModal();
+    // Init push for all views — drivers get auto-subscribed, others get auto-subscribed if permission already granted
+    if(!path().startsWith("/driver"))initPush();
 
     /* ══════════════════════════════════════════════════════
        LOAD STATUS TRACKER — dock view panel + history modal

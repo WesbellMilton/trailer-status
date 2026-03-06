@@ -134,7 +134,7 @@ body{background-image:none!important;background:transparent!important}
   <div class="driver-shell"></div>
 </div>
 
-<div id="driverView" style="display:none; padding:0; position:relative; min-height:calc(100vh - 54px); overflow:hidden; background:#070a0f;">
+<div id="driverView" style="display:none; padding:0; position:fixed; inset:0; z-index:200; overflow:hidden; background:#070a0f;">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
     #driverView {
@@ -920,7 +920,7 @@ body{background-image:none!important;background:transparent!important}
   </div>
 </div>
 
-<div id="dockView" style="display:none; padding:0; position:relative; min-height:100vh; overflow:hidden; background:#070a0f;">
+<div id="dockView" style="display:none; padding:0; position:fixed; inset:0; z-index:200; overflow:hidden; background:#070a0f;">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
   #dockView {
@@ -934,7 +934,7 @@ body{background-image:none!important;background:transparent!important}
   #dockView * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 
   /* ── Shell ── */
-  #dockView .dv-shell { display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+  #dockView .dv-shell { display:flex; flex-direction:column; height:100%; width:100%; overflow:hidden; }
 
   /* ── Top bar ── */
   #dockView .dv-topbar {
@@ -1177,6 +1177,7 @@ body{background-image:none!important;background:transparent!important}
     <div class="dv-topbar-right">
       <div class="dv-chip" id="dvWsChip"><div class="dv-ws-dot" id="dockWsDot"></div><span id="dockWsText">Connecting</span></div>
       <div class="dv-chip" id="dvStaffChip">🔑&nbsp;<span id="dvRoleLabel">Sign in</span></div>
+      <div class="dv-chip" id="dvBellChip" style="display:none;padding:5px 10px;font-size:16px;" title="Push notifications">🔕</div>
     </div>
   </div>
 

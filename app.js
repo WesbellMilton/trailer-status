@@ -956,6 +956,8 @@
       el("omwConfirmSub").textContent=res?.alreadyActive?`Trailer ${trailer} is already ${res.status}${door?" at door "+door:""}.`:`Head to door ${door} when you arrive. Door is held for 30 minutes.`;
       el("omwEtaDisplay").textContent=eta?`ETA ~${eta} minutes`:"";
       showScreen("omw-confirm-screen");
+      // Start GPS tracking — sends location every 30s to dispatch
+      if(window._driverOmwStart) window._driverOmwStart(trailer);
     }catch(e){
       if(errEl){errEl.textContent=e.message||"Submission failed.";errEl.style.display="";}
       btn.disabled=false;btn.textContent="📍 Notify Dispatch";
@@ -975,6 +977,7 @@
     if(!trailer){if(errEl){errEl.textContent="Enter your trailer number.";errEl.style.display="";}return;}
     if(errEl)errEl.style.display="none";
     const btn=el("btnArriveSubmit");btn.disabled=true;btn.textContent="Assigning…";
+    if(window._driverOmwStop) window._driverOmwStop();
     try{
       const res=await apiJson("/api/driver/arrive",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,dropType,carrierType:driverState.whoType==="outside"?"Outside":"Wesbell",direction:"Inbound"})});
       const door=res?.door||"";
@@ -1432,7 +1435,13 @@
     highlightNav();
     // Fetch state in parallel with WS — whichever arrives first wins
     apiJson("/api/state").then(t=>{
-      if(t&&Object.keys(t).length>0){trailers=t;if(isDock())renderDockView();if(isAdmin()&&!isSuper())renderBoard();}
+      if(t&&Object.keys(t).length>0){
+        trailers=t;
+        if(isDock())renderDockView();
+        if(isAdmin()&&!isSuper())renderBoard();
+        if(window.updateTrackingMap)window.updateTrackingMap();
+        if(window.updateTrackingList)window.updateTrackingList();
+      }
     }).catch(()=>{});
     if(!isDriver()){
       try{const p2=await apiJson("/api/dockplates");dockPlates=p2||{};}catch{dockPlates={};}
@@ -1650,13 +1659,23 @@
     ws.onmessage=evt=>{
       lastMsg=Date.now();let msg;try{msg=JSON.parse(evt.data);}catch{return;}
       const{type,payload}=msg||{};
-      if(type==="state"){trailers=payload||{};renderBoard();if(isSuper())renderSupBoard();if(isDock()){renderDockView();window._lspAutoRefresh?.();if(window._loadStatusRefresh&&document.getElementById("lsp-body")?.classList.contains("lsp-open"))window._loadStatusRefresh();}if(isAdmin()&&!isSuper())renderBoard();}
+      if(type==="state"){trailers=payload||{};renderBoard();if(isSuper())renderSupBoard();if(isDock()){renderDockView();window._lspAutoRefresh?.();updateTrackingMap?.();updateTrackingList?.();if(window._loadStatusRefresh&&document.getElementById("lsp-body")?.classList.contains("lsp-open"))window._loadStatusRefresh();}if(isAdmin()&&!isSuper())renderBoard();}
       else if(type==="dockplates"){dockPlates=payload||{};if(!isDriver())renderPlates();}
       else if(type==="doorblocks"){doorBlocks=payload||{};renderDockMap();renderBoard();}
       else if(type==="confirmations"){confirmations=Array.isArray(payload)?payload:[];if(isSuper())renderSupConf();}
       else if(type==="ping"){/* keepalive */}
-      else if(type==="omw"){showToast(`🚛 ${payload.trailer} on way → Door ${payload.door}${payload.eta?` · ETA ~${payload.eta}min`:""}`, "ok",6000);renderBoard();if(isDock())renderDockView();}
-      else if(type==="arrive"){showToast(`✅ ${payload.trailer} arrived at Door ${payload.door}`,"ok",6000);renderBoard();if(isDock())renderDockView();}
+      else if(type==="location"){
+        if(trailers[payload.trailer]){
+          trailers[payload.trailer].lat=payload.lat;
+          trailers[payload.trailer].lng=payload.lng;
+          trailers[payload.trailer].locAt=payload.locAt;
+          if(payload.eta!==null&&payload.eta!==undefined)trailers[payload.trailer].omwEta=payload.eta;
+        }
+        updateTrackingMap();updateTrackingList();
+        if(isDock())dvUpdateIncoming();
+      }
+      else if(type==="omw"){showToast(`🚛 ${payload.trailer} on way → Door ${payload.door}${payload.eta?` · ETA ~${payload.eta}min`:""}`, "ok",6000);renderBoard();if(isDock())renderDockView();updateTrackingMap();updateTrackingList();}
+      else if(type==="arrive"){showToast(`✅ ${payload.trailer} arrived at Door ${payload.door}`,"ok",6000);renderBoard();if(isDock())renderDockView();updateTrackingMap();updateTrackingList();}
       else if(type==="version"){VERSION=payload?.version||VERSION;el("verText").textContent=VERSION||"—";}
       else if(type==="notify"&&payload?.kind==="ready"){
         toast("🟢 Trailer Ready",`${payload.trailer} is READY${payload.door?" at door "+payload.door:""}.`,"ok",8000);
@@ -1988,4 +2007,209 @@
   });
   // Start WS immediately — don't wait for loadInitial, server sends state on connect
   connectWs();
+})();
+
+// ══════════════════════════════════════════════════════════════════
+//  LIVE TRACKING — GPS sender (driver) + map renderer (dispatch/dock)
+// ══════════════════════════════════════════════════════════════════
+(function initLiveTracking(){
+
+  // ── Dock location (the destination) ── 
+  // Wesbell Milton dock — update if your actual address differs
+  const DOCK_LAT = 43.5048, DOCK_LNG = -79.8880;
+  const DOCK_LABEL = "Wesbell Dock";
+
+  // ── Haversine distance (km) ──
+  function haversine(lat1,lng1,lat2,lng2){
+    const R=6371,dLat=(lat2-lat1)*Math.PI/180,dLng=(lng2-lng1)*Math.PI/180;
+    const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+    return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  }
+  function kmToMin(km){ return Math.max(1,Math.round(km/0.7)); } // ~70km/h avg including stops
+
+  // ═══════════════════════════════════════
+  //  DRIVER SIDE — send GPS every 30s
+  // ═══════════════════════════════════════
+  let _locWatcher=null, _locInterval=null, _lastLat=null, _lastLng=null;
+
+  function startGpsTracking(trailer){
+    if(!navigator.geolocation){ updateGpsCard("denied"); return; }
+    updateGpsCard("requesting");
+    navigator.geolocation.getCurrentPosition(
+      pos=>{ _lastLat=pos.coords.latitude; _lastLng=pos.coords.longitude; sendLocation(trailer); updateGpsCard("active"); },
+      err=>{ updateGpsCard(err.code===1?"denied":"unavailable"); },
+      {enableHighAccuracy:true,timeout:10000,maximumAge:30000}
+    );
+    _locWatcher=navigator.geolocation.watchPosition(
+      pos=>{ _lastLat=pos.coords.latitude; _lastLng=pos.coords.longitude; },
+      ()=>{},
+      {enableHighAccuracy:true,timeout:10000,maximumAge:15000}
+    );
+    _locInterval=setInterval(()=>{ if(_lastLat!==null) sendLocation(trailer); },30000);
+  }
+
+  function stopGpsTracking(){
+    if(_locWatcher!==null){navigator.geolocation.clearWatch(_locWatcher);_locWatcher=null;}
+    clearInterval(_locInterval);_locInterval=null;
+    _lastLat=null;_lastLng=null;
+  }
+
+  async function sendLocation(trailer){
+    if(_lastLat===null||!trailer) return;
+    const dist=haversine(_lastLat,_lastLng,DOCK_LAT,DOCK_LNG);
+    const eta=kmToMin(dist);
+    try{
+      await fetch("/api/driver/location",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},
+        body:JSON.stringify({trailer,lat:_lastLat,lng:_lastLng,eta})
+      });
+    }catch{}
+  }
+
+  function updateGpsCard(state){
+    const card=document.getElementById("ts-gps-card");
+    const icon=document.getElementById("ts-gps-icon");
+    const title=document.getElementById("ts-gps-title");
+    const desc=document.getElementById("ts-gps-desc");
+    if(!card) return;
+    if(state==="requesting"){ card.style.display="flex"; icon.textContent="📡"; title.textContent="Getting location…"; title.style.color="var(--cyan,#18d4e8)"; desc.textContent="One moment…"; }
+    else if(state==="active"){ card.style.display="flex"; icon.textContent="📡"; title.textContent="Location sharing on"; title.style.color="var(--green,#19e09a)"; desc.textContent="Dispatch can see your live position"; }
+    else if(state==="denied"){ card.style.display="flex"; icon.textContent="🚫"; title.textContent="Location off"; title.style.color="var(--amber,#f5a623)"; desc.textContent="Enable location in browser for live tracking"; card.style.borderColor="rgba(245,166,35,.25)"; card.style.background="rgba(245,166,35,.06)"; }
+    else{ card.style.display="none"; }
+  }
+
+  // Hook into driver OMW submit
+  const _origOmwSubmit = window._driverOmwHook;
+  window._driverOmwStart = function(trailer){
+    startGpsTracking(trailer);
+  };
+  window._driverOmwStop = function(){
+    stopGpsTracking();
+    updateGpsCard("hidden");
+  };
+
+  // ═══════════════════════════════════════
+  //  DISPATCH/DOCK SIDE — map + list
+  // ═══════════════════════════════════════
+  let _map=null, _markers={}, _dockMarker=null, _trackingOpen=true;
+
+  function getTrackedTrailers(){
+    return Object.entries(trailers)
+      .filter(([,r])=>r.status==="Incoming"&&(r.lat||r.omwAt))
+      .map(([t,r])=>({trailer:t,...r}))
+      .sort((a,b)=>(a.omwEta||999)-(b.omwEta||999));
+  }
+
+  function initTrackingMap(){
+    const mapEl=document.getElementById("trackingMapInner");
+    if(!mapEl||_map) return;
+    if(typeof L==="undefined") return; // Leaflet not loaded yet
+    _map=L.map(mapEl,{zoomControl:false,attributionControl:false})
+      .setView([DOCK_LAT,DOCK_LNG],10);
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{
+      maxZoom:18,subdomains:"abcd"
+    }).addTo(_map);
+    L.control.zoom({position:"topright"}).addTo(_map);
+    // Dock marker
+    const dockIcon=L.divIcon({html:`<div class="tr-dock-marker">🏭</div>`,className:"",iconSize:[28,28],iconAnchor:[14,14]});
+    _dockMarker=L.marker([DOCK_LAT,DOCK_LNG],{icon:dockIcon}).addTo(_map)
+      .bindPopup(`<strong>${DOCK_LABEL}</strong><br>Doors 28–42`);
+  }
+
+  function updateTrackingMap(){
+    const panel=document.getElementById("trackingPanel");
+    const noGps=document.getElementById("trackingNoGps");
+    if(!panel) return;
+    const tracked=getTrackedTrailers();
+    const hasGps=tracked.some(r=>r.lat);
+    // Show/hide panel
+    panel.style.display=(tracked.length>0)?"":"none";
+    const countEl=document.getElementById("trackingCount");
+    if(countEl)countEl.textContent=`${tracked.length} active`;
+    if(!_map&&tracked.length>0) initTrackingMap();
+    if(!_map) return;
+    if(noGps)noGps.style.display=hasGps?"none":"flex";
+    // Remove stale markers
+    const currentIds=new Set(tracked.map(r=>r.trailer));
+    Object.keys(_markers).forEach(t=>{if(!currentIds.has(t)){_map.removeLayer(_markers[t]);delete _markers[t];}});
+    const bounds=[L.latLng(DOCK_LAT,DOCK_LNG)];
+    tracked.forEach(r=>{
+      if(!r.lat) return;
+      const isArriving=(r.omwEta!==null&&r.omwEta<=5);
+      const dist=haversine(r.lat,r.lng,DOCK_LAT,DOCK_LNG);
+      const eta=r.omwEta??kmToMin(dist);
+      const cls="tr-truck-marker"+(isArriving?" tr-arriving":"");
+      const icon=L.divIcon({html:`<div class="${cls}">🚛</div>`,className:"",iconSize:[32,32],iconAnchor:[16,16]});
+      const popup=`<strong>${r.trailer}</strong><br>Door ${r.door||"TBD"} · ${isArriving?"Arriving now":"~"+eta+" min"}<br><span style="color:var(--t3);font-size:10px">${dist.toFixed(1)} km away</span>`;
+      if(_markers[r.trailer]){
+        _markers[r.trailer].setLatLng([r.lat,r.lng]);
+        _markers[r.trailer].setIcon(icon);
+        _markers[r.trailer].getPopup().setContent(popup);
+      } else {
+        _markers[r.trailer]=L.marker([r.lat,r.lng],{icon}).addTo(_map).bindPopup(popup);
+      }
+      bounds.push(L.latLng(r.lat,r.lng));
+    });
+    if(hasGps&&bounds.length>1)_map.fitBounds(L.latLngBounds(bounds).pad(.25),{maxZoom:13});
+  }
+
+  function updateTrackingList(){
+    const list=document.getElementById("trackingList");
+    if(!list) return;
+    const tracked=getTrackedTrailers();
+    if(!tracked.length){list.innerHTML="";return;}
+    list.innerHTML=tracked.map(r=>{
+      const hasGps=r.lat!==null&&r.lat!==undefined;
+      const dist=hasGps?haversine(r.lat,r.lng,DOCK_LAT,DOCK_LNG):null;
+      const eta=r.omwEta??( dist?kmToMin(dist):null );
+      const isArriving=eta!==null&&eta<=5;
+      const stale=r.locAt&&(Date.now()-r.locAt)>120000; // >2 min stale
+      const locAge=r.locAt?Math.floor((Date.now()-r.locAt)/1000):null;
+      const ageStr=locAge===null?"":locAge<60?`${locAge}s ago`:`${Math.floor(locAge/60)}m ago`;
+      return`<div class="tr-card">
+        <div class="tr-card-icon${isArriving?" tr-arriving":""}">🚛</div>
+        <div class="tr-card-info">
+          <div class="tr-card-trailer">${r.trailer}</div>
+          <div class="tr-card-meta">
+            ${hasGps?`${dist!==null?dist.toFixed(1)+"km · ":""}${stale?`<span class="tr-no-loc">⚠ GPS stale (${ageStr})</span>`:`<span style="color:var(--green,.#19e09a)">● Live</span> · ${ageStr}`}`:`<span class="tr-no-loc">⚡ ETA only — no GPS</span>`}
+            · ${r.carrierType||""}
+          </div>
+        </div>
+        <div class="tr-card-eta" style="text-align:right">
+          ${eta!==null?`<div class="tr-card-eta-val${isArriving?" tr-arriving":""}">${isArriving?"Now!":eta+"m"}</div><div class="tr-card-eta-lbl">ETA</div>`:"<div class='tr-no-loc'>ETA ?</div>"}
+          <div style="margin-top:3px">${r.door?`<span class="tr-card-door">D${r.door}</span>`:`<span class="tr-card-nodoor">No door</span>`}</div>
+        </div>
+      </div>`;
+    }).join("");
+  }
+
+  // Collapse toggle
+  document.addEventListener("click",ev=>{
+    if(ev.target.closest("#trackingToggle")||ev.target.closest("#trackingCollapseBtn")){
+      const body=document.getElementById("trackingBody");
+      const btn=document.getElementById("trackingCollapseBtn");
+      if(!body||!btn)return;
+      _trackingOpen=!_trackingOpen;
+      body.style.display=_trackingOpen?"":"none";
+      btn.textContent=_trackingOpen?"▲ Hide":"▼ Show";
+      if(_trackingOpen&&_map)setTimeout(()=>_map.invalidateSize(),50);
+    }
+  });
+
+  // Expose for WS handler
+  window.updateTrackingMap=updateTrackingMap;
+  window.updateTrackingList=updateTrackingList;
+  // Also update on full state broadcast
+  const _origRenderBoard=window.renderBoard;
+
+  // Poll location age every 30s to mark stale
+  setInterval(updateTrackingList,30000);
+
+  // Init on load
+  document.addEventListener("DOMContentLoaded",()=>{
+    updateTrackingMap();
+    updateTrackingList();
+  });
+
 })();

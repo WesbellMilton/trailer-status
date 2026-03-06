@@ -200,7 +200,7 @@ async function broadcastPush(title,body,data){
 
 // ── DB Init ──
 async function initDb(){
-  await run(`CREATE TABLE IF NOT EXISTS trailers(trailer TEXT PRIMARY KEY,direction TEXT,status TEXT,door TEXT,note TEXT,dropType TEXT,carrierType TEXT DEFAULT '',updatedAt INTEGER,omwAt INTEGER DEFAULT NULL,omwEta INTEGER DEFAULT NULL,doorAt INTEGER DEFAULT NULL)`);
+  await run(`CREATE TABLE IF NOT EXISTS trailers(trailer TEXT PRIMARY KEY,direction TEXT,status TEXT,door TEXT,note TEXT,dropType TEXT,carrierType TEXT DEFAULT '',updatedAt INTEGER,omwAt INTEGER DEFAULT NULL,omwEta INTEGER DEFAULT NULL,doorAt INTEGER DEFAULT NULL,lat REAL DEFAULT NULL,lng REAL DEFAULT NULL,locAt INTEGER DEFAULT NULL)`);
   await run(`CREATE TABLE IF NOT EXISTS doorblocks(door TEXT PRIMARY KEY,note TEXT NOT NULL DEFAULT '',setAt INTEGER NOT NULL DEFAULT 0)`);
   await run(`CREATE TABLE IF NOT EXISTS dockplates(door TEXT PRIMARY KEY,status TEXT,note TEXT,updatedAt INTEGER)`);
   await run(`CREATE TABLE IF NOT EXISTS confirmations(id INTEGER PRIMARY KEY AUTOINCREMENT,at INTEGER,trailer TEXT,door TEXT,action TEXT,ip TEXT,userAgent TEXT)`);
@@ -213,6 +213,9 @@ async function initDb(){
 
   db.run("ALTER TABLE trailers ADD COLUMN omwAt INTEGER DEFAULT NULL",()=>{});
   db.run("ALTER TABLE trailers ADD COLUMN omwEta INTEGER DEFAULT NULL",()=>{});
+  db.run("ALTER TABLE trailers ADD COLUMN lat REAL DEFAULT NULL",()=>{});
+  db.run("ALTER TABLE trailers ADD COLUMN lng REAL DEFAULT NULL",()=>{});
+  db.run("ALTER TABLE trailers ADD COLUMN locAt INTEGER DEFAULT NULL",()=>{});
   db.run("ALTER TABLE trailers ADD COLUMN doorAt INTEGER DEFAULT NULL",()=>{});
   await run(`DELETE FROM dockplates WHERE CAST(door AS INTEGER) < 28`);
   try{await run(`ALTER TABLE confirmations ADD COLUMN action TEXT`)}catch{}
@@ -328,7 +331,7 @@ async function audit(req,actorRole,action,entityType,entityId,details){
 async function loadTrailersObject(){
   const rows=await all(`SELECT * FROM trailers`);
   const obj={};
-  for(const r of rows) obj[r.trailer]={direction:r.direction||"",status:r.status||"",door:r.door||"",note:r.note||"",dropType:r.dropType||"",carrierType:r.carrierType||"",updatedAt:r.updatedAt||0,omwAt:r.omwAt||null,omwEta:r.omwEta||null,doorAt:r.doorAt||null};
+  for(const r of rows) obj[r.trailer]={direction:r.direction||"",status:r.status||"",door:r.door||"",note:r.note||"",dropType:r.dropType||"",carrierType:r.carrierType||"",updatedAt:r.updatedAt||0,omwAt:r.omwAt||null,omwEta:r.omwEta||null,doorAt:r.doorAt||null,lat:r.lat||null,lng:r.lng||null,locAt:r.locAt||null};
   return obj;
 }
 
@@ -897,6 +900,31 @@ app.post("/api/driver/arrive",requireXHR,requireDriverRate,async(req,res)=>{
   }catch(e){console.error("[arrive]",e);res.status(500).send("Arrival failed")}
 });
 
+
+app.post("/api/driver/location",requireXHR,requireDriverRate,async(req,res)=>{
+  try{
+    const trailer=String(req.body.trailer||"").trim().toUpperCase();
+    const lat=parseFloat(req.body.lat);
+    const lng=parseFloat(req.body.lng);
+    const eta=req.body.eta!==undefined?parseInt(req.body.eta):undefined;
+    if(!trailer||!isFinite(lat)||!isFinite(lng))return res.status(400).send("Missing trailer/coords");
+    if(lat<-90||lat>90||lng<-180||lng>180)return res.status(400).send("Invalid coords");
+    const existing=await get(`SELECT status FROM trailers WHERE trailer=?`,[trailer]);
+    if(!existing)return res.status(404).send("Trailer not found");
+    if(!["Incoming"].includes(existing.status))return res.json({ok:true,ignored:true});
+    const now=Date.now();
+    const updates=eta!==undefined
+      ?`lat=?,lng=?,locAt=?,omwEta=?`
+      :`lat=?,lng=?,locAt=?`;
+    const params=eta!==undefined?[lat,lng,now,eta,trailer]:[lat,lng,now,trailer];
+    await run(`UPDATE trailers SET ${updates} WHERE trailer=?`,params);
+    invalidateTrailers();
+    // Broadcast location update (lightweight — no full state broadcast)
+    wsBroadcast("location",{trailer,lat,lng,locAt:now,eta:eta??null});
+    res.json({ok:true});
+  }catch(e){console.error("[location]",e);res.status(500).send("Location update failed")}
+});
+
 app.post("/api/driver/drop",requireXHR,requireDriverRate,requireDriverAccess,async(req,res)=>{
   try{
     const trailer    =String(req.body.trailer    ||"").trim();
@@ -1164,7 +1192,7 @@ app.post("/api/confirm-safety",requireXHR,requireDriverAccess,async(req,res)=>{
     // FIX #7: Both xdock_pickup and xdock_offload complete the trailer's journey —
     // previously only xdock_pickup advanced the status to Departed, leaving offload
     // trailers lingering on the board until manually advanced.
-    if((action==="xdock_pickup"||action==="xdock_offload"||action==="depart")&&trailer){
+    if((action==="xdock_pickup"||action==="xdock_offload")&&trailer){
       await run(`UPDATE trailers SET status='Departed',updatedAt=? WHERE trailer=?`,[at,trailer]);
       await releaseReservation(trailer);
     }

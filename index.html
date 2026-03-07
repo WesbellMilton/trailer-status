@@ -202,6 +202,15 @@ body{background-image:none!important;background:transparent!important}
     #driverView .ts-action-card::after { content:""; position:absolute; right:20px; top:50%; transform:translateY(-50%); width:8px; height:14px; background:url('data:image/svg+xml;utf8,<svg viewBox="0 0 8 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L7 7L1 13" stroke="%237a95b0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>') no-repeat center; opacity:0.5; }
     
     #driverView .ts-action-icon { font-size:36px; line-height:1; flex-shrink:0; filter:drop-shadow(0 4px 12px rgba(0,0,0,0.3)); }
+  .ts-ext-carrier-btn {
+    display:flex; align-items:center; padding:18px 20px;
+    background:var(--surface,#0d1b2a); border:1.5px solid var(--border,#1a2d42);
+    border-radius:14px; cursor:pointer; transition:all .15s; user-select:none;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .ts-ext-carrier-btn:active { transform:scale(.97); background:rgba(255,255,255,.04); }
+  .ts-ext-carrier-btn.ts-ext-sel { border-color:var(--cyan,#18d4e8); background:rgba(24,212,232,.06); }
+  .ts-ext-carrier-name { font-size:17px; font-weight:600; color:var(--t0,#e0eaf4); font-family:var(--sans,sans-serif); }
     #driverView .ts-action-text { flex:1; display:flex; flex-direction:column; justify-content:center; }
     #driverView .ts-action-label { font-size:18px; font-weight:700; letter-spacing:.01em; color:var(--t0); margin-bottom:4px; }
     #driverView .ts-action-sub { font-size:13px; color:var(--t1); font-weight:400; line-height:1.3; padding-right:16px; }
@@ -423,6 +432,27 @@ body{background-image:none!important;background:transparent!important}
     </div>
   </div>
 
+  <div class="ts-screen" id="ts-s-ext-carrier">
+    <div class="ts-screen-header">
+      <div class="ts-topbar" style="padding:0"><div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div></div>
+      <div style="padding-top:28px">
+        <button class="ts-back-btn" data-back="ts-s-carrier"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg> Back</button>
+        <div class="ts-screen-title">Who are you <span>delivering from?</span></div>
+        <div style="font-size:15px;color:var(--t1);margin-top:8px">Select your carrier — door assigned instantly</div>
+      </div>
+    </div>
+    <div class="ts-screen-body" style="padding-top:8px">
+      <div id="ts-ext-carrier-list" style="display:flex;flex-direction:column;gap:10px;">
+        <div class="ts-ext-carrier-btn" data-ext-carrier="Apex" data-ext-prefix="APX"><span class="ts-ext-carrier-name">Apex</span></div>
+        <div class="ts-ext-carrier-btn" data-ext-carrier="Gardewine" data-ext-prefix="GDW"><span class="ts-ext-carrier-name">Gardewine</span></div>
+        <div class="ts-ext-carrier-btn" data-ext-carrier="Manitoulin" data-ext-prefix="MAN"><span class="ts-ext-carrier-name">Manitoulin</span></div>
+        <div class="ts-ext-carrier-btn" data-ext-carrier="TForce" data-ext-prefix="TFR"><span class="ts-ext-carrier-name">TForce</span></div>
+        <div class="ts-ext-carrier-btn" data-ext-carrier="XPO" data-ext-prefix="XPO"><span class="ts-ext-carrier-name">XPO</span></div>
+        <div class="ts-ext-carrier-btn" data-ext-carrier="Other" data-ext-prefix="EXT"><span class="ts-ext-carrier-name">Other</span></div>
+      </div>
+    </div>
+  </div>
+
   <div class="ts-screen" id="ts-s-drop">
     <div class="ts-screen-header">
       <div class="ts-topbar" style="padding:0"><div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div></div>
@@ -567,7 +597,7 @@ body{background-image:none!important;background:transparent!important}
       // Update Progress Bar
       const prog = {
         'ts-s-home': 15, 'ts-s-carrier': 35, 'ts-s-actions': 55, 
-        'ts-s-omw': 75, 'ts-s-drop': 75, 'ts-s-door-select': 75, 
+        'ts-s-omw': 75, 'ts-s-drop': 75, 'ts-s-ext-carrier': 75, 'ts-s-door-select': 75, 
         'ts-s-safety': 90, 'ts-s-door': 100, 'ts-s-done': 100
       };
       if(prog[id]) document.getElementById('ts-pb').style.width = prog[id] + '%';
@@ -596,6 +626,20 @@ body{background-image:none!important;background:transparent!important}
       btn.addEventListener('click', () => show(btn.dataset.back));
     });
 
+    // If URL has ?loc= param it's the outside carrier QR — skip trailer entry entirely
+    if (_driverLocSlug) {
+      document.querySelector('#ts-s-home .ts-hero-title').innerHTML = 'Outside<br/><strong>Carrier Drop</strong>';
+      document.querySelector('#ts-s-home .ts-hero-sub').textContent = 'Tap below to get your door assignment';
+      const inputWrap = document.querySelector('.ts-trailer-input-wrap');
+      if (inputWrap) inputWrap.style.display = 'none';
+      const goBtn = document.createElement('button');
+      goBtn.className = 'ts-cta-btn ts-accent ts-anim';
+      goBtn.style.cssText = 'margin:0 24px;background:var(--cyan);color:#000;';
+      goBtn.textContent = 'Get My Door →';
+      goBtn.addEventListener('click', () => show('ts-s-ext-carrier'));
+      document.querySelector('#ts-s-home').appendChild(goBtn);
+    }
+
     // 1. Trailer Input
     const homeTrailer = document.getElementById('ts-home-trailer');
     homeTrailer.addEventListener('input', e => { state.trailer = e.target.value.trim().toUpperCase(); e.target.value = state.trailer; });
@@ -608,9 +652,44 @@ body{background-image:none!important;background:transparent!important}
     document.querySelectorAll('#driverView [data-carrier]').forEach(btn => {
       btn.addEventListener('click', () => {
         state.carrier = btn.dataset.carrier;
-        document.getElementById('ts-actions-trailer-tag').textContent = `🚛 ${state.trailer}`;
-        buildActions();
-        show('ts-s-actions');
+        if (state.carrier === 'Outside') {
+          show('ts-s-ext-carrier');
+        } else {
+          document.getElementById('ts-actions-trailer-tag').textContent = `🚛 ${state.trailer}`;
+          buildActions();
+          show('ts-s-actions');
+        }
+      });
+    });
+
+    // Outside carrier picker — tap carrier → auto-drop via ext-drop API
+    document.querySelectorAll('.ts-ext-carrier-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        document.querySelectorAll('.ts-ext-carrier-btn').forEach(b => b.classList.remove('ts-ext-sel'));
+        btn.classList.add('ts-ext-sel');
+        const carrier = btn.dataset.extCarrier;
+        const prefix  = btn.dataset.extPrefix;
+        btn.style.pointerEvents = 'none';
+        btn.innerHTML = `<span class="ts-ext-carrier-name" style="color:var(--cyan)">Assigning door…</span>`;
+        try {
+          const res = await fetch('/api/driver/ext-drop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify({ carrier, prefix, locationId: _driverLocationId })
+          });
+          const data = res.ok ? await res.json().catch(() => ({})) : {};
+          if (data.door) {
+            showDoorAssigned('Door Assigned!', `Pull straight into Door ${data.door}.`, true);
+          } else {
+            showSuccess('Drop Logged', 'No doors free right now — dispatch has been notified.', [{k:'Carrier',v:carrier},{k:'Ref',v:data.refCode||'—'}]);
+          }
+        } catch {
+          toast('Network error — try again');
+        } finally {
+          btn.style.pointerEvents = '';
+          btn.innerHTML = `<span class="ts-ext-carrier-name">${carrier}</span>`;
+          btn.classList.remove('ts-ext-sel');
+        }
       });
     });
 

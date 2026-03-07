@@ -890,15 +890,48 @@
 
   function renderRolePanel(){
     const isDisp=ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin";
+    // Apply role class to body for CSS-driven visibility of quick-add bar
+    document.body.className=document.body.className.replace(/\brole-\S+/g,"").trim();
+    if(ROLE)document.body.classList.add("role-"+ROLE);
     if(isDisp){
       el("panelTitle").textContent=ROLE==="management"?"Management":ROLE==="admin"?"Admin":"Dispatcher";
       el("panelSub").textContent="Full control";el("panelBody").innerHTML=dispPanelHtml();
-      el("btnLogout").style.display="";el("btnAudit").style.display="";renderPlates();return;
+      el("btnLogout").style.display="";el("btnAudit").style.display="";renderPlates();
+      _initQuickAdd();
+      return;
     }
     if(ROLE==="dock"){el("panelTitle").textContent="Dock";el("panelSub").textContent="Loading / Dock Ready";el("panelBody").innerHTML=dockPanelHtml();el("btnLogout").style.display="";el("btnAudit").style.display="none";renderPlates();return;}
     el("panelTitle").textContent="Not Authenticated";el("panelSub").textContent="—";
     el("panelBody").innerHTML=`<div style="color:var(--t2);font-size:12px;line-height:1.6;">Please <a href="/login">sign in</a> to access controls.</div>`;
     el("btnLogout").style.display="none";el("btnAudit").style.display="none";
+  }
+
+  let _qaInited=false;
+  function _initQuickAdd(){
+    if(_qaInited)return;_qaInited=true;
+    const btn=el("btnQuickAdd");if(!btn)return;
+    const submit=async()=>{
+      const trailer=(el("qa_trailer")?.value??"").trim().toUpperCase();
+      if(!trailer)return el("qa_trailer")?.focus();
+      try{
+        await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({
+          trailer,
+          direction:(el("qa_direction")?.value??"Inbound"),
+          status:(el("qa_status")?.value??"Incoming"),
+          door:(el("qa_door")?.value??"").trim(),
+          note:(el("qa_note")?.value??"").trim(),
+        })});
+        el("qa_trailer").value="";el("qa_door").value="";el("qa_note").value="";
+        el("qa_direction").value="Inbound";el("qa_status").value="Incoming";
+        toast("Added",`Trailer ${trailer} added.`,"ok");
+        setTimeout(()=>el("qa_trailer")?.focus(),50);
+      }catch(e){toast("Failed",e.message,"err");}
+    };
+    btn.addEventListener("click",submit);
+    // Enter on trailer/door/note fields submits
+    ["qa_trailer","qa_door","qa_note"].forEach(id=>{
+      el(id)?.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();submit();}});
+    });
   }
 
   async function doLogout(){

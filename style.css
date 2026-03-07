@@ -665,6 +665,38 @@ textarea{min-height:60px;resize:vertical}
 /* ── btn-xs ── */
 .btn-xs{padding:2px 6px !important;font-size:10px !important;line-height:1.4 !important}
 
+/* ── Quick-add inline bar ─────────────────────────────── */
+.quick-add-bar{
+  display:flex;align-items:center;gap:6px;flex-wrap:nowrap;
+  padding:8px 12px;
+  background:rgba(7,10,15,.5);
+  border-top:1px dashed rgba(245,166,35,.2);
+}
+.quick-add-bar:focus-within{
+  background:rgba(12,18,28,.7);
+  border-top-color:rgba(245,166,35,.5);
+}
+.qa-input,.qa-select{
+  background:var(--s1);border:1px solid var(--b1);border-radius:var(--r);
+  color:var(--t1);font-size:12px;padding:5px 8px;outline:none;
+  transition:border-color .15s;
+}
+.qa-input:focus,.qa-select:focus{border-color:var(--amber);}
+.qa-trailer{width:110px;font-family:var(--mono);font-weight:600;}
+.qa-door{width:58px;font-family:var(--mono);}
+.qa-note{flex:1;min-width:80px;}
+.qa-select{flex-shrink:0;}
+.qa-submit{flex-shrink:0;padding:5px 14px !important;}
+/* Hide quick-add for non-dispatcher roles — shown via JS */
+.quick-add-bar{display:none;}
+.role-dispatcher .quick-add-bar,
+.role-admin .quick-add-bar,
+.role-management .quick-add-bar{display:flex;}
+@media(max-width:700px){
+  .quick-add-bar{flex-wrap:wrap;}
+  .qa-note{width:100%;flex:none;order:10;}
+}
+
 /* ═══════════════════════════════════════════
    LOOKUP SPINNER
 ═══════════════════════════════════════════ */

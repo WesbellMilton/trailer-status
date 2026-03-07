@@ -36,11 +36,18 @@ function init(expressApp) {
     try { safeSend(JSON.stringify({ type: 'confirmations', payload: await loadConfirmations(250) })); } catch {}
   });
 
-  // Terminate stale clients every 30 s
+  // Terminate stale clients every 30 s — also catches unresponsive OPEN sockets
   setInterval(() => {
-    for (const client of _wss.clients)
-      if (client.readyState === WebSocket.CLOSING || client.readyState === WebSocket.CLOSED)
+    let alive=0, dead=0;
+    for (const client of _wss.clients) {
+      if (client.readyState === WebSocket.CLOSING || client.readyState === WebSocket.CLOSED) {
         try { client.terminate(); } catch {}
+        dead++;
+      } else {
+        alive++;
+      }
+    }
+    if (dead > 0) console.log(`[WS] swept ${dead} dead client(s), ${alive} alive`);
   }, 30_000).unref();
 
   return { server: _server, wss: _wss };

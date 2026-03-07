@@ -139,33 +139,44 @@ a{color:var(--cyan);text-decoration:none}
 .board-ctrl-bar{
   border-bottom:1px solid var(--b0);
   background:var(--s0);
+  display:flex;align-items:center;gap:0;
+  overflow-x:auto;
+  padding:0 10px;
+  min-height:44px;
+  scrollbar-width:none;
 }
+.board-ctrl-bar::-webkit-scrollbar{display:none}
+/* KPI chips — compact inline, no separate row */
 .kpi-row-inline{
-  display:flex;flex-wrap:wrap;gap:0;
-  border-bottom:1px solid var(--b0);
+  display:flex;align-items:center;gap:4px;
+  flex-shrink:0;margin-right:8px;
 }
 .kpi-row-inline .kpi-tile{
-  flex:1;min-width:80px;border-radius:0;border:none;
-  border-right:1px solid var(--b0);
-  padding:8px 12px;
+  flex:none;border-radius:var(--r);border:1px solid var(--b0);
+  background:transparent;padding:3px 8px;font-size:10px;
+  white-space:nowrap;cursor:pointer;
+  transition:border-color .15s,background .15s;
 }
-.kpi-row-inline .kpi-tile:last-child{border-right:none}
+.kpi-row-inline .kpi-tile:hover{border-color:var(--amber);background:rgba(245,166,35,.07)}
+.kpi-row-inline .kpi-tile.kpi-active{border-color:var(--amber);background:rgba(245,166,35,.12)}
+.kpi-row-inline .kpi-tile .kpi-label{font-size:9px;letter-spacing:.06em}
+.kpi-row-inline .kpi-tile .kpi-val{font-size:13px;font-weight:600;line-height:1.1}
+/* Filter controls — single row, no wrap */
 .board-ctrl-filters{
-  display:flex;align-items:center;gap:6px;flex-wrap:wrap;
-  padding:8px 12px;
+  display:flex;align-items:center;gap:5px;flex-wrap:nowrap;flex-shrink:0;
 }
 .ctrl-search{
-  flex:1;min-width:140px;max-width:220px;
+  width:150px;flex-shrink:1;
   background:var(--s1);border:1px solid var(--b1);border-radius:var(--r);
-  color:var(--t1);font-size:12px;padding:5px 9px;outline:none;
+  color:var(--t1);font-size:12px;padding:4px 8px;outline:none;
 }
 .ctrl-search:focus{border-color:var(--amber);box-shadow:0 0 0 2px rgba(245,166,35,.15)}
 .ctrl-select{
   background:var(--s1);border:1px solid var(--b1);border-radius:var(--r);
-  color:var(--t1);font-size:12px;padding:5px 8px;outline:none;cursor:pointer;
+  color:var(--t1);font-size:12px;padding:4px 7px;outline:none;cursor:pointer;flex-shrink:0;
 }
 .ctrl-select:focus{border-color:var(--amber)}
-.ctrl-sep{width:1px;height:22px;background:var(--b0);margin:0 2px;flex-shrink:0}
+.ctrl-sep{width:1px;height:22px;background:var(--b0);margin:0 4px;flex-shrink:0}
 /* Sticky: the whole ctrl bar sticks together */
 .panel-board>.board-ctrl-bar{
   position:sticky;top:54px;z-index:30;

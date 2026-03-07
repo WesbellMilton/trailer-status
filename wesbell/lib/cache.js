@@ -2,16 +2,22 @@
 const { all } = require('./db');
 
 // ── In-memory caches (keyed by locationId) ────────────────────────────────────
-const _trailersCache = new Map(); // locationId → object
-let _plates = null;
-let _blocks  = null;
+const _trailersCache = new Map(); // locationId|'all' → object
+const _platesCache   = new Map(); // locationId|'all' → object
+const _blocksCache   = new Map(); // locationId|'all' → object
 
 const invalidateTrailers = (locationId = null) => {
   if (locationId) _trailersCache.delete(locationId);
   else _trailersCache.clear();
 };
-const invalidatePlates = () => { _plates = null; };
-const invalidateBlocks  = () => { _blocks  = null; };
+const invalidatePlates = (locationId = null) => {
+  if (locationId) _platesCache.delete(locationId);
+  else _platesCache.clear();
+};
+const invalidateBlocks = (locationId = null) => {
+  if (locationId) _blocksCache.delete(locationId);
+  else _blocksCache.clear();
+};
 
 // ── Loaders ───────────────────────────────────────────────────────────────────
 async function loadTrailersObject(locationId = null) {
@@ -64,12 +70,14 @@ async function getTrailersCache(locationId = null) {
   return _trailersCache.get(key);
 }
 async function getPlatesCache(locationId = null) {
-  if (!_plates) _plates = await loadDockPlatesObject(locationId);
-  return _plates;
+  const key = locationId || 'all';
+  if (!_platesCache.has(key)) _platesCache.set(key, await loadDockPlatesObject(locationId));
+  return _platesCache.get(key);
 }
 async function getBlocksCache(locationId = null) {
-  if (!_blocks) _blocks = await loadDoorBlocksObject(locationId);
-  return _blocks;
+  const key = locationId || 'all';
+  if (!_blocksCache.has(key)) _blocksCache.set(key, await loadDoorBlocksObject(locationId));
+  return _blocksCache.get(key);
 }
 
 const loadConfirmations = (limit = 250, locationId = null) =>

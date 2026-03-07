@@ -512,6 +512,7 @@
     const badge=el("dockMapFreeCount");
     if(badge)badge.textContent=`${15-occupiedInRange} free`;
     if(_selectedTrailer)renderDetailPanel(_selectedTrailer);
+    renderDspOccupancy();
     renderDspPlates();
   }
 
@@ -713,21 +714,56 @@
     renderDspPlates();
   }
 
+  // ── Shared occupancy card helpers ─────────────────────────────────────
+  function _buildOccCard(door){
+    const occupied=getOccupiedDoors();
+    const occ=occupied[door];
+    const isBlocked=occ?.status==="Blocked";
+    const cls=occ?(OCC_STATUS_CLS[occ.status]||"occ-incoming"):"occ-free";
+    const plateSt=dockPlates[door]?.status||"Unknown";
+    const dot=plateSt==="Out of Order"?`<span class="dpb-pdot dpb-pdot-ooo" title="Plate OOO"></span>`
+      :plateSt==="Service"?`<span class="dpb-pdot dpb-pdot-svc" title="Plate Svc"></span>`
+      :plateSt==="OK"?`<span class="dpb-pdot dpb-pdot-ok" title="Plate OK"></span>`:``;
+    if(!occ) return`<div class="occ-card occ-free"><div class="occ-door">D${esc(door)}</div>${dot}<div class="occ-label occ-free-lbl">Free</div></div>`;
+    if(isBlocked) return`<div class="occ-card occ-blocked"><div class="occ-door">D${esc(door)}</div><div class="occ-trailer">🚫</div><div class="occ-label">Blocked</div></div>`;
+    return`<div class="occ-card ${cls}"><div class="occ-door-row"><span class="occ-door">D${esc(door)}</span>${dot}</div><div class="occ-trailer">${esc(occ.trailer)}</div><div class="occ-status-badge">${esc(occ.status)}</div></div>`;
+  }
+  function _buildOccMap(doors){
+    const row1=doors.filter(d=>parseInt(d)<=35);
+    const row2=doors.filter(d=>parseInt(d)>35);
+    return`<div class="occ-map-row occ-map-row-a">${row1.map(_buildOccCard).join("")}</div>`
+          +`<div class="occ-map-row occ-map-row-b">${row2.map(_buildOccCard).join("")}</div>`;
+  }
+
+  function renderDspOccupancy(){
+    if(isDriver())return;
+    const grid=el("dspOccGrid");if(!grid)return;
+    const doors=[];for(let d=28;d<=42;d++)doors.push(String(d));
+    const occupied=getOccupiedDoors();
+    const freeCount=doors.filter(d=>!occupied[d]).length;
+    const loadCount=doors.filter(d=>occupied[d]?.status==="Loading").length;
+    const readyCount=doors.filter(d=>["Ready","Dock Ready"].includes(occupied[d]?.status)).length;
+    const sumEl=el("dspOccSummary");
+    if(sumEl) sumEl.innerHTML=`<span style="color:rgba(255,255,255,.4)">${freeCount} free</span>`
+      +(loadCount?` · <span style="color:var(--amber)">${loadCount} loading</span>`:"")
+      +(readyCount?` · <span style="color:var(--green)">${readyCount} ready</span>`:"");
+    grid.innerHTML=_buildOccMap(doors);
+  }
+
   function renderDspPlates(){
     if(isDriver())return;
     const grid=el("dspPlatesGrid");if(!grid)return;
     const canEdit=ROLE==="dispatcher"||ROLE==="dock"||ROLE==="management"||ROLE==="admin";
     const doors=[];for(let d=28;d<=42;d++)doors.push(String(d));
-    const occupied=getOccupiedDoors();
     const v=Object.values(dockPlates||{});
-    const freeCount=doors.filter(d=>!occupied[d]).length;
-    const oooCount=v.filter(p=>p?.status==="Out of Order").length;
-    const svcCount=v.filter(p=>p?.status==="Service").length;
     const sumEl=el("dspPlatesSummary");
+    const okCount=v.filter(p=>p?.status==="OK").length;
+    const svcCount=v.filter(p=>p?.status==="Service").length;
+    const oooCount=v.filter(p=>p?.status==="Out of Order").length;
     if(sumEl){
-      sumEl.innerHTML=`<span class="dps-ok">${freeCount} free</span>`
-        +(svcCount?` · <span class="dps-svc">${svcCount} svc</span>`:"")
-        +(oooCount?` · <span class="dps-ooo">${oooCount} OOO</span>`:"");
+      sumEl.innerHTML=`<span style="color:var(--green)">${okCount} OK</span>`
+        +(svcCount?` · <span style="color:var(--amber)">${svcCount} Svc</span>`:"")
+        +(oooCount?` · <span style="color:var(--red)">${oooCount} OOO</span>`:"");
     }
     grid.innerHTML=doors.map(door=>{
       const p=dockPlates[door]||{status:"Unknown",note:""};
@@ -829,26 +865,50 @@
   }
 
   function dispPanelHtml(){return`
-    <div class="infobox infobox-amber"><div class="ib-title">Dispatcher Controls</div>Add and manage trailers. Use inline buttons on each row for quick status changes.</div>
-    <div class="field"><label class="fl" for="d_trailer">Trailer Number</label><input id="d_trailer" placeholder="e.g. 5312" autocomplete="off" inputmode="numeric" autocorrect="off" autocapitalize="none" spellcheck="false" style="font-family:var(--mono);font-weight:500;"/></div>
-    <div class="field-row">
-      <div class="field"><label class="fl" for="d_direction">Direction</label><select id="d_direction"><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select></div>
-      <div class="field"><label class="fl" for="d_status">Status</label><select id="d_status"><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select></div>
-    </div>
-    <div class="field-row">
-      <div class="field"><label class="fl" for="d_door">Door (28–42)</label><input id="d_door" placeholder="e.g. 32" inputmode="numeric" autocomplete="off" style="font-family:var(--mono);"/></div>
-      <div class="field"><label class="fl" for="d_dropType">Drop Type</label><select id="d_dropType"><option value="">—</option><option>Empty</option><option>Loaded</option></select></div>
-    </div>
-    <div class="field"><label class="fl" for="d_carrierType">Carrier</label><select id="d_carrierType"><option value="">—</option><option>Wesbell</option><option>Outside</option></select></div>
-    <div class="field"><label class="fl" for="d_note">Note</label><textarea id="d_note" placeholder="Optional note…"></textarea></div>
-    <button class="btn btn-primary btn-full" id="btnSaveTrailer" style="min-height:48px;">Save Trailer Record</button>
-    <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--b0)">
-      <div class="panel-title" style="margin-bottom:10px"><div class="ptdot" style="background:var(--cyan)"></div>Export & Logs</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;">
-        <a href="/api/export/trailers.csv" class="btn btn-default btn-sm" download>⬇ Trailers CSV</a>
-        <a href="/api/export/audit.csv" class="btn btn-default btn-sm" download>⬇ Audit CSV</a>
-        <button class="btn btn-default btn-sm" id="btnViewLogs">🖥 Server Logs</button>
-        <a href="/health" class="btn btn-default btn-sm" target="_blank">❤ Health</a>
+    <div class="dcp-form">
+      <div class="dcp-row">
+        <div class="dcp-field dcp-field-wide">
+          <label class="dcp-label">Trailer #</label>
+          <input class="dcp-input" id="d_trailer" placeholder="e.g. 5312" autocomplete="off" inputmode="numeric" autocorrect="off" autocapitalize="none" spellcheck="false"/>
+        </div>
+        <div class="dcp-field">
+          <label class="dcp-label">Door</label>
+          <input class="dcp-input dcp-mono" id="d_door" placeholder="32" inputmode="numeric" autocomplete="off"/>
+        </div>
+      </div>
+      <div class="dcp-row">
+        <div class="dcp-field">
+          <label class="dcp-label">Direction</label>
+          <select class="dcp-select" id="d_direction">
+            <option>Inbound</option><option>Outbound</option><option>Cross Dock</option>
+          </select>
+        </div>
+        <div class="dcp-field">
+          <label class="dcp-label">Status</label>
+          <select class="dcp-select" id="d_status">
+            <option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option>
+          </select>
+        </div>
+      </div>
+      <div class="dcp-row">
+        <div class="dcp-field">
+          <label class="dcp-label">Drop</label>
+          <select class="dcp-select" id="d_dropType"><option value="">—</option><option>Empty</option><option>Loaded</option></select>
+        </div>
+        <div class="dcp-field">
+          <label class="dcp-label">Carrier</label>
+          <select class="dcp-select" id="d_carrierType"><option value="">—</option><option>Wesbell</option><option>Outside</option></select>
+        </div>
+      </div>
+      <div class="dcp-field-full">
+        <input class="dcp-input" id="d_note" placeholder="Note (optional)" autocomplete="off"/>
+      </div>
+      <button class="dcp-save" id="btnSaveTrailer">+ Save Trailer</button>
+      <div class="dcp-tools">
+        <a href="/api/export/trailers.csv" class="dcp-tool-btn" download>⬇ CSV</a>
+        <a href="/api/export/audit.csv" class="dcp-tool-btn" download>⬇ Audit</a>
+        <button class="dcp-tool-btn" id="btnViewLogs">🖥 Logs</button>
+        <a href="/health" class="dcp-tool-btn" target="_blank">❤ Health</a>
       </div>
     </div>`;}
 
@@ -1018,18 +1078,7 @@
     if(sumEl) sumEl.innerHTML=`<span style="color:rgba(255,255,255,.4)">${freeCount} free</span>`
       +(loadCount?` · <span style="color:var(--amber)">${loadCount} loading</span>`:"")
       +(readyCount?` · <span style="color:var(--green)">${readyCount} ready</span>`:"");
-    grid.innerHTML=doors.map(door=>{
-      const occ=occupied[door];
-      const isBlocked=occ?.status==="Blocked";
-      const cls=occ?(OCC_STATUS_CLS[occ.status]||"occ-incoming"):"occ-free";
-      const plateSt=dockPlates[door]?.status||"Unknown";
-      const plateDot=plateSt==="Out of Order"?`<span class="dpb-pdot dpb-pdot-ooo" title="Plate OOO"></span>`
-        :plateSt==="Service"?`<span class="dpb-pdot dpb-pdot-svc" title="Plate Svc"></span>`
-        :plateSt==="OK"?`<span class="dpb-pdot dpb-pdot-ok" title="Plate OK"></span>`:``;
-      if(!occ) return`<div class="occ-card occ-free"><div class="occ-door">D${esc(door)}</div>${plateDot}<div class="occ-label occ-free-lbl">Free</div></div>`;
-      if(isBlocked) return`<div class="occ-card occ-blocked"><div class="occ-door">D${esc(door)}</div><div class="occ-trailer">🚫</div><div class="occ-label">Blocked</div>${occ.note?`<div class="occ-note">${esc(occ.note)}</div>`:""}</div>`;
-      return`<div class="occ-card ${cls}"><div class="occ-door-row"><span class="occ-door">D${esc(door)}</span>${plateDot}</div><div class="occ-trailer">${esc(occ.trailer)}</div><div class="occ-status-badge">${esc(occ.status)}</div></div>`;
-    }).join("");
+    grid.innerHTML=_buildOccMap(doors);
   }
 
   function renderDockPlatesPanel(){

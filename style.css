@@ -5419,3 +5419,142 @@ select option { background: #0d1119; }
 .dsp-plate-btn.dpb-svc  .dpb-status-icon  { color: var(--amber); filter: drop-shadow(0 0 3px rgba(245,166,35,.5)); }
 .dsp-plate-btn.dpb-ooo  .dpb-status-icon  { color: var(--red);   filter: drop-shadow(0 0 4px rgba(240,74,74,.6));  }
 
+
+/* ═══════════════════════════════════════════════════════════════
+   COMPACT DISPATCH CONTROL PANEL (dcp-)
+   Fixed height — no scroll needed for dispatcher / admin
+═══════════════════════════════════════════════════════════════ */
+.dcp-form {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px 14px 10px;
+}
+.dcp-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+.dcp-field { display: flex; flex-direction: column; gap: 3px; }
+.dcp-field-wide { grid-column: span 1; }
+.dcp-field-full { display: flex; flex-direction: column; gap: 3px; }
+.dcp-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--t3);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.dcp-input, .dcp-select {
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 7px;
+  color: rgba(255,255,255,.85);
+  font-family: var(--sans);
+  font-size: 12px;
+  padding: 7px 10px;
+  height: 34px;
+  box-sizing: border-box;
+  transition: border-color .15s, background .15s;
+  width: 100%;
+}
+.dcp-input:focus, .dcp-select:focus {
+  outline: none;
+  border-color: var(--amber);
+  background: rgba(255,255,255,.08);
+}
+.dcp-input::placeholder { color: rgba(255,255,255,.2); }
+.dcp-mono { font-family: var(--mono) !important; font-weight: 600; }
+.dcp-save {
+  width: 100%;
+  height: 38px;
+  border-radius: 8px;
+  border: none;
+  background: var(--amber);
+  color: #000;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: .04em;
+  margin-top: 2px;
+  transition: opacity .15s, box-shadow .15s;
+}
+.dcp-save:hover { opacity: .88; box-shadow: 0 0 14px rgba(245,166,35,.3); }
+.dcp-tools {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255,255,255,.05);
+  margin-top: 2px;
+}
+.dcp-tool-btn {
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.04);
+  color: var(--t2);
+  font-family: var(--mono);
+  font-size: 10px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background .12s, color .12s;
+  white-space: nowrap;
+}
+.dcp-tool-btn:hover { background: rgba(255,255,255,.09); color: var(--t1); }
+
+/* ═══════════════════════════════════════════════════════════════
+   DOCK OCCUPANCY — DOOR MAP LAYOUT
+   All 15 doors displayed as a warehouse map:
+   Row 1 (D28–D35 = 8 doors), Row 2 (D36–D42 = 7 doors)
+   Wide cards, easy to scan at a glance
+═══════════════════════════════════════════════════════════════ */
+
+#dspOccGrid, #dvOccGrid {
+  display: flex !important;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px 14px !important;
+  grid-template-columns: unset !important;
+}
+
+.occ-map-row {
+  display: grid;
+  gap: 5px;
+}
+.occ-map-row-a { grid-template-columns: repeat(8, 1fr); }
+.occ-map-row-b { grid-template-columns: repeat(7, 1fr); }
+.occ-map-divider {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--t3);
+  letter-spacing: .08em;
+  text-align: center;
+  padding: 2px 0 0;
+  opacity: .5;
+}
+
+/* Occupancy card — wider map style */
+.occ-card {
+  min-height: 60px !important;
+  border-radius: 8px !important;
+  padding: 6px 4px 5px !important;
+  gap: 2px !important;
+}
+.occ-door {
+  font-size: 9px !important;
+}
+.occ-trailer {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+}
+.occ-status-badge {
+  font-size: 8px !important;
+  padding: 1px 3px !important;
+}
+.occ-free-lbl {
+  font-size: 8px !important;
+}
+

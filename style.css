@@ -5630,3 +5630,37 @@ select option { background: #0d1119; }
 }
 
 /* nav Dock + Driver links — restored */
+
+
+/* ═══════════════════════════════════════════════════════════════
+   ADMIN PANEL — rendered into panelBody alongside dispatch form
+═══════════════════════════════════════════════════════════════ */
+.adm-section {
+  border-top: 1px solid var(--divider);
+  padding: 0 14px 14px;
+  margin-top: 4px;
+}
+.adm-divider-hd {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--amber);
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  padding: 10px 0 8px;
+  opacity: .7;
+}
+.adm-acc {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--divider);
+  cursor: pointer;
+  color: var(--t2);
+  font-size: 10px;
+}
+.adm-acc:hover { color: var(--t1); }

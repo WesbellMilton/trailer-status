@@ -1531,22 +1531,14 @@ body{background-image:none!important;background:transparent!important}
             <div class="tight"><button class="btn btn-default btn-sm" id="btnClearFilters" style="margin-top:14px;">Clear</button></div>
           </div>
           <div class="tbl-hd">
-            <span>Trailer</span><span>Dir</span><span>Status</span><span>Door</span>
-            <span>Type</span><span>Note</span><span>Updated</span><span id="actionsColHead">Actions</span>
+            <span>Trailer</span><span>Status</span><span>Door</span>
+            <span>Note</span><span>Updated</span><span id="actionsColHead">Actions</span>
           </div>
           <div id="tbody"></div>
           <div class="board-footer" role="status" aria-live="polite"><span id="lastUpdated">—</span><span id="boardCountStr">—</span></div>
         </div>
 
-        <div class="panel" id="dockMapCard">
-          <div class="panel-hd">
-            <div class="panel-title"><div class="ptdot" style="background:var(--cyan)"></div>Door Occupancy Map</div>
-            <span class="badge" id="dockMapFreeCount" style="color:var(--green);">—</span>
-          </div>
-          <div class="panel-body" style="padding:10px 12px;">
-            <div class="dock-map-grid" id="dockMapGrid"></div>
-          </div>
-        </div>
+
 
         <div class="panel" id="auditCard" style="display:none;">
           <div class="panel-hd">
@@ -1576,6 +1568,15 @@ body{background-image:none!important;background:transparent!important}
 
       </div>
       <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="panel side-sticky" id="dockMapCard">
+          <div class="panel-hd">
+            <div class="panel-title"><div class="ptdot" style="background:var(--cyan)"></div>Door Map</div>
+            <span class="badge" id="dockMapFreeCount" style="color:var(--green);">—</span>
+          </div>
+          <div class="panel-body" style="padding:10px 12px;">
+            <div class="dock-map-grid" id="dockMapGrid"></div>
+          </div>
+        </div>
 
         <div id="adminPanel" class="panel" style="display:none;">
           <div class="panel-hd">

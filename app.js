@@ -9,6 +9,23 @@
   const isDock=()=>path().startsWith("/dock");
   const isAdmin=()=>ROLE==="admin";
 
+  // ── Sticky top calculator — keeps tbl-hd pinned just below filter-bar ───────
+  function _updateStickyTop(){
+    const fb=document.querySelector('.panel-board>.filter-bar');
+    const tb=document.querySelector('.topbar');
+    if(!fb||!tb)return;
+    const topbarH=tb.getBoundingClientRect().height;
+    const fbH=fb.getBoundingClientRect().height;
+    document.documentElement.style.setProperty('--filter-bar-h',(topbarH+fbH)+'px');
+  }
+  if(typeof ResizeObserver!=='undefined'){
+    const ro=new ResizeObserver(_updateStickyTop);
+    const observe=()=>{
+      const fb=document.querySelector('.panel-board>.filter-bar');
+      if(fb)ro.observe(fb);else setTimeout(observe,300);
+    };
+    observe();
+  }
   const fmtTime=ms=>{
     if(!ms)return"";
     try{return new Date(ms).toLocaleString(undefined,{month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"});}
@@ -410,6 +427,7 @@
     const occupiedInRange=Object.keys(occupied).filter(d=>{const n=parseInt(d);return n>=28&&n<=42;}).length;
     const badge=el("dockMapFreeCount");
     if(badge)badge.textContent=`${15-occupiedInRange} free`;
+    _updateStickyTop();
   }
   function renderSupBoard(){
     renderBoardInto(el("supTbody"),el("supCountsPill"),el("supCountStr"),el("supSearch"),el("supFilterDir"),el("supFilterStatus"),true);

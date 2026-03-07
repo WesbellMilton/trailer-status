@@ -116,6 +116,13 @@ a{color:var(--cyan);text-decoration:none}
   overflow:hidden;
   box-shadow:0 1px 3px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.025);
 }
+/* Trailer board panel: overflow visible so sticky filter/header work within page scroll */
+.panel-board{overflow:visible !important;background:transparent;border:none;box-shadow:none}
+.panel-board>.panel-hd{background:var(--s1);border:1px solid var(--b0);border-bottom:none;border-radius:var(--r2) var(--r2) 0 0;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.panel-board>.filter-bar{background:var(--s0);border:1px solid var(--b0);border-top:none;border-bottom:1px solid var(--b0)}
+.panel-board>.tbl-hd{border:1px solid var(--b0);border-top:none}
+.panel-board>#tbody{border:1px solid var(--b0);border-top:none;border-radius:0 0 var(--r2) var(--r2);overflow:hidden}
+.panel-board>.board-footer{border:1px solid var(--b0);border-top:1px solid rgba(26,37,53,.5);border-radius:0 0 var(--r2) var(--r2)}
 .panel-hd{
   padding:10px 16px;border-bottom:1px solid var(--b0);
   display:flex;align-items:center;justify-content:space-between;gap:10px;
@@ -151,8 +158,17 @@ a{color:var(--cyan);text-decoration:none}
    TRAILER TABLE
 ═══════════════════════════════════════════ */
 .tbl-hd,.tbl-row{display:grid;grid-template-columns:minmax(130px,1.8fr) 110px 64px 1fr 72px minmax(180px,auto);align-items:center}
+/* Sticky actions column */
+.panel-board .tbl-hd>span:last-child,
+.panel-board .tbl-row>.t-acts-wrap{position:sticky;right:0;z-index:5;background:var(--s1)}
+.panel-board .tbl-hd>span:last-child{background:var(--s0)}
+.panel-board .tbl-row:hover>.t-acts-wrap{background:rgba(16,22,32,1)}
+.panel-board .tbl-row.r-omw>.t-acts-wrap{background:rgba(8,25,35,1)}
+.panel-board .tbl-row.r-ready>.t-acts-wrap{background:rgba(8,22,18,1)}
+.panel-board .tbl-row.r-loading>.t-acts-wrap{background:rgba(22,18,8,1)}
 .tbl-hd>span,.tbl-row>span,.tbl-row>div{padding:8px 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .tbl-hd{background:linear-gradient(to bottom,var(--s0),rgba(12,16,23,.9));border-bottom:1px solid var(--b0)}
+.panel-board>.tbl-hd{position:sticky;top:calc(var(--filter-bar-h, 122px));z-index:29;backdrop-filter:blur(12px) !important;-webkit-backdrop-filter:blur(12px);box-shadow:0 2px 8px rgba(0,0,0,.4)}
 .tbl-hd>span{font-family:var(--mono);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.12em;color:var(--t3)}
 .tbl-row{
   border-bottom:1px solid rgba(28,40,64,.7);
@@ -223,6 +239,7 @@ a{color:var(--cyan);text-decoration:none}
    FILTER BAR
 ═══════════════════════════════════════════ */
 .filter-bar{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;padding:10px 14px;background:linear-gradient(to bottom,var(--s0),rgba(12,16,23,.9));border-bottom:1px solid var(--b0)}
+.panel-board>.filter-bar{position:sticky;top:54px;z-index:30;backdrop-filter:blur(8px) !important;-webkit-backdrop-filter:blur(8px)}
 .filter-bar .field{flex:1 1 110px;margin:0}
 .filter-bar .tight{flex:0 0 auto}
 
@@ -547,7 +564,7 @@ textarea{min-height:60px;resize:vertical}
 .feed-time{font-family:var(--mono);font-size:10px;color:var(--t3);margin-top:1px}
 
 .pin-row{display:grid;grid-template-columns:1fr 1fr auto;gap:9px;align-items:end;padding:11px;border:1px solid var(--b0);border-radius:var(--r);background:rgba(7,10,15,.5);margin-bottom:8px}
-.side-sticky{position:sticky;top:60px}
+.side-sticky{position:sticky;top:58px}
 
 /* ═══════════════════════════════════════════
    LOOKUP SPINNER

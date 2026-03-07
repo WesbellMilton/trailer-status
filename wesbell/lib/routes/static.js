@@ -5,7 +5,7 @@ const fs   = require('fs');
 const { guardPage } = require('../auth');
 
 const router   = Router();
-const ROOT_DIR = path.join(__dirname, '..', '..');   // project root
+const ROOT_DIR = path.join(__dirname, '..', '..', '..');   // repo root (lib/routes → lib → wesbell → repo root)
 
 const SAFE_FILES = /^\/(app\.js|style\.css|sw2?\.js|manifest\.json|favicon\.ico|favicon-\d+\.png|icon-\d+\.png|icon-[\w-]+\.png|apple-touch-icon\.png|icons\/icon-[\w-]+\.png|splash\/splash-[\w-]+\.png|js\/[\w./-]+\.js)$/;
 

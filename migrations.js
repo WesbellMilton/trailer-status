@@ -1,77 +1,215 @@
 'use strict';
-const path = require('path');
-const fs   = require('fs');
+/**
+ * Database migrations for Wesbell Dispatch.
+ *
+ * Each entry = { version: N, description: '...', up: async (run) => { ... } }
+ * Migrations are applied in order, exactly once, tracked in the `migrations` table.
+ * Never edit or remove an applied migration — add a new one instead.
+ */
 
-const PORT        = process.env.PORT || 3000;
-const APP_VERSION = process.env.APP_VERSION || '3.6.0';
-const NODE_ENV    = process.env.NODE_ENV || 'development';
-const IS_PROD     = NODE_ENV === 'production';
-
-// ── Database ──────────────────────────────────────────────────────────────────
-const DB_FILE = process.env.DB_FILE || (() => {
-  for (const candidate of ['/var/data/wesbell.sqlite', '/tmp/wesbell.sqlite']) {
-    try { fs.mkdirSync(path.dirname(candidate), { recursive: true }); return candidate; } catch {}
-  }
-  return path.join(__dirname, '..', 'wesbell.sqlite');
-})();
-
-// ── Auth ──────────────────────────────────────────────────────────────────────
-const PIN_MIN_LEN    = 4;
-const SESSION_TTL_MS = 1000 * 60 * 60 * 12;   // 12 h
-const COOKIE_NAME    = 'wb_session';
-const ENV_PINS = {
-  dispatcher : process.env.DISPATCHER_PIN || '',
-  dock       : process.env.DOCK_PIN       || '',
-  management : process.env.MANAGEMENT_PIN || '',
-  admin      : process.env.ADMIN_PIN      || '',
-};
-
-// ── Push / VAPID ──────────────────────────────────────────────────────────────
-const VAPID_FILE = process.env.VAPID_FILE || path.join(__dirname, '..', 'vapid.json');
-
-// ── Reservations ─────────────────────────────────────────────────────────────
-const RESERVATION_TTL_MS = 30 * 60 * 1000;   // 30 min
-
-// ── Geofencing ────────────────────────────────────────────────────────────────
-// All distances in km.  Zones are checked in order; first match wins.
-const GEOFENCE_ZONES = [
+const MIGRATIONS = [
   {
-    id      : 'depot',
-    label   : 'Wesbell Yard',
-    lat     : parseFloat(process.env.DEPOT_LAT  || '43.5048'),
-    lng     : parseFloat(process.env.DEPOT_LNG  || '-79.8880'),
-    // radiusKm checked as circle (fallback when no polygon)
-    radiusKm: parseFloat(process.env.DEPOT_RADIUS_KM || '0.3'),
-    // Polygon vertices [lat,lng] — takes priority when non-empty.
-    // Set via env as JSON string: DEPOT_POLYGON='[[43.505,-79.890],[43.505,-79.886],...]'
-    polygon : JSON.parse(process.env.DEPOT_POLYGON || '[]'),
-    // What to auto-trigger when a driver enters this zone while status==="Incoming"
-    autoAction: 'arrive',
+    version: 1,
+    description: 'Initial schema — core tables',
+    up: async (run) => {
+      await run(`CREATE TABLE IF NOT EXISTS trailers(
+        trailer TEXT PRIMARY KEY,
+        direction TEXT,
+        status TEXT,
+        door TEXT,
+        note TEXT,
+        dropType TEXT,
+        carrierType TEXT DEFAULT '',
+        updatedAt INTEGER,
+        omwAt INTEGER DEFAULT NULL,
+        omwEta INTEGER DEFAULT NULL,
+        doorAt INTEGER DEFAULT NULL
+      )`);
+      await run(`CREATE TABLE IF NOT EXISTS doorblocks(
+        door TEXT PRIMARY KEY,
+        note TEXT NOT NULL DEFAULT '',
+        setAt INTEGER NOT NULL DEFAULT 0
+      )`);
+      await run(`CREATE TABLE IF NOT EXISTS dockplates(
+        door TEXT PRIMARY KEY,
+        status TEXT,
+        note TEXT,
+        updatedAt INTEGER
+      )`);
+      await run(`CREATE TABLE IF NOT EXISTS confirmations(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        at INTEGER,
+        trailer TEXT,
+        door TEXT,
+        action TEXT,
+        ip TEXT,
+        userAgent TEXT
+      )`);
+      await run(`CREATE TABLE IF NOT EXISTS audit(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        at INTEGER,
+        actorRole TEXT,
+        action TEXT,
+        entityType TEXT,
+        entityId TEXT,
+        details TEXT,
+        ip TEXT,
+        userAgent TEXT
+      )`);
+      await run(`CREATE TABLE IF NOT EXISTS push_subscriptions(
+        endpoint TEXT PRIMARY KEY,
+        subscription TEXT,
+        createdAt INTEGER
+      )`);
+      await run(`CREATE TABLE IF NOT EXISTS issue_reports(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        at INTEGER,
+        trailer TEXT,
+        door TEXT,
+        note TEXT,
+        photo_data TEXT,
+        photo_mime TEXT,
+        ip TEXT,
+        userAgent TEXT
+      )`);
+      await run(`CREATE TABLE IF NOT EXISTS pins(
+        role TEXT PRIMARY KEY,
+        salt BLOB,
+        hash BLOB,
+        iter INTEGER
+      )`);
+      await run(`CREATE TABLE IF NOT EXISTS logs(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        at INTEGER,
+        level TEXT,
+        context TEXT,
+        message TEXT,
+        detail TEXT
+      )`);
+      await run(`CREATE TABLE IF NOT EXISTS door_reservations(
+        door TEXT PRIMARY KEY,
+        trailer TEXT NOT NULL,
+        carrierType TEXT NOT NULL DEFAULT 'Outside',
+        reservedAt INTEGER NOT NULL,
+        expiresAt INTEGER NOT NULL
+      )`);
+    },
   },
+
   {
-    id      : 'approach',
-    label   : 'Approach Zone',
-    lat     : parseFloat(process.env.DEPOT_LAT || '43.5048'),
-    lng     : parseFloat(process.env.DEPOT_LNG || '-79.8880'),
-    radiusKm: parseFloat(process.env.APPROACH_RADIUS_KM || '2.0'),
-    polygon : [],
-    autoAction: 'eta_update',  // just update ETA estimate, no arrive trigger
+    version: 2,
+    description: 'Add carrierType column to trailers if missing (pre-v3 upgrade)',
+    up: async (run) => {
+      // Safe to fail if column already exists — SQLite doesn't support IF NOT EXISTS on ALTER
+      try { await run(`ALTER TABLE trailers ADD COLUMN carrierType TEXT DEFAULT ''`); } catch {}
+      try { await run(`ALTER TABLE trailers ADD COLUMN omwAt INTEGER DEFAULT NULL`); } catch {}
+      try { await run(`ALTER TABLE trailers ADD COLUMN omwEta INTEGER DEFAULT NULL`); } catch {}
+      try { await run(`ALTER TABLE trailers ADD COLUMN doorAt INTEGER DEFAULT NULL`); } catch {}
+      try { await run(`ALTER TABLE confirmations ADD COLUMN action TEXT`); } catch {}
+    },
+  },
+
+  {
+    version: 3,
+    description: 'Performance indexes',
+    up: async (run) => {
+      await run(`CREATE INDEX IF NOT EXISTS idx_trailers_status    ON trailers(status)`);
+      await run(`CREATE INDEX IF NOT EXISTS idx_trailers_updatedAt ON trailers(updatedAt DESC)`);
+      await run(`CREATE INDEX IF NOT EXISTS idx_audit_at           ON audit(at DESC)`);
+      await run(`CREATE INDEX IF NOT EXISTS idx_audit_entityId     ON audit(entityId)`);
+      await run(`CREATE INDEX IF NOT EXISTS idx_audit_action       ON audit(action)`);
+      await run(`CREATE INDEX IF NOT EXISTS idx_reservations_exp   ON door_reservations(expiresAt)`);
+      await run(`CREATE INDEX IF NOT EXISTS idx_issues_at          ON issue_reports(at DESC)`);
+      await run(`CREATE INDEX IF NOT EXISTS idx_issues_trailer     ON issue_reports(trailer)`);
+    },
+  },
+
+  {
+    version: 4,
+    description: 'Seed default dockplates for doors 28–42',
+    up: async (run, all) => {
+      await run(`DELETE FROM dockplates WHERE CAST(door AS INTEGER) < 28`);
+      const existing = new Set((await all(`SELECT door FROM dockplates`)).map(r => r.door));
+      for (let d = 28; d <= 42; d++) {
+        const door = String(d);
+        if (!existing.has(door)) {
+          await run(
+            `INSERT INTO dockplates(door,status,note,updatedAt) VALUES(?,?,?,?)`,
+            [door, 'Unknown', '', Date.now()]
+          );
+        }
+      }
+    },
+  },
+
+  {
+    version: 5,
+    description: 'Add geofence_events table for driver proximity tracking',
+    up: async (run) => {
+      await run(`CREATE TABLE IF NOT EXISTS geofence_events(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        at INTEGER NOT NULL,
+        trailer TEXT NOT NULL,
+        zone TEXT NOT NULL,
+        event TEXT NOT NULL,
+        lat REAL,
+        lng REAL,
+        ip TEXT
+      )`);
+      await run(`CREATE INDEX IF NOT EXISTS idx_geofence_trailer ON geofence_events(trailer)`);
+      await run(`CREATE INDEX IF NOT EXISTS idx_geofence_at ON geofence_events(at DESC)`);
+    },
+  },
+
+  {
+    version: 6,
+    description: 'Add qr_scans table for streamlined QR automation tracking',
+    up: async (run) => {
+      await run(`CREATE TABLE IF NOT EXISTS qr_scans(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        at INTEGER NOT NULL,
+        trailer TEXT NOT NULL,
+        door TEXT,
+        action TEXT NOT NULL,
+        scannedBy TEXT DEFAULT 'driver',
+        ip TEXT
+      )`);
+      await run(`CREATE INDEX IF NOT EXISTS idx_qr_trailer ON qr_scans(trailer)`);
+    },
   },
 ];
 
-// ── Rate limits ───────────────────────────────────────────────────────────────
-const LOGIN_RATE_MAX  = 15;   // per minute per IP
-const DRIVER_RATE_MAX = 30;   // per minute per IP
+/**
+ * runMigrations(db, run, get, all)
+ * Applies all pending migrations in order against the open db connection.
+ */
+async function runMigrations(run, get, all) {
+  // Ensure migrations tracking table exists
+  await run(`CREATE TABLE IF NOT EXISTS migrations(
+    version INTEGER PRIMARY KEY,
+    description TEXT,
+    appliedAt INTEGER
+  )`);
 
-// ── Misc ──────────────────────────────────────────────────────────────────────
-const ROLE_HOME = { dispatcher: '/', admin: '/', dock: '/dock', management: '/management' };
-const MAX_LOGS  = 500;
-const WEBHOOK_URL = process.env.WEBHOOK_URL || '';
+  const applied = new Set(
+    (await all(`SELECT version FROM migrations`)).map(r => r.version)
+  );
 
-module.exports = {
-  PORT, APP_VERSION, NODE_ENV, IS_PROD,
-  DB_FILE, PIN_MIN_LEN, SESSION_TTL_MS, COOKIE_NAME, ENV_PINS,
-  VAPID_FILE, RESERVATION_TTL_MS, GEOFENCE_ZONES,
-  LOGIN_RATE_MAX, DRIVER_RATE_MAX,
-  ROLE_HOME, MAX_LOGS, WEBHOOK_URL,
-};
+  for (const m of MIGRATIONS) {
+    if (applied.has(m.version)) continue;
+    console.log(`[DB] Applying migration ${m.version}: ${m.description}`);
+    try {
+      await m.up(run, all);
+      await run(
+        `INSERT INTO migrations(version, description, appliedAt) VALUES(?,?,?)`,
+        [m.version, m.description, Date.now()]
+      );
+      console.log(`[DB] Migration ${m.version} applied ✓`);
+    } catch (err) {
+      console.error(`[DB] Migration ${m.version} FAILED:`, err.message);
+      throw err;  // halt startup — do not run on a broken schema
+    }
+  }
+}
+
+module.exports = { MIGRATIONS, runMigrations };

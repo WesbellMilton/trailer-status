@@ -382,7 +382,7 @@ body{background-image:none!important;background:transparent!important}
     </div>
     <div class="ts-screen-body">
       <div class="ts-eta-selector">
-        <div class="ts-eta-label">ETA to dock</div>
+        <div class="ts-eta-label" id="ts-eta-label">ETA to dock</div>
         <div class="ts-eta-pills">
           <div class="ts-eta-pill ts-sel" data-eta="10">10 min</div>
           <div class="ts-eta-pill" data-eta="20">20 min</div>
@@ -581,6 +581,11 @@ body{background-image:none!important;background:transparent!important}
 
     // --- Progress & Navigation Manager ---
     function show(id) {
+      // Stop GPS watch if leaving OMW screen
+      if (id !== 'ts-s-omw' && _omwGeoWatch !== null) {
+        navigator.geolocation?.clearWatch(_omwGeoWatch);
+        _omwGeoWatch = null;
+      }
       document.querySelectorAll('#driverView .ts-screen').forEach(s => {
         if (s.classList.contains('ts-active')) {
           s.classList.add('ts-exit');
@@ -761,6 +766,7 @@ body{background-image:none!important;background:transparent!important}
       }
       else if (act === 'omw') {
         show('ts-s-omw');
+        startOmwGeo();
       }
       else if (act === 'arrive') {
         // REAL ARRIVAL FETCH
@@ -793,6 +799,75 @@ body{background-image:none!important;background:transparent!important}
         state.eta = parseInt(p.dataset.eta);
       });
     });
+    // ── OMW Geolocation ────────────────────────────────────────────────────────
+    let _omwGeoWatch = null;
+
+    function haversineMin(lat1, lng1, lat2, lng2) {
+      const R = 6371, toR = Math.PI / 180;
+      const dLat = (lat2 - lat1) * toR, dLng = (lng2 - lng1) * toR;
+      const a = Math.sin(dLat/2)**2 + Math.cos(lat1*toR)*Math.cos(lat2*toR)*Math.sin(dLng/2)**2;
+      const km = 2 * R * Math.asin(Math.sqrt(a));
+      // Assume avg 60 km/h on highway → minutes = km * 1.0; add 5 min buffer
+      return Math.round(km * 1.0 + 5);
+    }
+
+    function snapEtaPill(minutes) {
+      // Find the closest pill value
+      const pills = [...document.querySelectorAll('#ts-s-omw .ts-eta-pill')];
+      const vals = pills.map(p => parseInt(p.dataset.eta));
+      const closest = vals.reduce((a, b) => Math.abs(b - minutes) < Math.abs(a - minutes) ? b : a);
+      pills.forEach(p => p.classList.toggle('ts-sel', parseInt(p.dataset.eta) === closest));
+      state.eta = closest;
+    }
+
+    function setGpsCard(icon, title, desc, color) {
+      const card = document.getElementById('ts-gps-card');
+      if (!card) return;
+      card.style.display = '';
+      card.style.borderColor = color ? `rgba(${color},.25)` : '';
+      card.style.background  = color ? `rgba(${color},.06)` : '';
+      document.getElementById('ts-gps-icon').textContent  = icon;
+      document.getElementById('ts-gps-title').textContent = title;
+      document.getElementById('ts-gps-title').style.color = color ? `rgb(${color})` : '';
+      document.getElementById('ts-gps-desc').textContent  = desc;
+    }
+
+    async function startOmwGeo() {
+      // Clear previous watch
+      if (_omwGeoWatch !== null) { navigator.geolocation?.clearWatch(_omwGeoWatch); _omwGeoWatch = null; }
+
+      if (!navigator.geolocation) {
+        document.getElementById('ts-eta-label').textContent = 'ETA to dock — select manually';
+        return;
+      }
+
+      document.getElementById('ts-eta-label').textContent = 'Calculating ETA…';
+      setGpsCard('📡', 'Getting your location…', 'This takes just a second', '25,200,154');
+
+      // Fetch depot coords from server (respects env config)
+      let depotLat = 43.5048, depotLng = -79.8880;
+      try {
+        const r = await fetch('/api/depot-coords', { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        if (r.ok) { const d = await r.json(); depotLat = d.lat; depotLng = d.lng; }
+      } catch {}
+
+      _omwGeoWatch = navigator.geolocation.watchPosition(
+        pos => {
+          const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+          const mins = haversineMin(lat, lng, depotLat, depotLng);
+          snapEtaPill(mins);
+          document.getElementById('ts-eta-label').textContent = `ETA to dock — ~${mins} min (GPS)`;
+          setGpsCard('📍', `Location active · ±${Math.round(accuracy)}m`, `~${mins} min from depot — tap a pill to override`, '25,200,154');
+        },
+        err => {
+          document.getElementById('ts-eta-label').textContent = 'ETA to dock — select manually';
+          const msg = err.code === 1 ? 'Location access denied' : err.code === 2 ? 'Position unavailable' : 'Location timed out';
+          setGpsCard('🚫', msg, 'Select your ETA manually above', '220,80,80');
+        },
+        { enableHighAccuracy: false, timeout: 12000, maximumAge: 30000 }
+      );
+    }
+
     document.getElementById('ts-omw-submit').addEventListener('click', async () => {
       const btn = document.getElementById('ts-omw-submit');
       btn.textContent = 'Sending...';

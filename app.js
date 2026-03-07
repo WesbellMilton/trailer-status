@@ -405,11 +405,11 @@
       return`<div class="tbl-row ${rowCls}${flash}${readyFlash}${dockReadyFlash}${omwRowCls}${r.carrierType==="Outside"?" carrier-outside":""}" data-trailer="${esc(r.trailer)}">
         <span class="t-num">${dirBadge}${esc(r.trailer)}${omwBadge}</span>
         <span class="t-status">${statusTag(r.status)}</span>
-        <span class="t-door-cell">${doorCell}${doorPickerHtml}</span>
+        <span class="t-door-cell">${doorCell}</span>
         <span class="t-note-cell">${noteHtml}</span>
         <span class="t-time" title="${esc(fmtTime(r.updatedAt))}">${esc(ago)}</span>
         <div class="t-acts-wrap">${actsHtml}</div>
-      </div>`;
+      </div>${doorPickerHtml}`;
     }).join("");
   }
 
@@ -431,7 +431,7 @@
       const isActive=(k.filter==="__omw__")?(activeFilter==="Incoming"&&activeSearch==="omw"):(activeFilter===k.filter&&k.filter!=="");
       return`<div class="kpi-tile${isActive?" kpi-active":""}" data-kpi-filter="${k.filter}" title="Filter: ${k.lbl}"><span class="kpi-val">${k.val}</span> <span class="kpi-label">${k.lbl}</span></div>`;
     }).join("");
-    kpiEl.querySelectorAll(".kpi[data-kpi-filter]").forEach(tile=>{
+    kpiEl.querySelectorAll(".kpi-tile[data-kpi-filter]").forEach(tile=>{
       tile.addEventListener("click",()=>{
         const f=tile.dataset.kpiFilter;
         const sel=el("filterStatus");if(!sel)return;
@@ -1409,6 +1409,12 @@
     // Close overflow menus when clicking outside
     if(!direct?.closest?.(".t-ovf-wrap"))
       document.querySelectorAll(".t-ovf-menu").forEach(m=>{m.style.display="none";});
+    // Also close inline door pickers when clicking outside
+    if(!direct?.closest?.(".t-door-cell")&&!direct?.closest?.(".inline-door-picker")){
+      Object.keys(shuntOpen).forEach(k=>{if(shuntOpen[k]){shuntOpen[k]=false;}});
+      const anyOpen=Object.values(shuntOpen).some(Boolean);
+      if(!anyOpen&&document.querySelector('.inline-door-picker'))renderBoard();
+    }
 
     if(direct?.closest?.("#dockPlatesToggle")){setPlatesOpen(el("dockPlatesToggle").getAttribute("aria-expanded")!=="true");return;}
     if(direct?.closest?.("#dockPlatesToggle2")){setPlatesOpen2(el("dockPlatesToggle2").getAttribute("aria-expanded")!=="true");return;}

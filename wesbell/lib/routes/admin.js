@@ -194,3 +194,11 @@ router.get('/api/locations/by-slug/:slug', async (req, res) => {
     res.json(loc);
   } catch { res.status(500).send('Failed'); }
 });
+
+// Public: depot coordinates for driver geolocation ETA calculation
+router.get('/api/depot-coords', (req, res) => {
+  const { GEOFENCE_ZONES } = require('../geofence');
+  const depot = GEOFENCE_ZONES.find(z => z.id === 'depot');
+  if (!depot) return res.json({ lat: 43.5048, lng: -79.8880 });
+  res.json({ lat: depot.lat, lng: depot.lng });
+});

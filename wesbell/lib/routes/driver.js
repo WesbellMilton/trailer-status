@@ -1,8 +1,6 @@
 'use strict';
 const { Router } = require('express');
 const { run, get, all } = require('../db');
-const { requireXHR }    = require('../middleware');
-const { requireDriverRate, requireDriverAccess } = require('../middleware');
 const { audit }                = require('../helpers');
 const { broadcastTrailers, wsBroadcast } = require('../ws');
 const { broadcastPush }        = require('../push');
@@ -10,9 +8,8 @@ const { pickBestDoor, reserveDoor, releaseReservation } = require('../doors');
 const { processLocation }      = require('../geofence');
 const { fireWebhook }          = require('../helpers');
 
-// Re-import requireDriverRate/requireDriverAccess from correct modules
-const mw = require('../middleware');
-const au = require('../auth');
+const mw = require('../middleware');   // requireXHR, requireDriverRate
+const au = require('../auth');         // requireDriverAccess
 
 const router = Router();
 

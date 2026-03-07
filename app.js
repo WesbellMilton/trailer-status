@@ -1296,23 +1296,73 @@
   ["supSearch","supFilterDir","supFilterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderSupBoard)));
 
   /* ── WEBSOCKET ── */
-  let wsRetry=0;
+  let wsRetry=0,_ws=null,_wsConnecting=false,_wsIntentionalClose=false;
+
   function wsStatus(s){
     el("wsDot").className="live-dot "+(s==="ok"?"ok":s==="bad"?"bad":"warn");
     el("wsText").textContent=s==="ok"?"Live":s==="bad"?"Offline":"Connecting";
     syncDriverWsDot(s);syncDockWsDot(s);
   }
+
+  // Resync state from server after reconnect — catches anything missed while disconnected
+  async function _resyncState(){
+    try{
+      const[t,p,b]=await Promise.all([
+        apiJson("/api/state").catch(()=>null),
+        apiJson("/api/dockplates").catch(()=>null),
+        apiJson("/api/doorblocks").catch(()=>null),
+      ]);
+      if(t){trailers=t;renderBoard();if(isDock())renderDockView();if(isSuper())renderSupBoard();}
+      if(p&&!isDriver()){dockPlates=p;renderPlates();}
+      if(b&&!isDriver()){doorBlocks=b;renderDockMap();}
+    }catch{}
+  }
+
   function connectWs(){
+    // Don't stack connections
+    if(_wsConnecting)return;
+    if(_ws&&(_ws.readyState===WebSocket.CONNECTING||_ws.readyState===WebSocket.OPEN))return;
+    _wsConnecting=true;
+    _wsIntentionalClose=false;
     wsStatus("warn");
+
     const ws=new WebSocket(`${location.protocol==="https:"?"wss":"ws"}://${location.host}`);
+    _ws=ws;
     let lastMsg=Date.now();
-    const watchdog=setInterval(()=>{if(Date.now()-lastMsg>35000){try{ws.close();}catch{}}},5000);
-    ws.onopen=()=>{wsRetry=0;wsStatus("ok");_replayOfflineQueue();};
-    ws.onclose=()=>{
-      clearInterval(watchdog);wsStatus("bad");
-      const base=Math.min(8000,500+wsRetry++*650),jitter=base*0.3*(Math.random()*2-1);
-      setTimeout(connectWs,Math.round(base+jitter));
+
+    // Watchdog: if no message in 40s, force close so onclose fires and reconnects
+    const watchdog=setInterval(()=>{
+      if(Date.now()-lastMsg>40000){
+        console.warn("[WS] watchdog — no message in 40s, reconnecting");
+        clearInterval(watchdog);
+        try{ws.close();}catch{}
+      }
+    },5000);
+
+    ws.onopen=()=>{
+      _wsConnecting=false;
+      wsRetry=0;
+      wsStatus("ok");
+      _replayOfflineQueue();
+      // Resync after any reconnect (not first load — server sends state on connect)
+      if(wsRetry===0&&trailers&&Object.keys(trailers).length>0)_resyncState();
     };
+
+    ws.onclose=e=>{
+      _wsConnecting=false;
+      clearInterval(watchdog);
+      wsStatus("bad");
+      if(_wsIntentionalClose)return;
+      // Exponential backoff: 500ms → ~30s cap (handles Render cold starts)
+      const base=Math.min(30000,500*Math.pow(1.6,Math.min(wsRetry,10)));
+      const jitter=base*0.25*(Math.random()*2-1);
+      const delay=Math.round(base+jitter);
+      console.log(`[WS] closed (${e.code}) — retry #${wsRetry+1} in ${(delay/1000).toFixed(1)}s`);
+      wsRetry++;
+      setTimeout(connectWs,delay);
+    };
+
+    ws.onerror=()=>{}; // onclose fires after onerror, handles reconnect
     ws.onmessage=evt=>{
       lastMsg=Date.now();let msg;try{msg=JSON.parse(evt.data);}catch{return;}
       const{type,payload}=msg||{};
@@ -1685,6 +1735,32 @@
   });
   // Start WS immediately — don't wait for loadInitial, server sends state on connect
   connectWs();
+
+  // ── Reconnect on tab becoming visible after being hidden ──
+  document.addEventListener("visibilitychange",()=>{
+    if(document.visibilityState!=="visible")return;
+    if(!_ws||_ws.readyState===WebSocket.CLOSED||_ws.readyState===WebSocket.CLOSING){
+      console.log("[WS] tab visible — reconnecting");
+      wsRetry=0; // reset backoff when user returns
+      connectWs();
+    } else if(_ws.readyState===WebSocket.OPEN){
+      // Tab was visible and WS is open — resync in case we missed events
+      _resyncState();
+    }
+  });
+
+  // ── Reconnect when network comes back online ──
+  window.addEventListener("online",()=>{
+    console.log("[WS] network online — reconnecting");
+    wsRetry=0;
+    if(!_ws||_ws.readyState!==WebSocket.OPEN)connectWs();
+  });
+
+  // ── Mark offline immediately when network drops ──
+  window.addEventListener("offline",()=>{
+    console.log("[WS] network offline");
+    wsStatus("bad");
+  });
 })();
 
 // ══════════════════════════════════════════════════════════════════

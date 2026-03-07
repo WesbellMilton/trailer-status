@@ -26,18 +26,33 @@
     };
     observe();
   }
+  const _fmtTimeCache=new Map();
   const fmtTime=ms=>{
     if(!ms)return"";
-    try{return new Date(ms).toLocaleString(undefined,{month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"});}
-    catch{return String(ms);}
+    const bucket=Math.floor(ms/60000); // per-minute granularity
+    const hit=_fmtTimeCache.get(bucket);
+    if(hit)return hit;
+    let r;
+    try{r=new Date(ms).toLocaleString(undefined,{month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"});}
+    catch{r=String(ms);}
+    _fmtTimeCache.set(bucket,r);
+    if(_fmtTimeCache.size>500)_fmtTimeCache.delete(_fmtTimeCache.keys().next().value);
+    return r;
   };
+  const _timeAgoCache=new Map();
   const timeAgo=ms=>{
     if(!ms)return"";
-    const s=Math.floor((Date.now()-ms)/1000);
-    if(s<60)return`${s}s ago`;
-    if(s<3600)return`${Math.floor(s/60)}m ago`;
-    if(s<86400)return`${Math.floor(s/3600)}h ago`;
-    return`${Math.floor(s/86400)}d ago`;
+    const bucket=Math.floor((Date.now()-ms)/1000); // 1s granularity
+    const cached=_timeAgoCache.get(ms);
+    if(cached&&cached[0]===bucket)return cached[1];
+    let r;
+    if(bucket<60)r=`${bucket}s ago`;
+    else if(bucket<3600)r=`${Math.floor(bucket/60)}m ago`;
+    else if(bucket<86400)r=`${Math.floor(bucket/3600)}h ago`;
+    else r=`${Math.floor(bucket/86400)}d ago`;
+    _timeAgoCache.set(ms,[bucket,r]);
+    if(_timeAgoCache.size>200)_timeAgoCache.delete(_timeAgoCache.keys().next().value); // prune
+    return r;
   };
   const esc=s=>String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
 
@@ -503,6 +518,8 @@
   function renderDetailPanel(trailerId){
     const r=trailers[trailerId];
     if(!r){closeDetailPanel();return;}
+    // Mobile: slide up the right panel as a bottom sheet
+    el("dspRight")?.classList.add("panel-open");
     const canEdit=ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin";
     _selectedTrailer=trailerId;
     el("dspRightEmpty").style.display="none";
@@ -599,6 +616,8 @@
     const emp=el("dspRightEmpty"),det=el("dspDetail");
     if(emp)emp.style.display="flex";
     if(det)det.style.display="none";
+    // Mobile: slide down the bottom sheet
+    el("dspRight")?.classList.remove("panel-open");
     document.querySelectorAll(".dsp-row-selected").forEach(r=>r.classList.remove("dsp-row-selected"));
   }
 
@@ -606,6 +625,12 @@
   function _initDetailPanel(){
     if(_detailInited)return;_detailInited=true;
     el("btnDspDetailClose")?.addEventListener("click",closeDetailPanel);
+    // Mobile: tap outside panel (on backdrop) to close
+    document.addEventListener("touchstart",e=>{
+      const right=el("dspRight");
+      if(!right||!right.classList.contains("panel-open"))return;
+      if(!right.contains(e.target)&&!e.target.closest(".dsp-row"))closeDetailPanel();
+    },{passive:true});
     el("btnDsdSaveNote")?.addEventListener("click",async()=>{
       if(!_selectedTrailer)return;
       const note=(el("dsdNoteInput")?.value||"").trim();
@@ -678,9 +703,11 @@
       </div>`;
     }).join("");
     ["platesGrid","platesGrid2"].forEach(id=>{const e=el(id);if(e)e.innerHTML=plateHtml;});
-    if(el("dockPlatesToggle")?.getAttribute("aria-expanded")==="true")setPlatesOpen(true);
-    if(el("dockPlatesToggle2")?.getAttribute("aria-expanded")==="true")setPlatesOpen2(true);
-    // Render into new bottom-of-board plates panel too
+    // Re-apply open height AFTER content renders (scrollHeight changes when edit form shows/hides)
+    requestAnimationFrame(()=>{
+      if(el("dockPlatesToggle")?.getAttribute("aria-expanded")==="true")setPlatesOpen(true);
+      if(el("dockPlatesToggle2")?.getAttribute("aria-expanded")==="true")setPlatesOpen2(true);
+    });
     renderDspPlates();
   }
 
@@ -748,10 +775,12 @@
       body.style.maxHeight=open?"0":(body.scrollHeight+40)+"px";
       try{localStorage.setItem("wb_dspplates",open?"0":"1");}catch{}
     });
-    // Restore open state
+    // Restore open state — defer so renderDspPlates has already run and scrollHeight is correct
     try{if(localStorage.getItem("wb_dspplates")==="1"){
-      const btn=el("dspPlatesToggle"),body=el("dspPlatesBody");
-      if(btn&&body){btn.setAttribute("aria-expanded","true");btn.querySelector(".dsp-plates-chev").textContent="▴";body.style.maxHeight=(body.scrollHeight+200)+"px";}
+      requestAnimationFrame(()=>{
+        const btn=el("dspPlatesToggle"),body=el("dspPlatesBody");
+        if(btn&&body){btn.setAttribute("aria-expanded","true");btn.querySelector(".dsp-plates-chev").textContent="▴";body.style.maxHeight=(body.scrollHeight+200)+"px";}
+      });
     }}catch{}
   }
 
@@ -1164,6 +1193,7 @@
   let _qaInited=false;
   function _initQuickAdd(){
     if(_qaInited)return;_qaInited=true;
+    if(!el("btnQuickAdd"))return; // guard: quick-add bar not in DOM yet
     const btn=el("btnQuickAdd");if(!btn)return;
     const submit=async()=>{
       const trailer=(el("qa_trailer")?.value??"").trim().toUpperCase();
@@ -1306,8 +1336,16 @@
     catch(e){toast("Update failed",e.message,"err");}
   }
   async function plateSave(door){
-    const status=(document.querySelector(`[data-plate-status="${CSS.escape(door)}"]`)?.value||"").trim();
-    const note=(document.querySelector(`[data-plate-note="${CSS.escape(door)}"]`)?.value||"").trim();
+    // Prefer the visible element (dspPlatesGrid is always visible; platesGrid may be in a collapsed accordion)
+    const allStatus=[...document.querySelectorAll(`[data-plate-status="${CSS.escape(door)}"]`)];
+    const allNote=[...document.querySelectorAll(`[data-plate-note="${CSS.escape(door)}"]`)];
+    // Pick the one inside #dspPlatesGrid if present, else fallback to first
+    const dspGrid=document.getElementById("dspPlatesGrid");
+    const statusEl=allStatus.find(el=>dspGrid?.contains(el))||allStatus[0];
+    const noteEl=allNote.find(el=>dspGrid?.contains(el))||allNote[0];
+    const status=(statusEl?.value||"").trim();
+    const note=(noteEl?.value||"").trim();
+    if(!status){toast("Select a status","","err");return;}
     try{await apiJson("/api/dockplates/set",{method:"POST",headers:CSRF,body:JSON.stringify({door,status,note})});toast("Plate updated",`Door ${door} → ${status}`,"ok");plateEditOpen[door]=false;renderPlates();}
     catch(e){toast("Update failed",e.message,"err");}
   }
@@ -1708,9 +1746,7 @@
     if(direct?.closest?.("#dockPlatesToggle2")){setPlatesOpen2(el("dockPlatesToggle2").getAttribute("aria-expanded")!=="true");return;}
     // PIN accordions
     for(const[tog,body] of [["pinMgmtToggle","pinMgmtBody"],["adminPinToggle","adminPinBody"],["adminLocToggle","adminLocBody"],["adminOverviewToggle","adminOverviewBody"]]){
-      if(direct?.closest?.(`#${tog}`)){const t=el(tog),b=el(body);if(!t||!b)return;const open=t.getAttribute("aria-expanded")==="true";t.setAttribute("aria-expanded",open?"false":"true");b.style.maxHeight=open?"0px":(b.scrollHeight+40)+"px";return;}
-        if(!open&&tog==="adminLocToggle")loadAdminLocations();
-        if(!open&&tog==="adminOverviewToggle")loadAdminOverview();
+      if(direct?.closest?.(`#${tog}`)){const t=el(tog),b=el(body);if(!t||!b)return;const open=t.getAttribute("aria-expanded")==="true";t.setAttribute("aria-expanded",open?"false":"true");b.style.maxHeight=open?"0px":(b.scrollHeight+40)+"px";if(!open&&tog==="adminLocToggle")loadAdminLocations();if(!open&&tog==="adminOverviewToggle")loadAdminOverview();return;}
     }
     if(act==="openStaffLogin"){el("btnDockStaffLogin")?.click();return;}
     if(id==="btnLogout")return doLogout();
@@ -1763,7 +1799,9 @@
     if(id==="ac_override"){driverState.overrideMode=true;driverState.assignedDoor="";driverState.selectedDoor="";showDoorPicker("doorPickerWrap","doorPickerGrid");updateDropSubmitState();return;}
     if(id==="oac_override"){driverState.overrideMode=true;driverState.assignedDoor="";driverState.selectedDoor="";showDoorPicker("offloadDoorPickerWrap","offloadDoorPickerGrid");updateOffloadSubmitState();return;}
     const doorBtn=direct?.closest?.("[data-door]");
-    if(doorBtn&&doorBtn.dataset.door&&!doorBtn.dataset.dmDoor&&!doorBtn.dataset.act){driverState.selectedDoor=doorBtn.dataset.door;driverState.overrideMode=true;buildDoorPicker(doorBtn.dataset.picker||"doorPickerGrid");updateDropSubmitState();updateOffloadSubmitState();return;}
+    // Exclude plate cards (dsp-plate-btn), dock reserve grid (dr-door-btn), and detail door grid (dsd-door-btn)
+    const isDoorPickExcluded=doorBtn?.classList?.contains("dsp-plate-btn")||doorBtn?.classList?.contains("dr-door-btn")||doorBtn?.classList?.contains("dsd-door-btn")||direct?.dataset?.plateToggle||direct?.dataset?.plateSave;
+    if(doorBtn&&doorBtn.dataset.door&&!doorBtn.dataset.dmDoor&&!doorBtn.dataset.act&&!isDoorPickExcluded){driverState.selectedDoor=doorBtn.dataset.door;driverState.overrideMode=true;buildDoorPicker(doorBtn.dataset.picker||"doorPickerGrid");updateDropSubmitState();updateOffloadSubmitState();return;}
     const dtBtn=direct?.closest?.("[data-type]");
     if(dtBtn?.dataset.type){driverState.dropType=dtBtn.dataset.type;el("dtbEmpty")?.classList.toggle("selected",driverState.dropType==="Empty");el("dtbLoaded")?.classList.toggle("selected",driverState.dropType==="Loaded");return;}
     if(act==="ovfToggle"&&trId){
@@ -1780,13 +1818,18 @@
     if(act==="delete"&&trId)return dispDelete(trId);
     if(act==="quickStatus"){const to=direct?.dataset?.to||direct?.closest?.("[data-to]")?.dataset?.to;if(trId&&to)return quickStatus(trId,to);}
     // ── New split-layout handlers ──
-    if(act==="selectRow"&&trId){
-      // Don't open detail if a button inside the row was clicked
-      if(direct?.closest?.("button[data-act]")&&direct.dataset.act!=="selectRow")return;
-      _selectedTrailer=trId;
-      renderDetailPanel(trId);
+    if(act==="selectRow"){
+      // Don't open detail if an action button inside the row was clicked
+      if(direct?.tagName==="BUTTON"&&direct?.dataset?.act&&direct.dataset.act!=="selectRow")return;
+      if(direct?.closest?.("button[data-act]")&&!direct?.closest?.("button[data-act]")?.classList?.contains?.("dsp-row"))return;
+      // dsp-row uses data-trailer, not data-trailer-id
+      const row=direct?.closest?.(".dsp-row");
+      const rowId=row?.dataset?.trailer||trId;
+      if(!rowId)return;
+      _selectedTrailer=rowId;
+      renderDetailPanel(rowId);
       document.querySelectorAll(".dsp-row-selected").forEach(r=>r.classList.remove("dsp-row-selected"));
-      direct?.closest?.(".dsp-row")?.classList.add("dsp-row-selected");
+      row?.classList.add("dsp-row-selected");
       return;
     }
     if(act==="dsdAssignDoor"&&trId){
@@ -1882,8 +1925,10 @@
   ["d_trailer","d_door","d_note","d_direction","d_status","d_dropType","d_carrierType"].forEach(id=>{
     el(id)?.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();dispSave();}});
   });
-  ["search","filterDir","filterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderBoard)));
-  ["supSearch","supFilterDir","supFilterStatus"].forEach(id=>["input","change"].forEach(ev=>el(id)?.addEventListener(ev,renderSupBoard)));
+  const _dbRender=()=>{clearTimeout(_dbRender._t);_dbRender._t=setTimeout(renderBoard,120);};
+  ["search","filterDir","filterStatus"].forEach(id=>{el(id)?.addEventListener("input",_dbRender);el(id)?.addEventListener("change",renderBoard);});
+  const _dbSupRender=()=>{clearTimeout(_dbSupRender._t);_dbSupRender._t=setTimeout(renderSupBoard,120);};
+  ["supSearch","supFilterDir","supFilterStatus"].forEach(id=>{el(id)?.addEventListener("input",_dbSupRender);el(id)?.addEventListener("change",renderSupBoard);});
 
   /* ── WEBSOCKET ── */
   let wsRetry=0,_ws=null,_wsConnecting=false,_wsIntentionalClose=false;
@@ -1937,7 +1982,7 @@
       // Tell server which location this client belongs to
       try{ws.send(JSON.stringify({type:"identify",locationId:_locationId||1}));}catch{}
       // Resync after any reconnect (not first load — server sends state on connect)
-      if(wsRetry===0&&trailers&&Object.keys(trailers).length>0)_resyncState();
+      if(wsRetry>0&&trailers&&Object.keys(trailers).length>0)_resyncState();
     };
 
     ws.onclose=e=>{
@@ -2677,5 +2722,31 @@
   // No-op stubs so WS handler references don't throw
   window.updateTrackingMap=function(){};
   window.updateTrackingList=function(){};
+
+
+  // ── Legacy / stub functions (driver view is self-contained in index.html) ──
+  async function driverDrop(){console.warn("[legacy] driverDrop called — driver view is self-contained");}
+  async function xdockPickup(){console.warn("[legacy] xdockPickup called");}
+  async function xdockOffload(){console.warn("[legacy] xdockOffload called");}
+  async function confSafety(){console.warn("[legacy] confSafety called");}
+  async function driverShunt(){console.warn("[legacy] driverShunt called");}
+  function selectFlow(f){console.warn("[legacy] selectFlow called",f);}
+  function onTrailerInput(){console.warn("[legacy] onTrailerInput called");}
+  function onPickupTrailerInput(){console.warn("[legacy] onPickupTrailerInput called");}
+  function onOffloadTrailerInput(){console.warn("[legacy] onOffloadTrailerInput called");}
+  function buildShuntDoorPicker(){console.warn("[legacy] buildShuntDoorPicker called");}
+  function buildDoorPicker(){console.warn("[legacy] buildDoorPicker called");}
+  function showDoorPicker(){console.warn("[legacy] showDoorPicker called");}
+  function updateShuntSubmitState(){console.warn("[legacy] updateShuntSubmitState called");}
+  function updateDropSubmitState(){console.warn("[legacy] updateDropSubmitState called");}
+  function updateOffloadSubmitState(){console.warn("[legacy] updateOffloadSubmitState called");}
+  function updateSafetySubmitState(){console.warn("[legacy] updateSafetySubmitState called");}
+  function openDockIssueModal(t,d){openQuickIssue(t,d||"");}
+  async function loadIssueReports(){console.warn("[legacy] loadIssueReports — no UI yet");}
+  function initIssueCamera(){}
+  function initIssueLightbox(){}
+  function initDockIssueModal(){}
+  // isOutside: referenced in btnBackToFlow which is also legacy
+  const isOutside=false;
 
 })();

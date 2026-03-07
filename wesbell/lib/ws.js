@@ -12,12 +12,22 @@ function init(expressApp) {
   _server = http.createServer(_app);
   _wss    = new WebSocket.Server({ server: _server });
 
-  _wss.on('connection', async ws => {
+  _wss.on('connection', async (ws, req) => {
     ws.on('error', () => {});
     const safeSend = msg => { try { if (ws.readyState === WebSocket.OPEN) ws.send(msg); } catch {} };
     ws.isAlive = true;
+    ws.locationId = 1; // default — updated when client sends identify message
     ws.on('pong',    () => { ws.isAlive = true; });
-    ws.on('message', () => { ws.isAlive = true; });
+    ws.on('message', raw => {
+      ws.isAlive = true;
+      // Client sends { type:'identify', locationId:N } immediately after connect
+      try {
+        const msg = JSON.parse(raw);
+        if (msg.type === 'identify' && msg.locationId) {
+          ws.locationId = Number(msg.locationId) || 1;
+        }
+      } catch {}
+    });
 
     const heartbeat = setInterval(() => {
       if (!ws.isAlive) { clearInterval(heartbeat); try { ws.terminate(); } catch {} return; }
@@ -62,19 +72,36 @@ function wsBroadcast(type, payload) {
       try { client.send(msg); } catch {}
 }
 
+// Location-scoped broadcast — only sends to clients at the given location
+function wsBroadcastToLocation(locationId, type, payload) {
+  if (!_wss) return;
+  const msg = JSON.stringify({ type, payload });
+  for (const client of _wss.clients)
+    if (client.readyState === WebSocket.OPEN && (client.locationId === locationId || client.locationId === 0))
+      try { client.send(msg); } catch {}
+}
+
 // Debounced trailer broadcast — collapses rapid-fire calls within 80 ms
-let _broadcastTimer = null;
-function broadcastTrailers() {
+const _broadcastTimers = new Map(); // locationId → timer
+function broadcastTrailers(locationId = null) {
   return new Promise(resolve => {
-    if (_broadcastTimer) clearTimeout(_broadcastTimer);
-    _broadcastTimer = setTimeout(async () => {
-      _broadcastTimer = null;
+    const key = locationId || 'all';
+    if (_broadcastTimers.has(key)) clearTimeout(_broadcastTimers.get(key));
+    _broadcastTimers.set(key, setTimeout(async () => {
+      _broadcastTimers.delete(key);
       try {
-        require('./cache').invalidateTrailers();
-        wsBroadcast('state', await getTrailersCache());
+        const cache = require('./cache');
+        if (locationId) {
+          cache.invalidateTrailers(locationId);
+          const data = await cache.getTrailersCache(locationId);
+          wsBroadcastToLocation(locationId, 'state', data);
+        } else {
+          cache.invalidateTrailers();
+          wsBroadcast('state', await cache.getTrailersCache());
+        }
       } catch (e) { console.error('[WS] broadcastTrailers:', e.message); }
       resolve();
-    }, 80);
+    }, 80));
   });
 }
 
@@ -95,5 +122,6 @@ module.exports = {
   init,
   get wss() { return _wss; },
   get server() { return _server; },
-  wsBroadcast, broadcastTrailers, broadcastPlates, broadcastBlocks, broadcastConfirmations,
+  wsBroadcast, wsBroadcastToLocation,
+  broadcastTrailers, broadcastPlates, broadcastBlocks, broadcastConfirmations,
 };

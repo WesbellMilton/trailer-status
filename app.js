@@ -9,20 +9,20 @@
   const isDock=()=>path().startsWith("/dock");
   const isAdmin=()=>ROLE==="admin";
 
-  // ── Sticky top calculator — keeps tbl-hd pinned just below filter-bar ───────
+  // ── Sticky top calculator — keeps tbl-hd pinned just below board-ctrl-bar ──
   function _updateStickyTop(){
-    const fb=document.querySelector('.panel-board>.filter-bar');
+    const cb=document.querySelector('.panel-board>.board-ctrl-bar');
     const tb=document.querySelector('.topbar');
-    if(!fb||!tb)return;
+    if(!cb||!tb)return;
     const topbarH=tb.getBoundingClientRect().height;
-    const fbH=fb.getBoundingClientRect().height;
-    document.documentElement.style.setProperty('--filter-bar-h',(topbarH+fbH)+'px');
+    const cbH=cb.getBoundingClientRect().height;
+    document.documentElement.style.setProperty('--ctrl-bar-h',(topbarH+cbH)+'px');
   }
   if(typeof ResizeObserver!=='undefined'){
     const ro=new ResizeObserver(_updateStickyTop);
     const observe=()=>{
-      const fb=document.querySelector('.panel-board>.filter-bar');
-      if(fb)ro.observe(fb);else setTimeout(observe,300);
+      const cb=document.querySelector('.panel-board>.board-ctrl-bar');
+      if(cb)ro.observe(cb);else setTimeout(observe,300);
     };
     observe();
   }

@@ -1505,28 +1505,24 @@ body{background-image:none!important;background:transparent!important}
 
       <div class="col-stack">
 
-        <div id="dispKpis" class="kpi-row" style="margin-bottom:4px;"></div>
-
         <div class="panel panel-board">
           <div class="panel-hd">
             <div class="panel-title"><div class="ptdot" style="background:var(--amber)"></div>Trailer Board</div>
             <span class="badge badge-num" id="countsPill">0</span>
-            <div class="disp-actions" style="margin-left:auto;">
+          </div>
+          <div class="board-ctrl-bar">
+            <div id="dispKpis" class="kpi-row kpi-row-inline"></div>
+            <div class="board-ctrl-filters">
+              <input id="search" placeholder="Search trailer, door, note…" aria-label="Search trailers" inputmode="search" autocomplete="off" class="ctrl-search"/>
+              <select id="filterDir" aria-label="Filter by direction" class="ctrl-select"><option value="">All Directions</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
+              <select id="filterStatus" aria-label="Filter by status" class="ctrl-select"><option value="">All Statuses</option><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select>
+              <button class="btn btn-default btn-sm" id="btnClearFilters">Clear</button>
+              <div class="ctrl-sep"></div>
               <a href="/dock"  class="btn btn-default btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px;" id="btnNavDock"><svg width="13" height="13" viewBox="0 0 12 12" fill="none"><path d="M1 9h10M3 9V6l3-2.5L9 6v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Dock</a>
               <a href="/driver" class="btn btn-default btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px;" id="btnNavDriver"><svg width="13" height="13" viewBox="0 0 12 12" fill="none"><rect x="1" y="4" width="8" height="5" rx="1.2" stroke="currentColor" stroke-width="1.4"/><path d="M9 6.5h1.5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H9" stroke="currentColor" stroke-width="1.4"/><circle cx="3" cy="9" r="1" fill="currentColor"/><circle cx="7" cy="9" r="1" fill="currentColor"/><path d="M1 6.5 2.5 4h4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Driver</a>
               <button class="btn btn-default btn-sm" id="btnShiftSummary">📊 Summary</button>
               <button class="btn btn-default btn-sm" id="btnHistoryBoard">🕐 History</button>
             </div>
-          </div>
-          <div class="filter-bar">
-            <div class="field"><label class="fl">Search</label><input id="search" placeholder="Trailer, door, note…" aria-label="Search trailers" inputmode="search" autocomplete="off"/></div>
-            <div class="field"><label class="fl">Direction</label>
-              <select id="filterDir" aria-label="Filter by direction"><option value="">All Directions</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
-            </div>
-            <div class="field"><label class="fl">Status</label>
-              <select id="filterStatus" aria-label="Filter by status"><option value="">All Statuses</option><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select>
-            </div>
-            <div class="tight"><button class="btn btn-default btn-sm" id="btnClearFilters" style="margin-top:14px;">Clear</button></div>
           </div>
           <div class="tbl-hd">
             <span>Trailer</span><span>Status</span><span>Door</span>

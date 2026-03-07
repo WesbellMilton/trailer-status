@@ -119,7 +119,7 @@ a{color:var(--cyan);text-decoration:none}
 /* Trailer board panel: overflow visible so sticky filter/header work within page scroll */
 .panel-board{overflow:visible !important;background:transparent;border:none;box-shadow:none}
 .panel-board>.panel-hd{background:var(--s1);border:1px solid var(--b0);border-bottom:none;border-radius:var(--r2) var(--r2) 0 0;box-shadow:0 1px 3px rgba(0,0,0,.3)}
-.panel-board>.filter-bar{background:var(--s0);border:1px solid var(--b0);border-top:none;border-bottom:1px solid var(--b0)}
+.panel-board>.board-ctrl-bar{border:1px solid var(--b0);border-top:none}
 .panel-board>.tbl-hd{border:1px solid var(--b0);border-top:none}
 .panel-board>#tbody{border:1px solid var(--b0);border-top:none;border-radius:0 0 var(--r2) var(--r2);overflow:hidden}
 .panel-board>.board-footer{border:1px solid var(--b0);border-top:1px solid rgba(26,37,53,.5);border-radius:0 0 var(--r2) var(--r2)}
@@ -132,6 +132,45 @@ a{color:var(--cyan);text-decoration:none}
 .ptdot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
 .panel-body{padding:14px}
 .panel-body-flush{padding:0}
+
+/* ═══════════════════════════════════════════
+   BOARD CONTROL BAR (KPIs + filters + actions unified)
+═══════════════════════════════════════════ */
+.board-ctrl-bar{
+  border-bottom:1px solid var(--b0);
+  background:var(--s0);
+}
+.kpi-row-inline{
+  display:flex;flex-wrap:wrap;gap:0;
+  border-bottom:1px solid var(--b0);
+}
+.kpi-row-inline .kpi-tile{
+  flex:1;min-width:80px;border-radius:0;border:none;
+  border-right:1px solid var(--b0);
+  padding:8px 12px;
+}
+.kpi-row-inline .kpi-tile:last-child{border-right:none}
+.board-ctrl-filters{
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  padding:8px 12px;
+}
+.ctrl-search{
+  flex:1;min-width:140px;max-width:220px;
+  background:var(--s1);border:1px solid var(--b1);border-radius:var(--r);
+  color:var(--t1);font-size:12px;padding:5px 9px;outline:none;
+}
+.ctrl-search:focus{border-color:var(--amber);box-shadow:0 0 0 2px rgba(245,166,35,.15)}
+.ctrl-select{
+  background:var(--s1);border:1px solid var(--b1);border-radius:var(--r);
+  color:var(--t1);font-size:12px;padding:5px 8px;outline:none;cursor:pointer;
+}
+.ctrl-select:focus{border-color:var(--amber)}
+.ctrl-sep{width:1px;height:22px;background:var(--b0);margin:0 2px;flex-shrink:0}
+/* Sticky: the whole ctrl bar sticks together */
+.panel-board>.board-ctrl-bar{
+  position:sticky;top:54px;z-index:30;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+}
 
 /* ═══════════════════════════════════════════
    BADGES
@@ -168,7 +207,7 @@ a{color:var(--cyan);text-decoration:none}
 .panel-board .tbl-row.r-loading>.t-acts-wrap{background:rgba(22,18,8,1)}
 .tbl-hd>span,.tbl-row>span,.tbl-row>div{padding:8px 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .tbl-hd{background:linear-gradient(to bottom,var(--s0),rgba(12,16,23,.9));border-bottom:1px solid var(--b0)}
-.panel-board>.tbl-hd{position:sticky;top:calc(var(--filter-bar-h, 122px));z-index:29;backdrop-filter:blur(12px) !important;-webkit-backdrop-filter:blur(12px);box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.panel-board>.tbl-hd{position:sticky;top:calc(var(--ctrl-bar-h, 130px));z-index:29;backdrop-filter:blur(12px) !important;-webkit-backdrop-filter:blur(12px);box-shadow:0 2px 8px rgba(0,0,0,.4)}
 .tbl-hd>span{font-family:var(--mono);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.12em;color:var(--t3)}
 .tbl-row{
   border-bottom:1px solid rgba(28,40,64,.7);
@@ -239,7 +278,7 @@ a{color:var(--cyan);text-decoration:none}
    FILTER BAR
 ═══════════════════════════════════════════ */
 .filter-bar{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;padding:10px 14px;background:linear-gradient(to bottom,var(--s0),rgba(12,16,23,.9));border-bottom:1px solid var(--b0)}
-.panel-board>.filter-bar{position:sticky;top:54px;z-index:30;backdrop-filter:blur(8px) !important;-webkit-backdrop-filter:blur(8px)}
+/* panel-board filter-bar sticky replaced by board-ctrl-bar */
 .filter-bar .field{flex:1 1 110px;margin:0}
 .filter-bar .tight{flex:0 0 auto}
 

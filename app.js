@@ -407,14 +407,19 @@
     const v=Object.values(trailers);
     const omwCount=v.filter(r=>r.omwAt&&r.status==="Incoming").length;
     const activeFilter=el("filterStatus")?.value||"";
+    const activeSearch=el("search")?.value?.trim().toLowerCase()||"";
     kpiEl.innerHTML=[
-      {val:v.length,lbl:"Total",cls:"kpi-total",filter:""},
-      {val:v.filter(r=>r.status==="Incoming").length,lbl:"Incoming",cls:"kpi-incoming",filter:"Incoming"},
-      {val:v.filter(r=>r.status==="Loading").length,lbl:"Loading",cls:"kpi-loading",filter:"Loading"},
-      {val:v.filter(r=>["Ready","Dock Ready"].includes(r.status)).length,lbl:"Ready",cls:"kpi-ready",filter:"Ready"},
-      {val:v.filter(r=>r.status==="Departed").length,lbl:"Departed",cls:"kpi-departed",filter:"Departed"},
-      {val:omwCount,lbl:"OMW",cls:"kpi-conf",filter:"__omw__"},
-    ].map(k=>`<div class="kpi ${k.cls}${activeFilter===k.filter?" kpi-active":""}" data-kpi-filter="${k.filter}" title="Click to filter" style="cursor:pointer;"><div class="k-val">${k.val}</div><div class="k-lbl">${k.lbl}</div></div>`).join("");
+      {val:v.length,lbl:"All",filter:""},
+      {val:v.filter(r=>r.status==="Incoming").length,lbl:"Incoming",filter:"Incoming"},
+      {val:v.filter(r=>r.status==="Dropped").length,lbl:"Dropped",filter:"Dropped"},
+      {val:v.filter(r=>r.status==="Loading").length,lbl:"Loading",filter:"Loading"},
+      {val:v.filter(r=>r.status==="Dock Ready").length,lbl:"Dock Ready",filter:"Dock Ready"},
+      {val:v.filter(r=>r.status==="Ready").length,lbl:"Ready",filter:"Ready"},
+      {val:omwCount,lbl:"OMW",filter:"__omw__"},
+    ].map(k=>{
+      const isActive=(k.filter==="__omw__")?(activeFilter==="Incoming"&&activeSearch==="omw"):(activeFilter===k.filter&&k.filter!=="");
+      return`<div class="kpi-tile${isActive?" kpi-active":""}" data-kpi-filter="${k.filter}" title="Filter: ${k.lbl}"><span class="kpi-val">${k.val}</span> <span class="kpi-label">${k.lbl}</span></div>`;
+    }).join("");
     kpiEl.querySelectorAll(".kpi[data-kpi-filter]").forEach(tile=>{
       tile.addEventListener("click",()=>{
         const f=tile.dataset.kpiFilter;

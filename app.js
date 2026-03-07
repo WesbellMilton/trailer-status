@@ -2107,6 +2107,7 @@
 
     const ws=new WebSocket(`${location.protocol==="https:"?"wss":"ws"}://${location.host}`);
     _ws=ws;
+    window._ws=ws;
     let lastMsg=Date.now();
 
     // Watchdog: if no message in 40s, force close so onclose fires and reconnects

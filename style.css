@@ -2917,14 +2917,24 @@ img,video,embed,object,iframe {
   overflow:hidden;
 }
 
-/* Scroll area: contains rows + panels, fills remaining height */
-.dsp-scroll-area{
+/* ── ROWS AREA: scrolls, takes remaining height above panels ── */
+.dsp-rows-area{
   flex:1;min-height:0;
   overflow-y:auto;overflow-x:hidden;
   display:flex;flex-direction:column;
 }
-.dsp-scroll-area::-webkit-scrollbar{width:4px}
-.dsp-scroll-area::-webkit-scrollbar-thumb{background:var(--b1);}
+.dsp-rows-area::-webkit-scrollbar{width:4px}
+.dsp-rows-area::-webkit-scrollbar-thumb{background:var(--b1);}
+
+/* ── PANELS AREA: always visible at bottom of left column ── */
+.dsp-panels-area{
+  flex:0 0 auto;
+  overflow-y:auto;overflow-x:hidden;
+  max-height:55vh; /* cap so it never crushes the rows */
+  border-top:1px solid var(--divider);
+}
+.dsp-panels-area::-webkit-scrollbar{width:4px}
+.dsp-panels-area::-webkit-scrollbar-thumb{background:var(--b1);}
 
 /* toolbar */
 .dsp-toolbar{
@@ -2991,9 +3001,10 @@ img,video,embed,object,iframe {
   text-transform:uppercase;letter-spacing:.1em;color:var(--t3);
 }
 
-/* scrollable body */
+/* scrollable body — fills rows area */
 .dsp-body{
   flex:1 0 auto;
+  min-height:0;
   background:var(--bg);
 }
 .dsp-body::-webkit-scrollbar{width:4px}
@@ -3291,8 +3302,10 @@ img,video,embed,object,iframe {
 .dsp-right-default::-webkit-scrollbar{width:4px}
 .dsp-right-default::-webkit-scrollbar-thumb{background:var(--b1);}
 
+/* Dispatch form always at top, never shrinks away */
 #panelBody{ flex-shrink:0; }
-#adminPanel{ flex-shrink:0; }
+/* Admin accordion fills remaining space, scrolls if needed */
+#adminPanel{ flex:1; overflow-y:auto; min-height:0; }
 
 .dsp-select-hint{
   display:flex;flex-direction:column;align-items:center;
@@ -5571,31 +5584,22 @@ select option { background: #0d1119; }
 
 
 /* ═══════════════════════════════════════════════════════════════
-   ALWAYS-VISIBLE PANELS — occupancy + plates always shown
-   dsp-left now scrolls so these naturally appear below the rows
+   PANEL BODIES — open/closed states
 ═══════════════════════════════════════════════════════════════ */
-
-/* Open state */
 .dsp-plates-body.dsp-plates-open {
   display: block !important;
   max-height: none !important;
   overflow: visible !important;
 }
-/* Collapsed */
 .dsp-plates-body:not(.dsp-plates-open) {
-  max-height: 0 !important;
-  overflow: hidden !important;
   display: none !important;
 }
-/* Dock view open */
 .dvp-body.dvp-body-open {
   display: block !important;
   max-height: none !important;
   overflow: visible !important;
 }
 .dvp-body:not(.dvp-body-open) {
-  max-height: 0 !important;
-  overflow: hidden !important;
   display: none !important;
 }
 .dsp-plates { flex-shrink: 0; }
@@ -5626,4 +5630,3 @@ select option { background: #0d1119; }
 }
 
 /* nav Dock + Driver links — restored */
-

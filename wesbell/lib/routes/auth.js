@@ -13,27 +13,33 @@ const router = Router();
 router.get('/api/whoami', (req, res) => {
   const s = getSession(req);
   const role = s?.role || null;
+  const locationId = s?.locationId || 1;
   const freeRoam = !role || role === 'admin' || role === 'management';
-  res.json({ role, version: APP_VERSION, redirectTo: freeRoam ? null : (ROLE_HOME[role] || '/') });
+  res.json({ role, locationId, version: APP_VERSION, redirectTo: freeRoam ? null : (ROLE_HOME[role] || '/') });
 });
 
 router.post('/api/login', requireXHR, async (req, res) => {
   const ip = ipOf(req);
   if (!checkLoginRate(ip)) return res.status(429).send('Too many login attempts. Try again in a minute.');
   try {
-    const role = String(req.body.role || '').toLowerCase();
-    const pin  = String(req.body.pin  || '');
+    const role       = String(req.body.role || '').toLowerCase();
+    const pin        = String(req.body.pin  || '');
+    const locationId = parseInt(req.body.locationId) || 1;
     if (!['dispatcher', 'dock', 'management', 'admin'].includes(role))
       return res.status(400).send('Invalid role');
     if (pin.length < 4) return res.status(400).send('PIN too short');
+    // Validate location exists
+    const { get: dbGet } = require('../db');
+    const loc = await dbGet(`SELECT id FROM locations WHERE id=? AND active=1`, [locationId]);
+    if (!loc) return res.status(400).send('Invalid location');
     const ok = await verifyPin(role, pin);
-    await audit(req, role, ok ? 'login_success' : 'login_failed', 'auth', role, {});
+    await audit(req, role, ok ? 'login_success' : 'login_failed', 'auth', role, { locationId });
     if (!ok) return res.status(401).send('Invalid PIN');
     const existing = getSession(req);
     if (existing?.sid) sessions.delete(existing.sid);
-    const sid = newSession(role);
+    const sid = newSession(role, locationId);
     setSessionCookie(res, sid);
-    res.json({ ok: true, role, version: APP_VERSION });
+    res.json({ ok: true, role, locationId, version: APP_VERSION });
   } catch { res.status(500).send('Login error'); }
 });
 

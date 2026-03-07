@@ -207,7 +207,7 @@ a{color:var(--cyan);text-decoration:none}
 /* ═══════════════════════════════════════════
    TRAILER TABLE
 ═══════════════════════════════════════════ */
-.tbl-hd,.tbl-row{display:grid;grid-template-columns:minmax(140px,1.6fr) 108px 70px 1fr 68px minmax(220px,auto);align-items:center}
+.tbl-hd,.tbl-row{display:grid;grid-template-columns:minmax(150px,1.4fr) 106px 68px 1fr 58px 1fr;align-items:center}
 /* Sticky actions column */
 .panel-board .tbl-hd>span:last-child,
 .panel-board .tbl-row>.t-acts-wrap{position:sticky;right:0;z-index:5;background:var(--s1)}
@@ -216,6 +216,10 @@ a{color:var(--cyan);text-decoration:none}
 .panel-board .tbl-row.r-omw>.t-acts-wrap{background:rgba(8,25,35,1)}
 .panel-board .tbl-row.r-ready>.t-acts-wrap{background:rgba(8,22,18,1)}
 .panel-board .tbl-row.r-loading>.t-acts-wrap{background:rgba(22,18,8,1)}
+.panel-board .tbl-row.r-incoming>.t-acts-wrap{background:var(--s1)}
+.panel-board .tbl-row.r-dropped>.t-acts-wrap{background:var(--s1)}
+/* ensure t-acts-wrap never clips */
+.t-acts-wrap{overflow:visible !important;min-width:0}
 .tbl-hd>span,.tbl-row>span,.tbl-row>div{padding:8px 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .tbl-hd{background:linear-gradient(to bottom,var(--s0),rgba(12,16,23,.9));border-bottom:1px solid var(--b0)}
 .panel-board>.tbl-hd{position:sticky;top:calc(var(--ctrl-bar-h, 130px));z-index:29;backdrop-filter:blur(12px) !important;-webkit-backdrop-filter:blur(12px);box-shadow:0 2px 8px rgba(0,0,0,.4)}
@@ -617,7 +621,7 @@ textarea{min-height:60px;resize:vertical}
 .side-sticky{position:sticky;top:58px}
 
 /* ── Row action buttons (expanded, no overflow menu) ── */
-.row-acts{display:flex;align-items:center;gap:5px;padding:4px 8px;flex-wrap:nowrap}
+.row-acts{display:flex;align-items:center;gap:4px;padding:3px 8px;flex-wrap:nowrap}
 .row-act-btn{white-space:nowrap;flex-shrink:0}
 .row-util{display:flex;gap:3px;margin-left:4px;opacity:0;transition:opacity .15s;flex-shrink:0}
 .tbl-row:hover .row-util{opacity:1}
@@ -2859,3 +2863,5 @@ img,video,embed,object,iframe {
 @supports(height:100svh){
   #dockView, #driverView { height:100svh !important; }
 }
+
+.row-act-btn.btn-sm{padding:4px 10px !important;font-size:11px !important;}

@@ -292,7 +292,14 @@
   function renderBoardInto(tbodyEl,countEl,countStrEl,sq,dq,stq,readOnly){
     if(!tbodyEl)return;
     const q=(sq?.value||"").trim().toLowerCase(),df=(dq?.value||"").trim(),sf=(stq?.value||"").trim();
-    const rows=Object.entries(trailers).map(([t,r])=>({trailer:t,...r})).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+    const STATUS_PRIORITY={Ready:0,"Dock Ready":1,Loading:2,Dropped:3,Incoming:4,Departed:5};
+    const rows=Object.entries(trailers).map(([t,r])=>({trailer:t,...r})).sort((a,b)=>{
+      const pa=STATUS_PRIORITY[a.status]??4,pb=STATUS_PRIORITY[b.status]??4;
+      if(pa!==pb)return pa-pb;
+      // within same status: OMW incoming floats up
+      if(a.status==="Incoming"&&b.status==="Incoming"){if(a.omwAt&&!b.omwAt)return -1;if(!a.omwAt&&b.omwAt)return 1;}
+      return(b.updatedAt||0)-(a.updatedAt||0);
+    });
     const filt=rows.filter(r=>{
       if(df&&r.direction!==df)return false;
       if(sf&&r.status!==sf)return false;
@@ -333,21 +340,23 @@
       const noteHtml=canEdit
         ?`<span class="t-note-edit" data-trailer="${esc(r.trailer)}" data-note="${esc(r.note||"")}" title="Click to edit note">${r.note?`<span class="t-note">${esc(r.note)}</span>`:`<span style="color:var(--t3);font-style:italic">add note…</span>`}</span>`
         :(r.note?`<span class="t-note" title="${esc(r.note)}">${esc(r.note)}</span>`:`<span style="color:var(--t3)">—</span>`);
+      // Dir as compact inline badge; compact overflow menu replaces 4 buttons
+      const dirBadge=r.direction?`<span class="t-dir-badge t-dir-${(r.direction||"").toLowerCase().replace(/\s+/g,"-")}">${esc(r.direction)}</span>`:"";
       let acts=`<span style="color:var(--t3)">—</span>`;
       if(canEdit){
         const nexts=NEXT_STATUS[r.status]||[];
-        const quickBtns=nexts.map((s,i)=>{
-          const cls=i===0?(s==="Ready"?"btn-success":"btn-primary"):"btn-default";
-          const extra=i>0?" qs-secondary":"";
-          return`<button class="btn ${cls} btn-sm qs-btn${extra}" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}" aria-label="${esc(s)} trailer ${esc(r.trailer)}">${esc(s)}</button>`;
-        }).join("");
-        acts=`<div class="t-acts">
-          ${quickBtns}
-          ${r.status==="Dock Ready"?`<button class="btn btn-success btn-sm" data-act="markReady" data-trailer-id="${esc(r.trailer)}" style="font-weight:800;" aria-label="Mark trailer ${esc(r.trailer)} ready">✓ Ready</button>`:""}
-          <button class="btn btn-default btn-sm" data-act="shuntToggle" data-trailer-id="${esc(r.trailer)}">Move</button>
-          <button class="btn btn-default btn-sm" data-act="edit" data-trailer-id="${esc(r.trailer)}">Edit</button>
-          <button class="btn btn-danger btn-sm" data-act="delete" data-trailer-id="${esc(r.trailer)}">Del</button>
-        </div>`;
+        const primaryStatus=nexts[0];
+        const primaryCls=primaryStatus==="Ready"?"btn-success":primaryStatus==="Dock Ready"?"btn-cyan":"btn-primary";
+        const primaryBtn=primaryStatus?`<button class="btn ${primaryCls} btn-sm" data-act="quickStatus" data-to="${esc(primaryStatus)}" data-trailer-id="${esc(r.trailer)}">${esc(primaryStatus)}</button>`:"";
+        const ovfItems=[
+          ...nexts.slice(1).map(s=>`<button class="t-ovf-item" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}">${esc(s)}</button>`),
+          r.status==="Dock Ready"?`<button class="t-ovf-item t-ovf-success" data-act="markReady" data-trailer-id="${esc(r.trailer)}">✓ Ready</button>`:"",
+          `<div class="t-ovf-sep"></div>`,
+          `<button class="t-ovf-item" data-act="shuntToggle" data-trailer-id="${esc(r.trailer)}">Move door</button>`,
+          `<button class="t-ovf-item" data-act="edit" data-trailer-id="${esc(r.trailer)}">Edit</button>`,
+          `<button class="t-ovf-item t-ovf-danger" data-act="delete" data-trailer-id="${esc(r.trailer)}">Delete</button>`,
+        ].filter(Boolean).join("");
+        acts=`<div class="t-acts">${primaryBtn}<div class="t-ovf-wrap"><button class="btn btn-default btn-sm t-ovf-btn" data-act="ovfToggle" data-trailer-id="${esc(r.trailer)}" aria-label="More">···</button><div class="t-ovf-menu" id="ovf-${esc(r.trailer)}" style="display:none;">${ovfItems}</div></div></div>`;
       } else if(canDock){
         if(r.status==="Dropped"||r.status==="Incoming")
           acts=`<div class="t-acts"><button class="btn btn-default btn-sm" data-act="dockSet" data-to="Loading" data-trailer-id="${esc(r.trailer)}">Loading</button></div>`;
@@ -356,21 +365,10 @@
         else
           acts=`<span style="color:var(--t3);font-size:10px;font-family:var(--mono);">${esc(r.status==="Dock Ready"?"Awaiting dispatch":r.status==="Ready"?"Ready":"—")}</span>`;
       }
-      const shuntPickerHtml=(shuntOpen[r.trailer]&&canEdit)?`
-        <div class="shunt-picker" data-shunt-trailer="${esc(r.trailer)}">
-          <span class="shunt-label">Move to door:</span>
-          <div class="shunt-doors">${Array.from({length:15},(_,i)=>i+28).map(d=>{
-            const ds=String(d),isCurrent=ds===(r.door||""),isOcc=!!occupied[ds]&&!isCurrent;
-            return`<button class="shunt-door-btn${isCurrent?" current":""}${isOcc?" occ":""}" data-act="shuntDoor" data-door="${ds}" data-trailer-id="${esc(r.trailer)}" ${isCurrent?"disabled":""} aria-label="Move to door ${ds}${isOcc?" (occupied)":""}">${ds}${isOcc?`<span class="shunt-occ-dot"></span>`:""}</button>`;
-          }).join("")}</div>
-          <button class="btn btn-default btn-sm" data-act="shuntToggle" data-trailer-id="${esc(r.trailer)}" style="margin-top:4px;">Cancel</button>
-        </div>`:"";
       return`<div class="tbl-row ${rowCls}${flash}${readyFlash}${dockReadyFlash}${omwRowCls}${r.carrierType==="Outside"?" carrier-outside":""}" data-trailer="${esc(r.trailer)}">
-        <span class="t-num">${esc(r.trailer)}${omwBadge}</span>
-        <span class="t-dir">${esc(r.direction||"—")}</span>
+        <span class="t-num">${esc(r.trailer)}${dirBadge}${omwBadge}</span>
         <span class="t-status">${statusTag(r.status)}</span>
         <span class="t-door-cell">${door}${doorAge}</span>
-        <span class="t-type">${ctag||dtype}</span>
         <span class="t-note-cell">${noteHtml}</span>
         <span class="t-time" title="${esc(fmtTime(r.updatedAt))}">${esc(ago)}</span>
         <div class="t-acts-wrap">${acts}</div>
@@ -382,14 +380,24 @@
     const kpiEl=el("dispKpis");if(!kpiEl)return;
     const v=Object.values(trailers);
     const omwCount=v.filter(r=>r.omwAt&&r.status==="Incoming").length;
+    const activeFilter=el("filterStatus")?.value||"";
     kpiEl.innerHTML=[
-      {val:v.length,lbl:"Total",cls:"kpi-total"},
-      {val:v.filter(r=>r.status==="Incoming").length,lbl:"Incoming",cls:"kpi-incoming"},
-      {val:v.filter(r=>r.status==="Loading").length,lbl:"Loading",cls:"kpi-loading"},
-      {val:v.filter(r=>["Ready","Dock Ready"].includes(r.status)).length,lbl:"Ready",cls:"kpi-ready"},
-      {val:v.filter(r=>r.status==="Departed").length,lbl:"Departed",cls:"kpi-departed"},
-      {val:omwCount,lbl:"On Way",cls:"kpi-conf"},
-    ].map(k=>`<div class="kpi ${k.cls}"><div class="k-val">${k.val}</div><div class="k-lbl">${k.lbl}</div></div>`).join("");
+      {val:v.length,lbl:"Total",cls:"kpi-total",filter:""},
+      {val:v.filter(r=>r.status==="Incoming").length,lbl:"Incoming",cls:"kpi-incoming",filter:"Incoming"},
+      {val:v.filter(r=>r.status==="Loading").length,lbl:"Loading",cls:"kpi-loading",filter:"Loading"},
+      {val:v.filter(r=>["Ready","Dock Ready"].includes(r.status)).length,lbl:"Ready",cls:"kpi-ready",filter:"Ready"},
+      {val:v.filter(r=>r.status==="Departed").length,lbl:"Departed",cls:"kpi-departed",filter:"Departed"},
+      {val:omwCount,lbl:"OMW",cls:"kpi-conf",filter:"__omw__"},
+    ].map(k=>`<div class="kpi ${k.cls}${activeFilter===k.filter?" kpi-active":""}" data-kpi-filter="${k.filter}" title="Click to filter" style="cursor:pointer;"><div class="k-val">${k.val}</div><div class="k-lbl">${k.lbl}</div></div>`).join("");
+    kpiEl.querySelectorAll(".kpi[data-kpi-filter]").forEach(tile=>{
+      tile.addEventListener("click",()=>{
+        const f=tile.dataset.kpiFilter;
+        const sel=el("filterStatus");if(!sel)return;
+        if(f==="__omw__"){sel.value="Incoming";if(el("search"))el("search").value="omw";}
+        else{sel.value=(sel.value===f)?"":f;if(el("search")&&el("search").value==="omw")el("search").value="";}
+        renderBoard();
+      });
+    });
   }
 
   function renderBoard(){
@@ -1355,6 +1363,9 @@
     const direct=ev.target,id=direct?.id;
     const act=direct?.dataset?.act||direct?.closest?.("[data-act]")?.dataset?.act;
     const trId=direct?.dataset?.trailerId||direct?.closest?.("[data-trailer-id]")?.dataset?.trailerId;
+    // Close overflow menus when clicking outside
+    if(!direct?.closest?.(".t-ovf-wrap"))
+      document.querySelectorAll(".t-ovf-menu").forEach(m=>{m.style.display="none";});
 
     if(direct?.closest?.("#dockPlatesToggle")){setPlatesOpen(el("dockPlatesToggle").getAttribute("aria-expanded")!=="true");return;}
     if(direct?.closest?.("#dockPlatesToggle2")){setPlatesOpen2(el("dockPlatesToggle2").getAttribute("aria-expanded")!=="true");return;}
@@ -1418,6 +1429,15 @@
     if(doorBtn&&doorBtn.dataset.door&&!doorBtn.dataset.dmDoor&&!doorBtn.dataset.act){driverState.selectedDoor=doorBtn.dataset.door;driverState.overrideMode=true;buildDoorPicker(doorBtn.dataset.picker||"doorPickerGrid");updateDropSubmitState();updateOffloadSubmitState();return;}
     const dtBtn=direct?.closest?.("[data-type]");
     if(dtBtn?.dataset.type){driverState.dropType=dtBtn.dataset.type;el("dtbEmpty")?.classList.toggle("selected",driverState.dropType==="Empty");el("dtbLoaded")?.classList.toggle("selected",driverState.dropType==="Loaded");return;}
+    if(act==="ovfToggle"&&trId){
+      const menu=document.getElementById("ovf-"+trId);
+      if(!menu)return;
+      const isOpen=menu.style.display!=="none";
+      // Close all other open menus first
+      document.querySelectorAll(".t-ovf-menu").forEach(m=>{if(m!==menu)m.style.display="none";});
+      menu.style.display=isOpen?"none":"block";
+      return;
+    }
     if(act==="shuntToggle"&&trId){shuntOpen[trId]=!shuntOpen[trId];renderBoard();return;}
     if(act==="shuntDoor"&&trId){const door=direct?.dataset?.door||direct?.closest?.("[data-door]")?.dataset?.door;if(door)return shuntTrailer(trId,door);}
     if(act==="delete"&&trId)return dispDelete(trId);

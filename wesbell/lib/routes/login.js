@@ -5,7 +5,7 @@ const { ROLE_HOME }  = require('../config');
 
 const router = Router();
 
-router.get('*', (req, res) => {
+router.get('*', async (req, res) => {
   const expired   = req.query.expired === '1';
   const fromPath  = req.query.from || '';
   if (fromPath.includes('/driver')) return res.redirect(302, '/driver');
@@ -79,6 +79,18 @@ ${expiredHtml}
     : '<option value="dispatcher" selected>Dispatcher</option><option value="dock">Dock</option><option value="management">Management</option><option value="admin">&#9889; Admin</option>';
   const expiredBanner = expired ? '<div class="ctx-badge ctx-err">&#9888; Session expired &#8212; please sign in again.</div>' : '';
 
+  // Load locations for the selector
+  let locationOptions = '<option value="1">Milton (Default)</option>';
+  try {
+    const { all } = require('../db');
+    const locs = await all(`SELECT id,name FROM locations WHERE active=1 ORDER BY id ASC`);
+    if (locs.length > 1) {
+      locationOptions = locs.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+    }
+  } catch {}
+
+  const showLocationPicker = locationOptions.includes('</option><option') ? '' : 'style="display:none"';
+
   res.setHeader('content-type', 'text/html; charset=utf-8');
   res.end(`<!doctype html><html lang="en"><head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
@@ -126,6 +138,10 @@ body{min-height:100vh;background:var(--bg);color:var(--t0);font-family:var(--san
   <div class="lp-heading">SIGN IN</div>
   <div class="lp-tagline">ENTER YOUR ROLE &amp; PIN TO CONTINUE</div>
   ${expiredBanner}
+  <div id="loc-wrap" ${showLocationPicker}>
+    <label class="fl" for="location">Location</label>
+    <select id="location" class="fi">${locationOptions}</select>
+  </div>
   <label class="fl" for="role">Role</label>
   <select id="role" class="fi">${roleOptions}</select>
   <label class="fl" for="pin">PIN</label>
@@ -146,10 +162,13 @@ body{min-height:100vh;background:var(--bg);color:var(--t0);font-family:var(--san
   var ROLE_HOME={dispatcher:"/",admin:"/",dock:"/dock",management:"/management"};
   var btn=document.getElementById("go"),lbl=document.getElementById("btn-lbl"),em=document.getElementById("em");
   function doLogin(){
-    var role=document.getElementById("role").value,pin=document.getElementById("pin").value;
+    var role=document.getElementById("role").value;
+    var pin=document.getElementById("pin").value;
+    var locEl=document.getElementById("location");
+    var locationId=locEl?Number(locEl.value)||1:1;
     if(!pin){em.textContent="Enter your PIN.";em.classList.add("show");return;}
     btn.disabled=true;lbl.textContent="SIGNING IN...";em.classList.remove("show");
-    fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},body:JSON.stringify({role:role,pin:pin})})
+    fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},body:JSON.stringify({role:role,pin:pin,locationId:locationId})})
     .then(function(r){if(!r.ok){r.text().then(function(t){em.textContent=t;em.classList.add("show")});return;}location.href=ROLE_HOME[role]||"/";})
     .catch(function(){em.textContent="Connection error. Try again.";em.classList.add("show");})
     .finally(function(){btn.disabled=false;lbl.textContent="SIGN IN";});

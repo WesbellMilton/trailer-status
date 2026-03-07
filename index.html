@@ -580,6 +580,9 @@ body{background-image:none!important;background:transparent!important}
     new MutationObserver(checkIsolation).observe(driverWrap, { attributes: true, attributeFilter: ['style'] });
 
     // --- Progress & Navigation Manager ---
+    let _omwGeoWatch = null;
+    let _omwLastPos = {}; // { lat, lng } sent with OMW submit if GPS acquired
+
     function show(id) {
       // Stop GPS watch if leaving OMW screen
       if (id !== 'ts-s-omw' && _omwGeoWatch !== null) {
@@ -800,7 +803,6 @@ body{background-image:none!important;background:transparent!important}
       });
     });
     // ── OMW Geolocation ────────────────────────────────────────────────────────
-    let _omwGeoWatch = null;
 
     function haversineMin(lat1, lng1, lat2, lng2) {
       const R = 6371, toR = Math.PI / 180;

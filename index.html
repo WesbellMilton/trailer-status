@@ -1556,75 +1556,81 @@ body{background-image:none!important;background:transparent!important}
         <span class="dh-acts">Next</span>
       </div>
 
-      <!-- rows -->
-      <div class="dsp-body" id="tbody"></div>
+      <!-- scrollable content: rows + panels + statusbar -->
+      <div class="dsp-scroll-area" id="dspScrollArea">
 
-      <!-- quick-add bar -->
-      <div class="dsp-qabar" id="quickAddBar">
-        <input id="qa_trailer" placeholder="Trailer #" autocomplete="off" inputmode="numeric" autocorrect="off" autocapitalize="none" spellcheck="false" class="dsp-qa-in qa-trailer" aria-label="Trailer number"/>
-        <select id="qa_direction" class="dsp-qa-sel" aria-label="Direction">
-          <option value="Inbound">Inbound</option>
-          <option value="Outbound">Outbound</option>
-          <option value="Cross Dock">Cross Dock</option>
-        </select>
-        <select id="qa_status" class="dsp-qa-sel" aria-label="Status">
-          <option value="Incoming">Incoming</option>
-          <option value="Dropped">Dropped</option>
-          <option value="Loading">Loading</option>
-          <option value="Dock Ready">Dock Ready</option>
-          <option value="Ready">Ready</option>
-        </select>
-        <input id="qa_door" placeholder="Door" inputmode="numeric" autocomplete="off" class="dsp-qa-in qa-door" aria-label="Door"/>
-        <input id="qa_note" placeholder="Note (optional)" autocomplete="off" class="dsp-qa-in qa-note" aria-label="Note"/>
-        <button class="dsp-qa-btn" id="btnQuickAdd">+ Add</button>
-      </div>
+        <!-- rows -->
+        <div class="dsp-body" id="tbody"></div>
 
-      <!-- dock occupancy — which trailer is at which door -->
-      <div class="dsp-plates dsp-occ-panel" id="dspOccPanel">
-        <button class="dsp-plates-toggle" id="dspOccToggle" aria-expanded="false">
-          <span class="dsp-plates-title">🚛 DOCK OCCUPANCY</span>
-          <span class="dsp-plates-summary" id="dspOccSummary">—</span>
-          <span class="dsp-plates-chev">▾</span>
-        </button>
-        <div class="dsp-plates-body dsp-plates-open" id="dspOccBody">
-          <div class="dsp-plates-grid" id="dspOccGrid"></div>
+        <!-- quick-add bar -->
+        <div class="dsp-qabar" id="quickAddBar">
+          <input id="qa_trailer" placeholder="Trailer #" autocomplete="off" inputmode="numeric" autocorrect="off" autocapitalize="none" spellcheck="false" class="dsp-qa-in qa-trailer" aria-label="Trailer number"/>
+          <select id="qa_direction" class="dsp-qa-sel" aria-label="Direction">
+            <option value="Inbound">Inbound</option>
+            <option value="Outbound">Outbound</option>
+            <option value="Cross Dock">Cross Dock</option>
+          </select>
+          <select id="qa_status" class="dsp-qa-sel" aria-label="Status">
+            <option value="Incoming">Incoming</option>
+            <option value="Dropped">Dropped</option>
+            <option value="Loading">Loading</option>
+            <option value="Dock Ready">Dock Ready</option>
+            <option value="Ready">Ready</option>
+          </select>
+          <input id="qa_door" placeholder="Door" inputmode="numeric" autocomplete="off" class="dsp-qa-in qa-door" aria-label="Door"/>
+          <input id="qa_note" placeholder="Note (optional)" autocomplete="off" class="dsp-qa-in qa-note" aria-label="Note"/>
+          <button class="dsp-qa-btn" id="btnQuickAdd">+ Add</button>
         </div>
-      </div>
 
-      <!-- dock plates — plate health: OK / Service / Out of Order -->
-      <div class="dsp-plates" id="dspPlates">
-        <button class="dsp-plates-toggle" id="dspPlatesToggle" aria-expanded="false">
-          <span class="dsp-plates-title">🔧 DOCK PLATES</span>
-          <span class="dsp-plates-summary" id="dspPlatesSummary">—</span>
-          <span class="dsp-plates-chev">▾</span>
-        </button>
-        <div class="dsp-plates-body dsp-plates-open" id="dspPlatesBody">
-          <div class="dsp-plates-grid" id="dspPlatesGrid"></div>
+        <!-- dock occupancy — which trailer is at which door -->
+        <div class="dsp-plates dsp-occ-panel" id="dspOccPanel">
+          <button class="dsp-plates-toggle" id="dspOccToggle" aria-expanded="true">
+            <span class="dsp-plates-title">🚛 DOCK OCCUPANCY</span>
+            <span class="dsp-plates-summary" id="dspOccSummary">—</span>
+            <span class="dsp-plates-chev">▴</span>
+          </button>
+          <div class="dsp-plates-body dsp-plates-open" id="dspOccBody">
+            <div class="dsp-plates-grid" id="dspOccGrid"></div>
+          </div>
         </div>
-      </div>
 
-      <!-- status bar -->
-      <div class="dsp-statusbar">
-        <span id="boardCountStr">—</span>
-        <span id="lastUpdated" style="color:var(--t3)">—</span>
-      </div>
+        <!-- dock plates — plate health: OK / Service / Out of Order -->
+        <div class="dsp-plates" id="dspPlates">
+          <button class="dsp-plates-toggle" id="dspPlatesToggle" aria-expanded="true">
+            <span class="dsp-plates-title">🔧 DOCK PLATES</span>
+            <span class="dsp-plates-summary" id="dspPlatesSummary">—</span>
+            <span class="dsp-plates-chev">▴</span>
+          </button>
+          <div class="dsp-plates-body dsp-plates-open" id="dspPlatesBody">
+            <div class="dsp-plates-grid" id="dspPlatesGrid"></div>
+          </div>
+        </div>
+
+        <!-- status bar -->
+        <div class="dsp-statusbar">
+          <span id="boardCountStr">—</span>
+          <span id="lastUpdated" style="color:var(--t3)">—</span>
+        </div>
+
+      </div><!-- /dsp-scroll-area -->
 
     </div>
 
     <!-- RIGHT: detail panel -->
     <div class="dsp-right" id="dspRight">
       <!-- Default right panel: role controls + select-a-trailer hint -->
-      <div class="dsp-right-default" id="dspRightEmpty" style="display:flex;flex-direction:column;height:100%;overflow:hidden;">
-        <!-- Role controls panel — dispatcher form / dock info / admin -->
-        <div class="dsd-hd" style="padding:10px 14px;flex-shrink:0;">
+      <div class="dsp-right-default" id="dspRightEmpty">
+        <!-- Role controls panel header -->
+        <div class="dsd-hd" style="padding:10px 14px;">
           <div>
             <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--t0)" id="panelTitle">Controls</div>
             <div style="font-family:var(--mono);font-size:10px;color:var(--t3)" id="panelSub">—</div>
           </div>
         </div>
-        <div id="panelBody" style="padding:0 14px 10px;flex-shrink:0;"></div>
-        <!-- Admin panel — shown below dispatch form for admin role -->
-        <div id="adminPanel" style="display:none;flex:1;overflow-y:auto;min-height:0;">
+        <!-- Dispatcher / admin compact form renders here -->
+        <div id="panelBody"></div>
+        <!-- Admin-only accordion — shown below form for admin role -->
+        <div id="adminPanel" style="display:none;">
           <div class="panel-hd">
             <div class="panel-title"><span class="ptdot" style="background:var(--amber)"></span>⚡ Admin Controls</div>
           </div>

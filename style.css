@@ -2914,7 +2914,8 @@ img,video,embed,object,iframe {
   flex:1;min-width:0;
   display:flex;flex-direction:column;
   border-right:1px solid var(--b0);
-  overflow:hidden;
+  overflow-y:auto;
+  overflow-x:hidden;
 }
 
 /* toolbar */
@@ -2984,7 +2985,9 @@ img,video,embed,object,iframe {
 
 /* scrollable body */
 .dsp-body{
-  flex:1;overflow-y:auto;
+  flex:0 0 auto;
+  min-height:180px;
+  overflow-y:visible;
   background:var(--bg);
 }
 .dsp-body::-webkit-scrollbar{width:4px}
@@ -5561,21 +5564,22 @@ select option { background: #0d1119; }
 
 /* ═══════════════════════════════════════════════════════════════
    ALWAYS-VISIBLE PANELS — occupancy + plates always shown
+   dsp-left now scrolls so these naturally appear below the rows
 ═══════════════════════════════════════════════════════════════ */
 
-/* Dispatch view — always-open body (no max-height animation) */
+/* Open state */
 .dsp-plates-body.dsp-plates-open {
   display: block !important;
   max-height: none !important;
   overflow: visible !important;
 }
-/* Collapsed state when user manually toggles */
+/* Collapsed */
 .dsp-plates-body:not(.dsp-plates-open) {
   max-height: 0 !important;
   overflow: hidden !important;
+  display: none !important;
 }
-
-/* Dock view — always-open body */
+/* Dock view open */
 .dvp-body.dvp-body-open {
   display: block !important;
   max-height: none !important;
@@ -5584,24 +5588,10 @@ select option { background: #0d1119; }
 .dvp-body:not(.dvp-body-open) {
   max-height: 0 !important;
   overflow: hidden !important;
+  display: none !important;
 }
-
-/* Make the toggle header look like a section label, not a clickable button */
-.dsp-plates-toggle {
-  cursor: default;
-  pointer-events: none; /* collapse disabled — always visible */
-}
-/* Re-enable pointer events so user can still collapse if needed */
-.dsp-plates-toggle { pointer-events: auto; cursor: pointer; }
-.dsp-plates-chev { opacity: .3; }
-
-/* Left column bottom area — allow the two panels to take natural height */
-.dsp-left {
-  overflow-y: auto !important;
-}
-.dsp-plates {
-  flex-shrink: 0;
-}
+.dsp-plates { flex-shrink: 0; }
+.dsp-plates-chev { opacity: .4; }
 
 /* ═══════════════════════════════════════════════════════════════
    DOCK VIEW — BACK TO DISPATCH BUTTON
@@ -5627,8 +5617,5 @@ select option { background: #0d1119; }
   color: var(--amber);
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   NAV — hide Dock + Driver links (kept in DOM for JS compat)
-═══════════════════════════════════════════════════════════════ */
-#navDock, #navDriver, #bnDock, #bnDriver { display: none !important; }
+/* nav Dock + Driver links — restored */
 

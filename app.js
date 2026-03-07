@@ -806,9 +806,7 @@
     }).join("");
   }
 
-  let _dspPlatesInited=false;
   function _initDspPlates(){
-    if(_dspPlatesInited)return;_dspPlatesInited=true;
     // Panels are always-open by default; toggle collapses them
     function wirePanel(toggleId,bodyId){
       const btn=el(toggleId),body=el(bodyId);if(!btn||!body)return;
@@ -1042,7 +1040,6 @@
 
   function renderDockView(){
     const cards=el("dockCards"),countEl=el("dockCount");if(!cards)return;
-    renderDvOccupancy();
     renderDockPlatesPanel();
     dvUpdateIncoming();
     // update role label
@@ -1147,20 +1144,6 @@
     });
   }
 
-  function renderDvOccupancy(){
-    const grid=document.getElementById("dvOccGrid");if(!grid)return;
-    const doors=[];for(let d=28;d<=42;d++)doors.push(String(d));
-    const occupied=getOccupiedDoors();
-    const freeCount=doors.filter(d=>!occupied[d]).length;
-    const loadCount=doors.filter(d=>occupied[d]?.status==="Loading").length;
-    const readyCount=doors.filter(d=>["Ready","Dock Ready"].includes(occupied[d]?.status)).length;
-    const sumEl=document.getElementById("dvOccSummary");
-    if(sumEl) sumEl.innerHTML=`<span style="color:rgba(255,255,255,.4)">${freeCount} free</span>`
-      +(loadCount?` · <span style="color:var(--amber)">${loadCount} loading</span>`:"")
-      +(readyCount?` · <span style="color:var(--green)">${readyCount} ready</span>`:"");
-    grid.innerHTML=_buildOccMap(doors);
-  }
-
   function renderDockPlatesPanel(){
     const grid=document.getElementById("dvPlatesGrid");
     if(!grid)return;
@@ -1218,7 +1201,6 @@
 
     if(!_dvPlatesInited){
       _dvPlatesInited=true;
-      _wireDvPanel("dvOccToggle","dvOccBody");
       _wireDvPanel("dvPlatesToggle","dvPlatesBody");
     }
   }
@@ -1440,9 +1422,7 @@
     el("btnLogout").style.display="none";el("btnAudit").style.display="none";
   }
 
-  let _qaInited=false;
   function _initQuickAdd(){
-    if(_qaInited)return;_qaInited=true;
     if(!el("btnQuickAdd"))return; // guard: quick-add bar not in DOM yet
     const btn=el("btnQuickAdd");if(!btn)return;
     const submit=async()=>{
@@ -2287,7 +2267,7 @@
         clearTimeout(connectWs._etaTimer);
         connectWs._etaTimer=setTimeout(function tickEta(){renderBoard();if(isDock()){renderDockView();dvUpdateIncoming();}connectWs._etaTimer=setTimeout(tickEta,60000);},60000);
       }
-      else if(type==="dockplates"){dockPlates=payload||{};if(!isDriver()){renderPlates();if(isDock()){renderDvOccupancy();renderDockPlatesPanel();}}}
+      else if(type==="dockplates"){dockPlates=payload||{};if(!isDriver()){renderPlates();if(isDock()){renderDockPlatesPanel();}}}
       else if(type==="doorblocks"){doorBlocks=payload||{};renderDockMap();renderBoard();}
       else if(type==="confirmations"){confirmations=Array.isArray(payload)?payload:[];if(isSuper())renderSupConf();}
       else if(type==="ping"){/* keepalive */}

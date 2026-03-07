@@ -5284,12 +5284,12 @@ select option { background: #0d1119; }
 
 /* ═══════════════════════════════════════════════════════════════
    DOCK OCCUPANCY CARDS
-   Used in: dispatch/admin dspOccGrid, dock view dvOccGrid
+   Used in: dispatch/admin dspOccGrid
    Each door gets a colored card reflecting trailer status
 ═══════════════════════════════════════════════════════════════ */
 
 /* Shared grid — same 5-col layout as plates */
-#dspOccGrid, #dvOccGrid {
+#dspOccGrid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 5px;
@@ -5536,7 +5536,7 @@ select option { background: #0d1119; }
    Wide cards, easy to scan at a glance
 ═══════════════════════════════════════════════════════════════ */
 
-#dspOccGrid, #dvOccGrid {
+#dspOccGrid {
   display: flex !important;
   flex-direction: column;
   gap: 6px;

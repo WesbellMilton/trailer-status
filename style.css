@@ -3243,3 +3243,535 @@ img,video,embed,object,iframe {
 .dsp-row.ready-flash{animation:readyFlash 2s ease infinite;}
 .dsp-row.dockready-flash{animation:dockReadyFlash 2s ease infinite;}
 
+
+/* ── Right panel default state (role controls) ── */
+.dsp-right-default{
+  display:flex;flex-direction:column;
+  height:100%;overflow-y:auto;
+}
+.dsp-right-default::-webkit-scrollbar{width:4px}
+.dsp-right-default::-webkit-scrollbar-thumb{background:var(--b1);}
+
+#panelBody{overflow-y:visible;}
+
+.dsp-select-hint{
+  display:flex;flex-direction:column;align-items:center;
+  gap:6px;padding:20px;
+  border-top:1px solid var(--b0);
+  margin-top:auto;
+}
+
+/* adminPanel inside right column */
+#adminPanel{border-top:1px solid var(--b0);}
+
+/* ── Door info callout in detail panel ── */
+.dsd-door-info{
+  display:flex;align-items:center;gap:10px;
+  padding:8px 10px;border-radius:5px;
+  border:1px solid var(--b1);
+  margin-bottom:8px;
+  font-family:var(--mono);font-size:11px;
+}
+.ddi-door{
+  font-size:16px;font-weight:700;color:var(--t0);
+  flex-shrink:0;min-width:36px;
+}
+.ddi-body{flex:1;min-width:0;}
+.ddi-plate-row{color:var(--t1);line-height:1.4;}
+.ddi-plate-row strong{color:var(--t0);}
+.ddi-note{color:var(--t3);}
+.ddi-conflict{color:var(--red);display:block;font-size:10px;margin-top:2px;}
+/* plate status colours */
+.ddi-ok{border-color:var(--green-bd);background:var(--green-bg);}
+.ddi-ok .ddi-door{color:var(--green);}
+.ddi-service{border-color:var(--amber-bd);background:var(--amber-bg);}
+.ddi-service .ddi-door{color:var(--amber);}
+.ddi-ooo{border-color:var(--red-bd);background:var(--red-bg);}
+.ddi-ooo .ddi-door{color:var(--red);}
+.ddi-unknown{border-color:var(--b1);background:var(--s2);}
+
+/* door grid plate status dots */
+.dsd-door-btn{position:relative;}
+.ddoor-plate-dot{
+  position:absolute;bottom:2px;right:2px;
+  width:4px;height:4px;border-radius:50%;
+}
+.dpp-ooo{background:var(--red);}
+.dpp-svc{background:var(--amber);}
+/* door button state additions */
+.dsd-door-btn.ddoor-bad{border-color:var(--red-bd);color:var(--red);opacity:.6;}
+.dsd-door-btn.ddoor-svc{border-color:var(--amber-bd);color:var(--amber);opacity:.7;}
+
+/* ════════════════════════════════════════════════════════════════
+   TESLA-STYLE DISPATCH OVERRIDES
+   No hard borders · Frosted surfaces · Glow accents · Soft type
+════════════════════════════════════════════════════════════════ */
+
+/* Background tones — deeper, less blocky */
+:root {
+  --bg-soft: #06090e;
+  --glass: rgba(255,255,255,.028);
+  --glass-hover: rgba(255,255,255,.048);
+  --glass-sel: rgba(245,166,35,.055);
+  --divider: rgba(255,255,255,.04);
+  --glow-amber: 0 0 18px rgba(245,166,35,.18);
+  --glow-green: 0 0 18px rgba(25,224,154,.18);
+  --glow-cyan:  0 0 18px rgba(24,212,232,.18);
+}
+
+/* Whole workspace — seamless dark canvas */
+.dsp-workspace {
+  background: var(--bg-soft);
+  border: none;
+}
+
+/* ── LEFT ── */
+.dsp-left { border-right: 1px solid var(--divider); }
+
+/* Toolbar — invisible, just space */
+.dsp-toolbar {
+  background: transparent;
+  border-bottom: 1px solid var(--divider);
+  padding: 8px 16px;
+  gap: 8px;
+}
+
+/* KPI chips — pill shaped, no visible border at rest */
+.dsp-kpis .kpi-tile {
+  border-radius: 20px;
+  border: 1px solid transparent;
+  background: var(--glass);
+  padding: 4px 12px;
+  gap: 5px;
+  transition: background .2s, border-color .2s, box-shadow .2s;
+}
+.dsp-kpis .kpi-tile:hover {
+  background: rgba(245,166,35,.08);
+  border-color: rgba(245,166,35,.25);
+  box-shadow: var(--glow-amber);
+}
+.dsp-kpis .kpi-tile.kpi-active {
+  background: rgba(245,166,35,.12);
+  border-color: rgba(245,166,35,.4);
+  box-shadow: var(--glow-amber);
+}
+.dsp-kpis .kpi-tile .kpi-val {
+  font-size: 14px;
+  font-weight: 300;
+  letter-spacing: -.01em;
+  color: var(--t0);
+}
+.dsp-kpis .kpi-tile .kpi-label {
+  font-size: 9px;
+  letter-spacing: .08em;
+  color: rgba(255,255,255,.35);
+  text-transform: uppercase;
+  font-weight: 400;
+}
+
+/* Search + selects — borderless, ghost */
+.dsp-search, .dsp-sel {
+  background: var(--glass);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: rgba(255,255,255,.7);
+  font-size: 11px;
+  transition: background .2s, border-color .2s;
+}
+.dsp-search:focus, .dsp-sel:focus {
+  background: rgba(255,255,255,.05);
+  border-color: rgba(245,166,35,.3);
+  box-shadow: 0 0 0 3px rgba(245,166,35,.06);
+  color: var(--t0);
+}
+.dsp-search::placeholder { color: rgba(255,255,255,.2); }
+
+/* Toolbar buttons — ghost pills */
+.dsp-tbtn {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: var(--glass);
+  color: rgba(255,255,255,.4);
+  font-size: 10px;
+  padding: 4px 10px;
+  letter-spacing: .04em;
+  transition: background .2s, color .2s, border-color .2s;
+}
+.dsp-tbtn:hover {
+  background: var(--glass-hover);
+  border-color: rgba(255,255,255,.1);
+  color: rgba(255,255,255,.8);
+}
+.dsp-tbtn.danger:hover {
+  background: rgba(240,74,74,.08);
+  border-color: rgba(240,74,74,.25);
+  color: var(--red);
+}
+.dsp-tbtn-sep { background: var(--divider); }
+
+/* Table header — nearly invisible */
+.dsp-hd {
+  background: transparent;
+  border-bottom: 1px solid var(--divider);
+  padding: 0 20px;
+}
+.dsp-hd > span {
+  padding: 6px 8px;
+  font-size: 9px;
+  letter-spacing: .15em;
+  color: rgba(255,255,255,.2);
+  font-weight: 400;
+}
+
+/* ── ROWS — the main event ── */
+.dsp-row {
+  border-bottom: 1px solid var(--divider);
+  border-left: 2px solid transparent;
+  padding: 0 20px;
+  min-height: 42px;
+  transition: background .15s;
+  cursor: pointer;
+  grid-template-columns: 130px 90px 52px 1fr 52px minmax(150px,auto);
+}
+.dsp-row > * {
+  padding: 8px 8px;
+  font-size: 12px;
+}
+.dsp-row:hover { background: var(--glass-hover); }
+.dsp-row.dsp-row-selected {
+  background: var(--glass-sel) !important;
+  border-left-color: rgba(245,166,35,.6) !important;
+}
+
+/* Row status left-bar — soft glow, not hard line */
+.dsp-row.r-loading  { border-left-color: rgba(245,166,35,.5);  background: rgba(245,166,35,.012); }
+.dsp-row.r-ready    { border-left-color: rgba(25,224,154,.5);  background: rgba(25,224,154,.012); }
+.dsp-row.r-dockready{ border-left-color: rgba(24,212,232,.5);  background: rgba(24,212,232,.012); }
+.dsp-row.r-dropped  { border-left-color: rgba(166,124,245,.4); background: rgba(166,124,245,.008);}
+.dsp-row.r-incoming { border-left-color: rgba(255,255,255,.08);}
+.dsp-row.r-departed { border-left-color: transparent; opacity: .4; }
+.dsp-row.r-omw      { background: rgba(24,212,232,.018); }
+
+/* Trailer ID — large, light weight */
+.dsp-row .dc-id {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 300;
+  letter-spacing: .02em;
+  color: rgba(255,255,255,.9);
+  gap: 6px;
+}
+
+/* Status tag — pill with glow */
+.dsp-row .stag {
+  font-size: 10px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-weight: 400;
+  letter-spacing: .04em;
+  border-width: 1px;
+}
+
+/* Door cell */
+.dsp-row .dc-door-ok    { color: rgba(25,224,154,.8); font-family: var(--mono); font-size: 11px; }
+.dsp-row .dc-door-empty { color: rgba(255,255,255,.18); font-family: var(--mono); font-size: 11px; }
+.dsp-row .dc-door-conflict { color: var(--red); font-family: var(--mono); font-size: 11px; }
+
+/* Note */
+.dsp-row .dc-note { color: rgba(255,255,255,.3); font-size: 11px; }
+.dsp-row .dc-age  { color: rgba(255,255,255,.2); font-size: 10px; font-family: var(--mono); }
+
+/* Direction badge */
+.dsp-row .t-dir-badge {
+  font-size: 8px;
+  border-radius: 4px;
+  padding: 1px 4px;
+  opacity: .7;
+}
+
+/* OMW badge */
+.dsp-row .omw-badge {
+  font-size: 9px;
+  opacity: .8;
+}
+
+/* Next-status buttons — ghost, very subtle */
+.dsp-next-btn {
+  font-size: 10px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: transparent;
+  color: rgba(255,255,255,.4);
+  font-family: var(--sans);
+  font-weight: 400;
+  letter-spacing: .03em;
+  transition: background .18s, border-color .18s, color .18s, box-shadow .18s;
+}
+.dsp-next-btn:hover {
+  background: var(--glass-hover);
+  border-color: rgba(255,255,255,.2);
+  color: rgba(255,255,255,.9);
+}
+.dsp-next-btn.nb-loading {
+  border-color: rgba(245,166,35,.3);
+  color: rgba(245,166,35,.7);
+}
+.dsp-next-btn.nb-loading:hover {
+  background: rgba(245,166,35,.1);
+  border-color: rgba(245,166,35,.5);
+  color: var(--amber);
+  box-shadow: var(--glow-amber);
+}
+.dsp-next-btn.nb-dockready {
+  border-color: rgba(24,212,232,.3);
+  color: rgba(24,212,232,.7);
+}
+.dsp-next-btn.nb-dockready:hover {
+  background: rgba(24,212,232,.08);
+  border-color: rgba(24,212,232,.5);
+  color: var(--cyan);
+  box-shadow: var(--glow-cyan);
+}
+.dsp-next-btn.nb-ready {
+  border-color: rgba(25,224,154,.3);
+  color: rgba(25,224,154,.7);
+}
+.dsp-next-btn.nb-ready:hover {
+  background: rgba(25,224,154,.08);
+  border-color: rgba(25,224,154,.5);
+  color: var(--green);
+  box-shadow: var(--glow-green);
+}
+.dsp-next-btn.nb-departed {
+  border-color: transparent;
+  color: rgba(255,255,255,.15);
+}
+
+/* Empty state */
+.dsp-empty {
+  padding: 60px 40px;
+  text-align: center;
+  color: rgba(255,255,255,.15);
+  font-size: 12px;
+  font-weight: 300;
+  letter-spacing: .06em;
+}
+
+/* Quick-add bar */
+.dsp-qabar {
+  background: transparent;
+  border-top: 1px solid var(--divider);
+  padding: 8px 16px;
+  gap: 8px;
+}
+.dsp-qa-label { color: rgba(255,255,255,.2); font-size: 10px; letter-spacing: .08em; }
+.dsp-qa-in, .dsp-qa-sel {
+  background: var(--glass);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: rgba(255,255,255,.8);
+  font-size: 11px;
+  transition: border-color .2s, background .2s;
+}
+.dsp-qa-in:focus, .dsp-qa-sel:focus {
+  border-color: rgba(245,166,35,.3);
+  background: rgba(255,255,255,.05);
+  outline: none;
+}
+.dsp-qa-btn {
+  background: rgba(245,166,35,.15);
+  color: rgba(245,166,35,.9);
+  border: 1px solid rgba(245,166,35,.25);
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .06em;
+  transition: background .2s, box-shadow .2s;
+}
+.dsp-qa-btn:hover {
+  background: rgba(245,166,35,.25);
+  box-shadow: var(--glow-amber);
+}
+
+/* Status bar */
+.dsp-statusbar {
+  background: transparent;
+  border-top: 1px solid var(--divider);
+  padding: 4px 16px;
+  color: rgba(255,255,255,.2);
+  font-size: 10px;
+  letter-spacing: .04em;
+}
+
+/* ── RIGHT PANEL ── */
+.dsp-right {
+  background: rgba(6,9,14,.95);
+  border-left: 1px solid var(--divider);
+}
+
+/* Detail header */
+.dsd-hd {
+  background: transparent;
+  border-bottom: 1px solid var(--divider);
+  padding: 18px 18px 14px;
+}
+.dsd-trailer-id {
+  font-family: var(--sans);
+  font-size: 28px;
+  font-weight: 200;
+  letter-spacing: .04em;
+  color: rgba(255,255,255,.95);
+}
+.dsd-meta {
+  font-size: 10px;
+  color: rgba(255,255,255,.25);
+  letter-spacing: .05em;
+  margin-top: 2px;
+}
+.dsd-close {
+  background: var(--glass);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: rgba(255,255,255,.25);
+  transition: background .2s, color .2s;
+}
+.dsd-close:hover {
+  background: rgba(240,74,74,.1);
+  color: rgba(240,74,74,.8);
+  border-color: rgba(240,74,74,.2);
+}
+
+/* Sections — no borders, just breathing room */
+.dsd-section {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--divider);
+}
+.dsd-section-lbl {
+  font-size: 8px;
+  letter-spacing: .18em;
+  color: rgba(255,255,255,.18);
+  text-transform: uppercase;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+/* Status buttons in detail — larger, glowy */
+.dsd-status-btn {
+  font-size: 11px;
+  padding: 6px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: var(--glass);
+  color: rgba(255,255,255,.5);
+  font-family: var(--sans);
+  font-weight: 400;
+  letter-spacing: .04em;
+  transition: background .2s, border-color .2s, box-shadow .2s, color .2s;
+}
+.dsd-status-btn:hover { background: var(--glass-hover); color: rgba(255,255,255,.9); }
+.dsd-status-btn.dsb-loading  { border-color:rgba(245,166,35,.3); color:rgba(245,166,35,.8); }
+.dsd-status-btn.dsb-loading:hover  { background:rgba(245,166,35,.1); box-shadow:var(--glow-amber); border-color:rgba(245,166,35,.5); color:var(--amber); }
+.dsd-status-btn.dsb-dockready{ border-color:rgba(24,212,232,.3); color:rgba(24,212,232,.8); }
+.dsd-status-btn.dsb-dockready:hover{ background:rgba(24,212,232,.08); box-shadow:var(--glow-cyan); border-color:rgba(24,212,232,.5); color:var(--cyan); }
+.dsd-status-btn.dsb-ready    { border-color:rgba(25,224,154,.3); color:rgba(25,224,154,.8); }
+.dsd-status-btn.dsb-ready:hover    { background:rgba(25,224,154,.08); box-shadow:var(--glow-green); border-color:rgba(25,224,154,.5); color:var(--green); }
+.dsd-status-btn.dsb-dropped  { border-color:rgba(166,124,245,.3); color:rgba(166,124,245,.8); }
+.dsd-status-btn.dsb-dropped:hover  { background:rgba(166,124,245,.1); border-color:rgba(166,124,245,.5); color:var(--violet); }
+.dsd-status-btn.dsb-departed { border-color:transparent; color:rgba(255,255,255,.2); }
+.dsd-status-btn.dsb-incoming { border-color:transparent; color:rgba(255,255,255,.3); }
+
+/* Door info callout */
+.dsd-door-info {
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.06);
+  background: var(--glass);
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  backdrop-filter: blur(8px);
+}
+.ddi-door { font-size: 20px; font-weight: 200; letter-spacing: .05em; }
+.ddi-plate-row { color: rgba(255,255,255,.45); font-size: 11px; }
+.ddi-plate-row strong { color: rgba(255,255,255,.75); font-weight: 400; }
+.ddi-ok   { border-color: rgba(25,224,154,.2);  background: rgba(25,224,154,.04); }
+.ddi-ok .ddi-door { color: rgba(25,224,154,.8); }
+.ddi-service{ border-color: rgba(245,166,35,.2); background: rgba(245,166,35,.04); }
+.ddi-service .ddi-door{ color: rgba(245,166,35,.8); }
+.ddi-ooo  { border-color: rgba(240,74,74,.2);  background: rgba(240,74,74,.04); }
+.ddi-ooo .ddi-door { color: rgba(240,74,74,.8); }
+
+/* Door grid — softer buttons */
+.dsd-door-grid { gap: 5px; }
+.dsd-door-btn {
+  padding: 6px 0;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.06);
+  background: var(--glass);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  color: rgba(255,255,255,.35);
+  transition: background .15s, border-color .15s, color .15s, box-shadow .15s;
+}
+.dsd-door-btn:hover { background: var(--glass-hover); border-color: rgba(245,166,35,.3); color: rgba(255,255,255,.9); box-shadow: 0 0 10px rgba(245,166,35,.1); }
+.dsd-door-btn.ddoor-current { border-color: rgba(25,224,154,.4); color: rgba(25,224,154,.9); background: rgba(25,224,154,.06); box-shadow: var(--glow-green); }
+.dsd-door-btn.ddoor-occ     { border-color: rgba(255,255,255,.04); color: rgba(255,255,255,.15); cursor: default; }
+.dsd-door-btn.ddoor-occ::after { content: ''; }
+.dsd-door-btn.ddoor-free    { border-color: rgba(255,255,255,.05); }
+.dsd-door-btn.ddoor-bad     { border-color: rgba(240,74,74,.2); color: rgba(240,74,74,.5); opacity: 1; }
+.dsd-door-btn.ddoor-svc     { border-color: rgba(245,166,35,.2); color: rgba(245,166,35,.5); opacity: 1; }
+
+/* Note textarea */
+.dsd-note-input {
+  background: var(--glass);
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 10px;
+  color: rgba(255,255,255,.75);
+  font-size: 12px;
+  font-weight: 300;
+  padding: 8px 12px;
+  resize: none;
+  transition: border-color .2s;
+}
+.dsd-note-input:focus {
+  border-color: rgba(245,166,35,.3);
+  background: rgba(255,255,255,.04);
+  outline: none;
+}
+.dsd-note-input::placeholder { color: rgba(255,255,255,.15); }
+
+/* Detail fields */
+.dsd-field-key { color: rgba(255,255,255,.2); font-size: 10px; letter-spacing: .06em; }
+.dsd-field-val { color: rgba(255,255,255,.6); font-size: 11px; font-weight: 300; }
+
+/* Edit form */
+.dsd-field-row select {
+  background: var(--glass);
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 8px;
+  color: rgba(255,255,255,.7);
+  font-size: 11px;
+}
+.dsd-field-row select:focus {
+  border-color: rgba(245,166,35,.3);
+  background: rgba(255,255,255,.05);
+  outline: none;
+}
+.dsd-field-row label { color: rgba(255,255,255,.25); }
+
+/* Default panel — role controls */
+.dsp-right-default { background: transparent; }
+.dsp-right-default .dsd-hd { border-bottom: 1px solid var(--divider); }
+.dsp-select-hint { border-top: 1px solid var(--divider); }
+.dre-icon { opacity: .07; }
+.dre-msg  { color: rgba(255,255,255,.15); font-weight: 300; letter-spacing: .06em; }
+.dre-sub  { color: rgba(255,255,255,.1); }
+
+/* Topbar softening */
+.topbar { border-bottom: 1px solid var(--divider); box-shadow: none; }
+
+/* Status tags — pill glow */
+.stag { border-radius: 20px !important; font-weight: 400 !important; }
+.stag-loading  { box-shadow: 0 0 10px rgba(245,166,35,.12); }
+.stag-ready    { box-shadow: 0 0 10px rgba(25,224,154,.12); }
+.stag-dockready{ box-shadow: 0 0 10px rgba(24,212,232,.12); }

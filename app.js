@@ -1941,47 +1941,196 @@
   }
   function kmToMin(km){ return Math.max(1,Math.round(km/0.7)); }
 
-  // ── Driver: send GPS every 30s while OMW ──
+  /* ── Battery-efficient GPS tracking ─────────────────────────────────────────
+   *
+   * Strategy:
+   *  - Accuracy tier based on distance to dock:
+   *      >5 km  → LOW accuracy (network/cell, ~100m, almost no battery draw)
+   *      1–5 km → MEDIUM accuracy (assisted GPS, ~20m)
+   *      <1 km  → HIGH accuracy (full GPS, ~5m) — only when it matters
+   *  - watchPosition disabled by default; single-shot getCurrentPosition used
+   *    on a smart interval that grows when far away and shrinks when close
+   *  - App backgrounded (screen off) → slow low-accuracy heartbeat only:
+   *      <1 km from dock → ping every 60s (keep door hold alive)
+   *      >1 km           → ping every 2 min (rough position for dispatch)
+   *      Uses network/cell only — GPS chip stays off
+   *  - App in foreground but driver not moving → back off send rate
+   *  - All timers cleared on stopGpsTracking
+   * ────────────────────────────────────────────────────────────────────────── */
   let _locWatcher=null,_locInterval=null,_lastLat=null,_lastLng=null;
+  let _gpsTrailer=null,_gpsPaused=false,_lastSentAt=0,_lastMovedAt=0;
+  let _currentAccuracyTier=null; // 'low'|'medium'|'high'
+
+  // Tier config
+  const GPS_TIERS={
+    low:   {enableHighAccuracy:false,timeout:15000,maximumAge:120000},
+    medium:{enableHighAccuracy:false,timeout:10000,maximumAge: 45000},
+    high:  {enableHighAccuracy:true, timeout: 8000,maximumAge: 10000},
+  };
+
+  // Poll interval (ms) by distance
+  function _pollInterval(distKm){
+    if(distKm>10)return 90000;   // 1.5 min — far away, low urgency
+    if(distKm>5) return 60000;   // 1 min
+    if(distKm>2) return 30000;   // 30s
+    if(distKm>0.5)return 15000;  // 15s — approaching
+    return 8000;                  // 8s — in the yard
+  }
+
+  // Accuracy tier by distance
+  function _tierForDist(distKm){
+    if(distKm>5) return 'low';
+    if(distKm>1) return 'medium';
+    return 'high';
+  }
+
+  function _scheduleNextPoll(distKm){
+    clearInterval(_locInterval);
+    if(_gpsPaused||!_gpsTrailer)return;
+    const delay=_pollInterval(distKm);
+    _locInterval=setTimeout(()=>_doPoll(),delay);
+  }
+
+  function _doPoll(){
+    if(_gpsPaused||!_gpsTrailer)return;
+    const distKm=(_lastLat!==null)?haversine(_lastLat,_lastLng,DOCK_LAT,DOCK_LNG):99;
+    const tier=_tierForDist(distKm);
+
+    // If tier changed, clear any active watchPosition
+    if(tier!==_currentAccuracyTier){
+      if(_locWatcher!==null){navigator.geolocation.clearWatch(_locWatcher);_locWatcher=null;}
+      _currentAccuracyTier=tier;
+    }
+
+    // For high-accuracy (close to dock) use watchPosition — we want real-time then
+    // For medium/low use single-shot getCurrentPosition to avoid background GPS lock
+    if(tier==='high'){
+      if(_locWatcher===null){
+        _locWatcher=navigator.geolocation.watchPosition(
+          pos=>_onPosition(pos,true),
+          ()=>{},
+          GPS_TIERS.high
+        );
+      }
+      // watchPosition handles its own updates — schedule a safety re-check in case it stalls
+      _locInterval=setTimeout(()=>_doPoll(),15000);
+    } else {
+      navigator.geolocation.getCurrentPosition(
+        pos=>_onPosition(pos,false),
+        ()=>{_scheduleNextPoll(distKm);},
+        GPS_TIERS[tier]
+      );
+    }
+  }
+
+  function _onPosition(pos,fromWatch){
+    const lat=pos.coords.latitude,lng=pos.coords.longitude;
+    const now=Date.now();
+    const distKm=haversine(lat,lng,DOCK_LAT,DOCK_LNG);
+
+    // Movement check — only update and send if moved meaningfully
+    let movedM=0;
+    if(_lastLat!==null){
+      const dLat=(lat-_lastLat)*111320,dLng=(lng-_lastLng)*111320*Math.cos(lat*Math.PI/180);
+      movedM=Math.sqrt(dLat*dLat+dLng*dLng);
+    }
+    const moved=movedM>20;  // >20m counts as movement
+    if(moved){_lastMovedAt=now;_lastLat=lat;_lastLng=lng;}
+    else if(_lastLat===null){_lastLat=lat;_lastLng=lng;}
+
+    // Send rate limiting:
+    // - Moved: send if >15s since last send
+    // - Stationary but near dock (<500m): send every 60s (keep door hold alive)
+    // - Stationary far: send every 3 min (heartbeat only)
+    const stationaryCap=distKm<0.5?60000:180000;
+    const shouldSend=moved
+      ?(now-_lastSentAt>=15000)
+      :(now-_lastSentAt>=stationaryCap);
+
+    if(shouldSend){
+      _lastSentAt=now;
+      sendLocation(_gpsTrailer);
+    }
+
+    if(!fromWatch)_scheduleNextPoll(distKm);
+  }
 
   function startGpsTracking(trailer){
     if(!navigator.geolocation){updateGpsCard("denied");return;}
+    stopGpsTracking(); // clear any prior session
+    _gpsTrailer=trailer;
+    _gpsPaused=false;
+    _currentAccuracyTier=null;
     updateGpsCard("requesting");
-    let _lastSentAt=0;
-    const MIN_SEND_INTERVAL=15000;  // never send more than once per 15s
-    const MIN_DISTANCE_M=30;        // only send if moved >30m
 
-    function _maybeSend(pos){
-      const lat=pos.coords.latitude,lng=pos.coords.longitude;
-      const now=Date.now();
-      // Distance filter — skip if barely moved
-      if(_lastLat!==null){
-        const dLat=(lat-_lastLat)*111320,dLng=(lng-_lastLng)*111320*Math.cos(lat*Math.PI/180);
-        if(Math.sqrt(dLat*dLat+dLng*dLng)<MIN_DISTANCE_M&&now-_lastSentAt<60000)return;
-      }
-      _lastLat=lat;_lastLng=lng;
-      if(now-_lastSentAt<MIN_SEND_INTERVAL)return;
-      _lastSentAt=now;
-      sendLocation(trailer);
-    }
-
+    // Initial fix — use medium accuracy to get a quick position, then tier will adjust
     navigator.geolocation.getCurrentPosition(
-      pos=>{_lastLat=pos.coords.latitude;_lastLng=pos.coords.longitude;sendLocation(trailer);updateGpsCard("active");},
-      err=>{updateGpsCard(err.code===1?"denied":"unavailable");},
-      {enableHighAccuracy:true,timeout:10000,maximumAge:30000}
+      pos=>{
+        _lastLat=pos.coords.latitude;_lastLng=pos.coords.longitude;
+        _lastSentAt=Date.now();
+        sendLocation(trailer);
+        updateGpsCard("active");
+        const distKm=haversine(_lastLat,_lastLng,DOCK_LAT,DOCK_LNG);
+        _currentAccuracyTier=_tierForDist(distKm);
+        _scheduleNextPoll(distKm);
+      },
+      err=>{
+        updateGpsCard(err.code===1?"denied":"unavailable");
+        // Still schedule polling in case they enable location later
+        _scheduleNextPoll(99);
+      },
+      GPS_TIERS.medium
     );
-    _locWatcher=navigator.geolocation.watchPosition(
-      pos=>{_maybeSend(pos);},
-      ()=>{},{enableHighAccuracy:true,timeout:10000,maximumAge:15000}
-    );
-    // Fallback heartbeat — guarantees a send every 30s even if not moving
-    _locInterval=setInterval(()=>{if(_lastLat!==null)sendLocation(trailer);},30000);
+
+    // Pause GPS when screen turns off, resume when user comes back
+    document.addEventListener("visibilitychange",_onVisibility);
+  }
+
+  function _onVisibility(){
+    if(!_gpsTrailer)return;
+    if(document.hidden){
+      // Screen off — drop to slow background heartbeat
+      // Stop any active watchPosition (high battery) but keep single-shot polls going slowly
+      _gpsPaused=false;  // not fully paused — just throttled
+      clearTimeout(_locInterval);clearInterval(_locInterval);_locInterval=null;
+      if(_locWatcher!==null){navigator.geolocation.clearWatch(_locWatcher);_locWatcher=null;_currentAccuracyTier=null;}
+      _scheduleBgPoll();
+    } else {
+      // Back in foreground — cancel bg poll, resume normal adaptive polling immediately
+      clearTimeout(_locInterval);clearInterval(_locInterval);_locInterval=null;
+      updateGpsCard("active");
+      _doPoll();
+    }
+  }
+
+  // Background poll: low accuracy, slow interval (2 min far, 60s near)
+  // Keeps door hold alive and gives dispatch a rough position
+  function _scheduleBgPoll(){
+    clearTimeout(_locInterval);_locInterval=null;
+    if(!_gpsTrailer||!document.hidden)return;
+    const distKm=(_lastLat!==null)?haversine(_lastLat,_lastLng,DOCK_LAT,DOCK_LNG):99;
+    const delay=distKm<1?60000:120000;  // 60s near dock, 2 min far
+    _locInterval=setTimeout(()=>{
+      if(!_gpsTrailer||!document.hidden)return;  // foreground reclaimed it
+      navigator.geolocation.getCurrentPosition(
+        pos=>{
+          _lastLat=pos.coords.latitude;_lastLng=pos.coords.longitude;
+          _lastSentAt=Date.now();
+          sendLocation(_gpsTrailer);
+          _scheduleBgPoll();  // chain next bg poll
+        },
+        ()=>{ _scheduleBgPoll(); },  // error — try again later
+        GPS_TIERS.low  // network/cell only — minimal battery
+      );
+    },delay);
   }
 
   function stopGpsTracking(){
+    document.removeEventListener("visibilitychange",_onVisibility);
     if(_locWatcher!==null){navigator.geolocation.clearWatch(_locWatcher);_locWatcher=null;}
-    clearInterval(_locInterval);_locInterval=null;
-    _lastLat=null;_lastLng=null;
+    clearTimeout(_locInterval);clearInterval(_locInterval);_locInterval=null;
+    _lastLat=null;_lastLng=null;_gpsTrailer=null;_gpsPaused=false;
+    _currentAccuracyTier=null;_lastSentAt=0;
   }
 
   async function sendLocation(trailer){

@@ -35,8 +35,12 @@ async function pickBestDoor(excludeTrailer = null) {
   return candidates[0]?.door || null;
 }
 
-async function reserveDoor(door, trailer, carrierType) {
+async function reserveDoor(door, trailer, carrierType, holdMinutes = null) {
   const now = Date.now();
+  // If holdMinutes provided, use that + 5 min grace; otherwise use config TTL
+  const expiresAt = holdMinutes
+    ? now + (holdMinutes * 60_000)
+    : now + RESERVATION_TTL_MS;
   await run(
     `INSERT INTO door_reservations(door,trailer,carrierType,reservedAt,expiresAt)
      VALUES(?,?,?,?,?)
@@ -45,12 +49,29 @@ async function reserveDoor(door, trailer, carrierType) {
        carrierType=excluded.carrierType,
        reservedAt=excluded.reservedAt,
        expiresAt=excluded.expiresAt`,
-    [door, trailer, carrierType, now, now + RESERVATION_TTL_MS]
+    [door, trailer, carrierType, now, expiresAt]
   );
 }
 
 const releaseReservation = trailer =>
   run(`DELETE FROM door_reservations WHERE trailer=?`, [trailer]);
+
+/**
+ * extendReservation(trailer, etaMinutes)
+ * Called on every location update. Sets expiry = now + ETA + 5 min grace.
+ * This keeps the door held for exactly as long as the driver needs.
+ */
+async function extendReservation(trailer, etaMinutes) {
+  const graceMs  = 5 * 60_000;   // 5 min grace after ETA
+  const holdMs   = (etaMinutes * 60_000) + graceMs;
+  const expiresAt = Date.now() + holdMs;
+  await run(
+    `UPDATE door_reservations SET expiresAt=? WHERE trailer=?`,
+    [expiresAt, trailer]
+  );
+  // Also log it for debugging
+  console.log(`[doors] ${trailer} door held until +${Math.round(holdMs/60000)}min (ETA ${etaMinutes}m + 5m grace)`);
+}
 
 async function cleanupExpiredReservations() {
   const r = await run(`DELETE FROM door_reservations WHERE expiresAt <= ?`, [Date.now()]);
@@ -61,4 +82,4 @@ async function cleanupExpiredReservations() {
 }
 setInterval(cleanupExpiredReservations, 2 * 60_000).unref();
 
-module.exports = { getOccupiedDoorSet, pickBestDoor, reserveDoor, releaseReservation, cleanupExpiredReservations };
+module.exports = { getOccupiedDoorSet, pickBestDoor, reserveDoor, releaseReservation, extendReservation, cleanupExpiredReservations };

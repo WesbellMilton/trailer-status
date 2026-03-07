@@ -488,7 +488,7 @@
       {val:omwCount,lbl:"OMW",filter:"__omw__"},
     ].map(k=>{
       const isActive=(k.filter==="__omw__")?(activeFilter==="Incoming"&&activeSearch==="omw"):(activeFilter===k.filter&&k.filter!=="");
-      return`<div class="kpi-tile${isActive?" kpi-active":""}" data-kpi-filter="${k.filter}" title="${k.lbl}"><span class="kpi-val">${k.val}</span> <span class="kpi-label">${k.lbl}</span></div>`;
+      return`<div class="kpi-tile${isActive?" kpi-active":""} ${k.cls||""}" data-kpi-filter="${k.filter}" title="${k.lbl}"><span class="kpi-val">${k.val}</span> <span class="kpi-label">${k.lbl}</span></div>`;
     }).join("");
     kpiEl.querySelectorAll(".kpi-tile[data-kpi-filter]").forEach(tile=>{
       tile.addEventListener("click",()=>{
@@ -754,9 +754,13 @@
         <div class="dpb-top"><span class="dpb-door">D${esc(door)}</span>${plateDot}</div>
         ${trailerLabel}
         ${open?`<div class="dpb-edit">
-          <select data-plate-status="${esc(door)}"><option ${p.status==="OK"?"selected":""}>OK</option><option ${p.status==="Service"?"selected":""}>Service</option><option ${p.status==="Out of Order"?"selected":""}>Out of Order</option></select>
-          <input data-plate-note="${esc(door)}" placeholder="Note" value="${esc(p.note||"")}"/>
-          <div style="display:flex;gap:4px;margin-top:4px;"><button class="p-btn" data-plate-save="${esc(door)}">Save</button><button class="p-btn" data-plate-toggle="${esc(door)}">✕</button></div>
+          <div class="dpb-status-btns">
+            <button class="dpb-sbtn dpb-sbtn-ok${p.status==="OK"?" dpb-sbtn-active":""}" data-plate-status-set="${esc(door)}" data-plate-val="OK">✓ OK</button>
+            <button class="dpb-sbtn dpb-sbtn-svc${p.status==="Service"?" dpb-sbtn-active":""}" data-plate-status-set="${esc(door)}" data-plate-val="Service">⚠ Service</button>
+            <button class="dpb-sbtn dpb-sbtn-ooo${p.status==="Out of Order"?" dpb-sbtn-active":""}" data-plate-status-set="${esc(door)}" data-plate-val="Out of Order">✕ OOO</button>
+          </div>
+          <input class="dpb-note-input" data-plate-note="${esc(door)}" placeholder="Note (optional)" value="${esc(p.note||"")}"/>
+          <div class="dpb-action-row"><button class="dpb-save-btn" data-plate-save="${esc(door)}">Save</button><button class="dpb-cancel-btn" data-plate-toggle="${esc(door)}">Cancel</button></div>
         </div>`:(canEdit?`<button class="dpb-edit-btn" data-plate-toggle="${esc(door)}">Edit</button>`:"")
         }
       </div>`;
@@ -1427,14 +1431,22 @@
     const dvpGrid=document.getElementById("dvPlatesGrid");
     const dspGrid2=document.getElementById("dspPlatesGrid");
 
-    // In dock plates panel, status comes from the active dvp-sbtn button
+    // Find the active status button — works for both dock view (dvp-sbtn) and dispatch (dpb-sbtn)
     let status="",note="";
+    // Search in: dvpGrid card, then dspGrid2 card, then fallback to legacy select
     const dvpCard=dvpGrid?.querySelector(`[data-door="${CSS.escape(door)}"]`);
+    const dspCard=dspGrid2?.querySelector(`[data-door="${CSS.escape(door)}"]`)||dspGrid2?.querySelector(`.dsp-plate-btn`);
     const dvpActiveBtn=dvpCard?.querySelector(".dvp-sbtn-active");
-    const dvpNoteInput=dvpCard?.querySelector(`[data-plate-note="${CSS.escape(door)}"]`)||document.getElementById(`dvp-note-${CSS.escape(door)}`);
-    if(dvpGrid&&dvpActiveBtn){
+    const dspActiveBtn=dspCard?.querySelector(".dpb-sbtn-active,.dvp-sbtn-active");
+
+    if(dvpActiveBtn){
+      const noteInput=dvpCard?.querySelector(`[data-plate-note]`)||document.getElementById(`dvp-note-${CSS.escape(door)}`);
       status=dvpActiveBtn.dataset.plateVal||"";
-      note=(dvpNoteInput?.value||"").trim();
+      note=(noteInput?.value||"").trim();
+    } else if(dspActiveBtn){
+      const noteInput=dspGrid2?.querySelector(`[data-plate-note="${CSS.escape(door)}"]`);
+      status=dspActiveBtn.dataset.plateVal||"";
+      note=(noteInput?.value||"").trim();
     } else {
       const allStatus=[...document.querySelectorAll(`[data-plate-status="${CSS.escape(door)}"]`)];
       const allNote=[...document.querySelectorAll(`[data-plate-note="${CSS.escape(door)}"]`)];
@@ -1999,13 +2011,15 @@
       catch(e){toast("Update failed",e.message,"err");}
       return;
     }
-        // dvp status-set quick buttons (dock plates panel) — set active state visually, still needs Save
+        // Status-set buttons (both dock plates dvp-sbtn and dispatch dpb-sbtn)
     const sset=direct?.dataset?.plateStatusSet;
     if(sset){
-      // Mark the clicked button active, deactivate siblings
-      const btns=direct.closest(".dvp-status-btns")?.querySelectorAll(".dvp-sbtn");
-      btns?.forEach(b=>b.classList.remove("dvp-sbtn-active"));
-      direct.classList.add("dvp-sbtn-active");
+      // Deactivate all sibling buttons, activate clicked one
+      const container=direct.closest(".dvp-status-btns,.dpb-status-btns");
+      container?.querySelectorAll(".dvp-sbtn,.dpb-sbtn").forEach(b=>{
+        b.classList.remove("dvp-sbtn-active","dpb-sbtn-active");
+      });
+      direct.classList.add(direct.classList.contains("dvp-sbtn")?"dvp-sbtn-active":"dpb-sbtn-active");
       return;
     }
     const tog=direct?.dataset?.plateToggle;if(tog){plateEditOpen[tog]=!plateEditOpen[tog];renderPlates();if(isDock())renderDockPlatesPanel();return;}

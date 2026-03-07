@@ -3892,25 +3892,119 @@ img,video,embed,object,iframe {
   letter-spacing: .06em;
   opacity: .25;
 }
+/* ── Dispatch plates — edit button ── */
 .dpb-edit-btn {
-  font-size: 7px;
-  background: transparent;
-  border: none;
-  color: rgba(255,255,255,.12);
+  font-size: 10px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 5px;
+  color: var(--t2);
   cursor: pointer;
-  padding: 0;
-  letter-spacing: .04em;
+  padding: 3px 10px;
+  min-height: 26px;
+  letter-spacing: .03em;
+  font-family: var(--mono);
+  font-weight: 500;
   margin-top: auto;
+  transition: background .12s, color .12s, border-color .12s;
 }
-.dpb-edit-btn:hover { color: rgba(255,255,255,.45); }
+.dpb-edit-btn:hover { background: rgba(255,255,255,.09); color: var(--t0); border-color: rgba(255,255,255,.2); }
+.dsp-plate-btn.dpb-svc .dpb-edit-btn { color: var(--amber); border-color: rgba(245,166,35,.35); }
+.dsp-plate-btn.dpb-svc .dpb-edit-btn:hover { background: rgba(245,166,35,.1); }
+.dsp-plate-btn.dpb-ooo .dpb-edit-btn { color: var(--red); border-color: rgba(240,74,74,.35); }
+.dsp-plate-btn.dpb-ooo .dpb-edit-btn:hover { background: rgba(240,74,74,.1); }
+
+/* ── Dispatch plates — expanded edit form ── */
 .dpb-edit {
-  margin-top: 4px;
+  margin-top: 5px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 5px;
   text-align: left;
   width: 100%;
 }
+
+/* Big colored status buttons (replaces select) */
+.dpb-status-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.dpb-sbtn {
+  width: 100%;
+  padding: 7px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.03);
+  color: var(--t2);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  min-height: 34px;
+  transition: background .12s, border-color .12s, color .12s, box-shadow .12s;
+}
+.dpb-sbtn-ok  { border-color: rgba(25,224,154,.2); color: rgba(25,224,154,.65); }
+.dpb-sbtn-svc { border-color: rgba(245,166,35,.2); color: rgba(245,166,35,.65); }
+.dpb-sbtn-ooo { border-color: rgba(240,74,74,.2);  color: rgba(240,74,74,.65);  }
+.dpb-sbtn-ok:hover,  .dpb-sbtn-ok.dpb-sbtn-active  { background: rgba(25,224,154,.15); border-color: var(--green); color: var(--green); box-shadow: 0 0 8px rgba(25,224,154,.2); }
+.dpb-sbtn-svc:hover, .dpb-sbtn-svc.dpb-sbtn-active { background: rgba(245,166,35,.15); border-color: var(--amber); color: var(--amber); box-shadow: 0 0 8px rgba(245,166,35,.2); }
+.dpb-sbtn-ooo:hover, .dpb-sbtn-ooo.dpb-sbtn-active { background: rgba(240,74,74,.15);  border-color: var(--red);   color: var(--red);   box-shadow: 0 0 8px rgba(240,74,74,.2); }
+
+/* Note input */
+.dpb-note-input {
+  width: 100%;
+  font-size: 11px;
+  font-family: var(--mono);
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 5px;
+  color: var(--t1);
+  padding: 5px 8px;
+  min-height: 30px;
+  box-sizing: border-box;
+  transition: border-color .15s, background .15s;
+}
+.dpb-note-input:focus { outline: none; border-color: var(--amber); background: rgba(255,255,255,.07); }
+.dpb-note-input::placeholder { color: rgba(255,255,255,.2); }
+
+/* Save / Cancel action row */
+.dpb-action-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 2px;
+}
+.dpb-save-btn {
+  flex: 1;
+  padding: 7px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(245,166,35,.45);
+  background: rgba(245,166,35,.14);
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 32px;
+  transition: background .12s, box-shadow .12s;
+}
+.dpb-save-btn:hover { background: rgba(245,166,35,.25); box-shadow: 0 0 10px rgba(245,166,35,.2); }
+.dpb-cancel-btn {
+  flex: 1;
+  padding: 7px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,.09);
+  background: rgba(255,255,255,.04);
+  color: var(--t3);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  min-height: 32px;
+  transition: background .12s, color .12s;
+}
+.dpb-cancel-btn:hover { background: rgba(255,255,255,.09); color: var(--t1); }
+
 .dpb-edit select, .dpb-edit input {
   width: 100%;
   font-size: 9px;
@@ -5050,36 +5144,7 @@ select option { background: #0d1119; }
 .stag.stag-departed { background: rgba(255,255,255,.04); color: var(--t3); border-color: rgba(255,255,255,.07); }
 
 /* Dock plates edit button in dispatch — bigger */
-.dpb-edit-btn {
-  font-size: 9px !important;
-  padding: 3px 8px !important;
-  min-height: 22px !important;
-  border: 1px solid rgba(255,255,255,.1) !important;
-  border-radius: 4px !important;
-  background: rgba(255,255,255,.04) !important;
-  color: var(--t2) !important;
-  cursor: pointer;
-  transition: background .12s, color .12s;
-  margin-top: auto;
-}
-.dpb-edit-btn:hover {
-  background: rgba(255,255,255,.1) !important;
-  color: var(--t0) !important;
-}
-.dsp-plate-btn.dpb-svc .dpb-edit-btn { color: var(--amber) !important; border-color: rgba(245,166,35,.3) !important; }
-.dsp-plate-btn.dpb-ooo .dpb-edit-btn { color: var(--red) !important; border-color: rgba(240,74,74,.3) !important; }
-
-/* Dispatch plate edit form — bigger inputs */
-.dpb-edit select, .dpb-edit input {
-  font-size: 11px !important;
-  padding: 4px 6px !important;
-  min-height: 28px !important;
-}
-.dpb-edit .p-btn {
-  padding: 5px 8px !important;
-  font-size: 10px !important;
-  min-height: 28px !important;
-}
+/* dpb-edit-btn — consolidated above */
 
 /* ═══════════════════════════════════════════════════════════════
    DOCK VIEW CARD — richer colors
@@ -5110,4 +5175,85 @@ select option { background: #0d1119; }
 #dockView .dv-cta.dv-cta-cyan:hover {
   background: rgba(24,212,232,.28);
 }
+
+
+/* ═══════════════════════════════════════════════════════════════
+   DISPATCH PLATE CARD — "Free" text color by plate status
+═══════════════════════════════════════════════════════════════ */
+.dsp-plate-btn.dpb-ok .dpb-free-label,
+.dsp-plate-btn.dpb-free .dpb-free-label { color: rgba(25,224,154,.45); font-weight: 600; }
+.dsp-plate-btn.dpb-svc .dpb-free-label  { color: rgba(245,166,35,.7); font-weight: 600; }
+.dsp-plate-btn.dpb-ooo .dpb-free-label  { color: rgba(240,74,74,.75); font-weight: 600; }
+
+/* Plate status dot bigger and brighter */
+.dpb-pdot { width: 7px; height: 7px; }
+.dpb-pdot-ok  { background: var(--green); box-shadow: 0 0 5px rgba(25,224,154,.6); }
+.dpb-pdot-svc { background: var(--amber); box-shadow: 0 0 5px rgba(245,166,35,.6); }
+.dpb-pdot-ooo { background: var(--red);   box-shadow: 0 0 6px rgba(240,74,74,.7);  }
+
+/* ═══════════════════════════════════════════════════════════════
+   DISPATCH BOARD ROWS — stronger color treatment
+   Applies to both dispatcher AND admin roles
+═══════════════════════════════════════════════════════════════ */
+
+/* Thicker left accent bar */
+.dsp-row { border-left-width: 3px; }
+
+/* Richer status row backgrounds + left bars */
+.dsp-row.r-loading {
+  border-left-color: var(--amber);
+  background: linear-gradient(90deg, rgba(245,166,35,.06) 0%, rgba(245,166,35,.01) 60%, transparent 100%);
+}
+.dsp-row.r-ready {
+  border-left-color: var(--green);
+  background: linear-gradient(90deg, rgba(25,224,154,.07) 0%, rgba(25,224,154,.01) 60%, transparent 100%);
+}
+.dsp-row.r-dockready {
+  border-left-color: var(--cyan);
+  background: linear-gradient(90deg, rgba(24,212,232,.06) 0%, rgba(24,212,232,.01) 60%, transparent 100%);
+}
+.dsp-row.r-dropped {
+  border-left-color: var(--violet);
+  background: linear-gradient(90deg, rgba(166,124,245,.05) 0%, rgba(166,124,245,.01) 60%, transparent 100%);
+}
+.dsp-row.r-incoming {
+  border-left-color: rgba(255,255,255,.18);
+}
+
+/* Trailer ID cell takes the status color */
+.dsp-row.r-loading  .dc-id { color: rgba(245,166,35,.95); }
+.dsp-row.r-ready    .dc-id { color: rgba(25,224,154,.95); }
+.dsp-row.r-dockready .dc-id { color: rgba(24,212,232,.95); }
+.dsp-row.r-dropped  .dc-id { color: rgba(166,124,245,.9); }
+
+/* Direction badge colors */
+.dsp-row .dc-dir-in  { color: var(--cyan); }
+.dsp-row .dc-dir-out { color: var(--amber); }
+.dsp-row .dc-dir-xd  { color: var(--violet); }
+
+/* Status tags inside dispatch rows — brighter */
+.dsp-row .stag-loading  { background: rgba(245,166,35,.12); border-color: rgba(245,166,35,.35); color: #f5c640; font-weight: 600; }
+.dsp-row .stag-ready    { background: rgba(25,224,154,.11); border-color: rgba(25,224,154,.35); color: #19e09a; font-weight: 600; }
+.dsp-row .stag-dockready{ background: rgba(24,212,232,.11); border-color: rgba(24,212,232,.35); color: #18d4e8; font-weight: 600; }
+.dsp-row .stag-dropped  { background: rgba(166,124,245,.11); border-color: rgba(166,124,245,.35); color: #a67cf5; font-weight: 600; }
+.dsp-row .stag-incoming { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.12); color: rgba(255,255,255,.55); }
+.dsp-row .stag-departed { opacity: .45; }
+
+/* Door cell — OK/conflict state */
+.dc-door-ok      { color: var(--green); font-weight: 600; }
+.dc-door-conflict{ color: var(--red); font-weight: 600; }
+.dc-door-empty   { color: rgba(255,255,255,.2); font-style: italic; }
+
+/* KPI tiles — color per status */
+.kpi-loading  { border-color: rgba(245,166,35,.3) !important; background: rgba(245,166,35,.06) !important; }
+.kpi-loading .kpi-val { color: var(--amber) !important; }
+.kpi-dockready{ border-color: rgba(24,212,232,.3) !important; background: rgba(24,212,232,.06) !important; }
+.kpi-dockready .kpi-val { color: var(--cyan) !important; }
+.kpi-ready    { border-color: rgba(25,224,154,.3) !important; background: rgba(25,224,154,.06) !important; }
+.kpi-ready .kpi-val { color: var(--green) !important; }
+
+/* Header — DISPATCHER / ADMIN chip */
+.role-dispatcher #userRoleChip,
+.role-admin #userRoleChip { color: var(--amber); border-color: rgba(245,166,35,.4); background: rgba(245,166,35,.08); }
+.role-admin #userRoleChip { color: var(--red); border-color: rgba(240,74,74,.4); background: rgba(240,74,74,.08); }
 

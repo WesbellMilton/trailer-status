@@ -343,62 +343,73 @@
       const readyFlash=((ROLE==="dispatcher"||ROLE==="management")&&!readOnly&&r.status==="Ready")?" ready-flash":"";
       const dockReadyFlash=((ROLE==="dispatcher"||ROLE==="management")&&!readOnly&&r.status==="Dock Ready")?" dockready-flash":"";
       const omwRowCls=omwActive?" r-omw":"";
-      const door=r.door?`<span class="t-door">${esc(r.door)}</span>`:`<span style="color:var(--t3)">—</span>`;
-      const dtype=r.dropType?`<span style="font-size:10px;color:var(--t2);font-family:var(--mono);">${esc(r.dropType)}</span>`:`<span style="color:var(--t3)">—</span>`;
-      const ctag=carrierTag(r.carrierType);
       const ago=r.updatedAt?timeAgo(r.updatedAt):"";
-      const omwBadge=r.omwAt&&r.status==="Incoming"?(()=>{
+
+      // ── OMW badge ──
+      const omwBadge=omwActive?(()=>{
         const rem=r.omwEta?Math.max(0,Math.ceil((r.omwAt+r.omwEta*60000-Date.now())/60000)):null;
         const arriving=rem===0;
         const etaTxt=rem===null?"OMW":arriving?"Arriving now":`~${rem}m`;
         const arrivedAt=r.omwAt&&r.omwEta?r.omwAt+r.omwEta*60000:null;
-        return`<span class="omw-badge${arriving?" omw-arriving":""}"${arrivedAt?` data-arrives="${arrivedAt}"`:""}>🚛 OMW ${etaTxt}</span>`;
+        return`<span class="omw-badge${arriving?" omw-arriving":""}"${arrivedAt?` data-arrives="${arrivedAt}"`:""}>🚛 ${etaTxt}</span>`;
       })():"";
-      const doorAge=r.doorAt&&r.door?`<span class="door-age" title="At door ${timeAgo(r.doorAt)}">${timeAgo(r.doorAt)}</span>`:"";
-      const noteHtml=canEdit
-        ?`<span class="t-note-edit" data-trailer="${esc(r.trailer)}" data-note="${esc(r.note||"")}" title="Click to edit note">${r.note?`<span class="t-note">${esc(r.note)}</span>`:`<span style="color:var(--t3);font-style:italic">add note…</span>`}</span>`
-        :(r.note?`<span class="t-note" title="${esc(r.note)}">${esc(r.note)}</span>`:`<span style="color:var(--t3)">—</span>`);
-      // Dir as compact inline badge; compact overflow menu replaces 4 buttons
-      const dirBadge=r.direction?`<span class="t-dir-badge t-dir-${(r.direction||"").toLowerCase().replace(/\s+/g,"-")}">${esc(r.direction)}</span>`:"";
-      let acts=`<span style="color:var(--t3)">—</span>`;
-      if(canEdit){
-        const nexts=NEXT_STATUS[r.status]||[];
-        const primaryStatus=nexts[0];
-        const primaryCls=primaryStatus==="Ready"?"btn-success":primaryStatus==="Dock Ready"?"btn-cyan":"btn-primary";
-        const primaryBtn=primaryStatus?`<button class="btn ${primaryCls} btn-sm" data-act="quickStatus" data-to="${esc(primaryStatus)}" data-trailer-id="${esc(r.trailer)}">${esc(primaryStatus)}</button>`:"";
-        const ovfItems=[
-          ...nexts.slice(1).map(s=>`<button class="t-ovf-item" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}">${esc(s)}</button>`),
-          r.status==="Dock Ready"?`<button class="t-ovf-item t-ovf-success" data-act="markReady" data-trailer-id="${esc(r.trailer)}">✓ Ready</button>`:"",
-          `<div class="t-ovf-sep"></div>`,
-          `<button class="t-ovf-item" data-act="shuntToggle" data-trailer-id="${esc(r.trailer)}">Move door</button>`,
-          `<button class="t-ovf-item" data-act="edit" data-trailer-id="${esc(r.trailer)}">Edit</button>`,
-          `<button class="t-ovf-item t-ovf-danger" data-act="delete" data-trailer-id="${esc(r.trailer)}">Delete</button>`,
-        ].filter(Boolean).join("");
-        acts=`<div class="t-acts">${primaryBtn}<div class="t-ovf-wrap"><button class="btn btn-default btn-sm t-ovf-btn" data-act="ovfToggle" data-trailer-id="${esc(r.trailer)}" aria-label="More">···</button><div class="t-ovf-menu" id="ovf-${esc(r.trailer)}" style="display:none;">${ovfItems}</div></div></div>`;
-      } else if(canDock){
-        if(r.status==="Dropped"||r.status==="Incoming")
-          acts=`<div class="t-acts"><button class="btn btn-default btn-sm" data-act="dockSet" data-to="Loading" data-trailer-id="${esc(r.trailer)}">Loading</button></div>`;
-        else if(r.status==="Loading")
-          acts=`<div class="t-acts"><button class="btn btn-cyan btn-sm" data-act="dockSet" data-to="Dock Ready" data-trailer-id="${esc(r.trailer)}">Dock Ready</button></div>`;
-        else
-          acts=`<span style="color:var(--t3);font-size:10px;font-family:var(--mono);">${esc(r.status==="Dock Ready"?"Awaiting dispatch":r.status==="Ready"?"Ready":"—")}</span>`;
-      }
-      const shuntPickerHtml=(shuntOpen[r.trailer]&&canEdit)?(()=>{
+
+      // ── Direction badge ──
+      const dirBadge=r.direction?`<span class="t-dir-badge t-dir-${(r.direction||"").toLowerCase().replace(/\s+/g,"-")}">${esc(r.direction[0])}</span>`:"";
+
+      // ── Door cell — clickable, color shows availability ──
+      const doorOccupant=r.door?occupied[r.door]:null;
+      const doorByOther=doorOccupant&&doorOccupant.trailer!==r.trailer;
+      const doorCls=r.door?(doorByOther?"t-door t-door-conflict":"t-door t-door-ok"):"t-door t-door-empty";
+      const doorLabel=r.door?`D${esc(r.door)}`:"—";
+      const doorCell=canEdit
+        ?`<button class="row-door-btn ${doorCls}" data-act="doorPick" data-trailer-id="${esc(r.trailer)}" title="${r.door?(doorByOther?"Door conflict — occupied by another trailer":"Door assigned"):"Click to assign door"}">${doorLabel}</button>`
+        :`<span class="${doorCls}">${doorLabel}</span>`;
+
+      // ── Inline door picker ──
+      const doorPickerHtml=(shuntOpen[r.trailer]&&canEdit)?(()=>{
         const doors=Array.from({length:15},(_,i)=>i+28).map(d=>{
           const ds=String(d),isCur=ds===(r.door||""),isOcc=!!occupied[ds]&&!isCur;
           const cls="shunt-door-btn"+(isCur?" current":"")+(isOcc?" occ":"");
           return`<button class="${cls}" data-act="shuntDoor" data-door="${ds}" data-trailer-id="${esc(r.trailer)}"${isCur?" disabled":""}>${ds}${isOcc?'<span class="shunt-occ-dot"></span>':""}</button>`;
         }).join("");
-        return`<div class="shunt-picker" data-shunt-trailer="${esc(r.trailer)}"><span class="shunt-label">Move to door:</span><div class="shunt-doors">${doors}</div><button class="btn btn-default btn-sm" data-act="shuntToggle" data-trailer-id="${esc(r.trailer)}" style="margin-top:4px;">Cancel</button></div>`;
+        return`<div class="inline-door-picker"><div class="shunt-doors">${doors}</div><button class="btn btn-default btn-xs" data-act="shuntToggle" data-trailer-id="${esc(r.trailer)}">✕ Cancel</button></div>`;
       })():"";
+
+      // ── Note ──
+      const noteHtml=canEdit
+        ?`<span class="t-note-edit" data-trailer="${esc(r.trailer)}" data-note="${esc(r.note||"")}" title="Click to edit">${r.note?`<span class="t-note">${esc(r.note)}</span>`:`<span class="t-note-empty">add note…</span>`}</span>`
+        :(r.note?`<span class="t-note" title="${esc(r.note)}">${esc(r.note)}</span>`:`<span style="color:var(--t3)">—</span>`);
+
+      // ── Status action buttons — all visible, no overflow menu ──
+      let actsHtml="";
+      if(canEdit){
+        const nexts=NEXT_STATUS[r.status]||[];
+        const btnCls={
+          "Dropped":"btn-primary","Loading":"btn-primary","Dock Ready":"btn-cyan",
+          "Ready":"btn-success","Departed":"btn-default","Incoming":"btn-default"
+        };
+        const statusBtns=nexts.map(s=>`<button class="btn ${btnCls[s]||"btn-primary"} btn-sm row-act-btn" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(r.trailer)}">${esc(s)}</button>`).join("");
+        const editBtn=`<button class="btn btn-default btn-xs row-util-btn" data-act="edit" data-trailer-id="${esc(r.trailer)}" title="Edit">✎</button>`;
+        const delBtn=`<button class="btn btn-default btn-xs row-util-btn row-del-btn" data-act="delete" data-trailer-id="${esc(r.trailer)}" title="Delete">✕</button>`;
+        actsHtml=`<div class="row-acts">${statusBtns}<div class="row-util">${editBtn}${delBtn}</div></div>`;
+      } else if(canDock){
+        if(r.status==="Dropped"||r.status==="Incoming")
+          actsHtml=`<div class="row-acts"><button class="btn btn-primary btn-sm row-act-btn" data-act="dockSet" data-to="Loading" data-trailer-id="${esc(r.trailer)}">Loading</button></div>`;
+        else if(r.status==="Loading")
+          actsHtml=`<div class="row-acts"><button class="btn btn-cyan btn-sm row-act-btn" data-act="dockSet" data-to="Dock Ready" data-trailer-id="${esc(r.trailer)}">Dock Ready</button></div>`;
+        else
+          actsHtml=`<span style="color:var(--t3);font-size:10px;font-family:var(--mono);">${esc(r.status==="Dock Ready"?"Awaiting dispatch":r.status==="Ready"?"Ready":"—")}</span>`;
+      }
+
       return`<div class="tbl-row ${rowCls}${flash}${readyFlash}${dockReadyFlash}${omwRowCls}${r.carrierType==="Outside"?" carrier-outside":""}" data-trailer="${esc(r.trailer)}">
-        <span class="t-num">${esc(r.trailer)}${dirBadge}${omwBadge}</span>
+        <span class="t-num">${dirBadge}${esc(r.trailer)}${omwBadge}</span>
         <span class="t-status">${statusTag(r.status)}</span>
-        <span class="t-door-cell">${door}${doorAge}</span>
+        <span class="t-door-cell">${doorCell}${doorPickerHtml}</span>
         <span class="t-note-cell">${noteHtml}</span>
         <span class="t-time" title="${esc(fmtTime(r.updatedAt))}">${esc(ago)}</span>
-        <div class="t-acts-wrap">${acts}</div>
-      </div>${shuntPickerHtml}`;
+        <div class="t-acts-wrap">${actsHtml}</div>
+      </div>`;
     }).join("");
   }
 
@@ -1470,7 +1481,7 @@
       menu.style.display=isOpen?"none":"block";
       return;
     }
-    if(act==="shuntToggle"&&trId){shuntOpen[trId]=!shuntOpen[trId];renderBoard();return;}
+    if((act==="shuntToggle"||act==="doorPick")&&trId){shuntOpen[trId]=!shuntOpen[trId];renderBoard();return;}
     if(act==="shuntDoor"&&trId){const door=direct?.dataset?.door||direct?.closest?.("[data-door]")?.dataset?.door;if(door)return shuntTrailer(trId,door);}
     if(act==="delete"&&trId)return dispDelete(trId);
     if(act==="quickStatus"){const to=direct?.dataset?.to||direct?.closest?.("[data-to]")?.dataset?.to;if(trId&&to)return quickStatus(trId,to);}

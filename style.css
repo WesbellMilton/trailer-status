@@ -3029,7 +3029,7 @@ img,video,embed,object,iframe {
 .dsp-row .dc-door{font-family:var(--mono);font-size:11px;text-align:center;}
 .dsp-row .dc-age{font-family:var(--mono);font-size:10px;color:var(--t3);}
 .dsp-row .dc-note{color:var(--t2);font-size:11px;}
-.dsp-row .dc-acts{display:flex;gap:3px;align-items:center;}
+.dsp-row .dc-acts{display:flex;gap:3px;align-items:center;overflow:visible;white-space:normal;}
 
 /* inline next-status buttons on row */
 .dsp-next-btn{
@@ -3208,6 +3208,7 @@ img,video,embed,object,iframe {
 .dsp-row .stag{font-size:10px;}
 .dsp-row .omw-badge{font-size:9px;}
 .dsp-row .t-dir-badge{font-size:9px;}
+.dsp-row .dc-acts{overflow:visible;white-space:normal;}
 
 /* flashing animations reuse existing */
 .dsp-row.flashing{animation:rowFlash .6s ease;}

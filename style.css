@@ -781,7 +781,7 @@ textarea{min-height:60px;resize:vertical}
 /* ═══════════════════════════════════════════
    DOCK VIEW
 ═══════════════════════════════════════════ */
-.dock-shell{min-height:100vh;background:var(--bg);display:flex;flex-direction:column;max-width:680px;margin:0 auto;padding:0 0 80px}
+.dock-shell{min-height:100vh;min-height:100dvh;background:var(--bg);display:flex;flex-direction:column;max-width:680px;margin:0 auto;padding:0 0 80px}
 
 .dock-toolbar{
   display:flex;align-items:center;gap:12px;padding:10px 16px;
@@ -2893,6 +2893,7 @@ img,video,embed,object,iframe {
 .dsp-workspace{
   display:flex;
   height:calc(100vh - 54px);
+  height:calc(100dvh - 54px);
   overflow:hidden;
 }
 
@@ -4026,6 +4027,10 @@ img,video,embed,object,iframe {
 #ts-s-waiting .ts-door-ring {
   animation: ts-ring-pulse-amber 2.5s ease-in-out infinite;
 }
+@media(max-width:768px){
+  #ts-s-waiting .ts-door-hero { padding-top:20px; }
+  #ts-s-waiting > div:last-child { padding-bottom:max(32px, env(safe-area-inset-bottom)); }
+}
 @keyframes ts-ring-pulse-amber {
   0%,100% { box-shadow: 0 0 40px rgba(245,166,35,.12), inset 0 0 0 1px rgba(245,166,35,.15); }
   50%      { box-shadow: 0 0 70px rgba(245,166,35,.28), inset 0 0 0 1px rgba(245,166,35,.35); }
@@ -4618,22 +4623,39 @@ select option { background: #0d1119; }
 ═══════════════════════════════════════════ */
 @media(max-width:768px){
 
-  /* Stack workspace vertically */
+  /* Stack workspace vertically — use full dynamic viewport */
   .dsp-workspace{
     flex-direction:column;
-    height:auto;
-    min-height:calc(100vh - 54px);
+    height:calc(100dvh - 54px);
+    overflow:hidden;
   }
 
-  /* Left column: full width, no fixed height */
+  /* Left column: full width, flex column, fills remaining height */
   .dsp-left{
-    flex:none;
+    flex:1;
+    min-height:0;
     width:100%;
     border-right:none;
-    border-bottom:1px solid var(--divider);
+    border-bottom:none;
     display:flex;
     flex-direction:column;
+    overflow:hidden;
+  }
+
+  /* Rows area: scrollable on mobile */
+  .dsp-rows-area{
+    flex:1;
     min-height:0;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+
+  /* Panels area: capped at 35vh so rows always visible */
+  .dsp-panels-area{
+    max-height:35vh;
+    flex-shrink:0;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
   }
 
   /* Body scrolls naturally on mobile */
@@ -4761,13 +4783,15 @@ select option { background: #0d1119; }
   /* Default (role controls) stays hidden on mobile until needed */
   .dsp-right-default{display:none !important;}
 
-  /* Dock plates panel — always show above bottom sheet */
+  /* Dock plates panel — pinned at bottom, above nav */
   .dsp-plates{
     position:sticky;
     bottom:0;
     z-index:200;
     background:rgba(5,8,13,.97);
   }
+  /* Add bottom padding to scroll area so content clears nav */
+  .dsp-rows-area{ padding-bottom:8px; }
 
   /* Status bar — compact */
   .dsp-statusbar{
@@ -4778,10 +4802,11 @@ select option { background: #0d1119; }
 
 
   /* Detail panel sizing inside sheet */
-  .dsp-detail{max-height:75vh;}
+  .dsp-detail{max-height:75vh;overflow-y:auto;-webkit-overflow-scrolling:touch;}
   .dsd-hd{padding:14px 16px 12px;position:sticky;top:0;background:rgba(7,9,14,.98);z-index:1;}
   .dsd-trailer-id{font-size:22px;}
-  .dsd-door-grid{grid-template-columns:repeat(5,1fr) !important;}
+  /* Sheet safe-area bottom */
+  .dsp-right { padding-bottom:max(16px, env(safe-area-inset-bottom)); }
 }
 
 /* ─── 480px: further compact ─── */
@@ -4793,9 +4818,13 @@ select option { background: #0d1119; }
   .dsp-row .dc-id{font-size:16px;}
   .dsp-plates-grid{
     grid-template-columns:repeat(5,1fr);
-    gap:3px;
-    padding:6px 12px 10px;
+    gap:2px;
+    padding:4px 10px 8px;
   }
+  .dsp-plate-btn { min-height:38px; padding:3px 3px 2px; }
+  .dpb-door { font-size:8px; }
+  .dpb-status-icon { font-size:11px; }
+  .dpb-edit-btn { font-size:7px; padding:1px 4px; min-height:18px; }
 }
 
 
@@ -4838,6 +4867,11 @@ select option { background: #0d1119; }
   grid-template-columns: repeat(5, 1fr);
   gap: 5px;
   padding: 8px 12px 12px;
+}
+@media(max-width:480px){
+  .dvp-grid { grid-template-columns:repeat(4,1fr); gap:4px; padding:6px 10px 10px; }
+  .dvp-card { min-height:60px; padding:6px 4px 5px; }
+  .dvp-status-badge { font-size:15px; }
 }
 
 /* ── Door card ── */
@@ -5588,3 +5622,10 @@ select option { background: #0d1119; }
   font-size: 10px;
 }
 .adm-acc:hover { color: var(--t1); }
+
+/* ── Touch: plate buttons tappable ── */
+@media(pointer:coarse){
+  .dsp-plate-btn { min-height:42px; }
+  .dpb-edit-btn { min-height:24px; padding:3px 6px; font-size:9px; }
+  .dvp-edit-open-btn { min-height:32px !important; }
+}

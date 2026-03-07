@@ -1947,15 +1947,34 @@
   function startGpsTracking(trailer){
     if(!navigator.geolocation){updateGpsCard("denied");return;}
     updateGpsCard("requesting");
+    let _lastSentAt=0;
+    const MIN_SEND_INTERVAL=15000;  // never send more than once per 15s
+    const MIN_DISTANCE_M=30;        // only send if moved >30m
+
+    function _maybeSend(pos){
+      const lat=pos.coords.latitude,lng=pos.coords.longitude;
+      const now=Date.now();
+      // Distance filter — skip if barely moved
+      if(_lastLat!==null){
+        const dLat=(lat-_lastLat)*111320,dLng=(lng-_lastLng)*111320*Math.cos(lat*Math.PI/180);
+        if(Math.sqrt(dLat*dLat+dLng*dLng)<MIN_DISTANCE_M&&now-_lastSentAt<60000)return;
+      }
+      _lastLat=lat;_lastLng=lng;
+      if(now-_lastSentAt<MIN_SEND_INTERVAL)return;
+      _lastSentAt=now;
+      sendLocation(trailer);
+    }
+
     navigator.geolocation.getCurrentPosition(
       pos=>{_lastLat=pos.coords.latitude;_lastLng=pos.coords.longitude;sendLocation(trailer);updateGpsCard("active");},
       err=>{updateGpsCard(err.code===1?"denied":"unavailable");},
       {enableHighAccuracy:true,timeout:10000,maximumAge:30000}
     );
     _locWatcher=navigator.geolocation.watchPosition(
-      pos=>{_lastLat=pos.coords.latitude;_lastLng=pos.coords.longitude;},
+      pos=>{_maybeSend(pos);},
       ()=>{},{enableHighAccuracy:true,timeout:10000,maximumAge:15000}
     );
+    // Fallback heartbeat — guarantees a send every 30s even if not moving
     _locInterval=setInterval(()=>{if(_lastLat!==null)sendLocation(trailer);},30000);
   }
 

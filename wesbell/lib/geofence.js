@@ -48,12 +48,46 @@ function getActiveZones(lat, lng) {
 }
 
 /**
- * getEtaMinutes(lat, lng, zone) → number
- * Rough ETA in minutes at average yard-approach speed (40 km/h).
+ * getEtaMinutes(lat, lng, zone) → Promise<number>
+ * Road-accurate ETA via OSRM public API (no key required).
+ * Falls back to haversine ÷ 40 km/h if the request fails.
+ * Results are cached 60s per coordinate pair to avoid hammering the API.
  */
-function getEtaMinutes(lat, lng, zone) {
-  const km = haversineKm(lat, lng, zone.lat, zone.lng);
-  return Math.max(1, Math.round(km / (40 / 60)));
+const _etaCache = new Map();  // key → { eta, expiresAt }
+const OSRM_BASE = process.env.OSRM_URL || 'https://router.project-osrm.org';
+
+async function getEtaMinutes(lat, lng, zone) {
+  const destLat = zone.lat;
+  const destLng = zone.lng;
+
+  // Cache key rounded to ~11m precision (4 decimal places)
+  const cacheKey = `${lat.toFixed(4)},${lng.toFixed(4)}->${destLat},${destLng}`;
+  const cached = _etaCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.eta;
+
+  try {
+    const url = `${OSRM_BASE}/route/v1/driving/${lng},${lat};${destLng},${destLat}?overview=false&alternatives=false`;
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 3000);
+    const resp = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(timeout);
+    if (!resp.ok) throw new Error(`OSRM ${resp.status}`);
+    const data = await resp.json();
+    if (data.code !== 'Ok' || !data.routes?.[0]) throw new Error('No route');
+    // duration is in seconds
+    const etaMin = Math.max(1, Math.ceil(data.routes[0].duration / 60));
+    _etaCache.set(cacheKey, { eta: etaMin, expiresAt: Date.now() + 60_000 });
+    // Prune old cache entries
+    if (_etaCache.size > 500) {
+      const now = Date.now();
+      for (const [k, v] of _etaCache) { if (v.expiresAt < now) _etaCache.delete(k); }
+    }
+    return etaMin;
+  } catch {
+    // Fallback: haversine at 40 km/h
+    const km = haversineKm(lat, lng, destLat, destLng);
+    return Math.max(1, Math.round(km / (40 / 60)));
+  }
 }
 
 // ── Server-side geofence event handler ───────────────────────────────────────
@@ -69,7 +103,7 @@ async function processLocation({ trailer, lat, lng, req }) {
 
   // Broadcast live location to dispatch/dock clients
   const depotZone = GEOFENCE_ZONES.find(z => z.id === 'depot');
-  const eta       = depotZone ? getEtaMinutes(lat, lng, depotZone) : null;
+  const eta       = depotZone ? await getEtaMinutes(lat, lng, depotZone) : null;
 
   wsBroadcast('location', { trailer, lat, lng, eta, zones: zoneIds, locAt: Date.now() });
 

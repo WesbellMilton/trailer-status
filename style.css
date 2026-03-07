@@ -4542,3 +4542,199 @@ select option { background: #0d1119; }
   border-radius: 10px;
 }
 
+
+/* ═══════════════════════════════════════════
+   DISPATCH VIEW — MOBILE (≤768px)
+   Split layout collapses: right panel becomes
+   a bottom sheet, table goes full width
+═══════════════════════════════════════════ */
+@media(max-width:768px){
+
+  /* Stack workspace vertically */
+  .dsp-workspace{
+    flex-direction:column;
+    height:auto;
+    min-height:calc(100vh - 54px);
+  }
+
+  /* Left column: full width, no fixed height */
+  .dsp-left{
+    flex:none;
+    width:100%;
+    border-right:none;
+    border-bottom:1px solid var(--divider);
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+  }
+
+  /* Body scrolls naturally on mobile */
+  .dsp-body{
+    max-height:none;
+    overflow:visible;
+    flex:none;
+  }
+
+  /* Toolbar wraps on mobile */
+  .dsp-toolbar{
+    flex-wrap:wrap;
+    gap:6px;
+    padding:8px 12px;
+    min-height:auto;
+  }
+  .dsp-kpis{
+    order:1;
+    width:100%;
+    overflow-x:auto;
+    gap:4px;
+    padding-bottom:4px;
+    scrollbar-width:none;
+  }
+  .dsp-kpis::-webkit-scrollbar{display:none}
+  .dsp-toolbar-right{
+    order:2;
+    width:100%;
+    flex-wrap:wrap;
+    gap:5px;
+  }
+  .dsp-search{
+    flex:1 1 120px;
+    min-width:100px;
+  }
+
+  /* Table header hidden on mobile — cards show all info */
+  .dsp-hd{display:none !important;}
+
+  /* Rows become cards on mobile */
+  .dsp-row{
+    grid-template-columns:1fr auto !important;
+    grid-template-rows:auto auto auto;
+    min-height:auto;
+    padding:12px 14px;
+    gap:0;
+    border-left-width:3px;
+  }
+  .dsp-row .dc-id{
+    grid-column:1;
+    grid-row:1;
+    font-size:18px;
+    font-weight:500;
+    margin-bottom:4px;
+  }
+  /* Status tag top-right */
+  .dsp-row > span:nth-child(2){
+    grid-column:2;
+    grid-row:1;
+    text-align:right;
+  }
+  /* Door */
+  .dsp-row .dc-door-ok,
+  .dsp-row .dc-door-empty,
+  .dsp-row .dc-door-conflict{
+    grid-column:1;
+    grid-row:2;
+    font-size:12px;
+    margin-bottom:3px;
+  }
+  /* Note */
+  .dsp-row .dc-note{
+    grid-column:1/-1;
+    grid-row:3;
+    white-space:normal;
+    margin-bottom:5px;
+    font-size:11px;
+  }
+  /* Age — hidden on mobile to save space */
+  .dsp-row .dc-age{display:none;}
+  /* Actions — full width row */
+  .dsp-row .dc-acts{
+    grid-column:1/-1;
+    grid-row:4;
+    gap:5px;
+    flex-wrap:wrap;
+    margin-top:4px;
+  }
+  .dsp-next-btn{
+    flex:1 1 auto;
+    min-height:38px;
+    font-size:11px;
+    padding:6px 12px;
+  }
+
+  /* Right panel becomes bottom sheet */
+  .dsp-right{
+    position:fixed;
+    bottom:0;left:0;right:0;
+    width:100% !important;
+    max-height:75vh;
+    border-left:none;
+    border-top:1px solid var(--divider);
+    border-radius:16px 16px 0 0;
+    z-index:300;
+    transform:translateY(100%);
+    transition:transform .3s cubic-bezier(.32,0,.15,1);
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  /* Drag handle */
+  .dsp-right::before{
+    content:"";
+    display:block;
+    width:36px;height:4px;
+    background:rgba(255,255,255,.15);
+    border-radius:2px;
+    margin:10px auto 0;
+  }
+  /* When a trailer is selected, slide up */
+  .dsp-right.panel-open{
+    transform:translateY(0);
+  }
+  /* Default (role controls) stays hidden on mobile until needed */
+  .dsp-right-default{display:none !important;}
+
+  /* Dock plates panel — always show above bottom sheet */
+  .dsp-plates{
+    position:sticky;
+    bottom:0;
+    z-index:200;
+    background:rgba(5,8,13,.97);
+  }
+
+  /* Status bar — compact */
+  .dsp-statusbar{
+    font-size:9px;
+    padding:3px 12px;
+  }
+
+  /* Quick-add bar stacks */
+  .dsp-qabar{
+    flex-wrap:wrap;
+    gap:6px;
+    padding:8px 12px;
+  }
+  .dsp-qa-in{flex:1 1 80px;min-width:60px;padding:8px 10px;font-size:15px;}
+  .dsp-qa-sel{flex:1 1 80px;min-width:60px;padding:8px 10px;font-size:15px;}
+  .dsp-qa-btn{width:100%;min-height:42px;padding:10px;font-size:12px;margin-top:2px;}
+  .dsp-qa-label{width:100%;}
+
+  /* Detail panel sizing inside sheet */
+  .dsp-detail{max-height:75vh;}
+  .dsd-hd{padding:14px 16px 12px;position:sticky;top:0;background:rgba(7,9,14,.98);z-index:1;}
+  .dsd-trailer-id{font-size:22px;}
+  .dsd-door-grid{grid-template-columns:repeat(5,1fr) !important;}
+}
+
+/* ─── 480px: further compact ─── */
+@media(max-width:480px){
+  .dsp-kpis .kpi-tile{padding:3px 8px;}
+  .dsp-kpis .kpi-tile .kpi-val{font-size:13px;}
+  .dsp-kpis .kpi-tile .kpi-label{font-size:8px;}
+  .dsp-tbtn{padding:4px 8px;font-size:9px;}
+  .dsp-row .dc-id{font-size:16px;}
+  .dsp-plates-grid{
+    grid-template-columns:repeat(5,1fr);
+    gap:3px;
+    padding:6px 12px 10px;
+  }
+}

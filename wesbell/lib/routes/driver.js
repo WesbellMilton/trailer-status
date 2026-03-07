@@ -8,13 +8,13 @@ const { pickBestDoor, reserveDoor, releaseReservation } = require('../doors');
 const { processLocation }      = require('../geofence');
 const { fireWebhook }          = require('../helpers');
 
-const mw = require('../middleware');   // requireXHR, requireDriverRate
-const au = require('../auth');         // requireDriverAccess
+const { requireXHR, requireDriverRate } = require('../middleware');
+const { requireDriverAccess } = require('../auth');
 
 const router = Router();
 
 // ── /api/driver/omw ───────────────────────────────────────────────────────────
-router.post('/api/driver/omw', requireXHR, mw.requireDriverRate, async (req, res) => {
+router.post('/api/driver/omw', requireXHR, requireDriverRate, async (req, res) => {
   try {
     const trailer = String(req.body.trailer || '').trim().toUpperCase();
     const eta     = parseInt(req.body.eta) || null;
@@ -84,7 +84,7 @@ router.get('/api/available-doors', async (req, res) => {
 });
 
 // ── /api/driver/arrive ────────────────────────────────────────────────────────
-router.post('/api/driver/arrive', requireXHR, mw.requireDriverRate, async (req, res) => {
+router.post('/api/driver/arrive', requireXHR, requireDriverRate, async (req, res) => {
   try {
     const trailer     = String(req.body.trailer     || '').trim().toUpperCase();
     const carrierType = String(req.body.carrierType || 'Outside').trim();
@@ -127,7 +127,7 @@ router.post('/api/driver/arrive', requireXHR, mw.requireDriverRate, async (req, 
 });
 
 // ── /api/driver/drop ──────────────────────────────────────────────────────────
-router.post('/api/driver/drop', requireXHR, mw.requireDriverRate, au.requireDriverAccess, async (req, res) => {
+router.post('/api/driver/drop', requireXHR, requireDriverRate, requireDriverAccess, async (req, res) => {
   try {
     const trailer     = String(req.body.trailer     || '').trim().toUpperCase();
     const door        = String(req.body.door        || '').trim();
@@ -168,7 +168,7 @@ router.post('/api/driver/drop', requireXHR, mw.requireDriverRate, au.requireDriv
 });
 
 // ── /api/crossdock/pickup ─────────────────────────────────────────────────────
-router.post('/api/crossdock/pickup', requireXHR, mw.requireDriverRate, au.requireDriverAccess, async (req, res) => {
+router.post('/api/crossdock/pickup', requireXHR, requireDriverRate, requireDriverAccess, async (req, res) => {
   try {
     const trailer = String(req.body.trailer || '').trim().toUpperCase();
     const door    = String(req.body.door    || '').trim();
@@ -191,7 +191,7 @@ router.post('/api/crossdock/pickup', requireXHR, mw.requireDriverRate, au.requir
 });
 
 // ── /api/crossdock/offload ────────────────────────────────────────────────────
-router.post('/api/crossdock/offload', requireXHR, mw.requireDriverRate, au.requireDriverAccess, async (req, res) => {
+router.post('/api/crossdock/offload', requireXHR, requireDriverRate, requireDriverAccess, async (req, res) => {
   try {
     const trailer = String(req.body.trailer || '').trim().toUpperCase();
     const door    = String(req.body.door    || '').trim();
@@ -221,7 +221,7 @@ router.post('/api/crossdock/offload', requireXHR, mw.requireDriverRate, au.requi
 });
 
 // ── /api/driver/location (GPS + geofencing) ────────────────────────────────────
-router.post('/api/driver/location', requireXHR, mw.requireDriverRate, async (req, res) => {
+router.post('/api/driver/location', requireXHR, requireDriverRate, async (req, res) => {
   try {
     const trailer = String(req.body.trailer || '').trim().toUpperCase();
     const lat     = parseFloat(req.body.lat);
@@ -268,7 +268,7 @@ router.post('/api/driver/location', requireXHR, mw.requireDriverRate, async (req
 });
 
 // ── /api/driver/shunt ─────────────────────────────────────────────────────────
-router.post('/api/driver/shunt', requireXHR, mw.requireDriverRate, async (req, res) => {
+router.post('/api/driver/shunt', requireXHR, requireDriverRate, async (req, res) => {
   try {
     const trailer = String(req.body.trailer || '').trim().toUpperCase();
     const door    = String(req.body.door || req.body.newDoor || '').trim();
@@ -285,7 +285,7 @@ router.post('/api/driver/shunt', requireXHR, mw.requireDriverRate, async (req, r
 });
 
 // ── /api/confirm-safety ────────────────────────────────────────────────────────
-router.post('/api/confirm-safety', requireXHR, au.requireDriverAccess, async (req, res) => {
+router.post('/api/confirm-safety', requireXHR, requireDriverAccess, async (req, res) => {
   try {
     const trailer     = String(req.body.trailer    || '').trim().toUpperCase();
     const door        = String(req.body.door       || '').trim();
@@ -317,7 +317,7 @@ router.post('/api/confirm-safety', requireXHR, au.requireDriverAccess, async (re
  * Payload: { trailer, door?, action, scannedBy? }
  * Supported actions: 'arrive', 'depart', 'status/<status>', 'door/<n>'
  */
-router.post('/api/qr/scan', requireXHR, mw.requireDriverRate, async (req, res) => {
+router.post('/api/qr/scan', requireXHR, requireDriverRate, async (req, res) => {
   try {
     const trailer   = String(req.body.trailer   || '').trim().toUpperCase();
     const door      = String(req.body.door      || '').trim();

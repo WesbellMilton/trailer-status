@@ -4,7 +4,7 @@ const { run, get, all } = require('../db');
 const { audit }                = require('../helpers');
 const { broadcastTrailers, wsBroadcast } = require('../ws');
 const { broadcastPush }        = require('../push');
-const { pickBestDoor, reserveDoor, releaseReservation } = require('../doors');
+const { pickBestDoor, reserveDoor, releaseReservation, extendReservation } = require('../doors');
 const { processLocation }      = require('../geofence');
 const { fireWebhook }          = require('../helpers');
 
@@ -28,7 +28,9 @@ router.post('/api/driver/omw', requireXHR, requireDriverRate, async (req, res) =
 
     const assignedDoor = await pickBestDoor(trailer);
     if (!assignedDoor) return res.status(409).send('No doors available right now. Please ask dispatch.');
-    await reserveDoor(assignedDoor, trailer, 'Wesbell');
+    // Hold door for ETA + 5 min grace (minimum 35 min if no ETA given)
+    const holdMinutes  = eta ? eta + 5 : 35;
+    await reserveDoor(assignedDoor, trailer, 'Wesbell', holdMinutes);
 
     const note = eta ? `ETA ~${eta} min` : 'On my way';
     const now  = Date.now();
@@ -241,6 +243,15 @@ router.post('/api/driver/location', requireXHR, requireDriverRate, async (req, r
       await run(`UPDATE trailers SET omwEta=?,updatedAt=? WHERE trailer=? AND status='Incoming'`, [eta, Date.now(), trailer]);
 
     const { zones, eta: computedEta, autoTriggered } = await processLocation({ trailer, lat, lng, req });
+
+    // Extend door reservation: ETA + 5 min grace, recomputed on every ping
+    const liveEta = computedEta ?? eta;
+    if (liveEta != null) {
+      await extendReservation(trailer, liveEta).catch(() => {});
+      // Also persist the computed ETA so dispatch board shows accurate value
+      if (computedEta != null && computedEta !== eta)
+        await run(`UPDATE trailers SET omwEta=?,updatedAt=? WHERE trailer=? AND status='Incoming'`, [computedEta, Date.now(), trailer]);
+    }
 
     // If geofence says auto-arrive, fire the arrive logic
     if (autoTriggered && !row.door) {

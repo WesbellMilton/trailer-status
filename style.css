@@ -5134,7 +5134,16 @@ select option { background: #0d1119; }
 /* ═══════════════════════════════════════════════════════════════
    DOCK VIEW CARD — richer colors
 ═══════════════════════════════════════════════════════════════ */
-#dockView .dv-card.dv-loading  { border-left-color: var(--amber); background: rgba(245,166,35,.05); }
+#dockView .dv-card.dv-loading  {
+  border-left-color: var(--amber);
+  background: rgba(245,166,35,.07);
+  box-shadow: 0 0 16px rgba(245,166,35,.08);
+  animation: dv-loading-pulse 2.2s ease-in-out infinite;
+}
+@keyframes dv-loading-pulse {
+  0%,100% { box-shadow: 0 0 16px rgba(245,166,35,.08); }
+  50%      { box-shadow: 0 0 28px rgba(245,166,35,.18); }
+}
 #dockView .dv-card.dv-dockready{ border-left-color: var(--cyan);  background: rgba(24,212,232,.05); }
 #dockView .dv-card.dv-ready    { border-left-color: var(--green); background: rgba(25,224,154,.05); box-shadow: 0 0 12px rgba(25,224,154,.07); }
 #dockView .dv-card.dv-dropped  { border-left-color: var(--violet);background: rgba(166,124,245,.04); }
@@ -5187,7 +5196,12 @@ select option { background: #0d1119; }
 /* Richer status row backgrounds + left bars */
 .dsp-row.r-loading {
   border-left-color: var(--amber);
-  background: linear-gradient(90deg, rgba(245,166,35,.06) 0%, rgba(245,166,35,.01) 60%, transparent 100%);
+  background: linear-gradient(90deg, rgba(245,166,35,.07) 0%, rgba(245,166,35,.01) 60%, transparent 100%);
+  animation: dsp-loading-pulse 2.2s ease-in-out infinite;
+}
+@keyframes dsp-loading-pulse {
+  0%,100% { background: linear-gradient(90deg, rgba(245,166,35,.07) 0%, rgba(245,166,35,.01) 60%, transparent 100%); }
+  50%      { background: linear-gradient(90deg, rgba(245,166,35,.13) 0%, rgba(245,166,35,.02) 60%, transparent 100%); }
 }
 .dsp-row.r-ready {
   border-left-color: var(--green);

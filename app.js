@@ -1412,7 +1412,6 @@
       // For admin: dispatch form + admin accordion all in one scrollable block
       el("panelBody").innerHTML=dispPanelHtml()+(ROLE==="admin"?adminPanelHtml():"");
       el("btnLogout").style.display="";el("btnAudit").style.display="";renderPlates();
-      _initQuickAdd();
       if(ROLE==="admin")_initAdminAccordions();
       return;
     }
@@ -1422,32 +1421,6 @@
     el("btnLogout").style.display="none";el("btnAudit").style.display="none";
   }
 
-  function _initQuickAdd(){
-    if(!el("btnQuickAdd"))return; // guard: quick-add bar not in DOM yet
-    const btn=el("btnQuickAdd");if(!btn)return;
-    const submit=async()=>{
-      const trailer=(el("qa_trailer")?.value??"").trim().toUpperCase();
-      if(!trailer)return el("qa_trailer")?.focus();
-      try{
-        await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({
-          trailer,
-          direction:(el("qa_direction")?.value??"Inbound"),
-          status:(el("qa_status")?.value??"Incoming"),
-          door:(el("qa_door")?.value??"").trim(),
-          note:(el("qa_note")?.value??"").trim(),
-        })});
-        el("qa_trailer").value="";el("qa_door").value="";el("qa_note").value="";
-        el("qa_direction").value="Inbound";el("qa_status").value="Incoming";
-        toast("Added",`Trailer ${trailer} added.`,"ok");
-        setTimeout(()=>el("qa_trailer")?.focus(),50);
-      }catch(e){toast("Failed",e.message,"err");}
-    };
-    btn.addEventListener("click",submit);
-    // Enter on trailer/door/note fields submits
-    ["qa_trailer","qa_door","qa_note"].forEach(id=>{
-      el(id)?.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();submit();}});
-    });
-  }
 
   async function doLogout(){
     if(isDriver()){try{sessionStorage.removeItem("wb_driver_session");sessionStorage.removeItem("wb_whoType");}catch{}driverRestart();return;}

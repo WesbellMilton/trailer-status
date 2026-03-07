@@ -682,20 +682,7 @@ textarea{min-height:60px;resize:vertical}
   transition:border-color .15s;
 }
 .qa-input:focus,.qa-select:focus{border-color:var(--amber);}
-.qa-trailer{width:110px;font-family:var(--mono);font-weight:600;}
-.qa-door{width:58px;font-family:var(--mono);}
-.qa-note{flex:1;min-width:80px;}
-.qa-select{flex-shrink:0;}
-.qa-submit{flex-shrink:0;padding:5px 14px !important;}
-/* Hide quick-add for non-dispatcher roles — shown via JS */
-.quick-add-bar{display:none;}
-.role-dispatcher .quick-add-bar,
-.role-admin .quick-add-bar,
-.role-management .quick-add-bar{display:flex;}
-@media(max-width:700px){
-  .quick-add-bar{flex-wrap:wrap;}
-  .qa-note{width:100%;flex:none;order:10;}
-}
+
 
 /* ═══════════════════════════════════════════
    LOOKUP SPINNER
@@ -3070,72 +3057,7 @@ img,video,embed,object,iframe {
 .dsp-empty{padding:40px;text-align:center;color:var(--t3);font-family:var(--mono);font-size:12px;}
 
 /* quick-add bar */
-.dsp-qabar{
-  display:none;
-  align-items:center;gap:6px;
-  padding:7px 14px;
-  background:rgba(8,14,24,.8);
-  border-top:1px solid var(--divider,rgba(255,255,255,.05));
-  flex-shrink:0;
-  flex-wrap:nowrap;
-  overflow-x:auto;
-  scrollbar-width:none;
-}
-.dsp-qabar::-webkit-scrollbar{display:none}
-.dsp-qa-in{
-  background:rgba(255,255,255,.05);
-  border:1px solid rgba(255,255,255,.08);
-  border-radius:7px;
-  color:rgba(255,255,255,.85);
-  font-family:var(--mono);
-  font-size:12px;
-  font-weight:400;
-  padding:6px 10px;
-  height:34px;
-  box-sizing:border-box;
-  transition:border-color .15s,background .15s;
-}
-.dsp-qa-in:focus{outline:none;border-color:var(--amber);background:rgba(255,255,255,.07);}
-.dsp-qa-in::placeholder{color:rgba(255,255,255,.25);}
-.qa-trailer{width:110px;font-weight:600;}
-.qa-door{width:72px;}
-.qa-note{flex:1;min-width:100px;}
-.dsp-qa-sel{
-  background:rgba(255,255,255,.05);
-  border:1px solid rgba(255,255,255,.08);
-  border-radius:7px;
-  color:rgba(255,255,255,.75);
-  font-family:var(--mono);
-  font-size:12px;
-  padding:6px 8px;
-  height:34px;
-  flex-shrink:0;
-  cursor:pointer;
-  transition:border-color .15s,background .15s;
-}
-.dsp-qa-sel:focus{outline:none;border-color:var(--amber);}
-.dsp-qa-btn{
-  background:var(--amber,#f5a623);
-  color:#000;
-  border:none;
-  border-radius:7px;
-  font-family:var(--mono);
-  font-size:12px;
-  font-weight:700;
-  padding:0 16px;
-  height:34px;
-  cursor:pointer;
-  flex-shrink:0;
-  white-space:nowrap;
-  transition:opacity .15s,box-shadow .15s;
-  letter-spacing:.03em;
-}
-.dsp-qa-btn:hover{opacity:.9;box-shadow:0 0 12px rgba(245,166,35,.3);}
 
-/* role visibility for qabar */
-.role-dispatcher .dsp-qabar,
-.role-admin .dsp-qabar,
-.role-management .dsp-qabar{display:flex;}
 
 /* status bar */
 .dsp-statusbar{
@@ -3615,26 +3537,7 @@ img,video,embed,object,iframe {
   letter-spacing: .06em;
 }
 
-/* Quick-add bar — styles consolidated in base above */
-.dsp-qa-in:focus, .dsp-qa-sel:focus {
-  border-color: rgba(245,166,35,.3);
-  background: rgba(255,255,255,.05);
-  outline: none;
-}
-.dsp-qa-btn {
-  background: rgba(245,166,35,.15);
-  color: rgba(245,166,35,.9);
-  border: 1px solid rgba(245,166,35,.25);
-  border-radius: 20px;
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: .06em;
-  transition: background .2s, box-shadow .2s;
-}
-.dsp-qa-btn:hover {
-  background: rgba(245,166,35,.25);
-  box-shadow: var(--glow-amber);
-}
+
 
 /* Status bar */
 .dsp-statusbar {
@@ -4839,16 +4742,7 @@ select option { background: #0d1119; }
     padding:3px 12px;
   }
 
-  /* Quick-add bar stacks */
-  .dsp-qabar{
-    flex-wrap:wrap;
-    gap:6px;
-    padding:8px 12px;
-  }
-  .dsp-qa-in{flex:1 1 80px;min-width:60px;padding:8px 10px;font-size:15px;}
-  .dsp-qa-sel{flex:1 1 80px;min-width:60px;padding:8px 10px;font-size:15px;}
-  .dsp-qa-btn{width:100%;min-height:42px;padding:10px;font-size:12px;margin-top:2px;}
-  .dsp-qa-label{width:100%;}
+
 
   /* Detail panel sizing inside sheet */
   .dsp-detail{max-height:75vh;}

@@ -207,7 +207,7 @@ a{color:var(--cyan);text-decoration:none}
 /* ═══════════════════════════════════════════
    TRAILER TABLE
 ═══════════════════════════════════════════ */
-.tbl-hd,.tbl-row{display:grid;grid-template-columns:minmax(130px,1.8fr) 110px 64px 1fr 72px minmax(180px,auto);align-items:center}
+.tbl-hd,.tbl-row{display:grid;grid-template-columns:minmax(140px,1.6fr) 108px 70px 1fr 68px minmax(220px,auto);align-items:center}
 /* Sticky actions column */
 .panel-board .tbl-hd>span:last-child,
 .panel-board .tbl-row>.t-acts-wrap{position:sticky;right:0;z-index:5;background:var(--s1)}
@@ -615,6 +615,51 @@ textarea{min-height:60px;resize:vertical}
 
 .pin-row{display:grid;grid-template-columns:1fr 1fr auto;gap:9px;align-items:end;padding:11px;border:1px solid var(--b0);border-radius:var(--r);background:rgba(7,10,15,.5);margin-bottom:8px}
 .side-sticky{position:sticky;top:58px}
+
+/* ── Row action buttons (expanded, no overflow menu) ── */
+.row-acts{display:flex;align-items:center;gap:5px;padding:4px 8px;flex-wrap:nowrap}
+.row-act-btn{white-space:nowrap;flex-shrink:0}
+.row-util{display:flex;gap:3px;margin-left:4px;opacity:0;transition:opacity .15s;flex-shrink:0}
+.tbl-row:hover .row-util{opacity:1}
+.row-util-btn{padding:3px 6px !important;font-size:11px !important;line-height:1 !important;border-radius:var(--r) !important}
+.row-del-btn:hover{border-color:var(--red) !important;color:var(--red) !important}
+
+/* ── Door button — clickable, color-coded ── */
+.row-door-btn{
+  font-family:var(--mono);font-weight:700;font-size:13px;
+  border:2px solid transparent;border-radius:var(--r);
+  padding:3px 8px;cursor:pointer;transition:all .12s;
+  background:transparent;
+}
+.row-door-btn:hover{transform:scale(1.08)}
+.t-door-ok{color:var(--green);border-color:rgba(25,224,154,.3)}
+.t-door-ok:hover{border-color:var(--green);background:rgba(25,224,154,.08)}
+.t-door-empty{color:var(--t3);border-color:var(--b1);border-style:dashed}
+.t-door-empty:hover{color:var(--amber);border-color:var(--amber);background:rgba(245,166,35,.06)}
+.t-door-conflict{color:var(--red);border-color:rgba(255,80,80,.4);animation:pulse-conflict 1.5s ease-in-out infinite}
+@keyframes pulse-conflict{0%,100%{border-color:rgba(255,80,80,.3)}50%{border-color:rgba(255,80,80,.9)}}
+
+/* ── Inline door picker (replaces shunt-picker) ── */
+.inline-door-picker{
+  position:absolute;left:0;top:calc(100% + 4px);z-index:50;
+  background:var(--s0);border:1px solid var(--b0);border-radius:var(--r2);
+  padding:10px;box-shadow:0 8px 24px rgba(0,0,0,.5);
+  min-width:260px;
+}
+.t-door-cell{position:relative}
+
+/* ── Direction badge compact (single letter) ── */
+.t-dir-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:16px;height:16px;border-radius:50%;font-size:9px;font-weight:700;
+  margin-right:5px;flex-shrink:0;vertical-align:middle;
+}
+
+/* ── Note empty state ── */
+.t-note-empty{color:var(--t3);font-style:italic;font-size:11px}
+
+/* ── btn-xs ── */
+.btn-xs{padding:2px 6px !important;font-size:10px !important;line-height:1.4 !important}
 
 /* ═══════════════════════════════════════════
    LOOKUP SPINNER

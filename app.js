@@ -496,6 +496,7 @@
     const badge=el("dockMapFreeCount");
     if(badge)badge.textContent=`${15-occupiedInRange} free`;
     if(_selectedTrailer)renderDetailPanel(_selectedTrailer);
+    renderDspPlates();
   }
 
   // ── DETAIL PANEL ─────────────────────────────────────────────────────────
@@ -679,6 +680,79 @@
     ["platesGrid","platesGrid2"].forEach(id=>{const e=el(id);if(e)e.innerHTML=plateHtml;});
     if(el("dockPlatesToggle")?.getAttribute("aria-expanded")==="true")setPlatesOpen(true);
     if(el("dockPlatesToggle2")?.getAttribute("aria-expanded")==="true")setPlatesOpen2(true);
+    // Render into new bottom-of-board plates panel too
+    renderDspPlates();
+  }
+
+  function renderDspPlates(){
+    if(isDriver())return;
+    const grid=el("dspPlatesGrid");if(!grid)return;
+    const canEdit=ROLE==="dispatcher"||ROLE==="dock"||ROLE==="management"||ROLE==="admin";
+    const doors=[];for(let d=28;d<=42;d++)doors.push(String(d));
+    const occupied=getOccupiedDoors();
+    const v=Object.values(dockPlates||{});
+    const freeCount=doors.filter(d=>!occupied[d]).length;
+    const oooCount=v.filter(p=>p?.status==="Out of Order").length;
+    const svcCount=v.filter(p=>p?.status==="Service").length;
+    const sumEl=el("dspPlatesSummary");
+    if(sumEl){
+      sumEl.innerHTML=`<span class="dps-ok">${freeCount} free</span>`
+        +(svcCount?` · <span class="dps-svc">${svcCount} svc</span>`:"")
+        +(oooCount?` · <span class="dps-ooo">${oooCount} OOO</span>`:"");
+    }
+    grid.innerHTML=doors.map(door=>{
+      const p=dockPlates[door]||{status:"Unknown",note:""};
+      const occ=occupied[door];
+      const open=!!plateEditOpen[door]&&canEdit;
+      // Determine card state: occupied > plate issue > free
+      const isBlocked=occ?.status==="Blocked";
+      const plateBad=p.status==="Out of Order";
+      const plateSvc=p.status==="Service";
+      let cardCls="dpb-free";
+      if(occ&&!isBlocked)cardCls="dpb-occupied dpb-"+((STATUS_ROW[occ.status]||"r-incoming").replace("r-",""));
+      else if(isBlocked)cardCls="dpb-blocked";
+      else if(plateBad)cardCls="dpb-ooo";
+      else if(plateSvc)cardCls="dpb-svc";
+      else if(p.status==="OK")cardCls="dpb-free";
+      // Trailer label — short, clipped
+      const trailerLabel=occ&&!isBlocked
+        ?`<div class="dpb-trailer">${esc(occ.trailer)}</div><div class="dpb-occ-status">${esc(occ.status)}</div>`
+        :isBlocked?`<div class="dpb-trailer" style="font-size:8px;opacity:.6">Blocked</div>${occ.note?`<div class="dpb-occ-status">${esc(occ.note)}</div>`:""}`:
+        `<div class="dpb-trailer dpb-free-label">Free</div>`;
+      // Plate indicator dot
+      const plateDot=plateBad?`<span class="dpb-pdot dpb-pdot-ooo" title="Plate: OOO"></span>`
+        :plateSvc?`<span class="dpb-pdot dpb-pdot-svc" title="Plate: Svc"></span>`:
+        p.status==="OK"?`<span class="dpb-pdot dpb-pdot-ok" title="Plate: OK"></span>`:``;
+      return`<div class="dsp-plate-btn ${cardCls}" data-door="${esc(door)}" title="${occ?esc(occ.trailer||"Blocked")+" · ":""}D${door} · Plate: ${esc(p.status||"Unknown")}${p.note?" · "+esc(p.note):""}">
+        <div class="dpb-top"><span class="dpb-door">D${esc(door)}</span>${plateDot}</div>
+        ${trailerLabel}
+        ${open?`<div class="dpb-edit">
+          <select data-plate-status="${esc(door)}"><option ${p.status==="OK"?"selected":""}>OK</option><option ${p.status==="Service"?"selected":""}>Service</option><option ${p.status==="Out of Order"?"selected":""}>Out of Order</option></select>
+          <input data-plate-note="${esc(door)}" placeholder="Note" value="${esc(p.note||"")}"/>
+          <div style="display:flex;gap:4px;margin-top:4px;"><button class="p-btn" data-plate-save="${esc(door)}">Save</button><button class="p-btn" data-plate-toggle="${esc(door)}">✕</button></div>
+        </div>`:(canEdit?`<button class="dpb-edit-btn" data-plate-toggle="${esc(door)}">Edit</button>`:"")
+        }
+      </div>`;
+    }).join("");
+  }
+
+  let _dspPlatesInited=false;
+  function _initDspPlates(){
+    if(_dspPlatesInited)return;_dspPlatesInited=true;
+    el("dspPlatesToggle")?.addEventListener("click",()=>{
+      const btn=el("dspPlatesToggle"),body=el("dspPlatesBody");
+      if(!btn||!body)return;
+      const open=btn.getAttribute("aria-expanded")==="true";
+      btn.setAttribute("aria-expanded",open?"false":"true");
+      btn.querySelector(".dsp-plates-chev").textContent=open?"▾":"▴";
+      body.style.maxHeight=open?"0":(body.scrollHeight+40)+"px";
+      try{localStorage.setItem("wb_dspplates",open?"0":"1");}catch{}
+    });
+    // Restore open state
+    try{if(localStorage.getItem("wb_dspplates")==="1"){
+      const btn=el("dspPlatesToggle"),body=el("dspPlatesBody");
+      if(btn&&body){btn.setAttribute("aria-expanded","true");btn.querySelector(".dsp-plates-chev").textContent="▴";body.style.maxHeight=(body.scrollHeight+200)+"px";}
+    }}catch{}
   }
 
   function renderSupConf(){
@@ -1070,6 +1144,7 @@
     document.body.className=document.body.className.replace(/\brole-\S+/g,"").trim();
     if(ROLE)document.body.classList.add("role-"+ROLE);
     _initDetailPanel();
+    _initDspPlates();
     const adminPanel=el("adminPanel");
     if(adminPanel)adminPanel.style.display=ROLE==="admin"?"":"none";
     if(isDisp){

@@ -7,6 +7,14 @@ let _app = null;   // set via init()
 let _wss = null;
 let _server = null;
 
+async function sendInitialState(ws, safeSend) {
+  const locId = ws.locationId || 1;
+  try { safeSend(JSON.stringify({ type: 'state',         payload: await require('./cache').loadTrailersObject(locId) })); } catch {}
+  try { safeSend(JSON.stringify({ type: 'dockplates',    payload: await require('./cache').loadDockPlatesObject(locId) })); } catch {}
+  try { safeSend(JSON.stringify({ type: 'doorblocks',    payload: await require('./cache').loadDoorBlocksObject(locId) })); } catch {}
+  try { safeSend(JSON.stringify({ type: 'confirmations', payload: await loadConfirmations(250, locId) })); } catch {}
+}
+
 function init(expressApp) {
   _app    = expressApp;
   _server = http.createServer(_app);
@@ -25,6 +33,12 @@ function init(expressApp) {
         const msg = JSON.parse(raw);
         if (msg.type === 'identify' && msg.locationId) {
           ws.locationId = Number(msg.locationId) || 1;
+          // Send location-scoped initial state now that we know the location
+          if (!ws._initialPushSent) {
+            ws._initialPushSent = true;
+            clearTimeout(ws._initialPushTimer);
+            sendInitialState(ws, safeSend);
+          }
         }
       } catch {}
     });
@@ -36,14 +50,21 @@ function init(expressApp) {
       safeSend(JSON.stringify({ type: 'ping' }));
     }, 20_000);
 
-    ws.on('close', () => clearInterval(heartbeat));
+    ws.on('close', () => { clearInterval(heartbeat); clearTimeout(ws._initialPushTimer); });
 
     const { APP_VERSION } = require('./config');
-    try { safeSend(JSON.stringify({ type: 'version',       payload: { version: APP_VERSION } })); } catch {}
-    try { safeSend(JSON.stringify({ type: 'state',         payload: await require('./cache').loadTrailersObject() })); } catch {}
-    try { safeSend(JSON.stringify({ type: 'dockplates',    payload: await require('./cache').loadDockPlatesObject() })); } catch {}
-    try { safeSend(JSON.stringify({ type: 'doorblocks',    payload: await require('./cache').loadDoorBlocksObject() })); } catch {}
-    try { safeSend(JSON.stringify({ type: 'confirmations', payload: await loadConfirmations(250) })); } catch {}
+    const locId = ws.locationId || 1;
+    try { safeSend(JSON.stringify({ type: 'version', payload: { version: APP_VERSION } })); } catch {}
+
+    // Defer data push until client sends identify (so we know its location).
+    // Fall back after 500 ms for clients that don't send identify (e.g. old SW).
+    ws._initialPushSent = false;
+    ws._initialPushTimer = setTimeout(() => {
+      if (!ws._initialPushSent) {
+        ws._initialPushSent = true;
+        sendInitialState(ws, safeSend);
+      }
+    }, 500);
   });
 
   // Terminate stale clients every 30 s — also catches unresponsive OPEN sockets

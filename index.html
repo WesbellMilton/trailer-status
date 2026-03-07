@@ -372,18 +372,21 @@ body{background-image:none!important;background:transparent!important}
       </div>
     </div>
     <div class="ts-screen-body">
-      <div id="ts-omw-eta-card" class="ts-info-card" style="margin-top:4px;">
-        <div class="ts-info-icon" id="ts-omw-eta-icon">📡</div>
-        <div class="ts-info-text">
-          <div class="ts-info-title" id="ts-omw-eta-title">Getting your location…</div>
-          <div class="ts-info-desc" id="ts-omw-eta-desc">Calculating road ETA to dock</div>
+      <div class="ts-eta-selector">
+        <div class="ts-eta-label">ETA to dock</div>
+        <div class="ts-eta-pills">
+          <div class="ts-eta-pill ts-sel" data-eta="10">10 min</div>
+          <div class="ts-eta-pill" data-eta="20">20 min</div>
+          <div class="ts-eta-pill" data-eta="30">30 min</div>
+          <div class="ts-eta-pill" data-eta="45">45 min</div>
+          <div class="ts-eta-pill" data-eta="60">1 hr</div>
         </div>
       </div>
-      <div class="ts-info-card" style="margin-top:8px;">
-        <div class="ts-info-icon">🚪</div>
+      <div class="ts-info-card" style="margin-top:10px;">
+        <div class="ts-info-icon">📍</div>
         <div class="ts-info-text">
-          <div class="ts-info-title">Door held for ETA + 5 min</div>
-          <div class="ts-info-desc">Your door is reserved until you arrive. Held longer if you're running late.</div>
+          <div class="ts-info-title">Door assigned instantly</div>
+          <div class="ts-info-desc">Your door is held for 30 minutes. Head straight in when you arrive.</div>
         </div>
       </div>
       <div id="ts-gps-card" class="ts-info-card" style="margin-top:8px;display:none;border-color:rgba(25,224,154,.25);background:rgba(25,224,154,.06);">
@@ -687,78 +690,38 @@ body{background-image:none!important;background:transparent!important}
       }
     }
 
-    // -- OMW Logic: GPS-first, road ETA from server --
-    let _omwLat = null, _omwLng = null, _omwEta = null;
-
-    function _omwSetEtaCard(icon, title, desc, color) {
-      document.getElementById('ts-omw-eta-icon').textContent = icon;
-      const t = document.getElementById('ts-omw-eta-title');
-      t.textContent = title; t.style.color = color || '';
-      document.getElementById('ts-omw-eta-desc').textContent = desc;
-    }
-
-    function _omwRequestGps() {
-      _omwLat = null; _omwLng = null; _omwEta = null;
-      const btn = document.getElementById('ts-omw-submit');
-      if (!navigator.geolocation) {
-        _omwSetEtaCard('🚫', 'Location unavailable', 'Enable location for accurate ETA & door hold', 'var(--amber,#f0a030)');
-        btn.disabled = false; return;
-      }
-      _omwSetEtaCard('📡', 'Getting your location…', 'Calculating road ETA to dock', '');
-      btn.disabled = true;
-      navigator.geolocation.getCurrentPosition(pos => {
-        _omwLat = pos.coords.latitude; _omwLng = pos.coords.longitude;
-        _omwSetEtaCard('📡', 'Location found — calculating…', 'Getting road ETA from server', 'var(--cyan,#18d4e8)');
-        fetch(`/api/driver/eta?lat=${_omwLat}&lng=${_omwLng}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-          .then(r => r.ok ? r.json() : null)
-          .then(d => {
-            if (d?.eta) {
-              _omwEta = d.eta;
-              const hrs = Math.floor(_omwEta / 60), mins = _omwEta % 60;
-              const etaStr = hrs > 0 ? `${hrs}h ${mins}m` : `${_omwEta} min`;
-              _omwSetEtaCard('🟢', `ETA: ~${etaStr}`, `Door held ${_omwEta + 5} min${d.distanceKm ? ' · ' + d.distanceKm + ' km via road' : ''}`, 'var(--green,#19e09a)');
-            } else {
-              _omwSetEtaCard('📍', 'Location ready', 'ETA calculated on arrival', 'var(--cyan,#18d4e8)');
-            }
-          })
-          .catch(() => _omwSetEtaCard('📍', 'Location ready', 'ETA will be estimated', 'var(--cyan,#18d4e8)'))
-          .finally(() => { btn.disabled = false; });
-      }, err => {
-        _omwSetEtaCard(err.code === 1 ? '🚫' : '⚠️',
-          err.code === 1 ? 'Location denied' : 'Location unavailable',
-          'ETA will be estimated — door held 35 min', 'var(--amber,#f0a030)');
-        btn.disabled = false;
-      }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 });
-    }
-
-    // Kick off GPS as soon as driver navigates to OMW screen
-    document.querySelectorAll('[data-act="omw"], [data-back]').forEach(el => {
-      el.addEventListener('click', () => {
-        if (document.getElementById('ts-s-omw').classList.contains('ts-active') ||
-            el.dataset.act === 'omw') setTimeout(_omwRequestGps, 150);
+    // -- OMW Logic (REAL API SYNC) --
+    document.querySelectorAll('#ts-s-omw .ts-eta-pill').forEach(p => {
+      p.addEventListener('click', () => {
+        document.querySelectorAll('#ts-s-omw .ts-eta-pill').forEach(x => x.classList.remove('ts-sel'));
+        p.classList.add('ts-sel');
+        state.eta = parseInt(p.dataset.eta);
       });
     });
-
     document.getElementById('ts-omw-submit').addEventListener('click', async () => {
       const btn = document.getElementById('ts-omw-submit');
-      btn.textContent = 'Sending...'; btn.disabled = true;
+      btn.textContent = 'Sending...';
+      btn.disabled = true;
       try {
-        const body = { trailer: state.trailer };
-        if (_omwLat !== null) { body.lat = _omwLat; body.lng = _omwLng; }
-        if (_omwEta !== null) { body.eta = _omwEta; }
-        const res = await fetch('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(body) });
-        if (res.ok) {
+        const res = await fetch('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, eta: state.eta }) });
+        if(res.ok) {
           const data = await res.json();
           if (data.door) {
             updateLiveDoor(data.door);
-            const etaNote = data.eta ? ` · ETA ~${data.eta} min` : '';
-            showDoorAssigned('Door Assigned!', data.alreadyActive ? `Your trailer is at Door ${data.door}.` : `Head to Door ${data.door}${etaNote}. Dispatch notified.`, true);
-          } else { toast('No door available — please ask dispatch.'); }
+            showDoorAssigned('Door Assigned!', data.alreadyActive ? `Your trailer is at Door ${data.door}.` : `Head to Door ${data.door}. Dispatch notified.`, true);
+          } else {
+            toast('No door available — please ask dispatch.');
+          }
         } else {
-          toast(await res.text().catch(() => '') || 'No door available — please ask dispatch.');
+          const msg = await res.text().catch(() => '');
+          toast(msg || 'No door available — please ask dispatch.');
         }
-      } catch { toast('Network Error'); }
-      finally { btn.textContent = 'Send On My Way →'; btn.disabled = false; }
+      } catch(e) {
+        toast('Network Error');
+      } finally {
+        btn.textContent = 'Send On My Way →'; 
+        btn.disabled = false;
+      }
     });
 
     // -- Drop Logic (REAL API SYNC) --
@@ -774,8 +737,15 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Submitting...';
       btn.disabled = true;
       try {
-        await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: state.dropType, carrierType: 'Outside' }) });
-        showSuccess('Drop Logged', 'Dispatch will assign your door on the board.', [{k:'Trailer',v:state.trailer},{k:'Type',v:state.dropType},{k:'Carrier',v:'Outside'}]);
+        const res = await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: state.dropType, carrierType: 'Outside' }) });
+        const data = res.ok ? await res.json().catch(() => ({})) : {};
+        if (data.door && data.autoAssigned) {
+          showSuccess('Door Assigned!', `Head to Door ${data.door}. Dispatch has been notified.`, [{k:'Trailer',v:state.trailer},{k:'Door',v:data.door},{k:'Type',v:state.dropType}]);
+        } else if (data.door) {
+          showSuccess('Drop Logged', `Trailer placed at Door ${data.door}.`, [{k:'Trailer',v:state.trailer},{k:'Door',v:data.door},{k:'Type',v:state.dropType}]);
+        } else {
+          showSuccess('Drop Logged', 'No doors available right now — dispatch has been notified to assign one.', [{k:'Trailer',v:state.trailer},{k:'Type',v:state.dropType},{k:'Carrier',v:'Outside'}]);
+        }
       } catch(e) {
         toast('Network Error');
       } finally {

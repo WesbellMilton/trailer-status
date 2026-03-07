@@ -10,9 +10,9 @@ setInterval(() => {
   for (const [sid, s] of sessions) if (s.exp < now) sessions.delete(sid);
 }, 30 * 60 * 1000).unref();
 
-function newSession(role) {
+function newSession(role, locationId = 1) {
   const sid = crypto.randomBytes(24).toString('hex');
-  sessions.set(sid, { role, exp: Date.now() + SESSION_TTL_MS });
+  sessions.set(sid, { role, locationId, exp: Date.now() + SESSION_TTL_MS });
   return sid;
 }
 
@@ -77,7 +77,7 @@ function requireRole(roles) {
     const s = getSession(req);
     if (!s) return res.status(401).send('Unauthorized');
     if (s.role !== 'admin' && !roles.includes(s.role)) return res.status(401).send('Unauthorized');
-    req.user = { role: s.role };
+    req.user = { role: s.role, locationId: s.locationId || 1 };
     next();
   };
 }
@@ -85,6 +85,8 @@ function requireRole(roles) {
 function requireDriverAccess(req, res, next) {
   const s = getSession(req);
   if (s?.role === 'dock') return res.status(403).send('Not accessible from dock role');
+  // Driver locationId comes from request body/query (set by QR code URL)
+  req.user = { role: s?.role || 'driver', locationId: s?.locationId || Number(req.body?.locationId || req.query?.locationId || 1) };
   next();
 }
 

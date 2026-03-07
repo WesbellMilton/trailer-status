@@ -569,6 +569,17 @@
       if(!right||!right.classList.contains("panel-open"))return;
       if(!right.contains(e.target)&&!e.target.closest(".dsp-row"))closeDetailPanel();
     },{passive:true});
+    // Mobile: swipe-down on drag handle to close bottom sheet
+    (()=>{
+      const right=el("dspRight");if(!right)return;
+      let sy=0,open=false;
+      right.addEventListener("touchstart",e=>{sy=e.touches[0].clientY;},{passive:true});
+      right.addEventListener("touchend",e=>{
+        if(!right.classList.contains("panel-open"))return;
+        const dy=e.changedTouches[0].clientY-sy;
+        if(dy>80)closeDetailPanel();
+      },{passive:true});
+    })();
     el("btnDsdSaveNote")?.addEventListener("click",async()=>{
       if(!_selectedTrailer)return;
       const note=(el("dsdNoteInput")?.value||"").trim();

@@ -4738,3 +4738,362 @@ select option { background: #0d1119; }
     padding:6px 12px 10px;
   }
 }
+
+
+/* ═══════════════════════════════════════════════════════════════
+   DOCK VIEW — PLATES PANEL
+   Big colorful cards showing OK / Service / OOO per door
+═══════════════════════════════════════════════════════════════ */
+
+.dvp-panel {
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  background: rgba(5,8,13,.9);
+}
+
+.dvp-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--t2);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  text-align: left;
+}
+.dvp-toggle-label { flex-shrink: 0; color: var(--t1); }
+.dvp-summary { flex: 1; font-size: 10px; font-weight: 400; letter-spacing: .04em; color: var(--t3); }
+.dvp-chev { flex-shrink: 0; font-size: 10px; transition: transform .2s; }
+
+.dvp-body { overflow: hidden; transition: max-height .3s ease; }
+
+.dvp-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+  padding: 8px 12px 12px;
+}
+
+/* ── Door card ── */
+.dvp-card {
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.07);
+  background: rgba(255,255,255,.03);
+  padding: 8px 6px 7px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  min-height: 72px;
+  transition: border-color .2s, background .2s;
+}
+.dvp-door-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--t3);
+  letter-spacing: .04em;
+}
+.dvp-status-badge {
+  font-size: 18px;
+  line-height: 1;
+  margin: 2px 0;
+}
+.dvp-occ {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--t2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  text-align: center;
+}
+.dvp-note {
+  font-size: 9px;
+  color: var(--t3);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Status variants */
+.dvp-card.dvp-ok {
+  background: rgba(25,224,154,.07);
+  border-color: rgba(25,224,154,.25);
+}
+.dvp-card.dvp-ok .dvp-door-label { color: rgba(25,224,154,.6); }
+.dvp-card.dvp-ok .dvp-status-badge { color: var(--green); filter: drop-shadow(0 0 4px rgba(25,224,154,.5)); }
+
+.dvp-card.dvp-svc {
+  background: rgba(245,166,35,.07);
+  border-color: rgba(245,166,35,.3);
+  box-shadow: 0 0 8px rgba(245,166,35,.06);
+}
+.dvp-card.dvp-svc .dvp-door-label { color: rgba(245,166,35,.7); }
+.dvp-card.dvp-svc .dvp-status-badge { color: var(--amber); filter: drop-shadow(0 0 4px rgba(245,166,35,.5)); }
+
+.dvp-card.dvp-ooo {
+  background: rgba(240,74,74,.08);
+  border-color: rgba(240,74,74,.35);
+  box-shadow: 0 0 10px rgba(240,74,74,.08);
+}
+.dvp-card.dvp-ooo .dvp-door-label { color: rgba(240,74,74,.75); }
+.dvp-card.dvp-ooo .dvp-status-badge { color: var(--red); filter: drop-shadow(0 0 4px rgba(240,74,74,.6)); }
+
+.dvp-card.dvp-unknown {
+  opacity: .5;
+}
+
+/* Edit open button — bigger than the old tiny "Edit" */
+.dvp-edit-open-btn {
+  margin-top: auto;
+  padding: 3px 10px;
+  font-size: 10px;
+  font-family: var(--mono);
+  font-weight: 500;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.05);
+  color: var(--t2);
+  cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s;
+  min-height: 26px;
+}
+.dvp-edit-open-btn:hover {
+  background: rgba(255,255,255,.1);
+  border-color: rgba(255,255,255,.2);
+  color: var(--t0);
+}
+.dvp-card.dvp-svc .dvp-edit-open-btn { border-color: rgba(245,166,35,.3); color: var(--amber); }
+.dvp-card.dvp-ooo .dvp-edit-open-btn { border-color: rgba(240,74,74,.4); color: var(--red); }
+
+/* Edit form inside card */
+.dvp-card.dvp-editing {
+  min-height: 120px;
+  align-items: stretch;
+}
+.dvp-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  margin-top: 4px;
+}
+.dvp-status-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.dvp-sbtn {
+  width: 100%;
+  padding: 7px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.04);
+  color: var(--t2);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s;
+  text-align: center;
+  min-height: 36px;
+}
+.dvp-sbtn-ok {
+  border-color: rgba(25,224,154,.2);
+  color: rgba(25,224,154,.7);
+}
+.dvp-sbtn-ok:hover, .dvp-sbtn-ok.dvp-sbtn-active {
+  background: rgba(25,224,154,.15);
+  border-color: var(--green);
+  color: var(--green);
+  box-shadow: 0 0 8px rgba(25,224,154,.2);
+}
+.dvp-sbtn-svc {
+  border-color: rgba(245,166,35,.2);
+  color: rgba(245,166,35,.7);
+}
+.dvp-sbtn-svc:hover, .dvp-sbtn-svc.dvp-sbtn-active {
+  background: rgba(245,166,35,.15);
+  border-color: var(--amber);
+  color: var(--amber);
+  box-shadow: 0 0 8px rgba(245,166,35,.2);
+}
+.dvp-sbtn-ooo {
+  border-color: rgba(240,74,74,.2);
+  color: rgba(240,74,74,.7);
+}
+.dvp-sbtn-ooo:hover, .dvp-sbtn-ooo.dvp-sbtn-active {
+  background: rgba(240,74,74,.15);
+  border-color: var(--red);
+  color: var(--red);
+  box-shadow: 0 0 8px rgba(240,74,74,.2);
+}
+.dvp-note-input {
+  width: 100%;
+  padding: 5px 7px;
+  border-radius: 5px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.06);
+  color: var(--t1);
+  font-family: var(--mono);
+  font-size: 10px;
+  box-sizing: border-box;
+}
+.dvp-note-input:focus {
+  outline: none;
+  border-color: var(--amber);
+  background: rgba(255,255,255,.09);
+}
+.dvp-save-btn {
+  flex: 1;
+  padding: 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(245,166,35,.4);
+  background: rgba(245,166,35,.12);
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 32px;
+  transition: background .12s;
+}
+.dvp-save-btn:hover { background: rgba(245,166,35,.22); }
+.dvp-cancel-btn {
+  flex: 1;
+  padding: 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: transparent;
+  color: var(--t3);
+  font-family: var(--mono);
+  font-size: 10px;
+  cursor: pointer;
+  min-height: 32px;
+  transition: background .12s;
+}
+.dvp-cancel-btn:hover { background: rgba(255,255,255,.06); color: var(--t2); }
+
+/* ═══════════════════════════════════════════════════════════════
+   DISPATCHER COLOR ENHANCEMENTS
+   Row status bars more vivid; status tags richer; toolbar accent
+═══════════════════════════════════════════════════════════════ */
+
+/* Bolder left-bar on rows */
+.dsp-row { border-left-width: 3px; }
+
+/* Richer row tints */
+.dsp-row.r-loading  { border-left-color: var(--amber); background: rgba(245,166,35,.04); }
+.dsp-row.r-ready    { border-left-color: var(--green);  background: rgba(25,224,154,.04); box-shadow: inset 0 0 0 0 transparent; }
+.dsp-row.r-dockready{ border-left-color: var(--cyan);   background: rgba(24,212,232,.04); }
+.dsp-row.r-dropped  { border-left-color: var(--violet); background: rgba(166,124,245,.03); }
+.dsp-row.r-incoming { border-left-color: rgba(255,255,255,.12); }
+
+/* Ready flash — more visible pulse */
+.dsp-row.ready-flash {
+  animation: dsp-ready-pulse 1.4s ease-in-out infinite;
+}
+@keyframes dsp-ready-pulse {
+  0%,100% { background: rgba(25,224,154,.04); }
+  50%      { background: rgba(25,224,154,.1); box-shadow: inset 3px 0 12px rgba(25,224,154,.1); }
+}
+.dsp-row.dockready-flash {
+  animation: dsp-dkrdy-pulse 1.6s ease-in-out infinite;
+}
+@keyframes dsp-dkrdy-pulse {
+  0%,100% { background: rgba(24,212,232,.04); }
+  50%      { background: rgba(24,212,232,.1); }
+}
+
+/* KPI tiles richer active state */
+.kpi-tile { transition: background .15s, border-color .15s; }
+.kpi-tile.kpi-active {
+  background: rgba(245,166,35,.12);
+  border-color: rgba(245,166,35,.4);
+  box-shadow: 0 0 10px rgba(245,166,35,.12);
+}
+.kpi-tile .kpi-val { font-size: 16px; font-weight: 700; color: var(--t0); }
+.kpi-tile .kpi-label { font-size: 9px; color: var(--t3); }
+
+/* Status tags — slightly richer */
+.stag.stag-loading  { background: rgba(245,166,35,.15); color: #f5c842; border-color: rgba(245,166,35,.3); }
+.stag.stag-ready    { background: rgba(25,224,154,.13); color: #19e09a; border-color: rgba(25,224,154,.3); }
+.stag.stag-dockready{ background: rgba(24,212,232,.13); color: #18d4e8; border-color: rgba(24,212,232,.3); }
+.stag.stag-dropped  { background: rgba(166,124,245,.13); color: #a67cf5; border-color: rgba(166,124,245,.3); }
+.stag.stag-incoming { background: rgba(255,255,255,.06); color: var(--t2); border-color: rgba(255,255,255,.1); }
+.stag.stag-departed { background: rgba(255,255,255,.04); color: var(--t3); border-color: rgba(255,255,255,.07); }
+
+/* Dock plates edit button in dispatch — bigger */
+.dpb-edit-btn {
+  font-size: 9px !important;
+  padding: 3px 8px !important;
+  min-height: 22px !important;
+  border: 1px solid rgba(255,255,255,.1) !important;
+  border-radius: 4px !important;
+  background: rgba(255,255,255,.04) !important;
+  color: var(--t2) !important;
+  cursor: pointer;
+  transition: background .12s, color .12s;
+  margin-top: auto;
+}
+.dpb-edit-btn:hover {
+  background: rgba(255,255,255,.1) !important;
+  color: var(--t0) !important;
+}
+.dsp-plate-btn.dpb-svc .dpb-edit-btn { color: var(--amber) !important; border-color: rgba(245,166,35,.3) !important; }
+.dsp-plate-btn.dpb-ooo .dpb-edit-btn { color: var(--red) !important; border-color: rgba(240,74,74,.3) !important; }
+
+/* Dispatch plate edit form — bigger inputs */
+.dpb-edit select, .dpb-edit input {
+  font-size: 11px !important;
+  padding: 4px 6px !important;
+  min-height: 28px !important;
+}
+.dpb-edit .p-btn {
+  padding: 5px 8px !important;
+  font-size: 10px !important;
+  min-height: 28px !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DOCK VIEW CARD — richer colors
+═══════════════════════════════════════════════════════════════ */
+#dockView .dv-card.dv-loading  { border-left-color: var(--amber); background: rgba(245,166,35,.05); }
+#dockView .dv-card.dv-dockready{ border-left-color: var(--cyan);  background: rgba(24,212,232,.05); }
+#dockView .dv-card.dv-ready    { border-left-color: var(--green); background: rgba(25,224,154,.05); box-shadow: 0 0 12px rgba(25,224,154,.07); }
+#dockView .dv-card.dv-dropped  { border-left-color: var(--violet);background: rgba(166,124,245,.04); }
+#dockView .dv-card.dv-incoming { border-left-color: rgba(255,255,255,.15); }
+
+#dockView .dv-cta.dv-cta-amber {
+  background: rgba(245,166,35,.18);
+  border-color: rgba(245,166,35,.5);
+  color: #f5c842;
+  font-weight: 700;
+  box-shadow: 0 0 12px rgba(245,166,35,.1);
+}
+#dockView .dv-cta.dv-cta-amber:hover {
+  background: rgba(245,166,35,.28);
+}
+#dockView .dv-cta.dv-cta-cyan {
+  background: rgba(24,212,232,.18);
+  border-color: rgba(24,212,232,.5);
+  color: #18d4e8;
+  font-weight: 700;
+  box-shadow: 0 0 12px rgba(24,212,232,.1);
+}
+#dockView .dv-cta.dv-cta-cyan:hover {
+  background: rgba(24,212,232,.28);
+}
+

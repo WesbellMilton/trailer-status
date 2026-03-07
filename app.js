@@ -908,6 +908,95 @@
       </div>
     </div>`;}
 
+  function adminPanelHtml(){return`
+    <div class="adm-section">
+      <div class="adm-divider-hd">⚡ ADMIN CONTROLS</div>
+      <button class="btn btn-danger btn-sm" id="btnClearAll" style="width:100%;margin-bottom:10px;">⚠ Clear All Trailers</button>
+
+      <button class="acc-head adm-acc" id="adminLocToggle" aria-expanded="false">
+        <span style="display:flex;align-items:center;gap:7px;font-size:10px;">🏢 Locations</span>
+        <span class="chev">▾</span>
+      </button>
+      <div id="adminLocBody" class="acc-body-dyn" style="max-height:0;overflow:hidden;transition:max-height .35s ease;">
+        <div style="padding:10px 0 4px;">
+          <div id="adminLocList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;min-height:32px;">
+            <div style="color:var(--t3);font-size:11px;font-family:var(--mono);">Loading…</div>
+          </div>
+          <div class="divider"></div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Add Location</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+              <div><label class="fl">Name</label><input class="fi" id="newLocName" placeholder="Brampton" autocomplete="off"/></div>
+              <div><label class="fl">Slug</label><input class="fi" id="newLocSlug" placeholder="brampton" autocomplete="off"/></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+              <div><label class="fl">From</label><input class="fi" id="newLocFrom" type="number" value="28" min="1" max="99"/></div>
+              <div><label class="fl">To</label><input class="fi" id="newLocTo" type="number" value="42" min="1" max="99"/></div>
+              <div><label class="fl">TZ</label><input class="fi" id="newLocTz" placeholder="America/Toronto" value="America/Toronto"/></div>
+            </div>
+            <button class="btn btn-success btn-sm" id="btnAddLocation" style="width:100%;">+ Add Location</button>
+          </div>
+        </div>
+      </div>
+
+      <button class="acc-head adm-acc" id="adminOverviewToggle" aria-expanded="false">
+        <span style="display:flex;align-items:center;gap:7px;font-size:10px;">📊 All Locations Overview</span>
+        <span class="chev">▾</span>
+      </button>
+      <div id="adminOverviewBody" class="acc-body-dyn" style="max-height:0;overflow:hidden;transition:max-height .35s ease;">
+        <div style="padding:10px 0 4px;">
+          <button class="btn btn-default btn-sm" id="btnRefreshOverview" style="width:100%;margin-bottom:10px;">↺ Refresh</button>
+          <div id="adminOverviewList" style="display:flex;flex-direction:column;gap:8px;">
+            <div style="color:var(--t3);font-size:11px;font-family:var(--mono);">Click Refresh to load</div>
+          </div>
+        </div>
+      </div>
+
+      <button class="acc-head adm-acc" id="adminPinToggle" aria-expanded="false">
+        <span style="display:flex;align-items:center;gap:7px;font-size:10px;">🔒 PIN Management</span>
+        <span class="chev">▾</span>
+      </button>
+      <div id="adminPinBody" class="acc-body-dyn" style="max-height:0;overflow:hidden;transition:max-height .35s ease;">
+        <div style="padding:10px 0 4px;">
+          <div class="pin-row">
+            <div><label class="fl">Dispatcher PIN</label><input type="password" id="pin_dispatcher_a" placeholder="New PIN" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm</label><input type="password" id="pin_dispatcher_a_confirm" placeholder="Repeat" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetDispatcherPinA" style="padding:7px 13px;">Set</button>
+          </div>
+          <div class="pin-row">
+            <div><label class="fl">Dock PIN</label><input type="password" id="pin_dock_a" placeholder="New PIN" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm</label><input type="password" id="pin_dock_a_confirm" placeholder="Repeat" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetDockPinA" style="padding:7px 13px;">Set</button>
+          </div>
+          <div class="pin-row">
+            <div><label class="fl">Management PIN</label><input type="password" id="pin_management_a" placeholder="New PIN" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm</label><input type="password" id="pin_management_a_confirm" placeholder="Repeat" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetManagementPinA" style="padding:7px 13px;">Set</button>
+          </div>
+          <div class="pin-row">
+            <div><label class="fl">Admin PIN</label><input type="password" id="pin_admin_a" placeholder="New PIN" autocomplete="new-password"/></div>
+            <div><label class="fl">Confirm</label><input type="password" id="pin_admin_a_confirm" placeholder="Repeat" autocomplete="new-password"/></div>
+            <button class="btn btn-success btn-sm" id="btnSetAdminPinA" style="padding:7px 13px;">Set</button>
+          </div>
+        </div>
+      </div>
+    </div>`;}
+
+  let _adminAccInited=false;
+  function _initAdminAccordions(){
+    if(_adminAccInited)return;_adminAccInited=true;
+    document.querySelectorAll(".adm-acc").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        const bodyId=btn.id.replace("Toggle","Body");
+        const body=el(bodyId);if(!body)return;
+        const open=btn.getAttribute("aria-expanded")==="true";
+        btn.setAttribute("aria-expanded",open?"false":"true");
+        const chev=btn.querySelector(".chev");if(chev)chev.textContent=open?"▾":"▴";
+        body.style.maxHeight=open?"0":(body.scrollHeight+100)+"px";
+      });
+    });
+  }
+
   function dockPanelHtml(){return`
     <div class="infobox infobox-cyan"><div class="ib-title">Dock Workflow</div>1. Trailer arrives → tap <strong>Loading</strong><br/>2. Loading done → tap <strong>Dock Ready</strong><br/>3. Dispatcher confirms → driver notified.</div>
     <div style="font-size:11px;color:var(--t2);">No dispatch controls on Dock role.</div>`;}
@@ -1332,14 +1421,17 @@
     if(ROLE)document.body.classList.add("role-"+ROLE);
     _initDetailPanel();
     _initDspPlates();
+    // Keep #adminPanel hidden — we render its content directly into panelBody for admin
     const adminPanel=el("adminPanel");
-    if(adminPanel)adminPanel.style.display=ROLE==="admin"?"":"none";
+    if(adminPanel)adminPanel.style.display="none";
     if(isDisp){
       el("panelTitle").textContent=ROLE==="management"?"Management":ROLE==="admin"?"⚡ Admin":"Dispatcher";
       el("panelSub").textContent=ROLE==="admin"?"Master access":"Full control";
-      el("panelBody").innerHTML=dispPanelHtml();
+      // For admin: dispatch form + admin accordion all in one scrollable block
+      el("panelBody").innerHTML=dispPanelHtml()+(ROLE==="admin"?adminPanelHtml():"");
       el("btnLogout").style.display="";el("btnAudit").style.display="";renderPlates();
       _initQuickAdd();
+      if(ROLE==="admin")_initAdminAccordions();
       return;
     }
     if(ROLE==="dock"){el("panelTitle").textContent="Dock";el("panelSub").textContent="Loading / Dock Ready";el("panelBody").innerHTML=dockPanelHtml();el("btnLogout").style.display="";el("btnAudit").style.display="none";renderPlates();return;}

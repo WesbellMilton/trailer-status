@@ -645,10 +645,10 @@ textarea{min-height:60px;resize:vertical}
 
 /* ── Inline door picker (replaces shunt-picker) ── */
 .inline-door-picker{
-  position:absolute;left:0;top:calc(100% + 4px);z-index:50;
-  background:var(--s0);border:1px solid var(--b0);border-radius:var(--r2);
-  padding:10px;box-shadow:0 8px 24px rgba(0,0,0,.5);
-  min-width:260px;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  background:rgba(7,10,15,.6);border-top:1px solid var(--b0);border-bottom:1px solid rgba(28,40,64,.5);
+  padding:10px 14px;
+  border-left:3px solid var(--amber);
 }
 .t-door-cell{position:relative}
 

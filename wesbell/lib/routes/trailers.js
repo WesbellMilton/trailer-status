@@ -3,12 +3,11 @@ const { Router } = require('express');
 const crypto = require('crypto');
 const { run, get } = require('../db');
 const { getTrailersCache, invalidateTrailers } = require('../cache');
-const { requireXHR, requireDockStatusAllowed, requireRole } = require('../auth');
+const { requireXHR } = require('../middleware');
+const { requireDockStatusAllowed: _rds, requireRole: _rr } = require('../auth');
 const { audit, logEvent, fireWebhook } = require('../helpers');
 const { broadcastTrailers, wsBroadcast } = require('../ws');
 const { broadcastPush } = require('../push');
-// Note: requireDockStatusAllowed and requireRole are on auth not middleware
-const { requireDockStatusAllowed: _rds, requireRole: _rr } = require('../auth');
 
 const router = Router();
 

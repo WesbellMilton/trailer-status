@@ -202,14 +202,6 @@ body{background-image:none!important;background:transparent!important}
     #driverView .ts-action-card::after { content:""; position:absolute; right:20px; top:50%; transform:translateY(-50%); width:8px; height:14px; background:url('data:image/svg+xml;utf8,<svg viewBox="0 0 8 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L7 7L1 13" stroke="%237a95b0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>') no-repeat center; opacity:0.5; }
     
     #driverView .ts-action-icon { font-size:36px; line-height:1; flex-shrink:0; filter:drop-shadow(0 4px 12px rgba(0,0,0,0.3)); }
-  .ts-ext-carrier-btn {
-    display:flex; align-items:center; padding:18px 20px;
-    background:var(--surface,#0d1b2a); border:1.5px solid var(--border,#1a2d42);
-    border-radius:14px; cursor:pointer; transition:all .15s; user-select:none;
-  }
-  .ts-ext-carrier-btn:active { transform:scale(.97); background:rgba(255,255,255,.04); }
-  .ts-ext-carrier-btn.ts-ext-sel { border-color:var(--cyan,#18d4e8); background:rgba(24,212,232,.06); }
-  .ts-ext-carrier-name { font-size:17px; font-weight:600; color:var(--t0,#e0eaf4); font-family:var(--sans,sans-serif); }
     #driverView .ts-action-text { flex:1; display:flex; flex-direction:column; justify-content:center; }
     #driverView .ts-action-label { font-size:18px; font-weight:700; letter-spacing:.01em; color:var(--t0); margin-bottom:4px; }
     #driverView .ts-action-sub { font-size:13px; color:var(--t1); font-weight:400; line-height:1.3; padding-right:16px; }
@@ -431,39 +423,6 @@ body{background-image:none!important;background:transparent!important}
     </div>
   </div>
 
-  <div class="ts-screen" id="ts-s-ext-carrier">
-    <div class="ts-screen-header">
-      <div class="ts-topbar" style="padding:0"><div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div></div>
-      <div style="padding-top:28px">
-        <button class="ts-back-btn" data-back="ts-s-carrier"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg> Back</button>
-        <div class="ts-screen-title">Who are you <span>delivering from?</span></div>
-        <div style="font-size:15px;color:var(--t1);margin-top:8px">Select your carrier — door assigned instantly</div>
-      </div>
-    </div>
-    <div class="ts-screen-body" style="padding-top:8px">
-      <div id="ts-ext-carrier-list" style="display:flex;flex-direction:column;gap:10px;">
-        <div class="ts-ext-carrier-btn" data-ext-carrier="Apex" data-ext-prefix="APX">
-          <span class="ts-ext-carrier-name">Apex</span>
-        </div>
-        <div class="ts-ext-carrier-btn" data-ext-carrier="Gardewine" data-ext-prefix="GDW">
-          <span class="ts-ext-carrier-name">Gardewine</span>
-        </div>
-        <div class="ts-ext-carrier-btn" data-ext-carrier="Manitoulin" data-ext-prefix="MAN">
-          <span class="ts-ext-carrier-name">Manitoulin</span>
-        </div>
-        <div class="ts-ext-carrier-btn" data-ext-carrier="TForce" data-ext-prefix="TFR">
-          <span class="ts-ext-carrier-name">TForce</span>
-        </div>
-        <div class="ts-ext-carrier-btn" data-ext-carrier="XPO" data-ext-prefix="XPO">
-          <span class="ts-ext-carrier-name">XPO</span>
-        </div>
-        <div class="ts-ext-carrier-btn" data-ext-carrier="Other" data-ext-prefix="EXT">
-          <span class="ts-ext-carrier-name">Other</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <div class="ts-screen" id="ts-s-drop">
     <div class="ts-screen-header">
       <div class="ts-topbar" style="padding:0"><div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div></div>
@@ -561,6 +520,18 @@ body{background-image:none!important;background:transparent!important}
 
   <script>
   (function(){
+    // Read location from URL: /driver?loc=milton sets locationId
+    const _driverLocSlug = new URLSearchParams(location.search).get('loc') || '';
+    let _driverLocationId = 1; // resolved after slug lookup below
+    (async () => {
+      if (_driverLocSlug) {
+        try {
+          const r = await fetch('/api/locations/by-slug/' + encodeURIComponent(_driverLocSlug), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+          if (r.ok) { const d = await r.json(); _driverLocationId = d.id || 1; }
+        } catch {}
+      }
+    })();
+
     let state = { trailer: '', carrier: '', action: '', eta: 10, dropType: 'Loaded', door: null, assignedDoor: null, safetyChecks: { load: false, plate: false } };
 
     // --- Kiosk Mode (Isolate Driver View) ---
@@ -638,49 +609,8 @@ body{background-image:none!important;background:transparent!important}
       btn.addEventListener('click', () => {
         state.carrier = btn.dataset.carrier;
         document.getElementById('ts-actions-trailer-tag').textContent = `🚛 ${state.trailer}`;
-        if (state.carrier === 'Outside') {
-          // Outside carrier — go straight to carrier picker, skip action board
-          show('ts-s-ext-carrier');
-        } else {
-          buildActions();
-          show('ts-s-actions');
-        }
-      });
-    });
-
-    // Outside carrier picker — select carrier → auto-drop
-    document.querySelectorAll('.ts-ext-carrier-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        document.querySelectorAll('.ts-ext-carrier-btn').forEach(b => b.classList.remove('ts-ext-sel'));
-        btn.classList.add('ts-ext-sel');
-        const carrier = btn.dataset.extCarrier;
-        const prefix  = btn.dataset.extPrefix;
-        btn.style.pointerEvents = 'none';
-        btn.innerHTML = `<span class="ts-ext-carrier-name" style="color:var(--cyan)">Assigning door…</span>`;
-        try {
-          const res = await fetch('/api/driver/ext-drop', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            body: JSON.stringify({ carrier, prefix })
-          });
-          const data = res.ok ? await res.json().catch(() => ({})) : {};
-          if (data.door) {
-            showDoorAssigned(
-              'Door Assigned!',
-              `Pull straight into Door ${data.door}.`,
-              true
-            );
-          } else {
-            showSuccess('Drop Logged', 'No doors free right now — dispatch notified.', [{k:'Carrier',v:carrier},{k:'Ref',v:data.refCode||'—'}]);
-          }
-        } catch {
-          toast('Network error — try again');
-        } finally {
-          // Restore button in case they go back
-          btn.style.pointerEvents = '';
-          btn.innerHTML = `<span class="ts-ext-carrier-name">${carrier}</span>`;
-          btn.classList.remove('ts-ext-sel');
-        }
+        buildActions();
+        show('ts-s-actions');
       });
     });
 
@@ -726,14 +656,14 @@ body{background-image:none!important;background:transparent!important}
       
       if (act === 'qd') {
         try { 
-          await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: 'Loaded', carrierType: 'Wesbell' }) }); 
+          await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: 'Loaded', carrierType: 'Wesbell' , locationId: _driverLocationId }) }); 
           showSuccess('Quick Drop Logged', 'Trailer dropped to yard instantly.', [{k:'Trailer',v:state.trailer},{k:'Action',v:'Quick Drop'}]);
         } catch(e) { toast('Error connecting to server'); }
       } 
       else if (act === 'shunt') {
         showDoorSelector('Shunt <span>Trailer</span>', 'Move to which door?', async () => {
           try {
-            await fetch('/api/driver/shunt', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, newDoor: state.door }) });
+            await fetch('/api/driver/shunt', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, newDoor: state.door , locationId: _driverLocationId }) });
             showSuccess('Shunt Complete', `Trailer moved to Door ${state.door}.`, [{k:'Trailer',v:state.trailer},{k:'New Door',v:state.door}]);
           } catch(e) { toast('Error shunting trailer'); }
         });
@@ -752,7 +682,7 @@ body{background-image:none!important;background:transparent!important}
       else if (act === 'arrive') {
         // REAL ARRIVAL FETCH
         try {
-          const res = await fetch('/api/driver/arrive', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, carrierType: state.carrier || 'Wesbell' }) });
+          const res = await fetch('/api/driver/arrive', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, carrierType: state.carrier || 'Wesbell' , locationId: _driverLocationId }) });
           if(res.ok) {
             const data = await res.json();
             if (data.door) {
@@ -785,7 +715,7 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Sending...';
       btn.disabled = true;
       try {
-        const res = await fetch('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, eta: state.eta }) });
+        const res = await fetch('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, eta: state.eta , locationId: _driverLocationId }) });
         if(res.ok) {
           const data = await res.json();
           if (data.door) {
@@ -819,15 +749,8 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Submitting...';
       btn.disabled = true;
       try {
-        const res = await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: state.dropType, carrierType: 'Outside' }) });
-        const data = res.ok ? await res.json().catch(() => ({})) : {};
-        if (data.door && data.autoAssigned) {
-          showSuccess('Door Assigned!', `Head to Door ${data.door}. Dispatch has been notified.`, [{k:'Trailer',v:state.trailer},{k:'Door',v:data.door},{k:'Type',v:state.dropType}]);
-        } else if (data.door) {
-          showSuccess('Drop Logged', `Trailer placed at Door ${data.door}.`, [{k:'Trailer',v:state.trailer},{k:'Door',v:data.door},{k:'Type',v:state.dropType}]);
-        } else {
-          showSuccess('Drop Logged', 'No doors available right now — dispatch has been notified to assign one.', [{k:'Trailer',v:state.trailer},{k:'Type',v:state.dropType},{k:'Carrier',v:'Outside'}]);
-        }
+        await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: state.dropType, carrierType: 'Outside' , locationId: _driverLocationId }) });
+        showSuccess('Drop Logged', 'Dispatch will assign your door on the board.', [{k:'Trailer',v:state.trailer},{k:'Type',v:state.dropType},{k:'Carrier',v:'Outside'}]);
       } catch(e) {
         toast('Network Error');
       } finally {
@@ -873,7 +796,7 @@ body{background-image:none!important;background:transparent!important}
       btn.disabled = true;
       try {
         const confirmDoor = state.door || state.assignedDoor || '';
-        await fetch('/api/confirm-safety', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, door: confirmDoor, action: 'depart', loadSecured: true, dockPlateUp: true }) });
+        await fetch('/api/confirm-safety', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, door: confirmDoor, action: 'depart', loadSecured: true, dockPlateUp: true , locationId: _driverLocationId }) });
         updateLiveDoor(null); 
         if(window._driverOmwStop) window._driverOmwStop();
         showSuccess('Departed! ✓', 'Safe travels! Trailer marked departed.', [{k:'Trailer',v:state.trailer},{k:'Door',v:confirmDoor||'—'}]);
@@ -1503,6 +1426,49 @@ body{background-image:none!important;background:transparent!important}
             </div>
             <div class="divider"></div>
             <button class="btn btn-danger btn-sm" id="btnClearAll" style="width:100%;margin-bottom:16px;">⚠ Clear All Trailers</button>
+            <div class="divider" style="margin-bottom:0;"></div>
+
+            <!-- ── Locations ─────────────────────────────────────────── -->
+            <button class="acc-head" id="adminLocToggle" aria-expanded="false" style="border-radius:0;border:none;border-bottom:1px solid var(--b0);margin:0 -14px;padding:10px 14px;width:calc(100% + 28px);">
+              <span style="display:flex;align-items:center;gap:7px;font-size:10px;">🏢 Locations</span>
+              <span class="chev">▾</span>
+            </button>
+            <div id="adminLocBody" style="max-height:0px;overflow:hidden;transition:max-height .35s ease;">
+              <div style="padding-top:12px;">
+                <div id="adminLocList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;min-height:32px;">
+                  <div style="color:var(--t3);font-size:11px;font-family:var(--mono);">Loading…</div>
+                </div>
+                <div class="divider"></div>
+                <div style="font-family:var(--mono);font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Add Location</div>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <div><label class="fl">Name</label><input class="fi" id="newLocName" placeholder="Brampton" autocomplete="off"/></div>
+                    <div><label class="fl">Slug (URL key)</label><input class="fi" id="newLocSlug" placeholder="brampton" autocomplete="off"/></div>
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+                    <div><label class="fl">Doors From</label><input class="fi" id="newLocFrom" type="number" value="28" min="1" max="99"/></div>
+                    <div><label class="fl">Doors To</label><input class="fi" id="newLocTo" type="number" value="42" min="1" max="99"/></div>
+                    <div><label class="fl">Timezone</label><input class="fi" id="newLocTz" placeholder="America/Toronto" value="America/Toronto"/></div>
+                  </div>
+                  <button class="btn btn-success btn-sm" id="btnAddLocation" style="width:100%;">+ Add Location</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── Cross-location Overview ───────────────────────────── -->
+            <button class="acc-head" id="adminOverviewToggle" aria-expanded="false" style="border-radius:0;border:none;border-bottom:1px solid var(--b0);margin:0 -14px;padding:10px 14px;width:calc(100% + 28px);">
+              <span style="display:flex;align-items:center;gap:7px;font-size:10px;">📊 All Locations Overview</span>
+              <span class="chev">▾</span>
+            </button>
+            <div id="adminOverviewBody" style="max-height:0px;overflow:hidden;transition:max-height .35s ease;">
+              <div style="padding-top:12px;">
+                <button class="btn btn-default btn-sm" id="btnRefreshOverview" style="width:100%;margin-bottom:10px;">↺ Refresh</button>
+                <div id="adminOverviewList" style="display:flex;flex-direction:column;gap:8px;">
+                  <div style="color:var(--t3);font-size:11px;font-family:var(--mono);">Click Refresh to load</div>
+                </div>
+              </div>
+            </div>
+
             <div class="divider" style="margin-bottom:0;"></div>
             <button class="acc-head" id="adminPinToggle" aria-expanded="false" style="border-radius:0;border:none;border-bottom:1px solid var(--b0);margin:0 -14px;padding:10px 14px;width:calc(100% + 28px);">
               <span style="display:flex;align-items:center;gap:7px;font-size:10px;">🔒 PIN Management</span>

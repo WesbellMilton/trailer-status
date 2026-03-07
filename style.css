@@ -166,7 +166,23 @@ a{color:var(--cyan);text-decoration:none}
 .tbl-row.r-dockready{border-left-color:var(--cyan);background:rgba(24,212,232,.018)}
 .tbl-row.r-dropped{border-left-color:var(--violet);background:rgba(166,124,245,.018)}
 .tbl-row.r-incoming{border-left-color:var(--b2)}
+.tbl-row.r-incoming.r-omw{border-left-color:var(--cyan);background:rgba(24,212,232,.012)}
 .tbl-row.r-departed{border-left-color:var(--b0);opacity:.4}
+@keyframes dockReadyGlow{0%,100%{background:rgba(24,212,232,.03)}50%{background:rgba(24,212,232,.10)}}
+@keyframes dockReadyTagPulse{0%,100%{box-shadow:0 0 0 0 rgba(24,212,232,.4)}50%{box-shadow:0 0 0 5px rgba(24,212,232,.1)}}
+.tbl-row.dockready-flash{animation:dockReadyGlow 1.4s ease-in-out infinite}
+.tbl-row.dockready-flash .stag-dockready{animation:dockReadyTagPulse 1.4s ease-in-out infinite}
+@keyframes omwArrivePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(.95)}}
+.omw-badge.omw-arriving{color:var(--green);background:rgba(25,224,154,.12);border-color:rgba(25,224,154,.35);animation:omwArrivePulse .7s ease-in-out infinite}
+/* KPI bar — incoming tile */
+.kpi-incoming::before{background:var(--cyan)}
+.kpi-incoming{box-shadow:inset 3px 0 20px rgba(24,212,232,.05),0 1px 4px rgba(0,0,0,.3)}
+.kpi-incoming .k-val{color:var(--cyan)}
+/* Dock map — per-status door cell colours */
+.dm-occupied.dm-loading{border-color:rgba(245,166,35,.45);background:rgba(245,166,35,.07)}
+.dm-occupied.dm-dockready{border-color:rgba(24,212,232,.45);background:rgba(24,212,232,.07)}
+.dm-occupied.dm-dropped{border-color:rgba(166,124,245,.45);background:rgba(166,124,245,.07)}
+.dm-occupied.dm-incoming{border-color:rgba(107,139,168,.3);background:rgba(107,139,168,.04)}
 .tbl-row.carrier-outside{background:rgba(166,124,245,.032)}
 .tbl-row.carrier-outside:hover{background:rgba(166,124,245,.055)}
 

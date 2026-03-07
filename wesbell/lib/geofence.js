@@ -74,11 +74,12 @@ async function processLocation({ trailer, lat, lng, req }) {
   wsBroadcast('location', { trailer, lat, lng, eta, zones: zoneIds, locAt: Date.now() });
 
   // Log each zone the driver is inside (deduplicate via recent events)
+  const { get: dbGet } = require('./db');
   for (const zone of activeZones) {
-    const recent = await run(`
-      SELECT id FROM geofence_events
-      WHERE trailer=? AND zone=? AND event='enter' AND at > ?
-    `, [trailer, zone.id, Date.now() - 5 * 60_000]).catch(() => null);
+    const recent = await dbGet(
+      `SELECT id FROM geofence_events WHERE trailer=? AND zone=? AND event='enter' AND at > ?`,
+      [trailer, zone.id, Date.now() - 5 * 60_000]
+    ).catch(() => null);
 
     if (!recent) {
       await run(

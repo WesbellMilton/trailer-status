@@ -2023,9 +2023,8 @@ input, select, textarea {
 /* ══════════════════════════════════════════
    DISPATCHER KPI BAR
 ══════════════════════════════════════════ */
-.disp-kpi-bar{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:4px}
-.disp-kpi-bar .kpi-row{flex:1;margin-bottom:0}
-.disp-actions{display:flex;gap:8px;align-items:center;padding-top:2px;flex-shrink:0}
+/* disp-kpi-bar removed */
+.disp-actions{display:flex;gap:6px;align-items:center;flex-shrink:0;padding-left:10px;border-left:1px solid var(--b0);margin-left:6px}
 
 /* ══════════════════════════════════════════
    OMW BADGE + DOOR AGE (board rows)

@@ -100,34 +100,266 @@ ${expiredHtml}
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#070a0f;--s0:#0c1018;--s1:#101620;--b0:#1a2535;--b1:#1f2e42;--t0:#e8eef8;--t1:#8a9db8;--t2:#4a5e78;--t3:#293848;--amber:#f0a030;--amber-d:#c07020;--cyan:#20c0d0;--green:#20d090;--red:#e84848;--mono:"DM Mono",monospace;--sans:"DM Sans",system-ui,sans-serif;--display:"Bebas Neue",sans-serif}
+:root{
+  --bg:#05080d;
+  --panel:#07090e;
+  --glass:rgba(255,255,255,.028);
+  --glass-focus:rgba(255,255,255,.05);
+  --divider:rgba(255,255,255,.045);
+  --t0:rgba(255,255,255,.95);
+  --t1:rgba(255,255,255,.55);
+  --t2:rgba(255,255,255,.22);
+  --t3:rgba(255,255,255,.1);
+  --amber:#f5a623;
+  --amber-glow:0 0 24px rgba(245,166,35,.2);
+  --red:#f04a4a;
+  --mono:"DM Mono",monospace;
+  --sans:"DM Sans",system-ui,sans-serif;
+  --display:"Bebas Neue",sans-serif;
+}
 html{height:100%;-webkit-font-smoothing:antialiased}
-body{min-height:100vh;background:var(--bg);color:var(--t0);font-family:var(--sans);display:grid;grid-template-columns:1fr 380px;overflow:hidden}
-.dashboard{position:relative;z-index:1;display:flex;flex-direction:column;padding:44px 52px 36px;background:linear-gradient(135deg,#070c14 0%,#0a1020 60%,#08111c 100%);border-right:1px solid var(--b0);overflow:hidden}
-.db-brand{display:flex;align-items:center;gap:12px;margin-bottom:44px}
-.db-mark{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--amber),var(--amber-d));display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:15px;font-weight:700;color:#000}
-.db-name{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.1em;color:var(--t0)}
-.clock-wrap{margin-bottom:8px}
-.clock-time{font-family:var(--display);font-size:clamp(80px,9vw,130px);line-height:.9;color:var(--t0)}
-.colon{color:var(--amber);animation:blink 1s step-start infinite}
-@keyframes blink{0%,49%{opacity:1}50%,100%{opacity:.2}}
-.date-row{display:flex;align-items:baseline;gap:12px;margin-bottom:36px}
-.date-day{font-family:var(--display);font-size:clamp(26px,3.5vw,42px);color:var(--t1);letter-spacing:.04em}
-.date-full{font-family:var(--mono);font-size:clamp(11px,1vw,13px);color:var(--t2);letter-spacing:.06em;text-transform:uppercase}
-.login-panel{position:relative;z-index:1;display:flex;flex-direction:column;justify-content:flex-start;padding:40px 40px 36px;background:var(--s0);overflow-y:auto}
-.lp-heading{font-family:var(--display);font-size:36px;color:var(--t0);letter-spacing:.04em;margin-bottom:4px}
-.lp-tagline{font-family:var(--mono);font-size:11px;color:var(--t2);letter-spacing:.06em;margin-bottom:28px}
-.ctx-badge{padding:8px 12px;border-radius:6px;font-family:var(--mono);font-size:11px;letter-spacing:.04em;margin-bottom:14px}
-.ctx-err{background:rgba(232,72,72,.08);border:1px solid rgba(232,72,72,.2);color:var(--red)}
-.fl{display:block;font-family:var(--mono);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);margin:0 0 7px}
-.fi{width:100%;padding:14px 16px;border-radius:8px;border:1px solid var(--b1);background:var(--s1);color:var(--t0);font-family:var(--mono);font-size:16px;outline:none;-webkit-appearance:none;transition:border-color .15s;margin-bottom:16px}
-.fi:focus{border-color:var(--amber)}.fi::placeholder{color:var(--t3)}
-.sign-btn{width:100%;padding:15px;border-radius:10px;border:1px solid rgba(240,160,48,.3);background:rgba(240,160,48,.1);color:var(--amber);font-family:var(--mono);font-size:14px;cursor:pointer;touch-action:manipulation;transition:all .15s;margin-top:4px;display:flex;align-items:center;justify-content:center;gap:10px}
-.sign-btn:hover{background:rgba(240,160,48,.18)}.sign-btn:active{transform:scale(.99)}.sign-btn:disabled{opacity:.5}
-.err-msg{display:none;padding:10px 12px;border-radius:6px;background:rgba(232,72,72,.08);border:1px solid rgba(232,72,72,.2);color:var(--red);font-family:var(--mono);font-size:12px;margin-top:12px}
+body{
+  min-height:100vh;
+  background:var(--bg);
+  color:var(--t0);
+  font-family:var(--sans);
+  display:grid;
+  grid-template-columns:1fr 400px;
+  overflow:hidden;
+}
+
+/* ── LEFT: clock dashboard ── */
+.dashboard{
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  padding:48px 60px 40px;
+  overflow:hidden;
+}
+/* Very subtle radial gradient — like Tesla ambient screen glow */
+.dashboard::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:radial-gradient(ellipse 70% 60% at 30% 40%, rgba(245,166,35,.04) 0%, transparent 70%),
+             radial-gradient(ellipse 50% 40% at 80% 80%, rgba(24,140,160,.03) 0%, transparent 60%);
+  pointer-events:none;
+}
+
+.db-brand{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-bottom:56px;
+  position:relative;
+}
+.db-mark{
+  width:36px;height:36px;
+  border-radius:9px;
+  background:linear-gradient(135deg,var(--amber) 0%,#c07020 100%);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:13px;font-weight:700;color:#000;
+  box-shadow:0 4px 16px rgba(245,120,0,.35);
+}
+.db-name{
+  font-family:var(--mono);
+  font-size:11px;
+  font-weight:500;
+  letter-spacing:.18em;
+  color:var(--t2);
+  text-transform:uppercase;
+}
+
+/* Clock — massive, ultra-light */
+.clock-wrap{position:relative;margin-bottom:4px}
+.clock-time{
+  font-family:var(--display);
+  font-size:clamp(96px,10vw,148px);
+  line-height:.85;
+  color:rgba(255,255,255,.9);
+  letter-spacing:-.01em;
+  font-weight:400;
+}
+.colon{
+  color:var(--amber);
+  display:inline-block;
+  animation:blink 1s step-start infinite;
+  margin:0 2px;
+}
+@keyframes blink{0%,49%{opacity:1}50%,100%{opacity:.15}}
+
+.date-row{
+  display:flex;
+  align-items:baseline;
+  gap:14px;
+  margin-bottom:0;
+  margin-top:8px;
+}
+.date-day{
+  font-family:var(--display);
+  font-size:clamp(28px,3.5vw,44px);
+  color:rgba(255,255,255,.35);
+  letter-spacing:.06em;
+  font-weight:400;
+}
+.date-full{
+  font-family:var(--mono);
+  font-size:clamp(10px,.9vw,12px);
+  color:var(--t2);
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+
+/* ── RIGHT: login panel ── */
+.login-panel{
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  padding:52px 44px;
+  background:rgba(7,9,14,.96);
+  border-left:1px solid var(--divider);
+  overflow-y:auto;
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+}
+/* Faint top glow inside panel */
+.login-panel::before{
+  content:"";
+  position:absolute;
+  top:0;left:0;right:0;
+  height:1px;
+  background:linear-gradient(90deg,transparent,rgba(245,166,35,.15),transparent);
+  pointer-events:none;
+}
+
+.lp-heading{
+  font-family:var(--display);
+  font-size:42px;
+  color:rgba(255,255,255,.9);
+  letter-spacing:.06em;
+  margin-bottom:6px;
+  font-weight:400;
+  line-height:1;
+}
+.lp-tagline{
+  font-family:var(--mono);
+  font-size:10px;
+  color:var(--t2);
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  margin-bottom:44px;
+}
+
+/* Error banner */
+.ctx-badge{padding:10px 14px;border-radius:10px;font-family:var(--mono);font-size:11px;letter-spacing:.04em;margin-bottom:16px}
+.ctx-err{background:rgba(240,74,74,.06);border:1px solid rgba(240,74,74,.15);color:rgba(240,74,74,.9)}
+
+/* Field labels — whisper light */
+.fl{
+  display:block;
+  font-family:var(--mono);
+  font-size:9px;
+  font-weight:500;
+  text-transform:uppercase;
+  letter-spacing:.18em;
+  color:var(--t2);
+  margin:0 0 8px;
+}
+
+/* Inputs — borderless glass, border only on focus */
+.fi{
+  width:100%;
+  padding:14px 16px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.06);
+  background:var(--glass);
+  color:rgba(255,255,255,.9);
+  font-family:var(--mono);
+  font-size:16px;
+  outline:none;
+  -webkit-appearance:none;
+  transition:border-color .2s, background .2s, box-shadow .2s;
+  margin-bottom:20px;
+}
+.fi:focus{
+  border-color:rgba(245,166,35,.35);
+  background:var(--glass-focus);
+  box-shadow:0 0 0 4px rgba(245,166,35,.06), var(--amber-glow);
+}
+.fi::placeholder{color:rgba(255,255,255,.1)}
+select.fi{cursor:pointer}
+select.fi option{background:#0c1018;color:rgba(255,255,255,.9)}
+
+/* Sign in button — clean amber pill */
+.sign-btn{
+  width:100%;
+  padding:16px;
+  border-radius:14px;
+  border:1px solid rgba(245,166,35,.25);
+  background:rgba(245,166,35,.1);
+  color:rgba(245,166,35,.95);
+  font-family:var(--mono);
+  font-size:13px;
+  font-weight:500;
+  letter-spacing:.12em;
+  cursor:pointer;
+  touch-action:manipulation;
+  transition:background .2s, border-color .2s, box-shadow .2s, transform .1s;
+  margin-top:8px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:12px;
+}
+.sign-btn:hover{
+  background:rgba(245,166,35,.18);
+  border-color:rgba(245,166,35,.4);
+  box-shadow:var(--amber-glow);
+}
+.sign-btn:active{transform:scale(.99);opacity:.9}
+.sign-btn:disabled{opacity:.3;cursor:not-allowed;box-shadow:none}
+
+/* Error message */
+.err-msg{
+  display:none;
+  padding:12px 14px;
+  border-radius:10px;
+  background:rgba(240,74,74,.06);
+  border:1px solid rgba(240,74,74,.15);
+  color:rgba(240,74,74,.9);
+  font-family:var(--mono);
+  font-size:11px;
+  margin-top:14px;
+  letter-spacing:.03em;
+}
 .err-msg.show{display:block}
-.lp-hint{font-family:var(--mono);font-size:10px;color:var(--t3);text-align:center;margin-top:20px;line-height:1.6}
-@media(max-width:768px){body{grid-template-columns:1fr;overflow-y:auto}.dashboard{padding:14px 16px 12px;border-right:none;border-bottom:1px solid var(--b0)}.login-panel{padding:20px 16px}}
+
+/* Hint */
+.lp-hint{
+  font-family:var(--mono);
+  font-size:9px;
+  color:var(--t3);
+  text-align:center;
+  margin-top:24px;
+  line-height:1.7;
+  letter-spacing:.06em;
+}
+
+/* Fade-up animation */
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.db-brand{animation:fadeUp .4s ease both}
+.clock-wrap{animation:fadeUp .4s ease .06s both}
+.date-row{animation:fadeUp .4s ease .1s both}
+.login-panel{animation:fadeUp .35s ease .05s both}
+
+/* Mobile */
+@media(max-width:768px){
+  body{grid-template-columns:1fr;overflow-y:auto}
+  .dashboard{padding:20px 20px 16px;border-right:none;border-bottom:1px solid var(--divider)}
+  .clock-time{font-size:clamp(64px,18vw,96px)}
+  .login-panel{padding:28px 20px;border-left:none}
+}
 </style></head><body>
 <div class="dashboard">
   <div class="db-brand"><div class="db-mark">W</div><div><div class="db-name">WESBELL</div></div></div>

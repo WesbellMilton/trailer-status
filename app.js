@@ -5,6 +5,7 @@
   const el=id=>document.getElementById(id);
   const path=()=>location.pathname.toLowerCase();
   const isDriver=()=>path().startsWith("/driver");
+  const isDispatch=()=>ROLE==="dispatcher";
   const isSuper=()=>path().startsWith("/management");
   const isDock=()=>path().startsWith("/dock");
   const isAdmin=()=>ROLE==="admin";
@@ -1447,13 +1448,46 @@
   }
   async function quickStatus(trailer,status){
     haptic("medium");
-    try{await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})});toast("Updated",`${trailer} → ${status}`,"ok");}
-    catch(e){toast("Update failed",e.message,"err");}
+    // Optimistic update
+    if(trailers[trailer]){
+      const prev=trailers[trailer].status;
+      trailers[trailer].status=status;
+      trailers[trailer].updatedAt=Date.now();
+      renderBoard();
+      if(isDock())renderDockView();
+      if(isSuper())renderSupBoard();
+      try{
+        await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})});
+        toast("Updated",`${trailer} → ${status}`,"ok");
+      }catch(e){
+        trailers[trailer].status=prev;renderBoard();if(isDock())renderDockView();
+        toast("Update failed",e.message,"err");
+      }
+    } else {
+      try{await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})});toast("Updated",`${trailer} → ${status}`,"ok");}
+      catch(e){toast("Update failed",e.message,"err");}
+    }
   }
   async function dockSet(trailer,status){
     haptic("medium");
-    try{await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})});const lbl={Loading:"🟡 Loading started","Dock Ready":"🔵 Dock Ready",Ready:"🟢 Ready"};showToast(lbl[status]||`${trailer} → ${status}`,"ok");}
-    catch(e){toast("Update failed",e.message,"err");}
+    // Optimistic update — reflect change instantly on both boards before WS round-trip
+    if(trailers[trailer]){
+      trailers[trailer].status=status;
+      trailers[trailer].updatedAt=Date.now();
+      renderBoard();
+      if(isDock())renderDockView();
+      if(isSuper())renderSupBoard();
+    }
+    try{
+      await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,status})});
+      const lbl={Loading:"🟡 Loading started","Dock Ready":"🔵 Dock Ready",Ready:"🟢 Ready"};
+      showToast(lbl[status]||`${trailer} → ${status}`,"ok");
+    }
+    catch(e){
+      // Revert optimistic update on failure
+      if(trailers[trailer]){delete trailers[trailer].status;renderBoard();if(isDock())renderDockView();}
+      toast("Update failed",e.message,"err");
+    }
   }
   async function markReady(trailer){
     haptic("success");
@@ -2228,10 +2262,16 @@
           if(!isDriver()){
             haptic("success");
             if(isDock())toast("🔵 Dock Ready",`Trailer ${trailer}${door?" at Door "+door:""} — ready to load`,"ok",10000);
+            else if(isDispatch()||isAdmin())toast("🔵 Dock Ready",`${trailer}${door?" · Door "+door:""} — awaiting pickup`,"ok",8000);
             _notifPush({icon:"🔵",title:`${trailer} Dock Ready`,body:`${door?"Door "+door+" — ":""}Ready to begin loading`,kind:"dock_ready",trailer,door,at:Date.now()});
           }
         } else if(kind==="loading"){
-          if(!isDriver()&&!isDock()){
+          if(!isDriver()){
+            if(isDock()){
+              // Dock gets a toast so workers know loading started (may have been set by dispatch)
+              toast("🟡 Loading",`Trailer ${trailer}${door?" at Door "+door:""} — loading started`,"ok",6000);
+              haptic("medium");
+            }
             _notifPush({icon:"🟡",title:`${trailer} Loading`,body:`Loading started${door?" at Door "+door:""}`,kind:"loading",trailer,door,at:Date.now()});
           }
         } else if(kind==="departed"){

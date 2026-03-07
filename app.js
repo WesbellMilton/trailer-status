@@ -542,75 +542,11 @@
       statusRow.innerHTML=`<div style="margin-right:6px;">${statusTag(r.status)}</div>`
         +(canEdit?nexts.map(s=>`<button class="dsd-status-btn ${DSB_CLS[s]||""}" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(trailerId)}">${esc(s)}</button>`).join(""):"");
     }
-    // Door section — assigned door callout with plate status, then full grid
-    const occupied=getOccupiedDoors();
-    const assignedDoor=r.door||"";
-    // Door info callout
-    let doorInfoEl=el("dsdDoorInfo");
-    if(!doorInfoEl){
-      doorInfoEl=document.createElement("div");
-      doorInfoEl.id="dsdDoorInfo";
-      const grid=el("dsdDoorGrid");
-      if(grid)grid.parentNode.insertBefore(doorInfoEl,grid);
-    }
-    if(doorInfoEl){
-      if(assignedDoor){
-        const plate=dockPlates[assignedDoor]||{};
-        const pCls=plate.status==="OK"?"ddi-ok":plate.status==="Service"?"ddi-service":plate.status==="Out of Order"?"ddi-ooo":"ddi-unknown";
-        const doorOcc=occupied[assignedDoor];
-        const otherTrailer=doorOcc&&doorOcc.trailer!==trailerId?doorOcc.trailer:null;
-        doorInfoEl.innerHTML=`<div class="dsd-door-info ${pCls}">
-          <div class="ddi-door">D${esc(assignedDoor)}</div>
-          <div class="ddi-body">
-            <div class="ddi-plate-row">Plate: <strong>${esc(plate.status||"Unknown")}</strong>${plate.note?` <span class="ddi-note">${esc(plate.note)}</span>`:""}${otherTrailer?`<span class="ddi-conflict"> ⚠ Also: ${esc(otherTrailer)}</span>`:""}</div>
-          </div>
-        </div>`;
-      } else {
-        doorInfoEl.innerHTML="";
-      }
-    }
-    // Door grid
-    const doorGrid=el("dsdDoorGrid");
-    if(doorGrid&&canEdit){
-      doorGrid.innerHTML=Array.from({length:15},(_,i)=>i+28).map(d=>{
-        const ds=String(d);
-        const isCur=ds===assignedDoor;
-        const occ=occupied[ds];
-        const isOcc=!!occ&&!isCur;
-        const plate=dockPlates[ds]||{};
-        const plateBad=plate.status==="Out of Order";
-        const plateSvc=plate.status==="Service";
-        const cls=isCur?"ddoor-current":isOcc?"ddoor-occ":plateBad?"ddoor-bad":plateSvc?"ddoor-svc":"ddoor-free";
-        const tip=isCur?`Current — ${plate.status||""}`:isOcc?(occ.status==="Blocked"?`Blocked${occ.note?" — "+occ.note:""}`:occ.trailer+" · "+occ.status):(plateBad?"Plate: OOO":plateSvc?"Plate: Service":"");
-        return`<button class="dsd-door-btn ${cls}" data-act="dsdAssignDoor" data-door="${ds}" data-trailer-id="${esc(trailerId)}"${tip?` title="${esc(tip)}"`:""}>${ds}${plateBad?'<span class="ddoor-plate-dot dpp-ooo"></span>':plateSvc?'<span class="ddoor-plate-dot dpp-svc"></span>':""}</button>`;
-      }).join("");
-    } else if(doorGrid){
-      doorGrid.innerHTML=assignedDoor?`<span style="font-family:var(--mono);font-size:13px;color:var(--green)">D${esc(assignedDoor)}</span>`:`<span style="color:var(--t3);font-size:11px">No door assigned</span>`;
-    }
     // Note
     const noteInput=el("dsdNoteInput");
     if(noteInput)noteInput.value=r.note||"";
     const noteBtn=el("btnDsdSaveNote");
     if(noteBtn)noteBtn.style.display=canEdit?"":"none";
-    // Detail fields
-    const fields=el("dsdFields");
-    if(fields){
-      const omwTxt=r.omwAt?(r.omwEta?`~${Math.max(0,Math.ceil((r.omwAt+r.omwEta*60000-Date.now())/60000))}m`:"Yes"):"No";
-      fields.innerHTML=[
-        ["Drop Type",r.dropType||"—"],
-        ["Carrier",r.carrierType||"—"],
-        ["OMW",omwTxt],
-        ["Updated",timeAgo(r.updatedAt)||"—"],
-      ].map(([k,v])=>`<div class="dsd-field"><span class="dsd-field-key">${k}</span><span class="dsd-field-val">${v}</span></div>`).join("");
-    }
-    // Edit form
-    const editSec=el("dsdEditSection");
-    if(editSec)editSec.style.display=canEdit?"":"none";
-    if(canEdit){
-      if(el("dsd_direction"))el("dsd_direction").value=r.direction||"Inbound";
-      if(el("dsd_dropType"))el("dsd_dropType").value=r.dropType||"";
-      if(el("dsd_carrier"))el("dsd_carrier").value=r.carrierType||"";
-    }
   }
 
   function closeDetailPanel(){
@@ -639,18 +575,6 @@
       try{
         await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({trailer:_selectedTrailer,note})});
         toast("Note saved","","ok",2500);
-      }catch(e){toast("Failed",e.message,"err");}
-    });
-    el("btnDsdSaveEdit")?.addEventListener("click",async()=>{
-      if(!_selectedTrailer)return;
-      try{
-        await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({
-          trailer:_selectedTrailer,
-          direction:el("dsd_direction")?.value||"",
-          dropType:el("dsd_dropType")?.value||"",
-          carrierType:el("dsd_carrier")?.value||"",
-        })});
-        toast("Saved","","ok",2500);
       }catch(e){toast("Failed",e.message,"err");}
     });
     el("btnDsdDelete")?.addEventListener("click",()=>{
@@ -755,7 +679,6 @@
     const grid=el("dspPlatesGrid");if(!grid)return;
     const canEdit=ROLE==="dispatcher"||ROLE==="dock"||ROLE==="management"||ROLE==="admin";
     const doors=[];for(let d=28;d<=42;d++)doors.push(String(d));
-    const occupied=getOccupiedDoors();
     const v=Object.values(dockPlates||{});
     const sumEl=el("dspPlatesSummary");
     const okCount=v.filter(p=>p?.status==="OK").length;
@@ -768,40 +691,30 @@
     }
     grid.innerHTML=doors.map(door=>{
       const p=dockPlates[door]||{status:"Unknown",note:""};
-      const occ=occupied[door];
       const open=!!plateEditOpen[door]&&canEdit;
-      // Determine card state: occupied > plate issue > free
-      const isBlocked=occ?.status==="Blocked";
-      const plateBad=p.status==="Out of Order";
-      const plateSvc=p.status==="Service";
-      let cardCls="dpb-free";
-      if(occ&&!isBlocked)cardCls="dpb-occupied dpb-"+((STATUS_ROW[occ.status]||"r-incoming").replace("r-",""));
-      else if(isBlocked)cardCls="dpb-blocked";
-      else if(plateBad)cardCls="dpb-ooo";
-      else if(plateSvc)cardCls="dpb-svc";
-      else if(p.status==="OK")cardCls="dpb-free";
-      // Trailer label — short, clipped
-      const trailerLabel=occ&&!isBlocked
-        ?`<div class="dpb-trailer">${esc(occ.trailer)}</div><div class="dpb-occ-status">${esc(occ.status)}</div>`
-        :isBlocked?`<div class="dpb-trailer" style="font-size:8px;opacity:.6">Blocked</div>${occ.note?`<div class="dpb-occ-status">${esc(occ.note)}</div>`:""}`:
-        `<div class="dpb-trailer dpb-free-label">Free</div>`;
-      // Plate indicator dot
-      const plateDot=plateBad?`<span class="dpb-pdot dpb-pdot-ooo" title="Plate: OOO"></span>`
-        :plateSvc?`<span class="dpb-pdot dpb-pdot-svc" title="Plate: Svc"></span>`:
-        p.status==="OK"?`<span class="dpb-pdot dpb-pdot-ok" title="Plate: OK"></span>`:``;
-      return`<div class="dsp-plate-btn ${cardCls}" data-door="${esc(door)}" title="${occ?esc(occ.trailer||"Blocked")+" · ":""}D${door} · Plate: ${esc(p.status||"Unknown")}${p.note?" · "+esc(p.note):""}">
-        <div class="dpb-top"><span class="dpb-door">D${esc(door)}</span>${plateDot}</div>
-        ${trailerLabel}
-        ${open?`<div class="dpb-edit">
+      const s=p.status||"Unknown";
+      let cardCls="dpb-unknown";
+      if(s==="OK")cardCls="dpb-ok";
+      else if(s==="Service")cardCls="dpb-svc";
+      else if(s==="Out of Order")cardCls="dpb-ooo";
+      if(open){
+        return`<div class="dsp-plate-btn ${cardCls} dpb-editing" data-door="${esc(door)}">
+          <div class="dpb-top"><span class="dpb-door">D${esc(door)}</span></div>
           <div class="dpb-status-btns">
-            <button class="dpb-sbtn dpb-sbtn-ok${p.status==="OK"?" dpb-sbtn-active":""}" data-plate-status-set="${esc(door)}" data-plate-val="OK">✓ OK</button>
-            <button class="dpb-sbtn dpb-sbtn-svc${p.status==="Service"?" dpb-sbtn-active":""}" data-plate-status-set="${esc(door)}" data-plate-val="Service">⚠ Service</button>
-            <button class="dpb-sbtn dpb-sbtn-ooo${p.status==="Out of Order"?" dpb-sbtn-active":""}" data-plate-status-set="${esc(door)}" data-plate-val="Out of Order">✕ OOO</button>
+            <button class="dpb-sbtn dpb-sbtn-ok${s==="OK"?" dpb-sbtn-active":""}" data-plate-status-set="${esc(door)}" data-plate-val="OK">✓ OK</button>
+            <button class="dpb-sbtn dpb-sbtn-svc${s==="Service"?" dpb-sbtn-active":""}" data-plate-status-set="${esc(door)}" data-plate-val="Service">⚠ Svc</button>
+            <button class="dpb-sbtn dpb-sbtn-ooo${s==="Out of Order"?" dpb-sbtn-active":""}" data-plate-status-set="${esc(door)}" data-plate-val="Out of Order">✕ OOO</button>
           </div>
-          <input class="dpb-note-input" data-plate-note="${esc(door)}" placeholder="Note (optional)" value="${esc(p.note||"")}"/>
-          <div class="dpb-action-row"><button class="dpb-save-btn" data-plate-save="${esc(door)}">Save</button><button class="dpb-cancel-btn" data-plate-toggle="${esc(door)}">Cancel</button></div>
-        </div>`:(canEdit?`<button class="dpb-edit-btn" data-plate-toggle="${esc(door)}">Edit</button>`:"")
-        }
+          <input class="dpb-note-input" data-plate-note="${esc(door)}" placeholder="Note…" value="${esc(p.note||"")}"/>
+          <div class="dpb-action-row"><button class="dpb-save-btn" data-plate-save="${esc(door)}">Save</button><button class="dpb-cancel-btn" data-plate-toggle="${esc(door)}">✕</button></div>
+        </div>`;
+      }
+      const icon=s==="OK"?"✓":s==="Service"?"⚠":"✕";
+      return`<div class="dsp-plate-btn ${cardCls}" data-door="${esc(door)}" title="D${door}: ${esc(s)}${p.note?" · "+esc(p.note):""}">
+        <div class="dpb-top"><span class="dpb-door">D${esc(door)}</span></div>
+        <div class="dpb-status-icon">${icon}</div>
+        ${p.note?`<div class="dpb-note-sm">${esc(p.note)}</div>`:""}
+        ${canEdit?`<button class="dpb-edit-btn" data-plate-toggle="${esc(door)}">Edit</button>`:""}
       </div>`;
     }).join("");
   }
@@ -1149,7 +1062,6 @@
     if(!grid)return;
     const canEdit=ROLE==="dispatcher"||ROLE==="dock"||ROLE==="management"||ROLE==="admin";
     const doors=[];for(let d=28;d<=42;d++)doors.push(String(d));
-    const occupied=getOccupiedDoors();
     const v=Object.values(dockPlates||{});
     const okCount=v.filter(p=>p?.status==="OK").length;
     const svcCount=v.filter(p=>p?.status==="Service").length;
@@ -1163,7 +1075,6 @@
 
     grid.innerHTML=doors.map(door=>{
       const p=dockPlates[door]||{status:"Unknown",note:""};
-      const occ=occupied[door];
       const open=!!plateEditOpen[door]&&canEdit;
       const s=p.status||"Unknown";
 

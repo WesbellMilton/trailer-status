@@ -5368,62 +5368,59 @@ select option { background: #0d1119; }
 }
 
 /* ── Per-status card colours ── */
+/* Binary visual: green = free/open, yellow = any trailer present           */
+/* Status badge retains detail text; blocked keeps red as override          */
 
+/* FREE — green */
 .occ-card.occ-free {
-  border-color: rgba(255,255,255,.04);
-  background: rgba(255,255,255,.015);
-}
-.occ-card.occ-free .occ-door { color: rgba(255,255,255,.2); }
-
-.occ-card.occ-incoming {
-  border-color: rgba(255,255,255,.1);
-  background: rgba(255,255,255,.03);
-}
-.occ-card.occ-incoming .occ-trailer { color: var(--t1); }
-.occ-card.occ-incoming .occ-status-badge { color: var(--t2); background: rgba(255,255,255,.07); }
-
-.occ-card.occ-dropped {
-  border-color: rgba(166,124,245,.2);
-  background: rgba(166,124,245,.05);
-}
-.occ-card.occ-dropped .occ-door { color: rgba(166,124,245,.6); }
-.occ-card.occ-dropped .occ-trailer { color: rgba(166,124,245,.95); }
-.occ-card.occ-dropped .occ-status-badge { background: rgba(166,124,245,.12); color: var(--violet); }
-
-.occ-card.occ-loading {
-  border-color: rgba(245,166,35,.3);
-  background: rgba(245,166,35,.06);
-  box-shadow: 0 0 8px rgba(245,166,35,.06);
-}
-.occ-card.occ-loading .occ-door { color: rgba(245,166,35,.6); }
-.occ-card.occ-loading .occ-trailer { color: rgba(245,166,35,.98); }
-.occ-card.occ-loading .occ-status-badge { background: rgba(245,166,35,.15); color: var(--amber); }
-
-.occ-card.occ-dockready {
-  border-color: rgba(24,212,232,.3);
-  background: rgba(24,212,232,.06);
-  box-shadow: 0 0 8px rgba(24,212,232,.07);
-}
-.occ-card.occ-dockready .occ-door { color: rgba(24,212,232,.6); }
-.occ-card.occ-dockready .occ-trailer { color: rgba(24,212,232,.98); }
-.occ-card.occ-dockready .occ-status-badge { background: rgba(24,212,232,.15); color: var(--cyan); }
-
-.occ-card.occ-ready {
-  border-color: rgba(25,224,154,.3);
-  background: rgba(25,224,154,.07);
+  border-color: rgba(25,224,154,.35);
+  background: rgba(25,224,154,.09);
   box-shadow: 0 0 10px rgba(25,224,154,.08);
 }
-.occ-card.occ-ready .occ-door { color: rgba(25,224,154,.6); }
-.occ-card.occ-ready .occ-trailer { color: rgba(25,224,154,.98); }
-.occ-card.occ-ready .occ-status-badge { background: rgba(25,224,154,.15); color: var(--green); }
+.occ-card.occ-free .occ-door { color: rgba(25,224,154,.6); }
+.occ-card.occ-free .occ-free-lbl { color: rgba(25,224,154,.7); }
 
+/* OCCUPIED (incoming / dropped / loading / dock ready / ready) — amber */
+.occ-card.occ-incoming,
+.occ-card.occ-dropped,
+.occ-card.occ-loading,
+.occ-card.occ-dockready,
+.occ-card.occ-ready {
+  border-color: rgba(245,166,35,.35);
+  background: rgba(245,166,35,.08);
+  box-shadow: 0 0 10px rgba(245,166,35,.07);
+}
+.occ-card.occ-incoming .occ-door,
+.occ-card.occ-dropped .occ-door,
+.occ-card.occ-loading .occ-door,
+.occ-card.occ-dockready .occ-door,
+.occ-card.occ-ready .occ-door { color: rgba(245,166,35,.6); }
+
+.occ-card.occ-incoming .occ-trailer,
+.occ-card.occ-dropped .occ-trailer,
+.occ-card.occ-loading .occ-trailer,
+.occ-card.occ-dockready .occ-trailer,
+.occ-card.occ-ready .occ-trailer { color: rgba(245,166,35,.98); }
+
+.occ-card.occ-incoming .occ-status-badge,
+.occ-card.occ-dropped .occ-status-badge,
+.occ-card.occ-loading .occ-status-badge,
+.occ-card.occ-dockready .occ-status-badge,
+.occ-card.occ-ready .occ-status-badge {
+  background: rgba(245,166,35,.14);
+  color: var(--amber);
+}
+
+/* DEPARTED — dim */
 .occ-card.occ-departed {
   opacity: .35;
 }
 
+/* BLOCKED — red override */
 .occ-card.occ-blocked {
-  border-color: rgba(240,74,74,.3);
-  background: rgba(240,74,74,.05);
+  border-color: rgba(240,74,74,.35);
+  background: rgba(240,74,74,.07);
+  box-shadow: 0 0 10px rgba(240,74,74,.07);
 }
 .occ-card.occ-blocked .occ-door { color: rgba(240,74,74,.65); }
 .occ-card.occ-blocked .occ-label { color: var(--red); }

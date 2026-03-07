@@ -605,11 +605,14 @@ body{background-image:none!important;background:transparent!important}
 
     // --- Live Door Status Banner ---
     function updateLiveDoor(door) {
-      const banner = document.getElementById('ts-live-banner');
       state.assignedDoor = door;
+      const banner = document.getElementById('ts-live-banner');
+      if (!banner) return;
       if (door) {
-        document.getElementById('ts-lb-door').textContent = door;
-        document.getElementById('ts-lb-trailer').textContent = `🚛 ${state.trailer}`;
+        const lb = document.getElementById('ts-lb-door');
+        const lt = document.getElementById('ts-lb-trailer');
+        if (lb) lb.textContent = door;
+        if (lt) lt.textContent = `🚛 ${state.trailer}`;
         banner.classList.add('ts-show');
       } else {
         banner.classList.remove('ts-show');
@@ -680,7 +683,7 @@ body{background-image:none!important;background:transparent!important}
           const data = res.ok ? await res.json().catch(() => ({})) : {};
           if (data.door) {
             updateLiveDoor(data.door);
-            showDoorAssigned('Door Assigned!', `Pull straight into Door ${data.door}.`, true);
+            showDoorAssigned('Door Assigned!', `Pull straight into Door ${data.door}.`, true, data.door);
           } else {
             showSuccess('Drop Logged', 'No doors free right now — dispatch has been notified.', [{k:'Carrier',v:carrier},{k:'Ref',v:data.refCode||'—'}]);
           }
@@ -767,7 +770,7 @@ body{background-image:none!important;background:transparent!important}
             const data = await res.json();
             if (data.door) {
               updateLiveDoor(data.door);
-              showDoorAssigned('Arrived!', data.alreadyActive ? `Head to your assigned Door ${data.door}.` : `Pull straight into Door ${data.door}.`, true);
+              showDoorAssigned('Arrived!', data.alreadyActive ? `Head to your assigned Door ${data.door}.` : `Pull straight into Door ${data.door}.`, true, data.door);
             } else {
               toast('No door available — please ask dispatch.');
             }
@@ -800,7 +803,7 @@ body{background-image:none!important;background:transparent!important}
           const data = await res.json();
           if (data.door) {
             updateLiveDoor(data.door);
-            showDoorAssigned('Door Assigned!', data.alreadyActive ? `Your trailer is at Door ${data.door}.` : `Head to Door ${data.door}. Dispatch notified.`, true);
+            showDoorAssigned('Door Assigned!', data.alreadyActive ? `Your trailer is at Door ${data.door}.` : `Head to Door ${data.door}. Dispatch notified.`, true, data.door);
           } else {
             toast('No door available — please ask dispatch.');
           }
@@ -889,8 +892,10 @@ body{background-image:none!important;background:transparent!important}
     });
 
     // -- Door Display Helper --
-    function showDoorAssigned(headline, sub, showSafety) {
-      document.getElementById('ts-door-number').textContent = state.assignedDoor || state.door || '--';
+    function showDoorAssigned(headline, sub, showSafety, door) {
+      const d = door || state.assignedDoor || state.door || '--';
+      state.assignedDoor = d !== '--' ? d : state.assignedDoor;
+      document.getElementById('ts-door-number').textContent = d;
       document.getElementById('ts-door-headline').textContent = headline;
       document.getElementById('ts-door-sub').textContent = sub;
       document.getElementById('ts-door-trailer-tag2').textContent = `🚛 ${state.trailer}`;

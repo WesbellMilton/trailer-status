@@ -312,9 +312,12 @@
     };
     tbodyEl.innerHTML=filt.map(r=>{
       const rowCls=STATUS_ROW[r.status]||"";
+      const omwActive=r.omwAt&&r.status==="Incoming";
       const flash=(r.trailer in prevStatuses&&prevStatuses[r.trailer]!==r.status)?" flashing":"";
       prevStatuses[r.trailer]=r.status;
       const readyFlash=((ROLE==="dispatcher"||ROLE==="management")&&!readOnly&&r.status==="Ready")?" ready-flash":"";
+      const dockReadyFlash=((ROLE==="dispatcher"||ROLE==="management")&&!readOnly&&r.status==="Dock Ready")?" dockready-flash":"";
+      const omwRowCls=omwActive?" r-omw":"";
       const door=r.door?`<span class="t-door">${esc(r.door)}</span>`:`<span style="color:var(--t3)">—</span>`;
       const dtype=r.dropType?`<span style="font-size:10px;color:var(--t2);font-family:var(--mono);">${esc(r.dropType)}</span>`:`<span style="color:var(--t3)">—</span>`;
       const ctag=carrierTag(r.carrierType);
@@ -362,7 +365,7 @@
           }).join("")}</div>
           <button class="btn btn-default btn-sm" data-act="shuntToggle" data-trailer-id="${esc(r.trailer)}" style="margin-top:4px;">Cancel</button>
         </div>`:"";
-      return`<div class="tbl-row ${rowCls}${flash}${readyFlash}${r.carrierType==="Outside"?" carrier-outside":""}" data-trailer="${esc(r.trailer)}">
+      return`<div class="tbl-row ${rowCls}${flash}${readyFlash}${dockReadyFlash}${omwRowCls}${r.carrierType==="Outside"?" carrier-outside":""}" data-trailer="${esc(r.trailer)}">
         <span class="t-num">${esc(r.trailer)}${omwBadge}</span>
         <span class="t-dir">${esc(r.direction||"—")}</span>
         <span class="t-status">${statusTag(r.status)}</span>

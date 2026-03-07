@@ -808,25 +808,21 @@
   let _dspPlatesInited=false;
   function _initDspPlates(){
     if(_dspPlatesInited)return;_dspPlatesInited=true;
-    function wirePanel(toggleId,bodyId,lsKey){
+    // Panels are always-open by default; toggle collapses them
+    function wirePanel(toggleId,bodyId){
       const btn=el(toggleId),body=el(bodyId);if(!btn||!body)return;
+      // Start expanded
+      btn.setAttribute("aria-expanded","true");
+      const chev=btn.querySelector(".dsp-plates-chev");if(chev)chev.textContent="▴";
       btn.addEventListener("click",()=>{
         const open=btn.getAttribute("aria-expanded")==="true";
         btn.setAttribute("aria-expanded",open?"false":"true");
-        const chev=btn.querySelector(".dsp-plates-chev");if(chev)chev.textContent=open?"▾":"▴";
-        body.style.maxHeight=open?"0":(body.scrollHeight+40)+"px";
-        try{localStorage.setItem(lsKey,open?"0":"1");}catch{}
+        if(chev)chev.textContent=open?"▾":"▴";
+        body.classList.toggle("dsp-plates-open",!open);
       });
-      try{if(localStorage.getItem(lsKey)==="1"){
-        requestAnimationFrame(()=>{
-          btn.setAttribute("aria-expanded","true");
-          const chev=btn.querySelector(".dsp-plates-chev");if(chev)chev.textContent="▴";
-          body.style.maxHeight=(body.scrollHeight+200)+"px";
-        });
-      }}catch{}
     }
-    wirePanel("dspOccToggle","dspOccBody","wb_dspocc");
-    wirePanel("dspPlatesToggle","dspPlatesBody","wb_dspplates");
+    wirePanel("dspOccToggle","dspOccBody");
+    wirePanel("dspPlatesToggle","dspPlatesBody");
   }
 
   function renderSupConf(){
@@ -964,7 +960,7 @@
     // update role label
     if(el("dvRoleLabel"))el("dvRoleLabel").textContent=ROLE?ROLE.charAt(0).toUpperCase()+ROLE.slice(1):"Sign in";
     // Show back-to-dispatch for dispatchers viewing dock
-    const bb=el("dvBackBtn");if(bb)bb.style.display=(ROLE&&ROLE!=="dock")?"":"none";
+    const bb=el("dvBackBtn");if(bb)bb.style.display=(ROLE&&["dispatcher","admin","management"].includes(ROLE))?"":"none";
     const q=(el("dockSearch")?.value||"").trim().toLowerCase();
     const rows=Object.entries(trailers).map(([t,r])=>({trailer:t,...r}))
       .filter(r=>{
@@ -1050,21 +1046,17 @@
   // ── DOCK VIEW — OCCUPANCY + PLATES PANELS ────────────────────────────
   let _dvPlatesInited=false;
 
-  function _wireDvPanel(toggleId,bodyId,lsKey){
+  function _wireDvPanel(toggleId,bodyId){
     const tog=document.getElementById(toggleId),body=document.getElementById(bodyId);
     if(!tog||!body)return;
+    // Start expanded
+    const chev=tog.querySelector(".dvp-chev");
+    if(chev)chev.textContent="▴";
     tog.addEventListener("click",()=>{
-      const open=body.style.maxHeight!=="0px"&&body.style.maxHeight!=="";
-      body.style.maxHeight=open?"0px":(body.scrollHeight+40)+"px";
-      const chev=tog.querySelector(".dvp-chev");if(chev)chev.textContent=open?"▾":"▴";
-      try{localStorage.setItem(lsKey,open?"0":"1");}catch{}
+      const open=body.classList.contains("dvp-body-open");
+      body.classList.toggle("dvp-body-open",!open);
+      if(chev)chev.textContent=open?"▾":"▴";
     });
-    try{if(localStorage.getItem(lsKey)==="1"){
-      requestAnimationFrame(()=>{
-        body.style.maxHeight=(body.scrollHeight+40)+"px";
-        const chev=tog.querySelector(".dvp-chev");if(chev)chev.textContent="▴";
-      });
-    }}catch{}
   }
 
   function renderDvOccupancy(){
@@ -1137,8 +1129,8 @@
 
     if(!_dvPlatesInited){
       _dvPlatesInited=true;
-      _wireDvPanel("dvOccToggle","dvOccBody","wb_dvocc");
-      _wireDvPanel("dvPlatesToggle","dvPlatesBody","wb_dvplates");
+      _wireDvPanel("dvOccToggle","dvOccBody");
+      _wireDvPanel("dvPlatesToggle","dvPlatesBody");
     }
   }
 
@@ -1200,7 +1192,7 @@
   function initDockView(){
     // Show "← Dispatch" back button for non-dock roles
     if(ROLE&&ROLE!=="dock"){
-      const bb=el("dvBackBtn");if(bb)bb.style.display="";
+      const bb=el("dvBackBtn");if(bb&&["dispatcher","admin","management"].includes(ROLE))bb.style.display="";
     }
     // Staff chip sign-in
     el("dvStaffChip")?.addEventListener("click",()=>el("btnDockStaffLogin")?.click());

@@ -78,14 +78,6 @@ body{background-image:none!important;background:transparent!important}
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x=".5" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor"/><rect x="7" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x=".5" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x="7" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".3"/></svg>
         Dispatcher
       </a>
-      <a href="/dock" class="nav-item" id="navDock">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 9h10M3 9V6l3-2.5L9 6v3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Dock
-      </a>
-      <a href="/driver" class="nav-item" id="navDriver">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="4" width="8" height="5" rx="1.2" stroke="currentColor" stroke-width="1.2"/><path d="M9 6.5h1.5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H9" stroke="currentColor" stroke-width="1.2"/><circle cx="3" cy="9" r="1" fill="currentColor"/><circle cx="7" cy="9" r="1" fill="currentColor"/><path d="M1 6.5 2.5 4h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-        Driver
-      </a>
       <a href="/management" class="nav-item" id="navManagement">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="4" r="2" stroke="currentColor" stroke-width="1.2"/><path d="M1.5 10.5c0-1.8 2-3 4.5-3s4.5 1.2 4.5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
         Management
@@ -107,14 +99,6 @@ body{background-image:none!important;background:transparent!important}
     <a href="/" class="bn-item" id="bnDispatch">
       <svg width="20" height="20" viewBox="0 0 12 12" fill="none"><rect x=".5" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor"/><rect x="7" y=".5" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x=".5" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".5"/><rect x="7" y="7" width="4.5" height="4.5" rx="1" fill="currentColor" opacity=".3"/></svg>
       <span>Board</span>
-    </a>
-    <a href="/dock" class="bn-item" id="bnDock">
-      <svg width="20" height="20" viewBox="0 0 12 12" fill="none"><path d="M1 9h10M3 9V6l3-2.5L9 6v3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span>Dock</span>
-    </a>
-    <a href="/driver" class="bn-item" id="bnDriver">
-      <svg width="20" height="20" viewBox="0 0 12 12" fill="none"><rect x="1" y="4" width="8" height="5" rx="1.2" stroke="currentColor" stroke-width="1.2"/><path d="M9 6.5h1.5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H9" stroke="currentColor" stroke-width="1.2"/><circle cx="3" cy="9" r="1" fill="currentColor"/><circle cx="7" cy="9" r="1" fill="currentColor"/><path d="M1 6.5 2.5 4h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-      <span>Driver</span>
     </a>
     <a href="/management" class="bn-item" id="bnManagement">
       <svg width="20" height="20" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="4" r="2" stroke="currentColor" stroke-width="1.2"/><path d="M1.5 10.5c0-1.8 2-3 4.5-3s4.5 1.2 4.5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
@@ -1426,7 +1410,7 @@ body{background-image:none!important;background:transparent!important}
       <div class="dv-logo-text">Dock</div>
     </div>
     <div class="dv-topbar-center" style="display:flex;align-items:center;justify-content:center;">
-      <a href="/" id="dvBackBtn" style="display:none;text-decoration:none;padding:5px 12px;border-radius:20px;border:1px solid var(--b0);background:var(--s2);font-size:11px;font-weight:600;color:var(--t2);letter-spacing:.03em;transition:border-color .15s;" onmouseover="this.style.borderColor='var(--b1)'" onmouseout="this.style.borderColor='var(--b0)'">← Dispatch</a>
+      <a href="/" id="dvBackBtn" class="dv-back-btn" style="display:none;">← Dispatch</a>
     </div>
     <div class="dv-topbar-right">
       <div class="dv-chip" id="dvWsChip"><div class="dv-ws-dot" id="dockWsDot"></div><span id="dockWsText">Connecting</span></div>
@@ -1485,7 +1469,7 @@ body{background-image:none!important;background:transparent!important}
       <span class="dvp-summary" id="dvOccSummary">—</span>
       <span class="dvp-chev">▾</span>
     </button>
-    <div class="dvp-body" id="dvOccBody" style="max-height:0;overflow:hidden;transition:max-height .3s ease;">
+    <div class="dvp-body dvp-body-open" id="dvOccBody">
       <div class="dvp-grid" id="dvOccGrid"></div>
     </div>
   </div>
@@ -1497,7 +1481,7 @@ body{background-image:none!important;background:transparent!important}
       <span class="dvp-summary" id="dvPlatesSummary">—</span>
       <span class="dvp-chev">▾</span>
     </button>
-    <div class="dvp-body" id="dvPlatesBody" style="max-height:0;overflow:hidden;transition:max-height .3s ease;">
+    <div class="dvp-body dvp-body-open" id="dvPlatesBody">
       <div class="dvp-grid" id="dvPlatesGrid"></div>
     </div>
   </div>
@@ -1588,7 +1572,7 @@ body{background-image:none!important;background:transparent!important}
           <span class="dsp-plates-summary" id="dspOccSummary">—</span>
           <span class="dsp-plates-chev">▾</span>
         </button>
-        <div class="dsp-plates-body" id="dspOccBody" style="max-height:0;overflow:hidden;transition:max-height .3s ease;">
+        <div class="dsp-plates-body dsp-plates-open" id="dspOccBody">
           <div class="dsp-plates-grid" id="dspOccGrid"></div>
         </div>
       </div>
@@ -1600,7 +1584,7 @@ body{background-image:none!important;background:transparent!important}
           <span class="dsp-plates-summary" id="dspPlatesSummary">—</span>
           <span class="dsp-plates-chev">▾</span>
         </button>
-        <div class="dsp-plates-body" id="dspPlatesBody" style="max-height:0;overflow:hidden;transition:max-height .3s ease;">
+        <div class="dsp-plates-body dsp-plates-open" id="dspPlatesBody">
           <div class="dsp-plates-grid" id="dspPlatesGrid"></div>
         </div>
       </div>

@@ -13,7 +13,10 @@ const router = Router();
 
 router.get('/api/state', async (req, res) => {
   try {
-    const data = await getTrailersCache();
+    const { getSession } = require('../auth');
+    const s = getSession(req);
+    const locationId = s?.locationId || null;  // null = all (for admin/unauthenticated fallback)
+    const data = await getTrailersCache(locationId);
     const etag = `"${crypto.createHash('md5').update(JSON.stringify(data)).digest('hex').slice(0, 8)}"`;
     if (req.headers['if-none-match'] === etag) return res.status(304).end();
     res.setHeader('ETag', etag);

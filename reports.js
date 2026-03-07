@@ -29,8 +29,7 @@ router.post('/api/report-issue', requireXHR, async (req, res) => {
       if (photoData.length * 0.75 > MAX_PHOTO_BYTES) return res.status(413).send('Photo too large (max 4 MB)');
     }
     const at = Date.now();
-    const { getSession } = require('../auth');
-    const issueLocId = getSession(req)?.locationId || 1;
+    const issueLocId = s?.locationId || 1;
     const result = await run(
       `INSERT INTO issue_reports(at,trailer,door,note,photo_data,photo_mime,ip,userAgent,location_id) VALUES(?,?,?,?,?,?,?,?,?)`,
       [at, trailer, door, note, photoData || null, photoMime || null, ipOf(req), req.headers['user-agent'] || '', issueLocId]
@@ -48,10 +47,16 @@ router.post('/api/report-issue', requireXHR, async (req, res) => {
 router.get('/api/issue-reports', requireRole(['dispatcher', 'management', 'admin']), async (req, res) => {
   try {
     const limit = Math.max(1, Math.min(200, Number(req.query.limit || 50)));
+    const locId_ir = req.user?.role === 'admin' && !req.query.locationId
+      ? null
+      : (req.query.locationId ? Number(req.query.locationId) : req.user?.locationId || null);
     const rows  = await all(
-      `SELECT id,at,trailer,door,note,photo_mime,ip,(CASE WHEN photo_data IS NOT NULL THEN 1 ELSE 0 END) as has_photo
-       FROM issue_reports ORDER BY at DESC LIMIT ?`,
-      [limit]
+      locId_ir
+        ? `SELECT id,at,trailer,door,note,photo_mime,ip,(CASE WHEN photo_data IS NOT NULL THEN 1 ELSE 0 END) as has_photo
+           FROM issue_reports WHERE location_id=? ORDER BY at DESC LIMIT ?`
+        : `SELECT id,at,trailer,door,note,photo_mime,ip,(CASE WHEN photo_data IS NOT NULL THEN 1 ELSE 0 END) as has_photo
+           FROM issue_reports ORDER BY at DESC LIMIT ?`,
+      locId_ir ? [locId_ir, limit] : [limit]
     );
     res.json(rows);
   } catch { res.status(500).send('Fetch failed'); }

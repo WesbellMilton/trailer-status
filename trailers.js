@@ -56,7 +56,7 @@ router.post('/api/upsert', requireXHR, _rds, async (req, res) => {
     if (!allowed.includes(finalStatus)) return res.status(400).send('Invalid status');
 
     const doorAt = (door && door !== existing?.door) ? now : (existing?.doorAt || null);
-    const upsertLocId = req.user?.locationId || 1;
+    const upsertLocId = req.user?.locationId || existing?.location_id || 1;
     await run(
       `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt,doorAt,location_id)
        VALUES(?,?,?,?,?,?,?,?,?,?)
@@ -90,7 +90,7 @@ router.post('/api/upsert', requireXHR, _rds, async (req, res) => {
     }
 
     await logEvent('info', 'upsert', `${actor} set ${trailer} → ${finalStatus}`, `door=${door || '—'}`);
-    await broadcastTrailers();
+    await broadcastTrailers(upsertLocId);
     res.json({ ok: true });
   } catch { res.status(500).send('Upsert failed'); }
 });
@@ -100,9 +100,10 @@ router.post('/api/delete', requireXHR, _rr(['dispatcher', 'management', 'admin']
   try {
     const trailer = String(req.body.trailer || '').trim().toUpperCase();
     if (!trailer) return res.status(400).send('Missing trailer');
+    const existing_del = await require('../db').get(`SELECT location_id FROM trailers WHERE trailer=?`, [trailer]);
     await run(`DELETE FROM trailers WHERE trailer=?`, [trailer]);
     await audit(req, actor, 'trailer_delete', 'trailer', trailer, {});
-    await broadcastTrailers();
+    await broadcastTrailers(existing_del?.location_id || req.user?.locationId || null);
     res.json({ ok: true });
   } catch { res.status(500).send('Delete failed'); }
 });
@@ -145,7 +146,13 @@ router.post('/api/shunt', requireXHR, async (req, res) => {
 router.get('/api/load-status', _rr(['dispatcher', 'management', 'admin', 'dock']), async (req, res) => {
   try {
     const { all } = require('../db');
-    const rows = await all(`SELECT * FROM trailers WHERE status NOT IN ('Departed','') ORDER BY updatedAt DESC`);
+    const locId_ls = req.user?.locationId || null;
+    const rows = await all(
+      locId_ls
+        ? `SELECT * FROM trailers WHERE location_id=? AND status NOT IN ('Departed','') ORDER BY updatedAt DESC`
+        : `SELECT * FROM trailers WHERE status NOT IN ('Departed','') ORDER BY updatedAt DESC`,
+      locId_ls ? [locId_ls] : []
+    );
     const result = await Promise.all(rows.map(async r => {
       const lastChange = await get(
         `SELECT at FROM audit WHERE entityId=? AND action='trailer_status_set' ORDER BY at DESC LIMIT 1`,

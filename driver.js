@@ -188,7 +188,7 @@ router.post('/api/driver/ext-drop', requireXHR, requireDriverRate, async (req, r
     const seq = String((existing?.cnt || 0) + 1).padStart(2, '0');
     const refCode = `${prefix}-${today}-${seq}`;
 
-    const now    = Date.now();
+    const now  = Date.now();
     const extLocId = req.user?.locationId || 1;
     const door = await pickBestDoor(refCode, extLocId) || '';
     if (door) await reserveDoor(door, refCode, carrier, 35, extLocId);

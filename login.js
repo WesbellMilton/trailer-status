@@ -62,7 +62,7 @@ ${expiredHtml}
     var p=pin.value.trim();
     if(!p){em.textContent="Enter your PIN.";em.classList.add("show");return;}
     btn.disabled=true;btn.textContent="SIGNING IN...";em.classList.remove("show");
-    fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},body:JSON.stringify({role:"dock",pin:p})})
+    fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},body:JSON.stringify({role:"dock",pin:p,locationId:1})})
     .then(function(r){if(!r.ok){r.text().then(function(t){em.textContent=t;em.classList.add("show")});return;}location.href="/dock";})
     .catch(function(){em.textContent="Connection error.";em.classList.add("show");})
     .finally(function(){btn.disabled=false;btn.textContent="SIGN IN";});
@@ -97,7 +97,7 @@ ${expiredHtml}
 <title>Wesbell Dispatch</title>
 <script>if("serviceWorker"in navigator){navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister()));}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -114,8 +114,8 @@ ${expiredHtml}
   --amber-glow:0 0 24px rgba(245,166,35,.2);
   --red:#f04a4a;
   --mono:"DM Mono",monospace;
-  --sans:"Inter",system-ui,sans-serif;
-  --display:"Instrument Serif",Georgia,serif;
+  --sans:"DM Sans",system-ui,sans-serif;
+  --display:"Bebas Neue",sans-serif;
 }
 html{height:100%;-webkit-font-smoothing:antialiased}
 body{
@@ -162,10 +162,10 @@ body{
   box-shadow:0 4px 16px rgba(245,120,0,.35);
 }
 .db-name{
-  font-family:var(--sans);
+  font-family:var(--mono);
   font-size:11px;
   font-weight:500;
-  letter-spacing:.22em;
+  letter-spacing:.18em;
   color:var(--t2);
   text-transform:uppercase;
 }
@@ -174,12 +174,11 @@ body{
 .clock-wrap{position:relative;margin-bottom:4px}
 .clock-time{
   font-family:var(--display);
-  font-size:clamp(80px,8.5vw,128px);
-  line-height:.88;
-  color:rgba(255,255,255,.88);
-  letter-spacing:-.02em;
+  font-size:clamp(96px,10vw,148px);
+  line-height:.85;
+  color:rgba(255,255,255,.9);
+  letter-spacing:-.01em;
   font-weight:400;
-  font-style:italic;
 }
 .colon{
   color:var(--amber);
@@ -197,12 +196,11 @@ body{
   margin-top:8px;
 }
 .date-day{
-  font-family:var(--sans);
-  font-size:clamp(22px,2.8vw,36px);
-  color:rgba(255,255,255,.28);
-  letter-spacing:.22em;
-  font-weight:300;
-  text-transform:uppercase;
+  font-family:var(--display);
+  font-size:clamp(28px,3.5vw,44px);
+  color:rgba(255,255,255,.35);
+  letter-spacing:.06em;
+  font-weight:400;
 }
 .date-full{
   font-family:var(--mono);
@@ -236,14 +234,13 @@ body{
 }
 
 .lp-heading{
-  font-family:var(--sans);
-  font-size:32px;
+  font-family:var(--display);
+  font-size:42px;
   color:rgba(255,255,255,.9);
-  letter-spacing:.18em;
+  letter-spacing:.06em;
   margin-bottom:6px;
-  font-weight:300;
+  font-weight:400;
   line-height:1;
-  text-transform:uppercase;
 }
 .lp-tagline{
   font-family:var(--mono);
@@ -278,8 +275,7 @@ body{
   border:1px solid rgba(255,255,255,.06);
   background:var(--glass);
   color:rgba(255,255,255,.9);
-  font-family:var(--sans);
-  font-weight:300;
+  font-family:var(--mono);
   font-size:16px;
   outline:none;
   -webkit-appearance:none;
@@ -303,10 +299,10 @@ select.fi option{background:#0c1018;color:rgba(255,255,255,.9)}
   border:1px solid rgba(245,166,35,.25);
   background:rgba(245,166,35,.1);
   color:rgba(245,166,35,.95);
-  font-family:var(--sans);
-  font-size:12px;
+  font-family:var(--mono);
+  font-size:13px;
   font-weight:500;
-  letter-spacing:.18em;
+  letter-spacing:.12em;
   cursor:pointer;
   touch-action:manipulation;
   transition:background .2s, border-color .2s, box-shadow .2s, transform .1s;

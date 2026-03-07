@@ -13,8 +13,7 @@ router.get('/api/doorblocks', async (req, res) => {
   try {
     const { getSession } = require('../auth');
     const s = getSession(req);
-    const locId = s?.locationId || null;
-    res.json(await loadDoorBlocksObject(locId));
+    res.json(await loadDoorBlocksObject(s?.locationId || null));
   } catch { res.status(500).send('Doorblocks error'); }
 });
 
@@ -49,8 +48,7 @@ router.get('/api/dockplates', async (req, res) => {
   try {
     const { getSession } = require('../auth');
     const s = getSession(req);
-    const locId = s?.locationId || null;
-    res.json(await loadDockPlatesObject(locId));
+    res.json(await loadDockPlatesObject(s?.locationId || null));
   } catch { res.status(500).send('Plates error'); }
 });
 

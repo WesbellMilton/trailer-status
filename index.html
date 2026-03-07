@@ -1548,6 +1548,18 @@ body{background-image:none!important;background:transparent!important}
         <button class="dsp-qa-btn" id="btnQuickAdd">Add →</button>
       </div>
 
+      <!-- dock plates — always visible at bottom of left column -->
+      <div class="dsp-plates" id="dspPlates">
+        <button class="dsp-plates-toggle" id="dspPlatesToggle" aria-expanded="false">
+          <span class="dsp-plates-title">DOCK PLATES</span>
+          <span class="dsp-plates-summary" id="dspPlatesSummary">—</span>
+          <span class="dsp-plates-chev">▾</span>
+        </button>
+        <div class="dsp-plates-body" id="dspPlatesBody" style="max-height:0;overflow:hidden;transition:max-height .3s ease;">
+          <div class="dsp-plates-grid" id="dspPlatesGrid"></div>
+        </div>
+      </div>
+
       <!-- status bar -->
       <div class="dsp-statusbar">
         <span id="boardCountStr">—</span>

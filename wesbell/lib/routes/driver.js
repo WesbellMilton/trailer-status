@@ -155,6 +155,7 @@ router.post('/api/driver/arrive', requireXHR, requireDriverRate, async (req, res
     await audit(req, 'driver', 'arrive', 'trailer', trailer, { door: assignedDoor, carrierType });
     broadcastPush('✅ Driver Arrived', `Trailer ${trailer} at Door ${assignedDoor}`, { type: 'arrive', trailer, door: assignedDoor });
     wsBroadcast('arrive', { trailer, door: assignedDoor, at: now });
+    wsBroadcast('notify', { kind: 'arrive', trailer, door: assignedDoor });
     fireWebhook('driver.arrived', { trailer, door: assignedDoor });
     await broadcastTrailers();
     res.json({ ok: true, door: assignedDoor, alreadyActive: false });
@@ -195,8 +196,10 @@ router.post('/api/driver/drop', requireXHR, requireDriverRate, requireDriverAcce
     );
     await releaseReservation(trailer);
     await audit(req, 'driver', 'driver_drop', 'trailer', trailer, { door: door || '', dropType, carrierType });
-    if (dropStatus === 'Dropped')
+    if (dropStatus === 'Dropped') {
       broadcastPush('📦 Outside Carrier Drop', `Trailer ${trailer} dropped to yard — needs door assignment`, { trailer }).catch(() => {});
+      wsBroadcast('notify', { kind: 'drop', trailer, door: door || '', carrierType });
+    }
     await broadcastTrailers();
     res.json({ ok: true, door: door || null });
   } catch { res.status(500).send('Drop failed'); }

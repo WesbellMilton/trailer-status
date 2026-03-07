@@ -183,8 +183,6 @@ router.get('/api/geofence/events', requireRole(['dispatcher', 'management', 'adm
   } catch { res.status(500).send('Geofence events failed'); }
 });
 
-module.exports = router;
-
 // Public: resolve location slug → id (used by driver QR code)
 router.get('/api/locations/by-slug/:slug', async (req, res) => {
   try {
@@ -202,3 +200,5 @@ router.get('/api/depot-coords', (req, res) => {
   if (!depot) return res.json({ lat: 43.5048, lng: -79.8880 });
   res.json({ lat: depot.lat, lng: depot.lng });
 });
+
+module.exports = router;

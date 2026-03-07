@@ -303,7 +303,8 @@
     const filt=rows.filter(r=>{
       if(df&&r.direction!==df)return false;
       if(sf&&r.status!==sf)return false;
-      if(q&&!`${r.trailer} ${r.door||""} ${r.note||""} ${r.direction||""} ${r.status||""} ${r.dropType||""}`.toLowerCase().includes(q))return false;
+      if(q==="omw"){if(!r.omwAt||r.status!=="Incoming")return false;}
+      else if(q&&!`${r.trailer} ${r.door||""} ${r.note||""} ${r.direction||""} ${r.status||""} ${r.dropType||""}`.toLowerCase().includes(q))return false;
       return true;
     });
     if(countEl)countEl.textContent=filt.length;

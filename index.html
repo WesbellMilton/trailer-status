@@ -679,6 +679,7 @@ body{background-image:none!important;background:transparent!important}
           });
           const data = res.ok ? await res.json().catch(() => ({})) : {};
           if (data.door) {
+            updateLiveDoor(data.door);
             showDoorAssigned('Door Assigned!', `Pull straight into Door ${data.door}.`, true);
           } else {
             showSuccess('Drop Logged', 'No doors free right now — dispatch has been notified.', [{k:'Carrier',v:carrier},{k:'Ref',v:data.refCode||'—'}]);

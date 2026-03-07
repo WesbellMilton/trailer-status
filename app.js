@@ -383,6 +383,14 @@
         else
           acts=`<span style="color:var(--t3);font-size:10px;font-family:var(--mono);">${esc(r.status==="Dock Ready"?"Awaiting dispatch":r.status==="Ready"?"Ready":"—")}</span>`;
       }
+      const shuntPickerHtml=(shuntOpen[r.trailer]&&canEdit)?(()=>{
+        const doors=Array.from({length:15},(_,i)=>i+28).map(d=>{
+          const ds=String(d),isCur=ds===(r.door||""),isOcc=!!occupied[ds]&&!isCur;
+          const cls="shunt-door-btn"+(isCur?" current":"")+(isOcc?" occ":"");
+          return`<button class="${cls}" data-act="shuntDoor" data-door="${ds}" data-trailer-id="${esc(r.trailer)}"${isCur?" disabled":""}>${ds}${isOcc?'<span class="shunt-occ-dot"></span>':""}</button>`;
+        }).join("");
+        return`<div class="shunt-picker" data-shunt-trailer="${esc(r.trailer)}"><span class="shunt-label">Move to door:</span><div class="shunt-doors">${doors}</div><button class="btn btn-default btn-sm" data-act="shuntToggle" data-trailer-id="${esc(r.trailer)}" style="margin-top:4px;">Cancel</button></div>`;
+      })():"";
       return`<div class="tbl-row ${rowCls}${flash}${readyFlash}${dockReadyFlash}${omwRowCls}${r.carrierType==="Outside"?" carrier-outside":""}" data-trailer="${esc(r.trailer)}">
         <span class="t-num">${esc(r.trailer)}${dirBadge}${omwBadge}</span>
         <span class="t-status">${statusTag(r.status)}</span>

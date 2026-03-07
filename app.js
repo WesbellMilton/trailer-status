@@ -53,6 +53,131 @@
   // Alias so both names work
   const showToast=(msg,type,dur)=>toast(msg,"",type,dur);
 
+  /* ── NOTIFICATION CENTRE ─────────────────────────────────────────────────────
+     _notifPush(n)  — add a notification, show toast, update bell badge
+     All notifications stored in _notifs[] (max 50, session only)
+     Bell button id="notifBell" — injected into DOM if not in HTML
+  ────────────────────────────────────────────────────────────────────────────── */
+  const _notifs=[];
+  let _notifUnread=0;
+  const KIND_DUR={ready:10000,omw:7000,arrive:6000,issue:8000,generic:5000};
+  const KIND_TYPE={ready:"ok",omw:"ok",arrive:"ok",issue:"warn",generic:"ok"};
+
+  function _notifPush(n){
+    n.id=Date.now()+Math.random();
+    n.read=false;
+    _notifs.unshift(n);
+    if(_notifs.length>50)_notifs.length=50;
+    _notifUnread++;
+    _notifUpdateBell();
+    toast(n.icon+" "+n.title,n.body,KIND_TYPE[n.kind]||"ok",KIND_DUR[n.kind]||5000);
+    haptic(n.kind==="ready"?"success":"light");
+    // If panel is open, re-render it
+    const panel=el("notifPanel");
+    if(panel&&panel.classList.contains("notif-open"))_notifRenderPanel();
+  }
+
+  function _notifUpdateBell(){
+    const bell=el("notifBell");if(!bell)return;
+    const badge=el("notifBadge");
+    if(badge){
+      badge.textContent=_notifUnread>9?"9+":String(_notifUnread);
+      badge.style.display=_notifUnread>0?"":"none";
+    }
+    bell.style.color=_notifUnread>0?"var(--amber,#f0a030)":"";
+  }
+
+  function _notifRenderPanel(){
+    const list=el("notifList");if(!list)return;
+    if(!_notifs.length){
+      list.innerHTML=`<div style="padding:20px 16px;color:var(--t3,#4a5e78);font-size:12px;font-family:var(--mono);text-align:center;">No notifications yet</div>`;
+      return;
+    }
+    const now=Date.now();
+    const age=ms=>{const s=Math.floor((now-ms)/1000);if(s<60)return`${s}s ago`;if(s<3600)return`${Math.floor(s/60)}m ago`;return`${Math.floor(s/3600)}h ago`;};
+    list.innerHTML=_notifs.map(n=>`
+      <div class="notif-row${n.read?"":" notif-unread"}" data-notif-id="${n.id}">
+        <div class="notif-icon">${n.icon||"🔔"}</div>
+        <div class="notif-content">
+          <div class="notif-title">${esc(n.title)}</div>
+          ${n.body?`<div class="notif-body">${esc(n.body)}</div>`:""}
+        </div>
+        <div class="notif-age">${age(n.at||now)}</div>
+      </div>`).join("");
+  }
+
+  function _notifTogglePanel(){
+    // Inject panel into DOM on first open if not in HTML
+    if(!el("notifPanel")){
+      const panel=document.createElement("div");
+      panel.id="notifPanel";
+      panel.innerHTML=`
+        <div id="notifPanelInner" style="position:fixed;top:0;right:0;bottom:0;width:min(320px,100vw);background:var(--bg1,#0d1b2a);border-left:1px solid var(--b0,#1a2d42);z-index:8000;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1);box-shadow:-8px 0 32px rgba(0,0,0,.4);">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid var(--b0,#1a2d42);flex-shrink:0;">
+            <div style="font-family:var(--mono,monospace);font-size:13px;font-weight:700;color:var(--t0,#e0eaf4);letter-spacing:.04em;">NOTIFICATIONS</div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button id="notifClearAll" style="font-size:10px;font-family:var(--mono);color:var(--t2,#4a5e78);background:none;border:1px solid var(--b0);padding:3px 8px;border-radius:4px;cursor:pointer;">Clear all</button>
+              <button id="notifClose" style="background:none;border:none;color:var(--t2);font-size:20px;cursor:pointer;line-height:1;padding:2px 6px;">×</button>
+            </div>
+          </div>
+          <div id="notifList" style="flex:1;overflow-y:auto;"></div>
+        </div>
+        <div id="notifBackdrop" style="position:fixed;inset:0;z-index:7999;background:rgba(0,0,0,.3);display:none;"></div>`;
+      // Add styles
+      const style=document.createElement("style");
+      style.textContent=`
+        .notif-row{display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-bottom:1px solid var(--b0,#1a2d42);cursor:default;transition:background .15s;}
+        .notif-row:hover{background:rgba(255,255,255,.03);}
+        .notif-unread{background:rgba(240,160,48,.06);}
+        .notif-unread .notif-title{color:var(--t0,#e0eaf4);}
+        .notif-icon{font-size:18px;flex-shrink:0;margin-top:1px;}
+        .notif-content{flex:1;min-width:0;}
+        .notif-title{font-family:var(--mono,monospace);font-size:12px;font-weight:600;color:var(--t1,#8a9db8);}
+        .notif-body{font-size:11px;color:var(--t2,#4a5e78);margin-top:2px;line-height:1.4;}
+        .notif-age{font-size:10px;color:var(--t3,#2a3d52);font-family:var(--mono);flex-shrink:0;margin-top:2px;}
+        #notifPanel.notif-open #notifPanelInner{transform:translateX(0);}
+        #notifPanel.notif-open #notifBackdrop{display:block;}
+      `;
+      document.head.appendChild(style);
+      document.body.appendChild(panel);
+      el("notifClose")?.addEventListener("click",_notifClosePanel);
+      el("notifBackdrop")?.addEventListener("click",_notifClosePanel);
+      el("notifClearAll")?.addEventListener("click",()=>{_notifs.length=0;_notifUnread=0;_notifUpdateBell();_notifRenderPanel();});
+    }
+    const panel=el("notifPanel");
+    const isOpen=panel.classList.contains("notif-open");
+    if(isOpen){_notifClosePanel();}
+    else{
+      panel.classList.add("notif-open");
+      // Mark all read
+      _notifs.forEach(n=>n.read=true);
+      _notifUnread=0;
+      _notifUpdateBell();
+      _notifRenderPanel();
+    }
+  }
+
+  function _notifClosePanel(){
+    el("notifPanel")?.classList.remove("notif-open");
+  }
+
+  // Inject bell button into nav if not already in HTML
+  function _initNotifBell(){
+    if(el("notifBell"))return; // already in HTML
+    // Find a good spot — next to wsText in the nav bar
+    const wsWrap=el("wsText")?.closest(".ws-status,.live-status,.nav-status")||el("wsText")?.parentElement;
+    const bell=document.createElement("button");
+    bell.id="notifBell";
+    bell.title="Notifications";
+    bell.style.cssText="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px;position:relative;color:var(--t2,#4a5e78);line-height:1;";
+    bell.innerHTML=`🔔<span id="notifBadge" style="display:none;position:absolute;top:0;right:0;background:var(--amber,#f0a030);color:#000;font-size:9px;font-weight:800;border-radius:8px;padding:1px 4px;font-family:var(--mono);line-height:1.4;"></span>`;
+    bell.addEventListener("click",_notifTogglePanel);
+    // Try to insert near version text or just before body end
+    const verEl=el("verText")?.parentElement||document.querySelector(".nav-right,.topbar-right,.nav-bar");
+    if(verEl)verEl.insertBefore(bell,verEl.firstChild);
+    else document.body.appendChild(bell);
+  }
+
   let _mr=null;
   function showModal(title,body){
     return new Promise(r=>{
@@ -1389,24 +1514,62 @@
         // Refresh load-status panel if open
         window._lspAutoRefresh?.();
       }
-      else if(type==="omw"){showToast(`🚛 ${payload.trailer} on way → Door ${payload.door}${payload.eta?` · ETA ~${payload.eta}min`:""}`, "ok",6000);renderBoard();if(isDock())renderDockView();updateTrackingMap();updateTrackingList();}
-      else if(type==="arrive"){showToast(`✅ ${payload.trailer} arrived at Door ${payload.door}`,"ok",6000);renderBoard();if(isDock())renderDockView();updateTrackingMap();updateTrackingList();}
+      else if(type==="omw"){
+        // ── OMW: only show toast to dispatchers/management/dock — not to the driver who sent it ──
+        renderBoard();if(isDock())renderDockView();updateTrackingMap();updateTrackingList();
+        if(!isDriver()){
+          _notifPush({
+            icon:"🚛",
+            title:`${payload.trailer} On My Way`,
+            body:`Door ${payload.door}${payload.eta?` · ETA ~${payload.eta} min`:""}`,
+            kind:"omw",trailer:payload.trailer,door:payload.door,at:Date.now()
+          });
+        }
+      }
+      else if(type==="arrive"){
+        renderBoard();if(isDock())renderDockView();updateTrackingMap();updateTrackingList();
+        if(!isDriver()){
+          _notifPush({
+            icon:"✅",
+            title:`${payload.trailer} Arrived`,
+            body:`At Door ${payload.door}`,
+            kind:"arrive",trailer:payload.trailer,door:payload.door,at:Date.now()
+          });
+        }
+      }
       else if(type==="version"){VERSION=payload?.version||VERSION;el("verText").textContent=VERSION||"—";}
       else if(type==="notify"){
         const kind=payload?.kind,trailer=payload?.trailer||"",door=payload?.door||"";
         if(kind==="ready"){
-          toast("🟢 Trailer Ready",`${trailer} is READY${door?" at door "+door:""}.`,"ok",8000);
           haptic("success");
-          if(isDriver()){const banner=el("readyNotifBanner");if(banner){el("readyNotifText").textContent=`Trailer ${trailer} is READY${door?" at door "+door:""}`;banner.style.display="flex";clearTimeout(banner._t);banner._t=setTimeout(()=>banner.style.display="none",12000);}}
+          // Drivers: only show banner if it's THEIR trailer
+          if(isDriver()){
+            const myTrailer=(driverState?.trailer||"").toUpperCase();
+            if(!myTrailer||myTrailer===trailer.toUpperCase()){
+              const banner=el("readyNotifBanner");
+              if(banner){
+                el("readyNotifText").textContent=`Trailer ${trailer} is READY${door?" at door "+door:""}`;
+                banner.style.display="flex";clearTimeout(banner._t);
+                banner._t=setTimeout(()=>banner.style.display="none",15000);
+              }
+            }
+          } else {
+            // Dispatchers/management/dock: push to notification centre
+            _notifPush({
+              icon:"🟢",
+              title:`${trailer} Ready`,
+              body:`Trailer ready for pickup${door?" at Door "+door:""}`,
+              kind:"ready",trailer,door,at:Date.now()
+            });
+          }
         } else if(kind==="arrive"){
-          if(!isDriver())toast("✅ Arrived",`Trailer ${trailer} arrived${door?" at Door "+door:""}.`,"ok",5000);
+          if(!isDriver())_notifPush({icon:"✅",title:`${trailer} Arrived`,body:`At Door ${door}`,kind:"arrive",trailer,door,at:Date.now()});
         } else if(kind==="omw"){
-          if(!isDriver())toast(`🚛 On My Way`,`Trailer ${trailer} → Door ${door}${payload.eta?` · ETA ~${payload.eta}m`:""}`.trim(),"ok",6000);
+          if(!isDriver())_notifPush({icon:"🚛",title:`${trailer} On My Way`,body:`Door ${door}${payload.eta?` · ETA ~${payload.eta}m`:""}`,kind:"omw",trailer,door,at:Date.now()});
         } else if(kind==="issue"){
-          toast("⚠️ Issue Filed",`Trailer ${trailer}${door?" at Door "+door:""}${payload.note?": "+payload.note.slice(0,60):""}.`,"warn",7000);
+          if(!isDriver())_notifPush({icon:"⚠️",title:`Issue: ${trailer}`,body:`${door?"Door "+door+" — ":""}${payload.note?.slice(0,80)||""}`,kind:"issue",trailer,door,at:Date.now()});
         } else {
-          // generic notify fallback
-          if(payload?.message)toast(payload.title||"Notification",payload.message,"ok",5000);
+          if(payload?.message)_notifPush({icon:"🔔",title:payload.title||"Notification",body:payload.message,kind:"generic",at:Date.now()});
         }
       }
     };
@@ -1528,6 +1691,7 @@
   loadInitial().then(()=>{
     syncBottomNav();initToastSwipe();initPullToRefresh();initKeyboardAvoidance();initSwipeViews();initPwaInstall();
     initStaffLogin();initStaffLogin._sync?.();initIssueCamera();initIssueLightbox();initDockIssueModal();
+    _initNotifBell();
     // Init push for all views — drivers get auto-subscribed, others get auto-subscribed if permission already granted
     if(!path().startsWith("/driver"))initPush();
 

@@ -162,6 +162,51 @@ router.post('/api/driver/arrive', requireXHR, requireDriverRate, async (req, res
   } catch (e) { console.error('[arrive]', e); res.status(500).send('Arrival failed'); }
 });
 
+// ── /api/driver/ext-drop  (outside carrier — no trailer number needed) ────────
+router.post('/api/driver/ext-drop', requireXHR, requireDriverRate, async (req, res) => {
+  try {
+    const carrier = String(req.body.carrier || 'Other').trim();
+    const prefix  = String(req.body.prefix  || 'EXT').trim().toUpperCase().slice(0, 4);
+    const CARRIERS = ['Apex','Gardewine','Manitoulin','TForce','XPO','Other'];
+    if (!CARRIERS.includes(carrier)) return res.status(400).send('Invalid carrier');
+
+    // Generate ref code: PREFIX-YYYYMMDD-NN (NN = sequential count for today)
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const pattern = `${prefix}-${today}-%`;
+    const existing = await get(
+      `SELECT COUNT(*) as cnt FROM trailers WHERE trailer LIKE ?`, [pattern]
+    );
+    const seq = String((existing?.cnt || 0) + 1).padStart(2, '0');
+    const refCode = `${prefix}-${today}-${seq}`;
+
+    const now  = Date.now();
+    const door = await pickBestDoor(refCode) || '';
+    if (door) await reserveDoor(door, refCode, carrier, 35);
+
+    const status = door ? 'Incoming' : 'Dropped';
+    await run(
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt)
+       VALUES(?,?,?,?,?,?,?,?)
+       ON CONFLICT(trailer) DO UPDATE SET
+         status=excluded.status,door=excluded.door,
+         carrierType=excluded.carrierType,updatedAt=excluded.updatedAt`,
+      [refCode, 'Inbound', status, door, '', 'Loaded', carrier, now]
+    );
+    await audit(req, 'driver', 'ext_drop', 'trailer', refCode, { carrier, door, refCode });
+
+    if (door) {
+      broadcastPush(`📦 ${carrier} Drop`, `${refCode} → Door ${door} (auto-assigned)`, { trailer: refCode, door }).catch(() => {});
+      wsBroadcast('notify', { kind: 'drop', trailer: refCode, door, carrierType: carrier, autoAssigned: true });
+    } else {
+      broadcastPush(`📦 ${carrier} Drop`, `${refCode} dropped — needs door assignment`, { trailer: refCode }).catch(() => {});
+      wsBroadcast('notify', { kind: 'drop', trailer: refCode, door: '', carrierType: carrier, autoAssigned: false });
+    }
+
+    await broadcastTrailers();
+    res.json({ ok: true, refCode, door, carrier });
+  } catch (e) { console.error('[ext-drop]', e); res.status(500).send('Drop failed'); }
+});
+
 // ── /api/driver/drop ──────────────────────────────────────────────────────────
 router.post('/api/driver/drop', requireXHR, requireDriverRate, requireDriverAccess, async (req, res) => {
   try {

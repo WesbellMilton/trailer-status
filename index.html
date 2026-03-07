@@ -1500,97 +1500,178 @@ body{background-image:none!important;background:transparent!important}
 </div>
 </div>
 <div id="dispatchView" style="display:none;">
-  <div class="page">
-    <div class="grid-main">
+  <!-- ══ DISPATCH WORKSPACE — full-height split layout ══ -->
+  <div class="dsp-workspace">
 
-      <div class="col-stack">
+    <!-- LEFT: dense table -->
+    <div class="dsp-left">
 
-        <div class="panel panel-board">
-          <div class="panel-hd">
-            <div class="panel-title"><div class="ptdot" style="background:var(--amber)"></div>Trailer Board</div>
-            <span class="badge badge-num" id="countsPill">0</span>
-          </div>
-          <div class="board-ctrl-bar">
-            <div id="dispKpis" class="kpi-row kpi-row-inline"></div>
-            <div class="board-ctrl-filters">
-              <input id="search" placeholder="Search trailer, door, note…" aria-label="Search trailers" inputmode="search" autocomplete="off" class="ctrl-search"/>
-              <select id="filterDir" aria-label="Filter by direction" class="ctrl-select"><option value="">All Directions</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
-              <select id="filterStatus" aria-label="Filter by status" class="ctrl-select"><option value="">All Statuses</option><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select>
-              <button class="btn btn-default btn-sm" id="btnClearFilters">Clear</button>
-              <div class="ctrl-sep"></div>
-              <a href="/dock"  class="btn btn-default btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px;" id="btnNavDock"><svg width="13" height="13" viewBox="0 0 12 12" fill="none"><path d="M1 9h10M3 9V6l3-2.5L9 6v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Dock</a>
-              <a href="/driver" class="btn btn-default btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px;" id="btnNavDriver"><svg width="13" height="13" viewBox="0 0 12 12" fill="none"><rect x="1" y="4" width="8" height="5" rx="1.2" stroke="currentColor" stroke-width="1.4"/><path d="M9 6.5h1.5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H9" stroke="currentColor" stroke-width="1.4"/><circle cx="3" cy="9" r="1" fill="currentColor"/><circle cx="7" cy="9" r="1" fill="currentColor"/><path d="M1 6.5 2.5 4h4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Driver</a>
-              <button class="btn btn-default btn-sm" id="btnShiftSummary">📊 Summary</button>
-              <button class="btn btn-default btn-sm" id="btnHistoryBoard">🕐 History</button>
-            </div>
-          </div>
-          <div class="tbl-hd">
-            <span>Trailer</span><span>Status</span><span>Door</span>
-            <span>Note</span><span>Updated</span><span id="actionsColHead">Actions</span>
-          </div>
-          <div id="tbody"></div>
-          <div class="board-footer" role="status" aria-live="polite"><span id="lastUpdated">—</span><span id="boardCountStr">—</span></div>
-          <!-- ── Quick-add trailer inline bar ── -->
-          <div class="quick-add-bar" id="quickAddBar">
-            <input id="qa_trailer" placeholder="Trailer #" autocomplete="off" inputmode="numeric" autocorrect="off" autocapitalize="none" spellcheck="false" class="qa-input qa-trailer" aria-label="Trailer number"/>
-            <select id="qa_direction" class="qa-select" aria-label="Direction"><option value="Inbound">Inbound</option><option value="Outbound">Outbound</option><option value="Cross Dock">Cross Dock</option></select>
-            <select id="qa_status" class="qa-select" aria-label="Status"><option value="Incoming">Incoming</option><option value="Dropped">Dropped</option><option value="Loading">Loading</option><option value="Dock Ready">Dock Ready</option><option value="Ready">Ready</option></select>
-            <input id="qa_door" placeholder="Door" inputmode="numeric" autocomplete="off" class="qa-input qa-door" aria-label="Door number"/>
-            <input id="qa_note" placeholder="Note (optional)" autocomplete="off" class="qa-input qa-note" aria-label="Note"/>
-            <button class="btn btn-primary btn-sm qa-submit" id="btnQuickAdd">+ Add</button>
+      <!-- toolbar -->
+      <div class="dsp-toolbar" id="dspToolbar">
+        <div class="dsp-kpis" id="dispKpis"></div>
+        <div class="dsp-toolbar-right">
+          <input id="search" placeholder="Search…" aria-label="Search trailers" inputmode="search" autocomplete="off" class="dsp-search"/>
+          <select id="filterDir" aria-label="Direction" class="dsp-sel"><option value="">All Dir</option><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
+          <select id="filterStatus" aria-label="Status" class="dsp-sel"><option value="">All Status</option><option>Incoming</option><option>Dropped</option><option>Loading</option><option>Dock Ready</option><option>Ready</option><option>Departed</option></select>
+          <button class="dsp-tbtn" id="btnClearFilters" title="Clear filters">✕</button>
+          <div class="dsp-tbtn-sep"></div>
+          <a href="/dock" class="dsp-tbtn" id="btnNavDock" title="Dock view">Dock</a>
+          <a href="/driver" class="dsp-tbtn" id="btnNavDriver" title="Driver view">Driver</a>
+          <button class="dsp-tbtn" id="btnShiftSummary" title="Shift summary">📊</button>
+          <button class="dsp-tbtn" id="btnHistoryBoard" title="History">🕐</button>
+          <button class="dsp-tbtn" id="btnAudit" style="display:none;" title="Audit log">📋</button>
+          <button class="dsp-tbtn danger" id="btnLogout" style="display:none;" title="Sign out">↩</button>
+        </div>
+      </div>
+
+      <!-- table header -->
+      <div class="dsp-hd" id="dspHd">
+        <span class="dh-trailer">Trailer</span>
+        <span class="dh-status">Status</span>
+        <span class="dh-door">Door</span>
+        <span class="dh-note">Note</span>
+        <span class="dh-age">Age</span>
+        <span class="dh-acts">Next</span>
+      </div>
+
+      <!-- rows -->
+      <div class="dsp-body" id="tbody"></div>
+
+      <!-- quick-add bar -->
+      <div class="dsp-qabar" id="quickAddBar">
+        <span class="dsp-qa-label">+ Add</span>
+        <input id="qa_trailer" placeholder="Trailer #" autocomplete="off" inputmode="numeric" autocorrect="off" autocapitalize="none" spellcheck="false" class="dsp-qa-in qa-trailer" aria-label="Trailer number"/>
+        <select id="qa_direction" class="dsp-qa-sel" aria-label="Direction"><option value="Inbound">Inb</option><option value="Outbound">Out</option><option value="Cross Dock">XD</option></select>
+        <select id="qa_status" class="dsp-qa-sel" aria-label="Status"><option value="Incoming">Incoming</option><option value="Dropped">Dropped</option><option value="Loading">Loading</option><option value="Dock Ready">Dock Ready</option><option value="Ready">Ready</option></select>
+        <input id="qa_door" placeholder="D#" inputmode="numeric" autocomplete="off" class="dsp-qa-in qa-door" aria-label="Door"/>
+        <input id="qa_note" placeholder="Note…" autocomplete="off" class="dsp-qa-in qa-note" aria-label="Note"/>
+        <button class="dsp-qa-btn" id="btnQuickAdd">Add →</button>
+      </div>
+
+      <!-- status bar -->
+      <div class="dsp-statusbar">
+        <span id="boardCountStr">—</span>
+        <span id="lastUpdated" style="color:var(--t3)">—</span>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: detail panel -->
+    <div class="dsp-right" id="dspRight">
+      <div class="dsp-right-empty" id="dspRightEmpty">
+        <div class="dre-icon">⟵</div>
+        <div class="dre-msg">Select a trailer</div>
+        <div class="dre-sub">Click any row to see details and take actions</div>
+      </div>
+      <div class="dsp-detail" id="dspDetail" style="display:none;">
+
+        <!-- detail header -->
+        <div class="dsd-hd">
+          <div class="dsd-trailer-id" id="dsdTrailerId">—</div>
+          <div class="dsd-meta" id="dsdMeta"></div>
+          <button class="dsd-close" id="btnDspDetailClose" title="Close">✕</button>
+        </div>
+
+        <!-- status progression -->
+        <div class="dsd-section">
+          <div class="dsd-section-lbl">Status</div>
+          <div class="dsd-status-row" id="dsdStatusRow"></div>
+        </div>
+
+        <!-- door assignment -->
+        <div class="dsd-section">
+          <div class="dsd-section-lbl">Door Assignment</div>
+          <div class="dsd-door-grid" id="dsdDoorGrid"></div>
+        </div>
+
+        <!-- note -->
+        <div class="dsd-section">
+          <div class="dsd-section-lbl">Note</div>
+          <div class="dsd-note-wrap">
+            <textarea id="dsdNoteInput" class="dsd-note-input" placeholder="Add a note…" rows="2"></textarea>
+            <button class="dsp-qa-btn" id="btnDsdSaveNote">Save Note</button>
           </div>
         </div>
 
+        <!-- details -->
+        <div class="dsd-section">
+          <div class="dsd-section-lbl">Details</div>
+          <div class="dsd-fields" id="dsdFields"></div>
+        </div>
 
-
-        <div class="panel" id="auditCard" style="display:none;">
-          <div class="panel-hd">
-            <div class="panel-title"><div class="ptdot" style="background:var(--t2)"></div>Audit Log</div>
-            <span class="badge badge-num" id="auditCount">0</span>
-          </div>
-          <div class="panel-body-flush">
-            <div class="data-tbl-wrap">
-              <table style="min-width:740px;">
-                <thead><tr><th>Time</th><th>Role</th><th>Action</th><th>Entity</th><th>ID</th><th>Details</th><th>IP</th></tr></thead>
-                <tbody id="auditBody"><tr><td colspan="7" style="padding:16px;color:var(--t2);">Click Audit to load.</td></tr></tbody>
-              </table>
+        <!-- edit full record -->
+        <div class="dsd-section" id="dsdEditSection">
+          <div class="dsd-section-lbl">Edit Record</div>
+          <div class="dsd-edit-form">
+            <div class="dsd-field-row">
+              <label>Direction</label>
+              <select id="dsd_direction"><option>Inbound</option><option>Outbound</option><option>Cross Dock</option></select>
+            </div>
+            <div class="dsd-field-row">
+              <label>Drop Type</label>
+              <select id="dsd_dropType"><option value="">—</option><option>Empty</option><option>Loaded</option></select>
+            </div>
+            <div class="dsd-field-row">
+              <label>Carrier</label>
+              <select id="dsd_carrier"><option value="">—</option><option>Wesbell</option><option>Outside</option></select>
+            </div>
+            <div class="dsd-actions">
+              <button class="btn btn-primary btn-sm" id="btnDsdSaveEdit">Save Changes</button>
+              <button class="btn btn-danger btn-sm" id="btnDsdDelete">Delete</button>
             </div>
           </div>
         </div>
 
-        <div class="panel" id="dockPlatesCard">
-          <button class="acc-head" id="dockPlatesToggle" aria-expanded="false">
-            <span style="display:flex;align-items:center;gap:9px;">Dock Plates (28–42) <span class="badge" id="platesMini">—</span></span>
+        <!-- door map -->
+        <div class="dsd-section">
+          <div class="dsd-section-lbl">Door Map <span id="dockMapFreeCount" style="color:var(--green);font-size:10px;"></span></div>
+          <div class="dock-map-grid" id="dockMapGrid" style="margin-top:6px;"></div>
+        </div>
+
+        <!-- plates accordion -->
+        <div class="dsd-section dsd-section-flush" id="dsdPlatesSection">
+          <button class="acc-head" id="dockPlatesToggle" aria-expanded="false" style="border-radius:0;border:none;padding:9px 14px;width:100%;background:transparent;">
+            <span style="display:flex;align-items:center;gap:9px;font-size:10px;">Dock Plates <span class="badge" id="platesMini">—</span></span>
             <span class="chev">▾</span>
           </button>
           <div class="acc-body" id="dockPlatesBody" style="max-height:0px;overflow:hidden;transition:max-height .3s ease;">
-            <div class="plate-grid" id="platesGrid"></div>
-            <div style="padding:0 12px 10px;font-family:var(--mono);font-size:9px;color:var(--t3);letter-spacing:.04em;">Click Edit on any door to update status or note.</div>
+            <div class="plate-grid" id="platesGrid" style="padding:8px;"></div>
+          </div>
+        </div>
+
+        <!-- export & logs (dispatcher only) -->
+        <div class="dsd-section role-dispatcher role-admin role-management" id="dsdExportSection">
+          <div class="dsd-section-lbl">Export & Logs</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;padding-top:4px;">
+            <a href="/api/export/trailers.csv" class="btn btn-default btn-sm" download>⬇ CSV</a>
+            <a href="/api/export/audit.csv" class="btn btn-default btn-sm" download>⬇ Audit</a>
+            <button class="btn btn-default btn-sm" id="btnViewLogs">🖥 Logs</button>
+            <a href="/health" class="btn btn-default btn-sm" target="_blank">❤ Health</a>
           </div>
         </div>
 
       </div>
-      <div style="display:flex;flex-direction:column;gap:14px;">
+    </div>
 
-        <div class="panel side-sticky">
-          <div class="panel-hd">
-            <div class="panel-title" id="panelTitle">Controls</div>
-            <span class="badge" id="panelSub">—</span>
-          </div>
-          <div class="panel-body" id="panelBody"></div>
-        </div>
+  </div>
 
-        <div class="panel" id="dockMapCard">
-          <div class="panel-hd">
-            <div class="panel-title"><div class="ptdot" style="background:var(--cyan)"></div>Door Map</div>
-            <span class="badge" id="dockMapFreeCount" style="color:var(--green);">—</span>
-          </div>
-          <div class="panel-body" style="padding:10px 12px;">
-            <div class="dock-map-grid" id="dockMapGrid"></div>
-          </div>
-        </div>
+  <!-- Keep these hidden panels for compatibility -->
+  <div style="display:none;">
+    <div id="auditCard">
+      <div class="data-tbl-wrap">
+        <table><thead><tr><th>Time</th><th>Role</th><th>Action</th><th>Entity</th><th>ID</th><th>Details</th><th>IP</th></tr></thead>
+        <tbody id="auditBody"><tr><td colspan="7">Click Audit to load.</td></tr></tbody></table>
+      </div>
+      <span id="auditCount">0</span>
+    </div>
+    <div id="dockPlatesCard"></div>
+    <div id="panelBody"></div>
+    <span id="panelTitle"></span>
+    <span id="panelSub"></span>
+    <span id="countsPill">0</span>
+  </div>
 
-        <div id="adminPanel" class="panel" style="display:none;">
+  <div id="adminPanel" class="panel" style="display:none; position:fixed; bottom:60px; right:16px; width:320px; max-height:80vh; overflow-y:auto; z-index:200; box-shadow:var(--sh-lg);">
           <div class="panel-hd">
             <div class="panel-title"><span class="ptdot" style="background:var(--amber)"></span>⚡ Admin Controls</div>
           </div>

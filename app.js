@@ -171,7 +171,13 @@
       const dtype=r.dropType?`<span style="font-size:10px;color:var(--t2);font-family:var(--mono);">${esc(r.dropType)}</span>`:`<span style="color:var(--t3)">—</span>`;
       const ctag=carrierTag(r.carrierType);
       const ago=r.updatedAt?timeAgo(r.updatedAt):"";
-      const omwBadge=r.omwAt&&r.status==="Incoming"?`<span class="omw-badge">🚛 OMW${r.omwEta?` ~${r.omwEta}m`:""}</span>`:"";
+      const omwBadge=r.omwAt&&r.status==="Incoming"?(()=>{
+        const rem=r.omwEta?Math.max(0,Math.ceil((r.omwAt+r.omwEta*60000-Date.now())/60000)):null;
+        const arriving=rem===0;
+        const etaTxt=rem===null?"OMW":arriving?"Arriving now":`~${rem}m`;
+        const arrivedAt=r.omwAt&&r.omwEta?r.omwAt+r.omwEta*60000:null;
+        return`<span class="omw-badge${arriving?" omw-arriving":""}"${arrivedAt?` data-arrives="${arrivedAt}"`:""}>🚛 OMW ${etaTxt}</span>`;
+      })():"";
       const doorAge=r.doorAt&&r.door?`<span class="door-age" title="At door ${timeAgo(r.doorAt)}">${timeAgo(r.doorAt)}</span>`:"";
       const noteHtml=canEdit
         ?`<span class="t-note-edit" data-trailer="${esc(r.trailer)}" data-note="${esc(r.note||"")}" title="Click to edit note">${r.note?`<span class="t-note">${esc(r.note)}</span>`:`<span style="color:var(--t3);font-style:italic">add note…</span>`}</span>`
@@ -345,18 +351,6 @@
     <div class="field"><label class="fl" for="d_carrierType">Carrier</label><select id="d_carrierType"><option value="">—</option><option>Wesbell</option><option>Outside</option></select></div>
     <div class="field"><label class="fl" for="d_note">Note</label><textarea id="d_note" placeholder="Optional note…"></textarea></div>
     <button class="btn btn-primary btn-full" id="btnSaveTrailer" style="min-height:48px;">Save Trailer Record</button>
-    <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--b0)">
-      <div class="panel-title" style="margin-bottom:10px"><div class="ptdot" style="background:var(--violet,#9b6dff)"></div>Shift Handoff Note</div>
-      <div id="shiftNoteWrap" style="display:none;padding:8px 10px;border-radius:6px;background:rgba(155,109,255,.08);border:1px solid rgba(155,109,255,.2);margin-bottom:8px;">
-        <div id="shiftNoteDisplay" style="font-size:12px;color:var(--t1);line-height:1.5;"></div>
-        <div id="shiftNoteMeta" style="font-size:10px;color:var(--t2);margin-top:3px;font-family:var(--mono);"></div>
-      </div>
-      <textarea id="shiftNoteInput" placeholder="Leave a note for the next shift… (e.g. Door 34 jammed, trailer 5312 priority pickup)" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--b1);background:var(--s1,#101620);color:var(--t0);font-size:12px;min-height:60px;resize:vertical;box-sizing:border-box;font-family:var(--sans);"></textarea>
-      <div style="display:flex;gap:6px;margin-top:6px;">
-        <button class="btn btn-primary btn-sm" id="btnSaveShiftNote">💬 Save Note</button>
-        <button class="btn btn-default btn-sm" id="btnClearShiftNote">Clear</button>
-      </div>
-    </div>
     <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--b0)">
       <div class="panel-title" style="margin-bottom:10px"><div class="ptdot" style="background:var(--cyan)"></div>Export & Logs</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;">
@@ -886,6 +880,37 @@
   try{const s=sessionStorage.getItem("wb_driver_session");if(s)driverState.sessionDrops=JSON.parse(s);}catch{}
   function saveSessionHistory(){try{sessionStorage.setItem("wb_driver_session",JSON.stringify(driverState.sessionDrops));}catch{}}
 
+  /* ── OFFLINE QUEUE ── */
+  // Buffers driver API calls when WS is down and replays them on reconnect
+  const _offlineQueue=[];
+  let _offlineReplaying=false;
+
+  async function queuedApiJson(url,opts){
+    // If online just fire normally
+    if(_wsOnline)return apiJson(url,opts);
+    // Queue the action for later
+    return new Promise((resolve,reject)=>{
+      _offlineQueue.push({url,opts,resolve,reject,at:Date.now()});
+      const count=_offlineQueue.length;
+      toast("📶 Offline",`Action queued (${count} pending). Will send when reconnected.`,"warn",5000);
+      haptic("error");
+    });
+  }
+
+  async function _replayOfflineQueue(){
+    if(_offlineReplaying||!_offlineQueue.length)return;
+    _offlineReplaying=true;
+    const queued=[..._offlineQueue];_offlineQueue.length=0;
+    let succeeded=0,failed=0;
+    for(const item of queued){
+      try{const r=await apiJson(item.url,item.opts);item.resolve(r);succeeded++;}
+      catch(e){item.reject(e);failed++;}
+    }
+    _offlineReplaying=false;
+    if(succeeded>0)toast("✅ Back online",`${succeeded} queued action${succeeded===1?"":"s"} sent successfully.`,"ok",5000);
+    if(failed>0)toast("⚠️ Some actions failed",`${failed} queued action${failed===1?"":"s"} could not be sent.`,"err",6000);
+  }
+
   function renderSessionHistory(){
     const count=el("shCount"),body=el("shBody");if(!count||!body)return;
     count.textContent=`${driverState.sessionDrops.length} submission${driverState.sessionDrops.length===1?"":"s"}`;
@@ -978,13 +1003,38 @@
 
   let _deferredInstallPrompt=null;
   function initPwaInstall(){
-    window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();_deferredInstallPrompt=e;const btn=el("btnInstallPwa");if(btn)btn.style.display="";});
-    window.addEventListener("appinstalled",()=>{_deferredInstallPrompt=null;const btn=el("btnInstallPwa");if(btn)btn.style.display="none";toast("App installed","Wesbell Dispatch added to home screen.","ok");});
-    el("btnInstallPwa")?.addEventListener("click",async()=>{
-      if(!_deferredInstallPrompt)return;_deferredInstallPrompt.prompt();
-      const{outcome}=await _deferredInstallPrompt.userChoice;if(outcome==="accepted")haptic("success");
-      _deferredInstallPrompt=null;const btn=el("btnInstallPwa");if(btn)btn.style.display="none";
+    const isStandalone=window.matchMedia("(display-mode:standalone)").matches||navigator.standalone===true;
+    if(isStandalone)return;
+    window.addEventListener("beforeinstallprompt",e=>{
+      e.preventDefault();_deferredInstallPrompt=e;
+      const btn=el("btnInstallPwa");if(btn)btn.style.display="";
+      try{if(sessionStorage.getItem("wb_install_dismissed"))return;}catch{}
+      clearTimeout(initPwaInstall._t);
+      initPwaInstall._t=setTimeout(()=>_showInstallBanner(),30000);
     });
+    window.addEventListener("appinstalled",()=>{
+      _deferredInstallPrompt=null;_hideInstallBanner();
+      const btn=el("btnInstallPwa");if(btn)btn.style.display="none";
+      toast("App installed","Wesbell Dispatch added to home screen.","ok");
+    });
+    el("btnInstallPwa")?.addEventListener("click",_triggerInstall);
+  }
+  function _showInstallBanner(){
+    if(el("pwaInstallBanner"))return;
+    const banner=document.createElement("div");
+    banner.id="pwaInstallBanner";
+    banner.innerHTML=`<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:linear-gradient(135deg,rgba(240,160,48,.12),rgba(32,192,208,.08));border-bottom:1px solid rgba(240,160,48,.2);position:fixed;top:0;left:0;right:0;z-index:9999;backdrop-filter:blur(8px);"><div style="font-size:22px">📲</div><div style="flex:1;min-width:0;"><div style="font-family:var(--mono,monospace);font-size:12px;font-weight:700;color:var(--amber,#f0a030);letter-spacing:.06em;">ADD TO HOME SCREEN</div><div style="font-family:var(--sans,sans-serif);font-size:11px;color:var(--t1,#8a9db8);margin-top:2px;">Faster access — works offline too</div></div><button id="pwaInstallBtn" style="padding:8px 14px;border-radius:8px;border:1px solid rgba(240,160,48,.4);background:rgba(240,160,48,.1);color:var(--amber,#f0a030);font-family:var(--mono,monospace);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">Install</button><button id="pwaInstallDismiss" style="padding:6px 8px;border:none;background:none;color:var(--t2,#4a5e78);font-size:18px;cursor:pointer;line-height:1;">×</button></div>`;
+    document.body.prepend(banner);
+    el("pwaInstallBtn")?.addEventListener("click",_triggerInstall);
+    el("pwaInstallDismiss")?.addEventListener("click",()=>{_hideInstallBanner();try{sessionStorage.setItem("wb_install_dismissed","1");}catch{}});
+  }
+  function _hideInstallBanner(){const b=el("pwaInstallBanner");if(b)b.remove();}
+  async function _triggerInstall(){
+    if(!_deferredInstallPrompt)return;
+    _deferredInstallPrompt.prompt();
+    const{outcome}=await _deferredInstallPrompt.userChoice;
+    if(outcome==="accepted"){haptic("success");_hideInstallBanner();}
+    _deferredInstallPrompt=null;const btn=el("btnInstallPwa");if(btn)btn.style.display="none";
   }
 
   function initKeyboardAvoidance(){
@@ -1016,6 +1066,27 @@
       if(logoutBtn){logoutBtn.style.display="";logoutBtn.textContent="↩ Start Over";logoutBtn.onclick=e=>{e.stopImmediatePropagation();try{sessionStorage.removeItem("wb_whoType");}catch{}driverRestart();};}
       el("btnAudit").style.display="none";
       renderSessionHistory();initPush();
+      // ── QR auto-load: handle ?qr=1&trailer=X&action=Y in URL ──
+      (function checkQrParams(){
+        const params=new URLSearchParams(location.search);
+        if(!params.has("qr"))return;
+        const trailer=(params.get("trailer")||"").trim().toUpperCase();
+        const action=(params.get("action")||"arrive").trim();
+        const door=(params.get("door")||"").trim();
+        if(!trailer)return;
+        // Clean URL immediately
+        history.replaceState({},"",location.pathname);
+        // Wait for WS state then act
+        setTimeout(async()=>{
+          try{
+            const res=await apiJson("/api/qr/scan",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,action,door,scannedBy:"driver"})});
+            if(res.door)toast("📱 QR Scanned",`Trailer ${trailer} → Door ${res.door}`,"ok",8000);
+            else if(res.departed)toast("📱 QR Scanned",`Trailer ${trailer} departed`,"ok",5000);
+            else toast("📱 QR Scanned",`Trailer ${trailer} · ${action}`,"ok",5000);
+            haptic("success");
+          }catch(e){toast("QR Error",e.message,"err",6000);}
+        },600);
+      })();
     }else if(p.startsWith("/management")){
       _unlockScroll();
       el("managementView").style.display="";el("managementView").classList.add("view-fade");
@@ -1112,7 +1183,7 @@
 
     if(id==="btnArrDone"||id==="btnOmwDone")return driverRestart();
     if(id==="btnBackToFlow"){
-      const _isOutside=driverState.whoType==="outside";const sb=document.querySelector("[data-flow='shunt']");if(sb)sb.style.display=_isOutside?"none":"";
+      const sb=document.querySelector("[data-flow='shunt']");if(sb)sb.style.display=isOutside?"none":"";
     }
     if(id==="btnDriverDrop")return driverDrop();
     if(id==="btnXdockPickup")return xdockPickup();
@@ -1236,7 +1307,7 @@
     const ws=new WebSocket(`${location.protocol==="https:"?"wss":"ws"}://${location.host}`);
     let lastMsg=Date.now();
     const watchdog=setInterval(()=>{if(Date.now()-lastMsg>35000){try{ws.close();}catch{}}},5000);
-    ws.onopen=()=>{wsRetry=0;wsStatus("ok");};
+    ws.onopen=()=>{wsRetry=0;wsStatus("ok");_replayOfflineQueue();};
     ws.onclose=()=>{
       clearInterval(watchdog);wsStatus("bad");
       const base=Math.min(8000,500+wsRetry++*650),jitter=base*0.3*(Math.random()*2-1);
@@ -1245,14 +1316,15 @@
     ws.onmessage=evt=>{
       lastMsg=Date.now();let msg;try{msg=JSON.parse(evt.data);}catch{return;}
       const{type,payload}=msg||{};
-      if(type==="state"){trailers=payload||{};renderBoard();if(isSuper())renderSupBoard();if(isDock()){renderDockView();window._lspAutoRefresh?.();updateTrackingMap?.();updateTrackingList?.();if(window._loadStatusRefresh&&document.getElementById("lsp-body")?.classList.contains("lsp-open"))window._loadStatusRefresh();}if(isAdmin()&&!isSuper())renderBoard();}
+      if(type==="state"){trailers=payload||{};renderBoard();if(isSuper())renderSupBoard();if(isDock()){renderDockView();window._lspAutoRefresh?.();updateTrackingMap?.();updateTrackingList?.();if(window._loadStatusRefresh&&document.getElementById("lsp-body")?.classList.contains("lsp-open"))window._loadStatusRefresh();}if(isAdmin()&&!isSuper())renderBoard();
+        // 5. ETA countdown: refresh dispatch board OMW badges every minute
+        clearTimeout(connectWs._etaTimer);
+        connectWs._etaTimer=setTimeout(function tickEta(){renderBoard();if(isDock())renderDockView();connectWs._etaTimer=setTimeout(tickEta,60000);},60000);
+      }
       else if(type==="dockplates"){dockPlates=payload||{};if(!isDriver())renderPlates();}
       else if(type==="doorblocks"){doorBlocks=payload||{};renderDockMap();renderBoard();}
       else if(type==="confirmations"){confirmations=Array.isArray(payload)?payload:[];if(isSuper())renderSupConf();}
       else if(type==="ping"){/* keepalive */}
-      else if(type==="shift_note"){
-        renderShiftNote(payload);
-      }
       else if(type==="location"){
         if(trailers[payload.trailer]){
           trailers[payload.trailer].lat=payload.lat;
@@ -1262,13 +1334,30 @@
         }
         updateTrackingMap();updateTrackingList();
         if(isDock())dvUpdateIncoming();
+        // Refresh the OMW badge on dispatch board when ETA updates
+        if(!isDock()&&!isDriver())renderBoard();
+        // Refresh load-status panel if open
+        window._lspAutoRefresh?.();
       }
       else if(type==="omw"){showToast(`🚛 ${payload.trailer} on way → Door ${payload.door}${payload.eta?` · ETA ~${payload.eta}min`:""}`, "ok",6000);renderBoard();if(isDock())renderDockView();updateTrackingMap();updateTrackingList();}
       else if(type==="arrive"){showToast(`✅ ${payload.trailer} arrived at Door ${payload.door}`,"ok",6000);renderBoard();if(isDock())renderDockView();updateTrackingMap();updateTrackingList();}
       else if(type==="version"){VERSION=payload?.version||VERSION;el("verText").textContent=VERSION||"—";}
-      else if(type==="notify"&&payload?.kind==="ready"){
-        toast("🟢 Trailer Ready",`${payload.trailer} is READY${payload.door?" at door "+payload.door:""}.`,"ok",8000);
-        if(isDriver()){const banner=el("readyNotifBanner");if(banner){el("readyNotifText").textContent=`Trailer ${payload.trailer} is READY${payload.door?" at door "+payload.door:""}`;banner.style.display="flex";clearTimeout(banner._t);banner._t=setTimeout(()=>banner.style.display="none",12000);}}
+      else if(type==="notify"){
+        const kind=payload?.kind,trailer=payload?.trailer||"",door=payload?.door||"";
+        if(kind==="ready"){
+          toast("🟢 Trailer Ready",`${trailer} is READY${door?" at door "+door:""}.`,"ok",8000);
+          haptic("success");
+          if(isDriver()){const banner=el("readyNotifBanner");if(banner){el("readyNotifText").textContent=`Trailer ${trailer} is READY${door?" at door "+door:""}`;banner.style.display="flex";clearTimeout(banner._t);banner._t=setTimeout(()=>banner.style.display="none",12000);}}
+        } else if(kind==="arrive"){
+          if(!isDriver())toast("✅ Arrived",`Trailer ${trailer} arrived${door?" at Door "+door:""}.`,"ok",5000);
+        } else if(kind==="omw"){
+          if(!isDriver())toast(`🚛 On My Way`,`Trailer ${trailer} → Door ${door}${payload.eta?` · ETA ~${payload.eta}m`:""}`.trim(),"ok",6000);
+        } else if(kind==="issue"){
+          toast("⚠️ Issue Filed",`Trailer ${trailer}${door?" at Door "+door:""}${payload.note?": "+payload.note.slice(0,60):""}.`,"warn",7000);
+        } else {
+          // generic notify fallback
+          if(payload?.message)toast(payload.title||"Notification",payload.message,"ok",5000);
+        }
       }
     };
   }
@@ -1388,7 +1477,7 @@
 
   loadInitial().then(()=>{
     syncBottomNav();initToastSwipe();initPullToRefresh();initKeyboardAvoidance();initSwipeViews();initPwaInstall();
-    initStaffLogin();initStaffLogin._sync?.();initIssueCamera();initIssueLightbox();initDockIssueModal();initShiftNote();
+    initStaffLogin();initStaffLogin._sync?.();initIssueCamera();initIssueLightbox();initDockIssueModal();
     // Init push for all views — drivers get auto-subscribed, others get auto-subscribed if permission already granted
     if(!path().startsWith("/driver"))initPush();
 
@@ -1595,170 +1684,6 @@
     initQuickDrop();initVoiceInput();initDockScan();initDimMode();initDockRememberLogin();
   });
   // Start WS immediately — don't wait for loadInitial, server sends state on connect
-  // ── Shift Notes ───────────────────────────────────────────────────────────
-  function renderShiftNote(data){
-    const wrap=el("shiftNoteWrap");
-    const banner=el("shiftNoteBanner");
-    const txt=data?.text||"";
-    const metaStr=(data?.setBy?data.setBy+" · ":"")+( data?.setAt?timeAgo(data.setAt):"");
-    // Sidebar editor section (dispatcher panel)
-    if(wrap)wrap.style.display=txt?"":"none";
-    const disp=el("shiftNoteDisplay");if(disp)disp.textContent=txt;
-    const meta=el("shiftNoteMeta");if(meta)meta.textContent=metaStr;
-    // Read-only banner on the board (visible to all roles)
-    if(banner){
-      banner.style.display=txt?"":"none";
-      const bt=el("shiftNoteBannerText");if(bt)bt.textContent=txt;
-      const bm=el("shiftNoteBannerMeta");if(bm)bm.textContent=metaStr;
-    }
-    // Sync textarea if it's empty (don't overwrite in-progress edits)
-    const inp=el("shiftNoteInput");if(inp&&!inp.value&&txt)inp.value=txt;
-  }
-  async function loadShiftNote(){
-    try{const d=await apiJson("/api/shift-note");renderShiftNote(d);}catch{}
-  }
-  function initShiftNote(){
-    const inp=el("shiftNoteInput"),btn=el("btnSaveShiftNote"),clr=el("btnClearShiftNote");
-    if(!inp||!btn)return;
-    btn.addEventListener("click",async()=>{
-      const text=(inp.value||"").trim();
-      try{
-        await apiJson("/api/shift-note",{method:"POST",headers:CSRF,body:JSON.stringify({text})});
-        toast("Shift note saved","",text?"ok":"warn");
-      }catch(e){toast("Failed",e.message,"err");}
-    });
-    clr?.addEventListener("click",async()=>{
-      inp.value="";
-      try{await apiJson("/api/shift-note",{method:"POST",headers:CSRF,body:JSON.stringify({text:""})});toast("Note cleared","","warn");}catch{}
-    });
-    loadShiftNote();
-  }
-
-  // ── Issue Reports (management view) ──────────────────────────────────
-  async function loadIssueReports(){
-    const body=el("supIssueBody"),count=el("supIssueCount");if(!body)return;
-    try{
-      const rows=await apiJson("/api/issue-reports?limit=50");
-      if(count)count.textContent=rows.length;
-      if(!rows.length){body.innerHTML='<div style="padding:20px;text-align:center;color:var(--t3);font-size:12px;font-family:var(--mono);">No issue reports yet.</div>';return;}
-      body.innerHTML=rows.map(r=>{
-        const hasPhoto=!!r.has_photo||!!r.photo_data;
-        return`<div class="issue-row" style="padding:12px 16px;border-bottom:1px solid var(--b0);display:grid;grid-template-columns:auto 1fr auto;gap:8px 12px;align-items:start;">
-          <div style="font-family:var(--mono);font-size:10px;color:var(--t2);white-space:nowrap;padding-top:2px;">${esc(fmtTime(r.at))}</div>
-          <div>
-            <span style="font-family:var(--mono);font-weight:600;color:var(--amber);">${esc(r.trailer||"—")}</span>
-            ${r.door?`<span style="font-size:11px;color:var(--t2);margin-left:6px;">D${esc(r.door)}</span>`:""}
-            <div style="font-size:12px;color:var(--t1);margin-top:3px;">${esc(r.note||"—")}</div>
-          </div>
-          <div style="display:flex;gap:6px;align-items:center;">
-            ${hasPhoto?`<button class="btn btn-default btn-sm" data-issue-photo="${r.id}" style="font-size:10px;">📷 Photo</button>`:""}
-          </div>
-        </div>`;
-      }).join("");
-    }catch(e){if(body)body.innerHTML=`<div style="padding:16px;color:var(--red);font-size:12px;">Failed to load: ${e.message}</div>`;}
-  }
-
-  // ── Photo lightbox (management issue photos) ─────────────────────────
-  function initIssueLightbox(){
-    const lb=el("issueLightbox"),img=el("issueLightboxImg"),closeBtn=el("issueLightboxClose");
-    if(!lb)return;
-    document.addEventListener("click",ev=>{
-      const btn=ev.target.closest("[data-issue-photo]");
-      if(!btn)return;
-      const id=btn.dataset.issuePhoto;
-      if(img)img.src=`/api/issue-reports/${encodeURIComponent(id)}/photo`;
-      lb.classList.add("lb-open");
-    });
-    closeBtn?.addEventListener("click",()=>lb.classList.remove("lb-open"));
-    lb.addEventListener("click",e=>{if(e.target===lb)lb.classList.remove("lb-open");});
-    document.addEventListener("keydown",e=>{if(e.key==="Escape")lb.classList.remove("lb-open");});
-  }
-
-  // ── Dock issue modal (photo capture + note) ──────────────────────────
-  let _dockIssueTrailer="",_dockIssueDoor="",_dockIssuePhotoB64=null,_dockIssuePhotoMime=null;
-
-  function initIssueCamera(){
-    const input=el("dockIssuePhotoInput");
-    if(!input)return;
-    input.addEventListener("change",()=>{
-      const file=input.files?.[0];if(!file)return;
-      if(!file.type.startsWith("image/"))return;
-      const reader=new FileReader();
-      reader.onload=e=>{
-        _dockIssuePhotoB64=e.target.result.split(",")[1];
-        _dockIssuePhotoMime=file.type;
-        const prev=el("dockIssuePrev"),empty=el("dockIssueEmpty"),rm=el("dockIssueRemovePhoto");
-        if(prev){prev.src=e.target.result;prev.style.display="";}
-        if(empty)empty.style.display="none";
-        if(rm)rm.style.display="";
-      };
-      reader.readAsDataURL(file);
-    });
-    el("dockIssueRemovePhoto")?.addEventListener("click",e=>{
-      e.preventDefault();_dockIssuePhotoB64=null;_dockIssuePhotoMime=null;
-      const prev=el("dockIssuePrev"),empty=el("dockIssueEmpty"),rm=el("dockIssueRemovePhoto"),inp=el("dockIssuePhotoInput");
-      if(prev)prev.style.display="none";if(empty)empty.style.display="";if(rm)rm.style.display="none";if(inp)inp.value="";
-    });
-  }
-
-  function initDockIssueModal(){
-    el("dockIssueCancelBtn")?.addEventListener("click",()=>{el("dockIssueOv")?.classList.add("hidden");unlockScroll();});
-    el("dockIssueOv")?.addEventListener("click",e=>{if(e.target===el("dockIssueOv")){el("dockIssueOv").classList.add("hidden");unlockScroll();}});
-    el("dockIssueSubmitBtn")?.addEventListener("click",submitDockIssue);
-  }
-
-  function openDockIssueModal(trailer,door){
-    _dockIssueTrailer=trailer;_dockIssueDoor=door||"";
-    _dockIssuePhotoB64=null;_dockIssuePhotoMime=null;
-    const ctx=el("dockIssueCtx");
-    if(ctx)ctx.textContent=`Trailer ${trailer}${door?" · Door "+door:""}`;
-    const note=el("dockIssueNote");if(note)note.value="";
-    const err=el("dockIssueErr");if(err)err.style.display="none";
-    const prev=el("dockIssuePrev"),empty=el("dockIssueEmpty"),rm=el("dockIssueRemovePhoto"),inp=el("dockIssuePhotoInput");
-    if(prev)prev.style.display="none";if(empty)empty.style.display="";if(rm)rm.style.display="none";if(inp)inp.value="";
-    el("dockIssueOv")?.classList.remove("hidden");
-    lockScroll();
-    setTimeout(()=>el("dockIssueNote")?.focus(),100);
-  }
-
-  async function submitDockIssue(){
-    const note=(el("dockIssueNote")?.value||"").trim();
-    const errEl=el("dockIssueErr"),submitBtn=el("dockIssueSubmitBtn");
-    if(!note){if(errEl){errEl.textContent="Please describe the issue.";errEl.style.display="";}return;}
-    if(errEl)errEl.style.display="none";
-    if(submitBtn){submitBtn.disabled=true;submitBtn.textContent="Submitting…";}
-    try{
-      await apiJson("/api/report-issue",{method:"POST",headers:CSRF,body:JSON.stringify({
-        trailer:_dockIssueTrailer,door:_dockIssueDoor,note,
-        photo_data:_dockIssuePhotoB64||undefined,photo_mime:_dockIssuePhotoMime||undefined
-      })});
-      el("dockIssueOv")?.classList.add("hidden");unlockScroll();
-      toast("Issue reported",`${_dockIssueTrailer} issue logged.`,"ok");
-      haptic("success");
-    }catch(e){if(errEl){errEl.textContent=`Failed: ${e.message}`;errEl.style.display="";}}
-    finally{if(submitBtn){submitBtn.disabled=false;submitBtn.textContent="Submit Report";}}
-  }
-
-  // ── Legacy driver function stubs (old UI removed, new UI in index.html) ──
-  // These IDs no longer exist in the DOM but the click handler still references
-  // them. Guard with no-ops so no ReferenceError is thrown if somehow triggered.
-  function driverDrop(){}
-  function xdockPickup(){}
-  function xdockOffload(){}
-  function confSafety(){}
-  function driverShunt(){}
-  function updateDropSubmitState(){}
-  function updateOffloadSubmitState(){}
-  function updateSafetySubmitState(){}
-  function buildShuntDoorPicker(){}
-  function updateShuntSubmitState(){}
-  function showDoorPicker(){}
-  function buildDoorPicker(){}
-  function onTrailerInput(){}
-  function onPickupTrailerInput(){}
-  function onOffloadTrailerInput(){}
-  function selectFlow(){}
-
   connectWs();
 })();
 
@@ -1826,8 +1751,31 @@
   }
 
   // Expose hooks for driver OMW submit/arrive
-  window._driverOmwStart=function(trailer){startGpsTracking(trailer);};
-  window._driverOmwStop=function(){stopGpsTracking();updateGpsCard("hidden");};
+  window._driverOmwStart=function(trailer){
+    startGpsTracking(trailer);
+    // Also wire the new geofence component (public/js/components/geofence.js)
+    // if it was loaded as an ES module — call its startTracking() if available
+    if(window._geofenceStart)window._geofenceStart(trailer,{
+      onArrive:function(door){
+        // Server triggered auto-arrive via geofence — show confirmation
+        toast("📍 Auto-arrived",`Geofence detected — Door ${door} assigned.`,"ok",8000);
+        haptic("success");
+        driverState.assignedDoor=door;
+        stopGpsTracking();
+        // Re-render the driver view to show the door
+        const assignedEl=el("assignedDoor");if(assignedEl)assignedEl.textContent="Door "+door;
+        const doorDisplayEl=el("ts-door-display");if(doorDisplayEl)doorDisplayEl.textContent=door;
+      },
+      onEta:function(eta){
+        // Update live ETA shown in the driver view
+        const etaEl=el("ts-eta-display");if(etaEl)etaEl.textContent=eta?`~${eta} min`:"";
+        // Also update the omwEta on the trailer in the local cache for the dock view
+        if(trailer&&trailers[trailer])trailers[trailer].omwEta=eta;
+        if(isDock())dvUpdateIncoming();
+      }
+    });
+  };
+  window._driverOmwStop=function(){stopGpsTracking();updateGpsCard("hidden");if(window._geofenceStop)window._geofenceStop();};
 
   // No-op stubs so WS handler references don't throw
   window.updateTrackingMap=function(){};

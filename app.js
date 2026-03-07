@@ -1599,7 +1599,10 @@
         } else if(kind==="drop"){
           if(!isDriver()){
             haptic("medium");
-            _notifPush({icon:"📦",title:`Drop: ${trailer}`,body:"Outside carrier drop — door assignment needed",kind:"drop",trailer,door,at:Date.now()});
+            const body=payload.autoAssigned&&door
+              ?`Auto-assigned Door ${door}`
+              :`Needs door assignment`;
+            _notifPush({icon:"📦",title:`Drop: ${trailer}`,body,kind:"drop",trailer,door,at:Date.now()});
           }
         } else if(kind==="arrive"){
           if(!isDriver()){

@@ -1,6 +1,6 @@
 (() => {
   const CSRF = {"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"};
-  let ROLE=null, VERSION="", trailers={}, dockPlates={}, doorBlocks={}, confirmations=[];
+  let ROLE=null, VERSION="", _locationId=1, trailers={}, dockPlates={}, doorBlocks={}, confirmations=[];
   const plateEditOpen={}, shuntOpen={};
   const el=id=>document.getElementById(id);
   const path=()=>location.pathname.toLowerCase();
@@ -883,6 +883,70 @@
     try{await apiJson("/api/clear",{method:"POST",headers:CSRF});toast("Board cleared","All records removed.","warn");}
     catch(e){toast("Clear failed",e.message,"err");}
   }
+
+  // ── Admin: Locations ───────────────────────────────────────────────────────
+  async function loadAdminLocations(){
+    const list=el("adminLocList");if(!list)return;
+    list.innerHTML='<div style="color:var(--t3);font-size:11px;font-family:var(--mono)">Loading…</div>';
+    try{
+      const locs=await apiJson("/api/admin/locations");
+      if(!locs.length){list.innerHTML='<div style="color:var(--t3);font-size:11px;font-family:var(--mono)">No locations yet</div>';return;}
+      list.innerHTML=locs.map(l=>`
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--s2,#0d1b2a);border:1px solid var(--b0);border-radius:8px;gap:8px;">
+          <div>
+            <div style="font-family:var(--mono);font-size:12px;font-weight:600;color:${l.active?'var(--t0)':'var(--t2)'}">${esc(l.name)}</div>
+            <div style="font-size:10px;color:var(--t2);font-family:var(--mono);">/${esc(l.slug)} · Doors ${l.doors_from}–${l.doors_to} · ${esc(l.timezone)}</div>
+          </div>
+          <button class="btn btn-sm ${l.active?'btn-default':'btn-success'}" style="flex-shrink:0;font-size:10px;" data-loc-toggle="${l.id}" data-loc-active="${l.active}">${l.active?'Disable':'Enable'}</button>
+        </div>`).join('');
+      list.querySelectorAll('[data-loc-toggle]').forEach(btn=>{
+        btn.addEventListener('click',async()=>{
+          const id=btn.dataset.locToggle,active=btn.dataset.locActive==='1'?0:1;
+          try{await apiJson(`/api/admin/locations/${id}`,{method:'PATCH',headers:CSRF,body:JSON.stringify({active})});loadAdminLocations();}
+          catch(e){toast('Failed',e.message,'err');}
+        });
+      });
+      // Expand accordion to fit new content
+      const body=el('adminLocBody');if(body)body.style.maxHeight=(body.scrollHeight+200)+'px';
+    }catch(e){list.innerHTML=`<div style="color:var(--red);font-size:11px">${esc(e.message)}</div>`;}
+  }
+
+  async function adminAddLocation(){
+    const name=el('newLocName')?.value.trim(),slug=el('newLocSlug')?.value.trim();
+    const doors_from=parseInt(el('newLocFrom')?.value)||28,doors_to=parseInt(el('newLocTo')?.value)||42;
+    const timezone=el('newLocTz')?.value.trim()||'America/Toronto';
+    if(!name||!slug)return toast('Missing fields','Name and slug are required.','err');
+    try{
+      await apiJson('/api/admin/locations',{method:'POST',headers:CSRF,body:JSON.stringify({name,slug,doors_from,doors_to,timezone})});
+      toast('Location added',`${name} (/${slug}) created.`,'ok');
+      if(el('newLocName'))el('newLocName').value='';
+      if(el('newLocSlug'))el('newLocSlug').value='';
+      loadAdminLocations();
+    }catch(e){toast('Failed',e.message,'err');}
+  }
+
+  async function loadAdminOverview(){
+    const list=el('adminOverviewList');if(!list)return;
+    list.innerHTML='<div style="color:var(--t3);font-size:11px;font-family:var(--mono)">Loading…</div>';
+    try{
+      const locs=await apiJson('/api/admin/overview');
+      if(!locs.length){list.innerHTML='<div style="color:var(--t3);font-size:11px;font-family:var(--mono)">No active locations</div>';return;}
+      list.innerHTML=locs.map(l=>{
+        const active=(l.byStatus.Incoming||0)+(l.byStatus.Dropped||0)+(l.byStatus.Loading||0)+(l.byStatus['Dock Ready']||0)+(l.byStatus.Ready||0);
+        return`<div style="padding:10px;background:var(--s2,#0d1b2a);border:1px solid var(--b0);border-radius:8px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--t0)">${esc(l.name)}</div>
+            ${l.openIssues?`<span style="font-size:10px;background:rgba(240,74,74,.15);color:var(--red);border:1px solid rgba(240,74,74,.3);border-radius:4px;padding:1px 6px;font-family:var(--mono);">⚠ ${l.openIssues} issue${l.openIssues>1?'s':''}</span>`:''}
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            ${Object.entries(l.byStatus).filter(([,v])=>v>0).map(([s,v])=>`<span style="font-size:10px;font-family:var(--mono);color:var(--t2);background:var(--s1,#0d1421);border:1px solid var(--b0);border-radius:3px;padding:1px 6px;">${esc(s)} <strong style="color:var(--t0)">${v}</strong></span>`).join('')}
+            ${!active?'<span style="font-size:10px;color:var(--t3);font-family:var(--mono)">No active trailers</span>':''}
+          </div>
+        </div>`;
+      }).join('');
+      const body=el('adminOverviewBody');if(body)body.style.maxHeight=(body.scrollHeight+200)+'px';
+    }catch(e){list.innerHTML=`<div style="color:var(--red);font-size:11px">${esc(e.message)}</div>`;}
+  }
   async function shuntTrailer(trailer,door){
     try{await apiJson("/api/shunt",{method:"POST",headers:CSRF,body:JSON.stringify({trailer,door})});shuntOpen[trailer]=false;toast("Moved",`Trailer ${trailer} → Door ${door} (Dropped)`,"ok");}
     catch(e){toast("Shunt failed",e.message,"err");}
@@ -1202,7 +1266,7 @@
 
   async function loadInitial(){
     try{
-      const w=await apiJson("/api/whoami");ROLE=w?.role;VERSION=w?.version||"";
+      const w=await apiJson("/api/whoami");ROLE=w?.role;VERSION=w?.version||"";_locationId=w?.locationId||1;
       if(w?.redirectTo&&ROLE&&w.redirectTo!==location.pathname){location.replace(w.redirectTo);return;}
     }catch{ROLE=null;VERSION="";}
     el("verText").textContent=VERSION||"—";
@@ -1295,8 +1359,10 @@
     if(direct?.closest?.("#dockPlatesToggle")){setPlatesOpen(el("dockPlatesToggle").getAttribute("aria-expanded")!=="true");return;}
     if(direct?.closest?.("#dockPlatesToggle2")){setPlatesOpen2(el("dockPlatesToggle2").getAttribute("aria-expanded")!=="true");return;}
     // PIN accordions
-    for(const[tog,body] of [["pinMgmtToggle","pinMgmtBody"],["adminPinToggle","adminPinBody"]]){
+    for(const[tog,body] of [["pinMgmtToggle","pinMgmtBody"],["adminPinToggle","adminPinBody"],["adminLocToggle","adminLocBody"],["adminOverviewToggle","adminOverviewBody"]]){
       if(direct?.closest?.(`#${tog}`)){const t=el(tog),b=el(body);if(!t||!b)return;const open=t.getAttribute("aria-expanded")==="true";t.setAttribute("aria-expanded",open?"false":"true");b.style.maxHeight=open?"0px":(b.scrollHeight+40)+"px";return;}
+        if(!open&&tog==="adminLocToggle")loadAdminLocations();
+        if(!open&&tog==="adminOverviewToggle")loadAdminOverview();
     }
     if(act==="openStaffLogin"){el("btnDockStaffLogin")?.click();return;}
     if(id==="btnLogout")return doLogout();
@@ -1318,6 +1384,8 @@
     if(id==="btnClearFilters"||id==="btnSupClearFilters"){["search","filterDir","filterStatus","supSearch","supFilterDir","supFilterStatus"].forEach(i=>{if(el(i))el(i).value="";});renderBoard();renderSupBoard();return;}
     if(id==="btnSaveTrailer")return dispSave();
     if(id==="btnClearAll")return dispClear();
+    if(id==="btnAddLocation")return adminAddLocation();
+    if(id==="btnRefreshOverview")return loadAdminOverview();
     // PIN buttons — consolidated
     const PIN_BTNS={btnSetDispatcherPin:["dispatcher","pin_dispatcher","pin_dispatcher_confirm"],btnSetDockPin:["dock","pin_dock","pin_dock_confirm"],btnSetManagementPin:["management","pin_management","pin_management_confirm"],btnSetAdminPinSup:["admin","pin_admin_sup","pin_admin_sup_confirm"],btnSetDispatcherPinA:["dispatcher","pin_dispatcher_a","pin_dispatcher_a_confirm"],btnSetDockPinA:["dock","pin_dock_a","pin_dock_a_confirm"],btnSetManagementPinA:["management","pin_management_a","pin_management_a_confirm"],btnSetAdminPinA:["admin","pin_admin_a","pin_admin_a_confirm"]};
     if(id in PIN_BTNS){const[r,i,c]=PIN_BTNS[id];return setPin(r,i,c);}
@@ -1495,6 +1563,8 @@
       wsRetry=0;
       wsStatus("ok");
       _replayOfflineQueue();
+      // Tell server which location this client belongs to
+      try{ws.send(JSON.stringify({type:"identify",locationId:_locationId||1}));}catch{}
       // Resync after any reconnect (not first load — server sends state on connect)
       if(wsRetry===0&&trailers&&Object.keys(trailers).length>0)_resyncState();
     };

@@ -177,6 +177,62 @@ const MIGRATIONS = [
       await run(`CREATE INDEX IF NOT EXISTS idx_qr_trailer ON qr_scans(trailer)`);
     },
   },
+
+  {
+    version: 7,
+    description: 'Multi-location support — locations table + location_id on scoped tables',
+    up: async (run, all) => {
+      // Locations master table
+      await run(`CREATE TABLE IF NOT EXISTS locations(
+        id   INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        slug TEXT NOT NULL UNIQUE,
+        doors_from INTEGER NOT NULL DEFAULT 28,
+        doors_to   INTEGER NOT NULL DEFAULT 42,
+        timezone   TEXT NOT NULL DEFAULT 'America/Toronto',
+        active     INTEGER NOT NULL DEFAULT 1,
+        createdAt  INTEGER NOT NULL DEFAULT 0
+      )`);
+
+      // Seed a default "Milton" location — maps existing single-location data
+      const existing = await all(`SELECT id FROM locations LIMIT 1`);
+      if (!existing.length) {
+        await run(
+          `INSERT INTO locations(name,slug,doors_from,doors_to,timezone,active,createdAt)
+           VALUES(?,?,?,?,?,?,?)`,
+          ['Milton', 'milton', 28, 42, 'America/Toronto', 1, Date.now()]
+        );
+      }
+
+      // Add location_id to scoped tables — safe no-op if column already exists
+      for (const tbl of ['trailers','dockplates','doorblocks','door_reservations','confirmations','audit','issue_reports','geofence_events']) {
+        try { await run(`ALTER TABLE ${tbl} ADD COLUMN location_id INTEGER NOT NULL DEFAULT 1`); } catch {}
+      }
+
+      // Back-fill all existing rows to location 1 (Milton)
+      for (const tbl of ['trailers','dockplates','doorblocks','door_reservations','confirmations','audit','issue_reports']) {
+        try { await run(`UPDATE ${tbl} SET location_id=1 WHERE location_id IS NULL OR location_id=0`); } catch {}
+      }
+
+      // Indexes
+      await run(`CREATE INDEX IF NOT EXISTS idx_trailers_loc    ON trailers(location_id)`);
+      await run(`CREATE INDEX IF NOT EXISTS idx_audit_loc       ON audit(location_id)`);
+      await run(`CREATE INDEX IF NOT EXISTS idx_issues_loc      ON issue_reports(location_id)`);
+      await run(`CREATE INDEX IF NOT EXISTS idx_dockplates_loc  ON dockplates(location_id)`);
+      await run(`CREATE INDEX IF NOT EXISTS idx_doorblocks_loc  ON doorblocks(location_id)`);
+      await run(`CREATE INDEX IF NOT EXISTS idx_reservations_loc ON door_reservations(location_id)`);
+
+      // Re-seed dockplates for location 1 so door range is correct
+      const plates = new Set((await all(`SELECT door FROM dockplates WHERE location_id=1`)).map(r=>r.door));
+      for (let d = 28; d <= 42; d++) {
+        const door = String(d);
+        if (!plates.has(door)) {
+          await run(`INSERT INTO dockplates(door,status,note,updatedAt,location_id) VALUES(?,?,?,?,?)`,
+            [door, 'Unknown', '', Date.now(), 1]);
+        }
+      }
+    },
+  },
 ];
 
 /**

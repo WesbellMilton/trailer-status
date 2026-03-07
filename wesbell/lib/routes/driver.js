@@ -185,23 +185,35 @@ router.post('/api/driver/drop', requireXHR, requireDriverRate, requireDriverAcce
       });
     }
 
-    const dropStatus = door ? 'Incoming' : (carrierType === 'Outside' ? 'Dropped' : 'Incoming');
+    // Auto-assign door for loaded outside carrier drops (same as OMW)
+    // Empty drops go to Dropped — nothing to load yet, no door needed
+    let assignedDoor = door || '';
+    const needsAutoAssign = !door && carrierType === 'Outside' && dropType === 'Loaded';
+    if (needsAutoAssign) {
+      assignedDoor = await pickBestDoor(trailer) || '';
+      if (assignedDoor) await reserveDoor(assignedDoor, trailer, 'Outside', 35);
+    }
+
+    const dropStatus = assignedDoor ? 'Incoming' : (carrierType === 'Outside' ? 'Dropped' : 'Incoming');
     await run(
       `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt)
        VALUES(?,?,?,?,?,?,?,?)
        ON CONFLICT(trailer) DO UPDATE SET
          direction=excluded.direction,status=excluded.status,door=excluded.door,
          dropType=excluded.dropType,carrierType=excluded.carrierType,updatedAt=excluded.updatedAt`,
-      [trailer, existing?.direction || 'Inbound', dropStatus, door || '', existing?.note || '', dropType, carrierType, now]
+      [trailer, existing?.direction || 'Inbound', dropStatus, assignedDoor, existing?.note || '', dropType, carrierType, now]
     );
     await releaseReservation(trailer);
-    await audit(req, 'driver', 'driver_drop', 'trailer', trailer, { door: door || '', dropType, carrierType });
-    if (dropStatus === 'Dropped') {
+    await audit(req, 'driver', 'driver_drop', 'trailer', trailer, { door: assignedDoor, dropType, carrierType, autoAssigned: needsAutoAssign });
+    if (needsAutoAssign && assignedDoor) {
+      broadcastPush('📦 Outside Carrier Drop', `Trailer ${trailer} → Door ${assignedDoor} (auto-assigned)`, { trailer, door: assignedDoor }).catch(() => {});
+      wsBroadcast('notify', { kind: 'drop', trailer, door: assignedDoor, carrierType, autoAssigned: true });
+    } else if (dropStatus === 'Dropped') {
       broadcastPush('📦 Outside Carrier Drop', `Trailer ${trailer} dropped to yard — needs door assignment`, { trailer }).catch(() => {});
-      wsBroadcast('notify', { kind: 'drop', trailer, door: door || '', carrierType });
+      wsBroadcast('notify', { kind: 'drop', trailer, door: '', carrierType, autoAssigned: false });
     }
     await broadcastTrailers();
-    res.json({ ok: true, door: door || null });
+    res.json({ ok: true, door: assignedDoor || null, autoAssigned: needsAutoAssign });
   } catch { res.status(500).send('Drop failed'); }
 });
 

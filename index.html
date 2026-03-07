@@ -428,7 +428,7 @@ body{background-image:none!important;background:transparent!important}
     </div>
     <div class="ts-door-actions">
       <button class="ts-cta-btn ts-green ts-anim" id="ts-door-safety-btn" style="display:none;">✓ Arrived — Start Safety Check</button>
-      <button class="ts-cta-btn ts-anim" id="ts-door-done-btn" style="background:var(--surface);border:2px solid var(--border);color:var(--t0);">Got it</button>
+
     </div>
   </div>
 
@@ -506,13 +506,39 @@ body{background-image:none!important;background:transparent!important}
     </div>
   </div>
 
-  <div class="ts-screen" id="ts-s-safety">
+    <div class="ts-screen" id="ts-s-waiting">
+    <div class="ts-topbar ts-anim">
+      <div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div>
+      <div id="ts-wait-trailer-tag" class="ts-trailer-tag"></div>
+    </div>
+    <div class="ts-door-hero">
+      <div class="ts-door-ring ts-done ts-anim" id="ts-wait-ring" style="border-color:rgba(245,166,35,.35);box-shadow:0 0 40px rgba(245,166,35,.12);">
+        <div>
+          <div style="font-size:13px;font-weight:600;letter-spacing:.14em;color:var(--t2);text-transform:uppercase;text-align:center;margin-bottom:6px">Your Door</div>
+          <div class="ts-door-number" id="ts-wait-door">--</div>
+        </div>
+      </div>
+      <div class="ts-door-headline ts-anim">Hang tight</div>
+      <div class="ts-door-sub ts-anim" id="ts-wait-sub">You&#8217;ll be notified the moment your truck is ready for pickup.</div>
+    </div>
+    <div style="padding:0 24px 32px;display:flex;flex-direction:column;gap:10px;align-items:center;">
+      <div style="display:flex;align-items:center;gap:10px;background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.2);border-radius:12px;padding:14px 18px;width:100%;max-width:360px;">
+        <div style="font-size:22px;">🔔</div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--t0);margin-bottom:2px;">Waiting for dispatch</div>
+          <div style="font-size:11px;color:var(--t2);">This screen updates automatically when marked Ready.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<div class="ts-screen" id="ts-s-safety">
     <div class="ts-screen-header">
       <div class="ts-topbar" style="padding:0"><div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div></div>
       <div style="padding-top:28px">
         <button class="ts-back-btn" data-back="ts-s-door-select"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Back</button>
         <div class="ts-screen-title">Safety <span>Check</span></div>
-        <div style="font-size:15px;color:var(--t1);margin-top:8px">Confirm before departing</div>
+        <div style="font-size:15px;color:var(--t1);margin-top:8px">Confirm before departing <span id="ts-safety-door-badge" style="color:var(--green);font-weight:600;"></span></div>
       </div>
     </div>
     <div class="ts-screen-body">
@@ -606,7 +632,7 @@ body{background-image:none!important;background:transparent!important}
       const prog = {
         'ts-s-home': 15, 'ts-s-carrier': 35, 'ts-s-actions': 55, 
         'ts-s-omw': 75, 'ts-s-drop': 75, 'ts-s-ext-carrier': 75, 'ts-s-door-select': 75, 
-        'ts-s-safety': 90, 'ts-s-door': 100, 'ts-s-done': 100
+        'ts-s-safety': 90, 'ts-s-door': 100, 'ts-s-waiting': 80, 'ts-s-done': 100
       };
       if(prog[id]) document.getElementById('ts-pb').style.width = prog[id] + '%';
     }
@@ -969,29 +995,44 @@ body{background-image:none!important;background:transparent!important}
     });
 
     // -- Door Display Helper --
-    function showDoorAssigned(headline, sub, showSafety, door) {
-      const d = door || state.assignedDoor || state.door || '--';
+    // showWaiting — door assigned, waiting for dispatch to mark Ready
+    function showWaiting(door) {
+      const d = door || state.assignedDoor || '--';
       state.assignedDoor = d !== '--' ? d : state.assignedDoor;
-      document.getElementById('ts-door-number').textContent = d;
-      document.getElementById('ts-door-headline').textContent = headline;
-      document.getElementById('ts-door-sub').textContent = sub;
-      document.getElementById('ts-door-trailer-tag2').textContent = `🚛 ${state.trailer}`;
-      // Show safety button only for OMW flow (driver needs to confirm when they actually arrive)
-      const safetyBtn = document.getElementById('ts-door-safety-btn');
-      if(safetyBtn) safetyBtn.style.display = showSafety ? '' : 'none';
-      show('ts-s-door');
+      document.getElementById('ts-wait-door').textContent = d;
+      document.getElementById('ts-wait-trailer-tag').textContent = `🚛 ${state.trailer}`;
+      document.getElementById('ts-wait-sub').textContent = `You'll be notified the moment your truck is ready for pickup.`;
+      show('ts-s-waiting');
     }
-    document.getElementById('ts-door-safety-btn').addEventListener('click', () => {
+
+    // showSafetyCheck — called by WS when dispatch marks Ready
+    function showSafetyCheck() {
       state.safetyChecks = { load: false, plate: false };
       document.querySelectorAll('#ts-s-safety .ts-check-item').forEach(c => c.classList.remove('ts-checked'));
       document.getElementById('ts-safety-submit').disabled = true;
       state.door = state.assignedDoor || state.door;
+      // Update safety screen header to show door
+      const safetyTitle = document.querySelector('#ts-s-safety .ts-screen-title');
+      if (safetyTitle) safetyTitle.innerHTML = `Safety <span>Check</span>`;
+      const safetyDoor = document.getElementById('ts-safety-door-badge');
+      if (safetyDoor) safetyDoor.textContent = state.door ? `Door ${state.door}` : '';
       show('ts-s-safety');
-    });
-    document.getElementById('ts-door-done-btn').addEventListener('click', () => {
-       show('ts-s-home');
-       document.getElementById('ts-home-trailer').value = '';
-       state.trailer = '';
+    }
+
+    function showDoorAssigned(headline, sub, showSafety, door) {
+      const d = door || state.assignedDoor || state.door || '--';
+      state.assignedDoor = d !== '--' ? d : state.assignedDoor;
+      // For arrive action — driver is already at the dock, go straight to safety
+      if (showSafety && state.action === 'arrive') {
+        showSafetyCheck();
+        return;
+      }
+      // All other cases (omw, drop) — show waiting screen
+      showWaiting(d);
+    }
+
+    document.getElementById('ts-door-safety-btn').addEventListener('click', () => {
+      showSafetyCheck();
     });
 
     // -- Success Helper --
@@ -1009,6 +1050,40 @@ body{background-image:none!important;background:transparent!important}
       document.getElementById('ts-home-trailer').value = '';
       show('ts-s-home');
     });
+
+    // -- Live WS: listen for ready notification from dispatch --
+    // The outer app.js WS is available via window._ws (set by connectWs in app.js)
+    // We poll for it since it may connect after the driver IIFE runs
+    (function hookWsReady() {
+      function handleWsMsg(e) {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === 'notify' && msg.payload?.kind === 'ready') {
+            const trailer = (msg.payload.trailer || '').toUpperCase();
+            const myTrailer = (state.trailer || '').toUpperCase();
+            if (!myTrailer || myTrailer === trailer) {
+              // Only transition if currently on the waiting screen
+              const waiting = document.getElementById('ts-s-waiting');
+              if (waiting && waiting.classList.contains('ts-active')) {
+                if (msg.payload.door) state.assignedDoor = String(msg.payload.door);
+                showSafetyCheck();
+              }
+            }
+          }
+        } catch {}
+      }
+      // Retry until WS is available (app.js sets window._ws after connect)
+      let _tries = 0;
+      function tryHook() {
+        const ws = window._ws;
+        if (ws) {
+          ws.addEventListener('message', handleWsMsg);
+        } else if (_tries++ < 30) {
+          setTimeout(tryHook, 500);
+        }
+      }
+      tryHook();
+    })();
 
   })();
   </script>

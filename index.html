@@ -1478,6 +1478,11 @@ body{background-image:none!important;background:transparent!important}
     <button class="dv-sec" style="flex:unset;padding:6px 14px;border-color:rgba(24,212,232,.3);color:var(--cyan);background:rgba(24,212,232,.08);" id="btnBulkDockReady">→ Dock Ready</button>
   </div>
 
+  <!-- ── Cards ── -->
+  <div class="dv-cards" id="dockCards">
+    <div class="dv-empty"><div class="dv-empty-icon">🏭</div><div class="dv-empty-msg">Loading…</div></div>
+  </div>
+
   <!-- ── Dock Plates Panel ── -->
   <div class="dvp-panel" id="dvPlatesPanel">
     <button class="dvp-toggle" id="dvPlatesToggle">
@@ -1485,14 +1490,9 @@ body{background-image:none!important;background:transparent!important}
       <span class="dvp-summary" id="dvPlatesSummary">—</span>
       <span class="dvp-chev">▾</span>
     </button>
-    <div class="dvp-body dvp-body-open" id="dvPlatesBody">
+    <div class="dvp-body" id="dvPlatesBody">
       <div class="dvp-grid" id="dvPlatesGrid"></div>
     </div>
-  </div>
-
-  <!-- ── Cards ── -->
-  <div class="dv-cards" id="dockCards">
-    <div class="dv-empty"><div class="dv-empty-icon">🏭</div><div class="dv-empty-msg">Loading…</div></div>
   </div>
 
   <!-- ── Toast ── -->

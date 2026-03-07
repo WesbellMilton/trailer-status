@@ -1134,9 +1134,9 @@
   function _wireDvPanel(toggleId,bodyId){
     const tog=document.getElementById(toggleId),body=document.getElementById(bodyId);
     if(!tog||!body)return;
-    // Start expanded
     const chev=tog.querySelector(".dvp-chev");
-    if(chev)chev.textContent="▴";
+    // Sync chev to current state
+    if(chev)chev.textContent=body.classList.contains("dvp-body-open")?"▴":"▾";
     tog.addEventListener("click",()=>{
       const open=body.classList.contains("dvp-body-open");
       body.classList.toggle("dvp-body-open",!open);

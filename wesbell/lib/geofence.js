@@ -116,9 +116,11 @@ async function processLocation({ trailer, lat, lng, req }) {
     ).catch(() => null);
 
     if (!recent) {
+      // Get location_id from the trailer record
+      const trailerRow = await require('./db').get(`SELECT location_id FROM trailers WHERE trailer=?`, [trailer]).catch(() => null);
       await run(
-        `INSERT INTO geofence_events(at,trailer,zone,event,lat,lng,ip) VALUES(?,?,?,?,?,?,?)`,
-        [Date.now(), trailer, zone.id, 'enter', lat, lng, ipOf(req)]
+        `INSERT INTO geofence_events(at,trailer,zone,event,lat,lng,ip,location_id) VALUES(?,?,?,?,?,?,?,?)`,
+        [Date.now(), trailer, zone.id, 'enter', lat, lng, ipOf(req), trailerRow?.location_id || 1]
       ).catch(() => {});
     }
   }

@@ -2413,6 +2413,11 @@
     });
   }
 
+  // ── Legacy stubs (must be defined before loadInitial call) ──
+  function initIssueCamera(){}
+  function initIssueLightbox(){}
+  function initDockIssueModal(){}
+
   loadInitial().then(()=>{
     syncBottomNav();initToastSwipe();initPullToRefresh();initKeyboardAvoidance();initSwipeViews();initPwaInstall();
     initStaffLogin();initStaffLogin._sync?.();initIssueCamera();initIssueLightbox();initDockIssueModal();
@@ -2934,9 +2939,6 @@
   function updateSafetySubmitState(){console.warn("[legacy] updateSafetySubmitState called");}
   function openDockIssueModal(t,d){openQuickIssue(t,d||"");}
   async function loadIssueReports(){console.warn("[legacy] loadIssueReports — no UI yet");}
-  function initIssueCamera(){}
-  function initIssueLightbox(){}
-  function initDockIssueModal(){}
   // isOutside: referenced in btnBackToFlow which is also legacy
   const isOutside=false;
 

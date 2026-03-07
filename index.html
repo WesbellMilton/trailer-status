@@ -1530,6 +1530,15 @@ body{background-image:none!important;background:transparent!important}
           </div>
           <div id="tbody"></div>
           <div class="board-footer" role="status" aria-live="polite"><span id="lastUpdated">—</span><span id="boardCountStr">—</span></div>
+          <!-- ── Quick-add trailer inline bar ── -->
+          <div class="quick-add-bar" id="quickAddBar">
+            <input id="qa_trailer" placeholder="Trailer #" autocomplete="off" inputmode="numeric" autocorrect="off" autocapitalize="none" spellcheck="false" class="qa-input qa-trailer" aria-label="Trailer number"/>
+            <select id="qa_direction" class="qa-select" aria-label="Direction"><option value="Inbound">Inbound</option><option value="Outbound">Outbound</option><option value="Cross Dock">Cross Dock</option></select>
+            <select id="qa_status" class="qa-select" aria-label="Status"><option value="Incoming">Incoming</option><option value="Dropped">Dropped</option><option value="Loading">Loading</option><option value="Dock Ready">Dock Ready</option><option value="Ready">Ready</option></select>
+            <input id="qa_door" placeholder="Door" inputmode="numeric" autocomplete="off" class="qa-input qa-door" aria-label="Door number"/>
+            <input id="qa_note" placeholder="Note (optional)" autocomplete="off" class="qa-input qa-note" aria-label="Note"/>
+            <button class="btn btn-primary btn-sm qa-submit" id="btnQuickAdd">+ Add</button>
+          </div>
         </div>
 
 
@@ -1562,7 +1571,16 @@ body{background-image:none!important;background:transparent!important}
 
       </div>
       <div style="display:flex;flex-direction:column;gap:14px;">
-        <div class="panel side-sticky" id="dockMapCard">
+
+        <div class="panel side-sticky">
+          <div class="panel-hd">
+            <div class="panel-title" id="panelTitle">Controls</div>
+            <span class="badge" id="panelSub">—</span>
+          </div>
+          <div class="panel-body" id="panelBody"></div>
+        </div>
+
+        <div class="panel" id="dockMapCard">
           <div class="panel-hd">
             <div class="panel-title"><div class="ptdot" style="background:var(--cyan)"></div>Door Map</div>
             <span class="badge" id="dockMapFreeCount" style="color:var(--green);">—</span>
@@ -1658,13 +1676,6 @@ body{background-image:none!important;background:transparent!important}
           </div>
         </div>
 
-        <div class="panel side-sticky">
-          <div class="panel-hd">
-            <div class="panel-title" id="panelTitle">Controls</div>
-            <span class="badge" id="panelSub">—</span>
-          </div>
-          <div class="panel-body" id="panelBody"></div>
-        </div>
 
       </div>
       </div>

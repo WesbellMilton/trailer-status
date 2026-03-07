@@ -2153,6 +2153,9 @@
     const ws=new WebSocket(`${location.protocol==="https:"?"wss":"ws"}://${location.host}`);
     _ws=ws;
     window._ws=ws;
+    // Message bus: any module can do window._wsBus.addEventListener('msg', cb)
+    // without caring about socket reconnects
+    if(!window._wsBus)window._wsBus=new EventTarget();
     let lastMsg=Date.now();
 
     // Watchdog: if no message in 40s, force close so onclose fires and reconnects
@@ -2192,6 +2195,8 @@
     ws.onerror=()=>{}; // onclose fires after onerror, handles reconnect
     ws.onmessage=evt=>{
       lastMsg=Date.now();let msg;try{msg=JSON.parse(evt.data);}catch{return;}
+      // Fan out to bus listeners (driver view, future modules)
+      if(window._wsBus){const e=new CustomEvent('msg',{detail:msg});window._wsBus.dispatchEvent(e);}
       const{type,payload}=msg||{};
       if(type==="state"){trailers=payload||{};renderBoard();if(isSuper())renderSupBoard();if(isDock()){renderDockView();dvUpdateIncoming();window._lspAutoRefresh?.();updateTrackingMap?.();updateTrackingList?.();if(window._loadStatusRefresh&&document.getElementById("lsp-body")?.classList.contains("lsp-open"))window._loadStatusRefresh();}if(isAdmin()&&!isSuper())renderBoard();
         clearTimeout(connectWs._etaTimer);
@@ -2245,17 +2250,7 @@
         const kind=payload?.kind,trailer=payload?.trailer||"",door=payload?.door||"";
         if(kind==="ready"){
           haptic("success");
-          if(isDriver()){
-            const myTrailer=(driverState?.trailer||"").toUpperCase();
-            if(!myTrailer||myTrailer===trailer.toUpperCase()){
-              const banner=el("readyNotifBanner");
-              if(banner){
-                el("readyNotifText").textContent=`Trailer ${trailer} is READY${door?" at door "+door:""}`;
-                banner.style.display="flex";clearTimeout(banner._t);
-                banner._t=setTimeout(()=>banner.style.display="none",15000);
-              }
-            }
-          } else {
+          if(!isDriver()){
             _notifPush({icon:"🟢",title:`${trailer} Ready`,body:`Ready for pickup${door?" at Door "+door:""}`,kind:"ready",trailer,door,at:Date.now()});
           }
         } else if(kind==="dock_ready"){

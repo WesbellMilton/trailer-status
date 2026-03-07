@@ -5257,3 +5257,165 @@ select option { background: #0d1119; }
 .role-admin #userRoleChip { color: var(--amber); border-color: rgba(245,166,35,.4); background: rgba(245,166,35,.08); }
 .role-admin #userRoleChip { color: var(--red); border-color: rgba(240,74,74,.4); background: rgba(240,74,74,.08); }
 
+
+/* ═══════════════════════════════════════════════════════════════
+   DOCK OCCUPANCY CARDS
+   Used in: dispatch/admin dspOccGrid, dock view dvOccGrid
+   Each door gets a colored card reflecting trailer status
+═══════════════════════════════════════════════════════════════ */
+
+/* Shared grid — same 5-col layout as plates */
+#dspOccGrid, #dvOccGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+  padding: 8px 12px 12px;
+}
+
+/* Base card */
+.occ-card {
+  border-radius: 9px;
+  border: 1px solid rgba(255,255,255,.06);
+  background: rgba(255,255,255,.025);
+  padding: 7px 5px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-height: 66px;
+  text-align: center;
+  transition: border-color .2s, background .2s;
+  position: relative;
+}
+
+.occ-door {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--t3);
+  letter-spacing: .04em;
+  line-height: 1;
+}
+.occ-door-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: center;
+  width: 100%;
+}
+.occ-trailer {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  color: var(--t0);
+}
+.occ-status-badge {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: .04em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255,255,255,.06);
+  color: var(--t2);
+  white-space: nowrap;
+}
+.occ-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--t3);
+}
+.occ-free-lbl {
+  color: rgba(255,255,255,.2);
+  font-weight: 500;
+}
+.occ-note {
+  font-size: 9px;
+  color: var(--t3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* ── Per-status card colours ── */
+
+.occ-card.occ-free {
+  border-color: rgba(255,255,255,.04);
+  background: rgba(255,255,255,.015);
+}
+.occ-card.occ-free .occ-door { color: rgba(255,255,255,.2); }
+
+.occ-card.occ-incoming {
+  border-color: rgba(255,255,255,.1);
+  background: rgba(255,255,255,.03);
+}
+.occ-card.occ-incoming .occ-trailer { color: var(--t1); }
+.occ-card.occ-incoming .occ-status-badge { color: var(--t2); background: rgba(255,255,255,.07); }
+
+.occ-card.occ-dropped {
+  border-color: rgba(166,124,245,.2);
+  background: rgba(166,124,245,.05);
+}
+.occ-card.occ-dropped .occ-door { color: rgba(166,124,245,.6); }
+.occ-card.occ-dropped .occ-trailer { color: rgba(166,124,245,.95); }
+.occ-card.occ-dropped .occ-status-badge { background: rgba(166,124,245,.12); color: var(--violet); }
+
+.occ-card.occ-loading {
+  border-color: rgba(245,166,35,.3);
+  background: rgba(245,166,35,.06);
+  box-shadow: 0 0 8px rgba(245,166,35,.06);
+}
+.occ-card.occ-loading .occ-door { color: rgba(245,166,35,.6); }
+.occ-card.occ-loading .occ-trailer { color: rgba(245,166,35,.98); }
+.occ-card.occ-loading .occ-status-badge { background: rgba(245,166,35,.15); color: var(--amber); }
+
+.occ-card.occ-dockready {
+  border-color: rgba(24,212,232,.3);
+  background: rgba(24,212,232,.06);
+  box-shadow: 0 0 8px rgba(24,212,232,.07);
+}
+.occ-card.occ-dockready .occ-door { color: rgba(24,212,232,.6); }
+.occ-card.occ-dockready .occ-trailer { color: rgba(24,212,232,.98); }
+.occ-card.occ-dockready .occ-status-badge { background: rgba(24,212,232,.15); color: var(--cyan); }
+
+.occ-card.occ-ready {
+  border-color: rgba(25,224,154,.3);
+  background: rgba(25,224,154,.07);
+  box-shadow: 0 0 10px rgba(25,224,154,.08);
+}
+.occ-card.occ-ready .occ-door { color: rgba(25,224,154,.6); }
+.occ-card.occ-ready .occ-trailer { color: rgba(25,224,154,.98); }
+.occ-card.occ-ready .occ-status-badge { background: rgba(25,224,154,.15); color: var(--green); }
+
+.occ-card.occ-departed {
+  opacity: .35;
+}
+
+.occ-card.occ-blocked {
+  border-color: rgba(240,74,74,.3);
+  background: rgba(240,74,74,.05);
+}
+.occ-card.occ-blocked .occ-door { color: rgba(240,74,74,.65); }
+.occ-card.occ-blocked .occ-label { color: var(--red); }
+
+/* ── Dispatch occupancy panel toggle header ── */
+.dsp-occ-panel .dsp-plates-toggle {
+  border-top-color: rgba(24,212,232,.1);
+}
+
+/* Plate status icon (large, centered in plate card) */
+.dpb-status-icon {
+  font-size: 18px;
+  line-height: 1;
+  margin: 2px 0;
+}
+.dsp-plate-btn.dpb-free .dpb-status-icon  { color: var(--green); filter: drop-shadow(0 0 3px rgba(25,224,154,.5)); }
+.dsp-plate-btn.dpb-svc  .dpb-status-icon  { color: var(--amber); filter: drop-shadow(0 0 3px rgba(245,166,35,.5)); }
+.dsp-plate-btn.dpb-ooo  .dpb-status-icon  { color: var(--red);   filter: drop-shadow(0 0 4px rgba(240,74,74,.6));  }
+

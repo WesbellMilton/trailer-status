@@ -265,6 +265,7 @@
   }
 
   const STATUS_ROW={Loading:"r-loading",Ready:"r-ready","Dock Ready":"r-dockready",Dropped:"r-dropped",Incoming:"r-incoming",Departed:"r-departed"};
+  const OCC_STATUS_CLS={Incoming:"occ-incoming",Dropped:"occ-dropped",Loading:"occ-loading","Dock Ready":"occ-dockready",Ready:"occ-ready",Departed:"occ-departed",Blocked:"occ-blocked"};
   const STATUS_TAG={Loading:"stag-loading",Ready:"stag-ready","Dock Ready":"stag-dockready",Dropped:"stag-dropped",Incoming:"stag-incoming",Departed:"stag-departed"};
 
   const statusTag=s=>`<span class="stag ${STATUS_TAG[s]||"stag-unknown"}"><span class="sp"></span>${esc(s||"—")}</span>`;
@@ -708,6 +709,7 @@
       if(el("dockPlatesToggle")?.getAttribute("aria-expanded")==="true")setPlatesOpen(true);
       if(el("dockPlatesToggle2")?.getAttribute("aria-expanded")==="true")setPlatesOpen2(true);
     });
+    renderDspOccupancy();
     renderDspPlates();
   }
 
@@ -770,22 +772,25 @@
   let _dspPlatesInited=false;
   function _initDspPlates(){
     if(_dspPlatesInited)return;_dspPlatesInited=true;
-    el("dspPlatesToggle")?.addEventListener("click",()=>{
-      const btn=el("dspPlatesToggle"),body=el("dspPlatesBody");
-      if(!btn||!body)return;
-      const open=btn.getAttribute("aria-expanded")==="true";
-      btn.setAttribute("aria-expanded",open?"false":"true");
-      btn.querySelector(".dsp-plates-chev").textContent=open?"▾":"▴";
-      body.style.maxHeight=open?"0":(body.scrollHeight+40)+"px";
-      try{localStorage.setItem("wb_dspplates",open?"0":"1");}catch{}
-    });
-    // Restore open state — defer so renderDspPlates has already run and scrollHeight is correct
-    try{if(localStorage.getItem("wb_dspplates")==="1"){
-      requestAnimationFrame(()=>{
-        const btn=el("dspPlatesToggle"),body=el("dspPlatesBody");
-        if(btn&&body){btn.setAttribute("aria-expanded","true");btn.querySelector(".dsp-plates-chev").textContent="▴";body.style.maxHeight=(body.scrollHeight+200)+"px";}
+    function wirePanel(toggleId,bodyId,lsKey){
+      const btn=el(toggleId),body=el(bodyId);if(!btn||!body)return;
+      btn.addEventListener("click",()=>{
+        const open=btn.getAttribute("aria-expanded")==="true";
+        btn.setAttribute("aria-expanded",open?"false":"true");
+        const chev=btn.querySelector(".dsp-plates-chev");if(chev)chev.textContent=open?"▾":"▴";
+        body.style.maxHeight=open?"0":(body.scrollHeight+40)+"px";
+        try{localStorage.setItem(lsKey,open?"0":"1");}catch{}
       });
-    }}catch{}
+      try{if(localStorage.getItem(lsKey)==="1"){
+        requestAnimationFrame(()=>{
+          btn.setAttribute("aria-expanded","true");
+          const chev=btn.querySelector(".dsp-plates-chev");if(chev)chev.textContent="▴";
+          body.style.maxHeight=(body.scrollHeight+200)+"px";
+        });
+      }}catch{}
+    }
+    wirePanel("dspOccToggle","dspOccBody","wb_dspocc");
+    wirePanel("dspPlatesToggle","dspPlatesBody","wb_dspplates");
   }
 
   function renderSupConf(){
@@ -893,6 +898,7 @@
 
   function renderDockView(){
     const cards=el("dockCards"),countEl=el("dockCount");if(!cards)return;
+    renderDvOccupancy();
     renderDockPlatesPanel();
     dvUpdateIncoming();
     // update role label
@@ -981,17 +987,56 @@
     initDockCardSwipes();
   }
 
-  // ── DOCK VIEW PLATES PANEL ─────────────────────────────────────────────
+  // ── DOCK VIEW — OCCUPANCY + PLATES PANELS ────────────────────────────
   let _dvPlatesInited=false;
+
+  function _wireDvPanel(toggleId,bodyId,lsKey){
+    const tog=document.getElementById(toggleId),body=document.getElementById(bodyId);
+    if(!tog||!body)return;
+    tog.addEventListener("click",()=>{
+      const open=body.style.maxHeight!=="0px"&&body.style.maxHeight!=="";
+      body.style.maxHeight=open?"0px":(body.scrollHeight+40)+"px";
+      const chev=tog.querySelector(".dvp-chev");if(chev)chev.textContent=open?"▾":"▴";
+      try{localStorage.setItem(lsKey,open?"0":"1");}catch{}
+    });
+    try{if(localStorage.getItem(lsKey)==="1"){
+      requestAnimationFrame(()=>{
+        body.style.maxHeight=(body.scrollHeight+40)+"px";
+        const chev=tog.querySelector(".dvp-chev");if(chev)chev.textContent="▴";
+      });
+    }}catch{}
+  }
+
+  function renderDvOccupancy(){
+    const grid=document.getElementById("dvOccGrid");if(!grid)return;
+    const doors=[];for(let d=28;d<=42;d++)doors.push(String(d));
+    const occupied=getOccupiedDoors();
+    const freeCount=doors.filter(d=>!occupied[d]).length;
+    const loadCount=doors.filter(d=>occupied[d]?.status==="Loading").length;
+    const readyCount=doors.filter(d=>["Ready","Dock Ready"].includes(occupied[d]?.status)).length;
+    const sumEl=document.getElementById("dvOccSummary");
+    if(sumEl) sumEl.innerHTML=`<span style="color:rgba(255,255,255,.4)">${freeCount} free</span>`
+      +(loadCount?` · <span style="color:var(--amber)">${loadCount} loading</span>`:"")
+      +(readyCount?` · <span style="color:var(--green)">${readyCount} ready</span>`:"");
+    grid.innerHTML=doors.map(door=>{
+      const occ=occupied[door];
+      const isBlocked=occ?.status==="Blocked";
+      const cls=occ?(OCC_STATUS_CLS[occ.status]||"occ-incoming"):"occ-free";
+      const plateSt=dockPlates[door]?.status||"Unknown";
+      const plateDot=plateSt==="Out of Order"?`<span class="dpb-pdot dpb-pdot-ooo" title="Plate OOO"></span>`
+        :plateSt==="Service"?`<span class="dpb-pdot dpb-pdot-svc" title="Plate Svc"></span>`
+        :plateSt==="OK"?`<span class="dpb-pdot dpb-pdot-ok" title="Plate OK"></span>`:``;
+      if(!occ) return`<div class="occ-card occ-free"><div class="occ-door">D${esc(door)}</div>${plateDot}<div class="occ-label occ-free-lbl">Free</div></div>`;
+      if(isBlocked) return`<div class="occ-card occ-blocked"><div class="occ-door">D${esc(door)}</div><div class="occ-trailer">🚫</div><div class="occ-label">Blocked</div>${occ.note?`<div class="occ-note">${esc(occ.note)}</div>`:""}</div>`;
+      return`<div class="occ-card ${cls}"><div class="occ-door-row"><span class="occ-door">D${esc(door)}</span>${plateDot}</div><div class="occ-trailer">${esc(occ.trailer)}</div><div class="occ-status-badge">${esc(occ.status)}</div></div>`;
+    }).join("");
+  }
 
   function renderDockPlatesPanel(){
     const grid=document.getElementById("dvPlatesGrid");
     if(!grid)return;
     const canEdit=ROLE==="dispatcher"||ROLE==="dock"||ROLE==="management"||ROLE==="admin";
     const doors=[];for(let d=28;d<=42;d++)doors.push(String(d));
-    const occupied=getOccupiedDoors();
-
-    // Summary line
     const v=Object.values(dockPlates||{});
     const okCount=v.filter(p=>p?.status==="OK").length;
     const svcCount=v.filter(p=>p?.status==="Service").length;
@@ -1015,11 +1060,6 @@
       else if(s==="Service")cardCls="dvp-svc";
       else if(s==="Out of Order")cardCls="dvp-ooo";
 
-      const occLine=occ&&occ.status!=="Blocked"
-        ?`<div class="dvp-occ">${esc(occ.trailer)}</div>`
-        :"";
-      const noteLine=p.note?`<div class="dvp-note">${esc(p.note)}</div>`:"";
-
       if(open){
         return`<div class="dvp-card ${cardCls} dvp-editing" data-door="${esc(door)}">
           <div class="dvp-door-label">D${esc(door)}</div>
@@ -1041,29 +1081,15 @@
       return`<div class="dvp-card ${cardCls}" data-door="${esc(door)}">
         <div class="dvp-door-label">D${esc(door)}</div>
         <div class="dvp-status-badge">${s==="OK"?"✓":s==="Service"?"⚠":"✕"}</div>
-        ${occLine}
-        ${noteLine}
+        ${p.note?`<div class="dvp-note">${esc(p.note)}</div>`:""}
         ${canEdit?`<button class="dvp-edit-open-btn" data-plate-toggle="${esc(door)}">Edit</button>`:""}
       </div>`;
     }).join("");
 
     if(!_dvPlatesInited){
       _dvPlatesInited=true;
-      // Toggle open/close panel
-      const tog=document.getElementById("dvPlatesToggle");
-      const body=document.getElementById("dvPlatesBody");
-      if(tog&&body){
-        // Default: collapsed
-        tog.addEventListener("click",()=>{
-          const open=body.style.maxHeight!=="0px"&&body.style.maxHeight!=="";
-          body.style.maxHeight=open?"0px":(body.scrollHeight+40)+"px";
-          tog.querySelector(".dvp-chev").textContent=open?"▾":"▴";
-          try{localStorage.setItem("wb_dvplates",open?"0":"1");}catch{}
-        });
-        try{if(localStorage.getItem("wb_dvplates")==="1"){
-          requestAnimationFrame(()=>{body.style.maxHeight=(body.scrollHeight+40)+"px";tog.querySelector(".dvp-chev").textContent="▴";});
-        }}catch{}
-      }
+      _wireDvPanel("dvOccToggle","dvOccBody","wb_dvocc");
+      _wireDvPanel("dvPlatesToggle","dvPlatesBody","wb_dvplates");
     }
   }
 
@@ -2128,7 +2154,7 @@
         clearTimeout(connectWs._etaTimer);
         connectWs._etaTimer=setTimeout(function tickEta(){renderBoard();if(isDock()){renderDockView();dvUpdateIncoming();}connectWs._etaTimer=setTimeout(tickEta,60000);},60000);
       }
-      else if(type==="dockplates"){dockPlates=payload||{};if(!isDriver()){renderPlates();if(isDock())renderDockPlatesPanel();}}
+      else if(type==="dockplates"){dockPlates=payload||{};if(!isDriver()){renderPlates();if(isDock()){renderDvOccupancy();renderDockPlatesPanel();}}}
       else if(type==="doorblocks"){doorBlocks=payload||{};renderDockMap();renderBoard();}
       else if(type==="confirmations"){confirmations=Array.isArray(payload)?payload:[];if(isSuper())renderSupConf();}
       else if(type==="ping"){/* keepalive */}

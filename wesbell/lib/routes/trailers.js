@@ -73,9 +73,16 @@ router.post('/api/upsert', requireXHR, _rds, async (req, res) => {
         wsBroadcast('notify', { kind: 'ready', trailer, door: door || '' });
         broadcastPush('🟢 Trailer Ready', `Trailer ${trailer} is ready${door ? ' at door ' + door : ''}`, { trailer, door }).catch(() => {});
         fireWebhook('trailer.ready', { trailer, door, actor });
-      } else if (finalStatus === 'Dock Ready') fireWebhook('trailer.dock_ready', { trailer, door, actor });
-      else if (finalStatus === 'Departed')     fireWebhook('trailer.departed',   { trailer, door, actor });
-      else if (finalStatus === 'Loading')      fireWebhook('trailer.loading',    { trailer, door, actor });
+      } else if (finalStatus === 'Dock Ready') {
+        wsBroadcast('notify', { kind: 'dock_ready', trailer, door: door || '' });
+        fireWebhook('trailer.dock_ready', { trailer, door, actor });
+      } else if (finalStatus === 'Loading') {
+        wsBroadcast('notify', { kind: 'loading', trailer, door: door || '' });
+        fireWebhook('trailer.loading', { trailer, door, actor });
+      } else if (finalStatus === 'Departed') {
+        wsBroadcast('notify', { kind: 'departed', trailer, door: door || '' });
+        fireWebhook('trailer.departed', { trailer, door, actor });
+      }
     }
 
     await logEvent('info', 'upsert', `${actor} set ${trailer} → ${finalStatus}`, `door=${door || '—'}`);

@@ -59,25 +59,26 @@ router.post('/api/driver/omw', requireXHR, requireDriverRate, async (req, res) =
     if (existing && ACTIVE.includes(existing.status))
       return res.json({ ok: true, door: existing.door || '', alreadyActive: true, status: existing.status });
 
-    const assignedDoor = await pickBestDoor(trailer);
+    const locId = req.user?.locationId || 1;
+    const assignedDoor = await pickBestDoor(trailer, locId);
     if (!assignedDoor) return res.status(409).send('No doors available right now. Please ask dispatch.');
     // Hold door for ETA + 5 min grace (minimum 35 min if no ETA given)
     const holdMinutes  = eta ? eta + 5 : 35;
-    await reserveDoor(assignedDoor, trailer, 'Wesbell', holdMinutes);
+    await reserveDoor(assignedDoor, trailer, 'Wesbell', holdMinutes, locId);
 
     const note = eta ? `ETA ~${eta} min` : 'On my way';
     const now  = Date.now();
     await run(
-      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt,omwAt,omwEta)
-       VALUES(?,?,?,?,?,?,?,?,?,?)
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt,omwAt,omwEta,location_id)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(trailer) DO UPDATE SET
          direction=excluded.direction,status=excluded.status,door=excluded.door,
          note=excluded.note,dropType=excluded.dropType,carrierType=excluded.carrierType,
          updatedAt=excluded.updatedAt,omwAt=excluded.omwAt,omwEta=excluded.omwEta`,
-      [trailer, 'Inbound', 'Incoming', assignedDoor, note, 'Loaded', 'Wesbell', now, now, eta]
+      [trailer, 'Inbound', 'Incoming', assignedDoor, note, 'Loaded', 'Wesbell', now, now, eta, req.user?.locationId || 1]
     );
     await audit(req, 'driver', 'omw', 'trailer', trailer, { door: assignedDoor, eta });
-    await broadcastTrailers();
+    await broadcastTrailers(req.user?.locationId || 1);
     broadcastPush('🚛 Driver On My Way', `Trailer ${trailer} → Door ${assignedDoor}${eta ? ` · ETA ~${eta} min` : ''}`,
       { type: 'omw', trailer, door: assignedDoor }).catch(() => {});
     wsBroadcast('omw', { trailer, door: assignedDoor, eta, at: now });
@@ -103,13 +104,20 @@ router.get('/api/driver/assignment', async (req, res) => {
 router.get('/api/available-doors', async (req, res) => {
   try {
     const { getOccupiedDoorSet } = require('../doors');
+    const { getSession } = require('../auth');
+    const { get: dbGet } = require('../db');
+    const s = getSession(req);
+    const locationId = s?.locationId || Number(req.query.locationId || 1);
     const excludeTrailer = String(req.query.trailer || '').trim().toUpperCase() || null;
-    const occupiedSet    = await getOccupiedDoorSet(excludeTrailer);
-    const plates         = await all(`SELECT door,status FROM dockplates`);
+    const occupiedSet    = await getOccupiedDoorSet(excludeTrailer, locationId);
+    const plates         = await require('../db').all(`SELECT door,status FROM dockplates WHERE location_id=?`, [locationId]);
     const plateMap       = {};
     plates.forEach(p => { plateMap[String(p.door)] = p.status; });
+    const loc = await dbGet(`SELECT doors_from,doors_to FROM locations WHERE id=?`, [locationId]).catch(() => null);
+    const from = loc?.doors_from ?? 28;
+    const to   = loc?.doors_to   ?? 42;
     const doors = [];
-    for (let d = 28; d <= 42; d++) {
+    for (let d = from; d <= to; d++) {
       const ds = String(d), ps = plateMap[ds] || 'Unknown';
       if (ps === 'Out of Order') continue;
       doors.push({ door: ds, available: !occupiedSet.has(ds), plateStatus: ps });
@@ -135,29 +143,30 @@ router.post('/api/driver/arrive', requireXHR, requireDriverRate, async (req, res
       return res.json({ ok: true, door: existing.door, alreadyActive: true, status: existing.status });
     }
 
-    const assignedDoor = await pickBestDoor(trailer);
+    const locId = req.user?.locationId || 1;
+    const assignedDoor = await pickBestDoor(trailer, locId);
     if (!assignedDoor) return res.status(409).send('No doors available. Please ask dispatch.');
-    await reserveDoor(assignedDoor, trailer, carrierType);
+    await reserveDoor(assignedDoor, trailer, carrierType, null, locId);
 
     const now         = Date.now();
     const useDropType = existing?.dropType || dropType;
     const useDirection = existing?.direction || direction;
     await run(
-      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt,doorAt)
-       VALUES(?,?,?,?,?,?,?,?,?)
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt,doorAt,location_id)
+       VALUES(?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(trailer) DO UPDATE SET
          direction=excluded.direction,status=excluded.status,door=excluded.door,
          dropType=excluded.dropType,carrierType=excluded.carrierType,
          updatedAt=excluded.updatedAt,doorAt=excluded.doorAt`,
-      [trailer, useDirection, 'Incoming', assignedDoor, existing?.note || '', useDropType, carrierType, now, now]
+      [trailer, useDirection, 'Incoming', assignedDoor, existing?.note || '', useDropType, carrierType, now, now, req.user?.locationId || 1]
     );
     await releaseReservation(trailer);
     await audit(req, 'driver', 'arrive', 'trailer', trailer, { door: assignedDoor, carrierType });
-    broadcastPush('✅ Driver Arrived', `Trailer ${trailer} at Door ${assignedDoor}`, { type: 'arrive', trailer, door: assignedDoor });
+    broadcastPush('✅ Driver Arrived', `Trailer ${trailer} at Door ${assignedDoor}`, { type: 'arrive', trailer, door: assignedDoor }).catch(() => {});
     wsBroadcast('arrive', { trailer, door: assignedDoor, at: now });
     wsBroadcast('notify', { kind: 'arrive', trailer, door: assignedDoor });
     fireWebhook('driver.arrived', { trailer, door: assignedDoor });
-    await broadcastTrailers();
+    await broadcastTrailers(req.user?.locationId || 1);
     res.json({ ok: true, door: assignedDoor, alreadyActive: false });
   } catch (e) { console.error('[arrive]', e); res.status(500).send('Arrival failed'); }
 });
@@ -185,12 +194,12 @@ router.post('/api/driver/ext-drop', requireXHR, requireDriverRate, async (req, r
 
     const status = door ? 'Incoming' : 'Dropped';
     await run(
-      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt)
-       VALUES(?,?,?,?,?,?,?,?)
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt,location_id)
+       VALUES(?,?,?,?,?,?,?,?,?)
        ON CONFLICT(trailer) DO UPDATE SET
          status=excluded.status,door=excluded.door,
          carrierType=excluded.carrierType,updatedAt=excluded.updatedAt`,
-      [refCode, 'Inbound', status, door, '', 'Loaded', carrier, now]
+      [refCode, 'Inbound', status, door, '', 'Loaded', carrier, now, req.user?.locationId || 1]
     );
     await audit(req, 'driver', 'ext_drop', 'trailer', refCode, { carrier, door, refCode });
 
@@ -202,7 +211,7 @@ router.post('/api/driver/ext-drop', requireXHR, requireDriverRate, async (req, r
       wsBroadcast('notify', { kind: 'drop', trailer: refCode, door: '', carrierType: carrier, autoAssigned: false });
     }
 
-    await broadcastTrailers();
+    await broadcastTrailers(req.user?.locationId || 1);
     res.json({ ok: true, refCode, door, carrier });
   } catch (e) { console.error('[ext-drop]', e); res.status(500).send('Drop failed'); }
 });
@@ -241,12 +250,12 @@ router.post('/api/driver/drop', requireXHR, requireDriverRate, requireDriverAcce
 
     const dropStatus = assignedDoor ? 'Incoming' : (carrierType === 'Outside' ? 'Dropped' : 'Incoming');
     await run(
-      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt)
-       VALUES(?,?,?,?,?,?,?,?)
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt,location_id)
+       VALUES(?,?,?,?,?,?,?,?,?)
        ON CONFLICT(trailer) DO UPDATE SET
          direction=excluded.direction,status=excluded.status,door=excluded.door,
          dropType=excluded.dropType,carrierType=excluded.carrierType,updatedAt=excluded.updatedAt`,
-      [trailer, existing?.direction || 'Inbound', dropStatus, assignedDoor, existing?.note || '', dropType, carrierType, now]
+      [trailer, existing?.direction || 'Inbound', dropStatus, assignedDoor, existing?.note || '', dropType, carrierType, now, req.user?.locationId || 1]
     );
     await releaseReservation(trailer);
     await audit(req, 'driver', 'driver_drop', 'trailer', trailer, { door: assignedDoor, dropType, carrierType, autoAssigned: needsAutoAssign });
@@ -257,7 +266,7 @@ router.post('/api/driver/drop', requireXHR, requireDriverRate, requireDriverAcce
       broadcastPush('📦 Outside Carrier Drop', `Trailer ${trailer} dropped to yard — needs door assignment`, { trailer }).catch(() => {});
       wsBroadcast('notify', { kind: 'drop', trailer, door: '', carrierType, autoAssigned: false });
     }
-    await broadcastTrailers();
+    await broadcastTrailers(req.user?.locationId || 1);
     res.json({ ok: true, door: assignedDoor || null, autoAssigned: needsAutoAssign });
   } catch { res.status(500).send('Drop failed'); }
 });
@@ -274,13 +283,13 @@ router.post('/api/crossdock/pickup', requireXHR, requireDriverRate, requireDrive
     if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send('Invalid door (28–42)');
     const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
     await run(
-      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
-       VALUES(?,?,?,?,?,?,?)
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt,location_id)
+       VALUES(?,?,?,?,?,?,?,?)
        ON CONFLICT(trailer) DO UPDATE SET door=excluded.door,updatedAt=excluded.updatedAt`,
-      [trailer, existing?.direction || 'Cross Dock', existing?.status || 'Ready', door, existing?.note || '', existing?.dropType || '', Date.now()]
+      [trailer, existing?.direction || 'Cross Dock', existing?.status || 'Ready', door, existing?.note || '', existing?.dropType || '', Date.now(), req.user?.locationId || 1]
     );
     await audit(req, 'driver', 'crossdock_pickup', 'trailer', trailer, { door });
-    await broadcastTrailers();
+    await broadcastTrailers(req.user?.locationId || 1);
     res.json({ ok: true });
   } catch { res.status(500).send('Cross dock pickup failed'); }
 });
@@ -304,13 +313,13 @@ router.post('/api/crossdock/offload', requireXHR, requireDriverRate, requireDriv
       });
     }
     await run(
-      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt)
-       VALUES(?,?,?,?,?,?,?)
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt,location_id)
+       VALUES(?,?,?,?,?,?,?,?)
        ON CONFLICT(trailer) DO UPDATE SET door=excluded.door,status=excluded.status,dropType=excluded.dropType,updatedAt=excluded.updatedAt`,
-      [trailer, existing?.direction || 'Cross Dock', 'Dropped', door, existing?.note || '', 'Loaded', Date.now()]
+      [trailer, existing?.direction || 'Cross Dock', 'Dropped', door, existing?.note || '', 'Loaded', Date.now(), req.user?.locationId || 1]
     );
     await audit(req, 'driver', 'crossdock_offload', 'trailer', trailer, { door });
-    await broadcastTrailers();
+    await broadcastTrailers(req.user?.locationId || 1);
     res.json({ ok: true });
   } catch { res.status(500).send('Cross dock offload failed'); }
 });
@@ -362,7 +371,7 @@ router.post('/api/driver/location', requireXHR, requireDriverRate, async (req, r
         broadcastPush('📍 Driver Entered Yard', `Auto-assigned Door ${assignedDoor} to ${trailer}`,
           { type: 'geofence_arrive', trailer, door: assignedDoor }).catch(() => {});
         wsBroadcast('arrive', { trailer, door: assignedDoor, at: now, auto: true });
-        await broadcastTrailers();
+        await broadcastTrailers(req.user?.locationId || 1);
         return res.json({ ok: true, autoTriggered: true, door: assignedDoor, zones, eta: computedEta });
       }
     }
@@ -383,7 +392,7 @@ router.post('/api/driver/shunt', requireXHR, requireDriverRate, async (req, res)
     const existing = await get(`SELECT door FROM trailers WHERE trailer=?`, [trailer]);
     await run(`UPDATE trailers SET door=?,status='Dropped',updatedAt=? WHERE trailer=?`, [door, Date.now(), trailer]);
     await audit(req, 'driver', 'trailer_shunt', 'trailer', trailer, { fromDoor: existing?.door || '—', toDoor: door });
-    await broadcastTrailers();
+    await broadcastTrailers(req.user?.locationId || 1);
     res.json({ ok: true, door });
   } catch (e) { console.error('[driver/shunt]', e); res.status(500).send('Shunt failed'); }
 });
@@ -404,12 +413,12 @@ router.post('/api/confirm-safety', requireXHR, requireDriverAccess, async (req, 
       require('../cache').invalidateTrailers();
     }
     await run(
-      `INSERT INTO confirmations(at,trailer,door,action,ip,userAgent) VALUES(?,?,?,?,?,?)`,
-      [at, trailer || '', door || '', action, require('../middleware').ipOf(req), req.headers['user-agent'] || '']
+      `INSERT INTO confirmations(at,trailer,door,action,ip,userAgent,location_id) VALUES(?,?,?,?,?,?,?)`,
+      [at, trailer || '', door || '', action, require('../middleware').ipOf(req), req.headers['user-agent'] || '', req.user?.locationId || 1]
     );
     await audit(req, 'driver', 'safety_confirmed', 'safety', trailer || '-',
       { trailer, door, action, loadSecured, dockPlateUp });
-    await broadcastTrailers();
+    await broadcastTrailers(req.user?.locationId || 1);
     await require('../ws').broadcastConfirmations();
     res.json({ ok: true });
   } catch { res.status(500).send('Confirm failed'); }
@@ -446,23 +455,23 @@ router.post('/api/qr/scan', requireXHR, requireDriverRate, async (req, res) => {
         if (!assignedDoor) return res.status(409).send('No doors available.');
         await reserveDoor(assignedDoor, trailer, 'Wesbell');
         await run(
-          `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt,doorAt)
-           VALUES(?,?,?,?,?,?,?,?,?)
+          `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt,doorAt,location_id)
+           VALUES(?,?,?,?,?,?,?,?,?,?)
            ON CONFLICT(trailer) DO UPDATE SET
              direction=excluded.direction,status=excluded.status,door=excluded.door,
              carrierType=excluded.carrierType,updatedAt=excluded.updatedAt,doorAt=excluded.doorAt`,
           [trailer, existing?.direction || 'Inbound', 'Incoming', assignedDoor, existing?.note || '',
-           existing?.dropType || 'Loaded', 'Wesbell', now, now]
+           existing?.dropType || 'Loaded', 'Wesbell', now, now, req.user?.locationId || 1]
         );
         await releaseReservation(trailer);
-        await broadcastTrailers();
+        await broadcastTrailers(req.user?.locationId || 1);
         result = { door: assignedDoor };
       }
 
     } else if (action === 'depart') {
       await run(`UPDATE trailers SET status='Departed',updatedAt=? WHERE trailer=?`, [now, trailer]);
       await releaseReservation(trailer);
-      await broadcastTrailers();
+      await broadcastTrailers(req.user?.locationId || 1);
       result = { departed: true };
 
     } else if (action.startsWith('status/')) {
@@ -470,7 +479,7 @@ router.post('/api/qr/scan', requireXHR, requireDriverRate, async (req, res) => {
       const allowed   = ['Incoming', 'Dropped', 'Loading', 'Dock Ready', 'Ready', 'Departed'];
       if (!allowed.includes(newStatus)) return res.status(400).send('Invalid status');
       await run(`UPDATE trailers SET status=?,updatedAt=? WHERE trailer=?`, [newStatus, now, trailer]);
-      await broadcastTrailers();
+      await broadcastTrailers(req.user?.locationId || 1);
       result = { status: newStatus };
 
     } else if (action.startsWith('door/')) {
@@ -478,7 +487,7 @@ router.post('/api/qr/scan', requireXHR, requireDriverRate, async (req, res) => {
       const dNum    = Number(newDoor);
       if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send('Invalid door');
       await run(`UPDATE trailers SET door=?,updatedAt=? WHERE trailer=?`, [newDoor, now, trailer]);
-      await broadcastTrailers();
+      await broadcastTrailers(req.user?.locationId || 1);
       result = { door: newDoor };
 
     } else {

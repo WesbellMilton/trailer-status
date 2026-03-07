@@ -755,6 +755,7 @@
     const grid=el("dspPlatesGrid");if(!grid)return;
     const canEdit=ROLE==="dispatcher"||ROLE==="dock"||ROLE==="management"||ROLE==="admin";
     const doors=[];for(let d=28;d<=42;d++)doors.push(String(d));
+    const occupied=getOccupiedDoors();
     const v=Object.values(dockPlates||{});
     const sumEl=el("dspPlatesSummary");
     const okCount=v.filter(p=>p?.status==="OK").length;
@@ -982,9 +983,7 @@
       </div>
     </div>`;}
 
-  let _adminAccInited=false;
   function _initAdminAccordions(){
-    if(_adminAccInited)return;_adminAccInited=true;
     document.querySelectorAll(".adm-acc").forEach(btn=>{
       btn.addEventListener("click",()=>{
         const bodyId=btn.id.replace("Toggle","Body");
@@ -1167,6 +1166,7 @@
     if(!grid)return;
     const canEdit=ROLE==="dispatcher"||ROLE==="dock"||ROLE==="management"||ROLE==="admin";
     const doors=[];for(let d=28;d<=42;d++)doors.push(String(d));
+    const occupied=getOccupiedDoors();
     const v=Object.values(dockPlates||{});
     const okCount=v.filter(p=>p?.status==="OK").length;
     const svcCount=v.filter(p=>p?.status==="Service").length;

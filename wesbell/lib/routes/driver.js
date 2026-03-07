@@ -13,13 +13,46 @@ const { requireDriverAccess } = require('../auth');
 
 const router = Router();
 
+// ── /api/driver/eta  (pre-fetch road ETA before OMW submit) ──────────────────
+router.get('/api/driver/eta', requireDriverRate, async (req, res) => {
+  try {
+    const lat = parseFloat(req.query.lat);
+    const lng = parseFloat(req.query.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng))
+      return res.status(400).send('Invalid coordinates');
+    if (lat < 41.5 || lat > 57 || lng < -96 || lng > -74)
+      return res.status(400).send('Coordinates out of range');
+    const { getEtaMinutes, haversineKm, GEOFENCE_ZONES } = require('../geofence');
+    const depot = GEOFENCE_ZONES.find(z => z.id === 'depot');
+    if (!depot) return res.status(500).send('No depot configured');
+    const eta        = await getEtaMinutes(lat, lng, depot);
+    const distanceKm = haversineKm(lat, lng, depot.lat, depot.lng);
+    res.json({ ok: true, eta, distanceKm: Math.round(distanceKm * 10) / 10 });
+  } catch (e) { console.error('[driver/eta]', e); res.status(500).send('ETA failed'); }
+});
+
 // ── /api/driver/omw ───────────────────────────────────────────────────────────
 router.post('/api/driver/omw', requireXHR, requireDriverRate, async (req, res) => {
   try {
     const trailer = String(req.body.trailer || '').trim().toUpperCase();
-    const eta     = parseInt(req.body.eta) || null;
-    if (!trailer)           return res.status(400).send('Missing trailer number');
+    if (!trailer)            return res.status(400).send('Missing trailer number');
     if (trailer.length > 20) return res.status(400).send('Trailer number too long');
+
+    // Accept GPS position for road-accurate ETA at booking time
+    const lat = req.body.lat != null ? parseFloat(req.body.lat) : null;
+    const lng = req.body.lng != null ? parseFloat(req.body.lng) : null;
+    const hasGps = Number.isFinite(lat) && Number.isFinite(lng)
+      && lat >= 41.5 && lat <= 57 && lng >= -96 && lng <= -74;
+
+    // Compute road ETA if GPS provided, otherwise fall back to client hint or default
+    let eta = parseInt(req.body.eta) || null;
+    if (hasGps) {
+      try {
+        const { getEtaMinutes, GEOFENCE_ZONES } = require('../geofence');
+        const depot = GEOFENCE_ZONES.find(z => z.id === 'depot');
+        if (depot) eta = await getEtaMinutes(lat, lng, depot);
+      } catch { /* keep client eta */ }
+    }
 
     const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
     const ACTIVE   = ['Incoming', 'Dropped', 'Loading', 'Dock Ready', 'Ready'];
@@ -49,7 +82,7 @@ router.post('/api/driver/omw', requireXHR, requireDriverRate, async (req, res) =
       { type: 'omw', trailer, door: assignedDoor }).catch(() => {});
     wsBroadcast('omw', { trailer, door: assignedDoor, eta, at: now });
     fireWebhook('driver.omw', { trailer, door: assignedDoor, eta });
-    res.json({ ok: true, door: assignedDoor, alreadyActive: false });
+    res.json({ ok: true, door: assignedDoor, alreadyActive: false, eta });
   } catch (e) { console.error('[omw]', e); res.status(500).send('OMW failed'); }
 });
 

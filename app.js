@@ -522,19 +522,50 @@
       statusRow.innerHTML=`<div style="margin-right:6px;">${statusTag(r.status)}</div>`
         +(canEdit?nexts.map(s=>`<button class="dsd-status-btn ${DSB_CLS[s]||""}" data-act="quickStatus" data-to="${esc(s)}" data-trailer-id="${esc(trailerId)}">${esc(s)}</button>`).join(""):"");
     }
-    // Door grid
+    // Door section — assigned door callout with plate status, then full grid
     const occupied=getOccupiedDoors();
+    const assignedDoor=r.door||"";
+    // Door info callout
+    let doorInfoEl=el("dsdDoorInfo");
+    if(!doorInfoEl){
+      doorInfoEl=document.createElement("div");
+      doorInfoEl.id="dsdDoorInfo";
+      const grid=el("dsdDoorGrid");
+      if(grid)grid.parentNode.insertBefore(doorInfoEl,grid);
+    }
+    if(doorInfoEl){
+      if(assignedDoor){
+        const plate=dockPlates[assignedDoor]||{};
+        const pCls=plate.status==="OK"?"ddi-ok":plate.status==="Service"?"ddi-service":plate.status==="Out of Order"?"ddi-ooo":"ddi-unknown";
+        const doorOcc=occupied[assignedDoor];
+        const otherTrailer=doorOcc&&doorOcc.trailer!==trailerId?doorOcc.trailer:null;
+        doorInfoEl.innerHTML=`<div class="dsd-door-info ${pCls}">
+          <div class="ddi-door">D${esc(assignedDoor)}</div>
+          <div class="ddi-body">
+            <div class="ddi-plate-row">Plate: <strong>${esc(plate.status||"Unknown")}</strong>${plate.note?` <span class="ddi-note">${esc(plate.note)}</span>`:""}${otherTrailer?`<span class="ddi-conflict"> ⚠ Also: ${esc(otherTrailer)}</span>`:""}</div>
+          </div>
+        </div>`;
+      } else {
+        doorInfoEl.innerHTML="";
+      }
+    }
+    // Door grid
     const doorGrid=el("dsdDoorGrid");
     if(doorGrid&&canEdit){
       doorGrid.innerHTML=Array.from({length:15},(_,i)=>i+28).map(d=>{
         const ds=String(d);
-        const isCur=ds===(r.door||"");
-        const isOcc=!!occupied[ds]&&!isCur;
-        const cls=isCur?"ddoor-current":isOcc?"ddoor-occ":"ddoor-free";
-        return`<button class="dsd-door-btn ${cls}" data-act="dsdAssignDoor" data-door="${ds}" data-trailer-id="${esc(trailerId)}"${isOcc?" title=\"Occupied\"":""}>${ds}</button>`;
+        const isCur=ds===assignedDoor;
+        const occ=occupied[ds];
+        const isOcc=!!occ&&!isCur;
+        const plate=dockPlates[ds]||{};
+        const plateBad=plate.status==="Out of Order";
+        const plateSvc=plate.status==="Service";
+        const cls=isCur?"ddoor-current":isOcc?"ddoor-occ":plateBad?"ddoor-bad":plateSvc?"ddoor-svc":"ddoor-free";
+        const tip=isCur?`Current — ${plate.status||""}`:isOcc?(occ.status==="Blocked"?`Blocked${occ.note?" — "+occ.note:""}`:occ.trailer+" · "+occ.status):(plateBad?"Plate: OOO":plateSvc?"Plate: Service":"");
+        return`<button class="dsd-door-btn ${cls}" data-act="dsdAssignDoor" data-door="${ds}" data-trailer-id="${esc(trailerId)}"${tip?` title="${esc(tip)}"`:""}>${ds}${plateBad?'<span class="ddoor-plate-dot dpp-ooo"></span>':plateSvc?'<span class="ddoor-plate-dot dpp-svc"></span>':""}</button>`;
       }).join("");
     } else if(doorGrid){
-      doorGrid.innerHTML=r.door?`<span style="font-family:var(--mono);font-size:13px;color:var(--green)">D${esc(r.door)}</span>`:`<span style="color:var(--t3);font-size:11px">No door assigned</span>`;
+      doorGrid.innerHTML=assignedDoor?`<span style="font-family:var(--mono);font-size:13px;color:var(--green)">D${esc(assignedDoor)}</span>`:`<span style="color:var(--t3);font-size:11px">No door assigned</span>`;
     }
     // Note
     const noteInput=el("dsdNoteInput");
@@ -565,7 +596,7 @@
   function closeDetailPanel(){
     _selectedTrailer=null;
     const emp=el("dspRightEmpty"),det=el("dspDetail");
-    if(emp)emp.style.display="";
+    if(emp)emp.style.display="flex";
     if(det)det.style.display="none";
     document.querySelectorAll(".dsp-row-selected").forEach(r=>r.classList.remove("dsp-row-selected"));
   }
@@ -1036,15 +1067,17 @@
 
   function renderRolePanel(){
     const isDisp=ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin";
-    // Apply role class to body for CSS-driven visibility of quick-add bar
     document.body.className=document.body.className.replace(/\brole-\S+/g,"").trim();
     if(ROLE)document.body.classList.add("role-"+ROLE);
     _initDetailPanel();
+    const adminPanel=el("adminPanel");
+    if(adminPanel)adminPanel.style.display=ROLE==="admin"?"":"none";
     if(isDisp){
-      el("panelTitle").textContent=ROLE==="management"?"Management":ROLE==="admin"?"Admin":"Dispatcher";
-      el("panelSub").textContent="Full control";el("panelBody").innerHTML=dispPanelHtml();
+      el("panelTitle").textContent=ROLE==="management"?"Management":ROLE==="admin"?"⚡ Admin":"Dispatcher";
+      el("panelSub").textContent=ROLE==="admin"?"Master access":"Full control";
+      el("panelBody").innerHTML=ROLE==="admin"?"":dispPanelHtml();
       el("btnLogout").style.display="";el("btnAudit").style.display="";renderPlates();
-      _initQuickAdd();
+      if(ROLE!=="admin")_initQuickAdd();
       return;
     }
     if(ROLE==="dock"){el("panelTitle").textContent="Dock";el("panelSub").textContent="Loading / Dock Ready";el("panelBody").innerHTML=dockPanelHtml();el("btnLogout").style.display="";el("btnAudit").style.display="none";renderPlates();return;}

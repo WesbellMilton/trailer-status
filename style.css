@@ -3762,38 +3762,56 @@ img,video,embed,object,iframe {
 /* Grid — 5 columns across all 15 doors */
 .dsp-plates-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 4px;
-  padding: 4px 16px 14px;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 3px;
+  padding: 3px 12px 10px;
+}
+@media (max-width: 700px) {
+  .dsp-plates-grid { grid-template-columns: repeat(5, 1fr); }
 }
 
 /* Base card */
 .dsp-plate-btn {
-  border-radius: 9px;
+  border-radius: 6px;
   border: 1px solid rgba(255,255,255,.05);
   background: var(--glass);
-  padding: 7px 7px 5px;
+  padding: 4px 4px 3px;
   text-align: center;
   position: relative;
   transition: border-color .2s, background .2s;
-  min-height: 58px;
+  min-height: 44px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
+  cursor: pointer;
 }
 .dpb-top {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 2px;
   width: 100%;
 }
 .dpb-door {
   font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 500;
+  font-size: 9px;
+  font-weight: 600;
   line-height: 1;
+  letter-spacing: .04em;
+}
+.dpb-status-icon {
+  font-size: 13px;
+  line-height: 1;
+  margin: 1px 0;
+}
+.dpb-note-sm {
+  font-size: 8px;
+  color: var(--t2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 .dpb-trailer {
   font-family: var(--mono);
@@ -3822,14 +3840,14 @@ img,video,embed,object,iframe {
 }
 /* ── Dispatch plates — edit button ── */
 .dpb-edit-btn {
-  font-size: 10px;
+  font-size: 8px;
   background: rgba(255,255,255,.04);
   border: 1px solid rgba(255,255,255,.1);
-  border-radius: 5px;
+  border-radius: 4px;
   color: var(--t2);
   cursor: pointer;
-  padding: 3px 10px;
-  min-height: 26px;
+  padding: 2px 5px;
+  min-height: 20px;
   letter-spacing: .03em;
   font-family: var(--mono);
   font-weight: 500;
@@ -3998,6 +4016,20 @@ img,video,embed,object,iframe {
   border-color: rgba(245,166,35,.15);
 }
 .dsp-plate-btn.dpb-svc .dpb-door { color: rgba(245,166,35,.65); }
+.dsp-plate-btn.dpb-ok  { background: rgba(25,224,154,.02); border-color: rgba(25,224,154,.1); }
+.dsp-plate-btn.dpb-ok  .dpb-door { color: rgba(25,224,154,.5); }
+.dsp-plate-btn.dpb-ok  .dpb-status-icon { color: rgba(25,224,154,.6); }
+.dsp-plate-btn.dpb-unknown { border-color: rgba(255,255,255,.06); }
+.dsp-plate-btn.dpb-unknown .dpb-status-icon { color: rgba(255,255,255,.3); }
+
+/* ── Driver waiting screen ── */
+#ts-s-waiting .ts-door-ring {
+  animation: ts-ring-pulse-amber 2.5s ease-in-out infinite;
+}
+@keyframes ts-ring-pulse-amber {
+  0%,100% { box-shadow: 0 0 40px rgba(245,166,35,.12), inset 0 0 0 1px rgba(245,166,35,.15); }
+  50%      { box-shadow: 0 0 70px rgba(245,166,35,.28), inset 0 0 0 1px rgba(245,166,35,.35); }
+}
 
 /* ════════════════════════════════════════════════════════════════
    TESLA GLOBAL UI OVERRIDES

@@ -963,9 +963,24 @@
     banner.classList.add("dv-show");
   }
 
+  function renderDvOccupancy(){
+    const grid=el("dvOccGrid");if(!grid)return;
+    const doors=[];for(let d=28;d<=42;d++)doors.push(String(d));
+    const occupied=getOccupiedDoors();
+    const freeCount=doors.filter(d=>!occupied[d]).length;
+    const loadCount=doors.filter(d=>occupied[d]?.status==="Loading").length;
+    const readyCount=doors.filter(d=>["Ready","Dock Ready"].includes(occupied[d]?.status)).length;
+    const sumEl=el("dvOccSummary");
+    if(sumEl) sumEl.innerHTML=`<span style="color:rgba(25,224,154,.7)">${freeCount} free</span>`
+      +(loadCount?` · <span style="color:#f5a623">${loadCount} loading</span>`:"")
+      +(readyCount?` · <span style="color:#19e09a">${readyCount} ready</span>`:"");
+    grid.innerHTML=_buildOccMap(doors);
+  }
+
   function renderDockView(){
     const cards=el("dockCards"),countEl=el("dockCount");if(!cards)return;
     renderDockPlatesPanel();
+    renderDvOccupancy();
     dvUpdateIncoming();
     // update role label
     if(el("dvRoleLabel"))el("dvRoleLabel").textContent=ROLE?ROLE.charAt(0).toUpperCase()+ROLE.slice(1):"Sign in";
@@ -1127,6 +1142,7 @@
     if(!_dvPlatesInited){
       _dvPlatesInited=true;
       _wireDvPanel("dvPlatesToggle","dvPlatesBody");
+      _wireDvPanel("dvOccToggle","dvOccBody");
     }
   }
 

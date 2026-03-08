@@ -1268,301 +1268,372 @@ body{background-image:none!important;background:transparent!important}
 
 <div id="dockView" style="display:none; padding:0; position:fixed; inset:0; z-index:200; overflow:hidden; background:#070a0f;">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
-  #dockView {
-    --bg:#070a0f; --s1:#0d1520; --s2:#111d2e; --s3:#16243a;
-    --b0:#1a2e48; --b1:#243d5c; --b2:#2e4e6e;
-    --t0:#fff; --t1:#dce8f5; --t2:#a8bdd4; --t3:#6b8ba8;
-    --green:#19e09a; --cyan:#18d4e8; --amber:#f5a623; --red:#f04a4a; --violet:#b052d9;
-    --font:'Outfit',sans-serif; --r:16px; --r2:24px;
-    background:var(--bg); color:var(--t0); font-family:var(--font);
-  }
+  /* ── DOCK VIEW — Mobile-first redesign ─────────────────────────────── */
+  #dockView { font-family: var(--font, 'DM Sans', sans-serif); }
   #dockView * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 
-  /* ── Shell ── */
-  #dockView .dv-shell { display:flex; flex-direction:column; height:100%; width:100%; overflow:hidden; }
+  #dockView .dv-shell {
+    display:flex; flex-direction:column; height:100%; width:100%; overflow:hidden;
+  }
 
   /* ── Top bar ── */
   #dockView .dv-topbar {
-    display:flex; align-items:center; justify-content:space-between;
-    padding:calc(env(safe-area-inset-top,0px) + 14px) 20px 12px;
-    background:var(--s1); border-bottom:1px solid var(--b0); flex-shrink:0; gap:10px;
+    display:flex; align-items:center; gap:8px;
+    padding:10px 14px 10px;
+    padding-top:calc(10px + env(safe-area-inset-top, 0px));
+    background:#070a0f; flex-shrink:0;
+    border-bottom:1px solid rgba(255,255,255,.04);
   }
-  #dockView .dv-logo { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+  #dockView .dv-logo { display:flex; align-items:center; gap:8px; flex-shrink:0; }
   #dockView .dv-logo-mark {
-    width:32px; height:32px; border-radius:9px;
+    width:30px; height:30px; border-radius:9px;
     background:linear-gradient(135deg,#18d4e8,#0a7a8c);
     display:flex; align-items:center; justify-content:center;
-    font-size:13px; font-weight:700; color:#000; box-shadow:0 2px 10px rgba(24,212,232,.3);
+    font-size:14px; font-weight:800; color:#000; flex-shrink:0;
   }
-  #dockView .dv-logo-text { font-size:12px; font-weight:600; letter-spacing:.06em; color:var(--t2); text-transform:uppercase; }
+  #dockView .dv-logo-text { font-size:13px; font-weight:700; letter-spacing:.06em; color:var(--t1,#aaa); text-transform:uppercase; }
   #dockView .dv-topbar-center { flex:1; min-width:0; }
   #dockView .dv-topbar-right { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+  #dockView .dv-back-btn {
+    font-size:12px; color:var(--cyan,#18d4e8); text-decoration:none; font-weight:600;
+    padding:5px 10px; border-radius:8px; background:rgba(24,212,232,.08);
+    border:1px solid rgba(24,212,232,.2); white-space:nowrap;
+  }
   #dockView .dv-chip {
     display:flex; align-items:center; gap:5px;
-    background:var(--s2); border:1px solid var(--b0); border-radius:20px;
-    padding:5px 11px; font-size:11px; font-weight:600; color:var(--t2); cursor:pointer;
-    transition:border-color .15s; white-space:nowrap;
+    background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.07);
+    border-radius:20px; padding:5px 10px;
+    font-size:11px; font-weight:600; color:var(--t1,#aaa);
+    cursor:pointer; white-space:nowrap; user-select:none;
   }
   #dockView .dv-chip:active { opacity:.8; }
-  #dockView .dv-ws-dot { width:6px; height:6px; border-radius:50%; background:#f5a623; box-shadow:0 0 7px rgba(245,166,35,.5); flex-shrink:0; transition:background .3s, box-shadow .3s; }
-  #dockView .dv-ws-dot.dv-bad { background:var(--red); box-shadow:0 0 7px rgba(240,74,74,.5); }
+  #dockView .dv-ws-dot { width:6px; height:6px; border-radius:50%; background:#f5a623; flex-shrink:0; transition:background .3s; }
+  #dockView .dv-ws-dot.dv-bad { background:var(--red,#f04a4a); }
 
   /* ── Incoming banner ── */
   #dockView .dv-incoming-banner {
-    display:none; align-items:center; gap:10px; padding:10px 20px;
-    background:linear-gradient(90deg, rgba(24,212,232,.12), rgba(24,212,232,.06));
-    border-bottom:1px solid rgba(24,212,232,.25); flex-shrink:0;
-    animation:dv-pulse-border 2s ease-in-out infinite;
+    display:none; align-items:center; gap:10px;
+    padding:9px 14px; background:rgba(24,212,232,.07);
+    border-bottom:1px solid rgba(24,212,232,.15); flex-shrink:0;
   }
   #dockView .dv-incoming-banner.dv-show { display:flex; }
-  @keyframes dv-pulse-border {
-    0%,100% { border-bottom-color:rgba(24,212,232,.2); }
-    50%      { border-bottom-color:rgba(24,212,232,.5); }
-  }
-  #dockView .dv-incoming-icon { font-size:20px; animation:dv-bounce .8s ease-in-out infinite alternate; }
-  @keyframes dv-bounce { from { transform:translateX(0); } to { transform:translateX(4px); } }
-  #dockView .dv-incoming-text { flex:1; font-size:13px; font-weight:600; color:var(--cyan); }
-  #dockView .dv-incoming-sub  { font-size:11px; color:var(--t2); font-weight:400; }
+  #dockView .dv-incoming-icon { font-size:18px; }
+  #dockView .dv-incoming-text { font-size:12px; font-weight:700; color:var(--cyan,#18d4e8); }
+  #dockView .dv-incoming-sub  { font-size:11px; color:var(--t2,#888); font-weight:400; }
+  @keyframes dv-bounce { 0%,100%{transform:translateX(0)} 50%{transform:translateX(4px)} }
+  #dockView .dv-incoming-icon { animation:dv-bounce .9s ease-in-out infinite; }
 
   /* ── Scan bar ── */
   #dockView .dv-scan-bar {
-    display:flex; align-items:center; gap:8px; padding:10px 16px;
-    background:var(--s1); border-bottom:1px solid var(--b0); flex-shrink:0;
+    display:flex; align-items:center; gap:8px;
+    padding:8px 12px; flex-shrink:0;
+    background:#070a0f; border-bottom:1px solid rgba(255,255,255,.04);
   }
   #dockView .dv-scan-wrap {
-    flex:1; display:flex; align-items:center; gap:8px;
-    background:var(--s2); border:1px solid var(--b1); border-radius:14px;
-    padding:4px 4px 4px 14px; transition:border-color .2s, box-shadow .2s;
+    flex:1; display:flex; align-items:center;
+    background:rgba(255,255,255,.05); border:1.5px solid rgba(255,255,255,.08);
+    border-radius:12px; overflow:hidden; transition:border-color .15s;
   }
-  #dockView .dv-scan-wrap:focus-within { border-color:var(--cyan); box-shadow:0 0 0 3px rgba(24,212,232,.1); }
+  #dockView .dv-scan-wrap:focus-within { border-color:var(--cyan,#18d4e8); }
+  #dockView .dv-scan-label {
+    font-size:16px; padding:0 10px; opacity:.5; flex-shrink:0;
+  }
   #dockView .dv-scan-input {
-    flex:1; background:none; border:none; outline:none; font-family:var(--font);
-    font-size:15px; font-weight:600; color:var(--t0); text-transform:uppercase;
-    caret-color:var(--cyan); letter-spacing:.04em; min-width:0;
+    flex:1; background:none; border:none; outline:none;
+    font-family:var(--font); font-size:15px; font-weight:600;
+    color:var(--t0,#fff); padding:11px 0;
+    letter-spacing:.04em;
   }
-  #dockView .dv-scan-input::placeholder { color:var(--t3); font-weight:400; text-transform:none; font-size:14px; }
+  #dockView .dv-scan-input::placeholder { color:var(--t3,#555); font-weight:400; font-size:13px; letter-spacing:0; }
   #dockView .dv-scan-go {
-    background:linear-gradient(135deg,var(--cyan),#0a7a8c); border:none;
-    border-radius:10px; width:36px; height:36px; flex-shrink:0;
-    display:flex; align-items:center; justify-content:center; cursor:pointer;
-    transition:transform .12s, filter .12s;
+    width:44px; height:44px; background:var(--cyan,#18d4e8); border:none;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; flex-shrink:0; transition:filter .14s;
   }
-  #dockView .dv-scan-go:active { transform:scale(.92); filter:brightness(.88); }
+  #dockView .dv-scan-go:active { filter:brightness(.85); }
   #dockView .dv-scan-go svg { width:16px; height:16px; fill:none; stroke:#000; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; }
   #dockView .dv-search-wrap {
-    display:flex; align-items:center; gap:6px;
-    background:var(--s2); border:1px solid var(--b0); border-radius:14px;
-    padding:8px 12px; width:110px; transition:width .2s, border-color .2s;
+    display:flex; align-items:center; gap:5px;
+    background:rgba(255,255,255,.05); border:1.5px solid rgba(255,255,255,.08);
+    border-radius:12px; padding:0 10px; width:90px; transition:width .2s, border-color .15s;
   }
-  #dockView .dv-search-wrap:focus-within { border-color:var(--b1); width:140px; }
-  #dockView .dv-search-input { flex:1; background:none; border:none; outline:none; font-family:var(--font); font-size:13px; color:var(--t0); min-width:0; }
-  #dockView .dv-search-input::placeholder { color:var(--t3); }
+  #dockView .dv-search-wrap:focus-within { border-color:var(--b1,#333); width:120px; }
+  #dockView .dv-search-input {
+    flex:1; background:none; border:none; outline:none;
+    font-family:var(--font); font-size:12px; color:var(--t0,#fff); min-width:0;
+    padding:11px 0;
+  }
+  #dockView .dv-search-input::placeholder { color:var(--t3,#555); }
 
   /* ── Filter pills ── */
   #dockView .dv-filters {
-    display:flex; gap:6px; padding:10px 16px 8px;
-    overflow-x:auto; flex-shrink:0; scrollbar-width:none;
+    display:flex; align-items:center; gap:6px;
+    padding:7px 12px; overflow-x:auto; flex-shrink:0;
+    scrollbar-width:none; background:#070a0f;
+    border-bottom:1px solid rgba(255,255,255,.04);
   }
   #dockView .dv-filters::-webkit-scrollbar { display:none; }
   #dockView .dv-fpill {
-    display:flex; align-items:center; gap:5px; padding:6px 14px; border-radius:20px;
-    border:1.5px solid var(--b0); background:var(--s1);
-    font-family:var(--font); font-size:11px; font-weight:600; color:var(--t3);
-    cursor:pointer; transition:all .15s; white-space:nowrap; flex-shrink:0;
+    display:flex; align-items:center; gap:5px;
+    padding:5px 11px; border-radius:20px; white-space:nowrap;
+    font-size:11px; font-weight:600; color:var(--t2,#888);
+    background:rgba(255,255,255,.04); border:1.5px solid rgba(255,255,255,.07);
+    cursor:pointer; user-select:none; transition:all .14s; flex-shrink:0;
   }
-  #dockView .dv-fpill.dv-on { border-color:var(--cyan); color:var(--cyan); background:rgba(24,212,232,.08); }
-  #dockView .dv-fpill-dot { width:6px; height:6px; border-radius:50%; }
+  #dockView .dv-fpill.dv-on { border-color:var(--cyan,#18d4e8); color:var(--cyan,#18d4e8); background:rgba(24,212,232,.08); }
+  #dockView .dv-fpill-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
   #dockView .dv-count-chip {
-    background:var(--s2); border:1px solid var(--b0); border-radius:8px;
-    padding:3px 8px; font-size:11px; font-weight:700; color:var(--t2);
-    font-family:monospace; margin-left:auto; flex-shrink:0;
+    margin-left:auto; flex-shrink:0;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1);
+    border-radius:20px; padding:3px 10px;
+    font-size:11px; font-weight:700; color:var(--t1,#aaa);
+    white-space:nowrap;
   }
-
-  /* ── Cards list ── */
-  #dockView .dv-cards {
-    flex:1; overflow-y:auto; padding:10px 12px 32px;
-    display:flex; flex-direction:column; gap:9px;
-    -webkit-overflow-scrolling:touch;
-  }
-
-  /* ── Card ── */
-  #dockView .dv-card {
-    background:var(--s1); border:2px solid var(--b0); border-radius:20px;
-    padding:16px 18px; display:flex; flex-direction:column; gap:11px;
-    position:relative; overflow:hidden; transition:border-color .15s;
-  }
-  /* left accent stripe */
-  #dockView .dv-card::before { content:""; position:absolute; left:0; top:0; bottom:0; width:4px; border-radius:4px 0 0 4px; background:var(--b1); }
-  #dockView .dv-card.dv-incoming::before  { background:var(--t3); }
-  #dockView .dv-card.dv-dropped::before   { background:var(--violet); }
-  #dockView .dv-card.dv-loading           { border-color:rgba(245,166,35,.3); }
-  #dockView .dv-card.dv-loading::before   { background:var(--amber); }
-  #dockView .dv-card.dv-dockready         { border-color:rgba(24,212,232,.3); }
-  #dockView .dv-card.dv-dockready::before { background:var(--cyan); }
-  #dockView .dv-card.dv-ready             { border-color:rgba(25,224,154,.3); }
-  #dockView .dv-card.dv-ready::before     { background:var(--green); }
-  #dockView .dv-card.dv-departed::before  { background:var(--b0); opacity:.5; }
-
-  /* card — row 1 */
-  #dockView .dv-card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
-  #dockView .dv-trailer  { font-size:26px; font-weight:700; letter-spacing:-.02em; color:var(--t0); line-height:1; }
-  #dockView .dv-card-note { font-size:12px; color:var(--t2); margin-top:3px; }
-  #dockView .dv-card-right { display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex-shrink:0; }
-  #dockView .dv-door {
-    font-size:18px; font-weight:700; color:var(--t0); font-family:monospace;
-    background:var(--s2); border:1px solid var(--b1); border-radius:9px;
-    padding:3px 11px; line-height:1.3;
-  }
-  #dockView .dv-no-door { font-size:11px; color:var(--t3); }
-  /* status badge */
-  #dockView .dv-status {
-    display:inline-flex; align-items:center; gap:5px;
-    padding:3px 9px; border-radius:8px; font-size:11px; font-weight:600; letter-spacing:.02em;
-  }
-  #dockView .dv-status::before { content:""; width:5px; height:5px; border-radius:50%; flex-shrink:0; }
-  #dockView .dv-st-incoming  { background:rgba(107,139,168,.12); color:var(--t2); }      #dockView .dv-st-incoming::before  { background:var(--t3); }
-  #dockView .dv-st-dropped   { background:rgba(176,82,217,.12);  color:var(--violet); }  #dockView .dv-st-dropped::before   { background:var(--violet); }
-  #dockView .dv-st-loading   { background:rgba(245,166,35,.12);  color:var(--amber); }   #dockView .dv-st-loading::before   { background:var(--amber); }
-  #dockView .dv-st-dockready { background:rgba(24,212,232,.12);  color:var(--cyan); }    #dockView .dv-st-dockready::before { background:var(--cyan); }
-  #dockView .dv-st-ready     { background:rgba(25,224,154,.12);  color:var(--green); }   #dockView .dv-st-ready::before     { background:var(--green); }
-  #dockView .dv-st-departed  { background:rgba(80,80,80,.1);     color:var(--t3); }      #dockView .dv-st-departed::before  { background:var(--b1); }
-
-  /* card — row 2: meta */
-  #dockView .dv-card-meta { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
-  #dockView .dv-carrier {
-    font-size:9px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
-    padding:2px 7px; border-radius:5px; border:1px solid;
-  }
-  #dockView .dv-wb  { color:var(--amber); border-color:rgba(245,166,35,.3); background:rgba(245,166,35,.07); }
-  #dockView .dv-ext { color:var(--t2);    border-color:var(--b0); background:var(--s2); }
-  #dockView .dv-eta {
-    font-size:11px; font-weight:600; color:var(--cyan);
-    background:rgba(24,212,232,.1); border:1px solid rgba(24,212,232,.2); border-radius:6px; padding:2px 7px;
-    animation:dv-eta-pulse 2s ease-in-out infinite;
-  }
-  @keyframes dv-eta-pulse { 0%,100% { opacity:1; } 50% { opacity:.65; } }
-  #dockView .dv-eta.dv-arriving { color:var(--green); background:rgba(25,224,154,.1); border-color:rgba(25,224,154,.3); animation:none; }
-  #dockView .dv-ago { font-size:11px; color:var(--t3); margin-left:auto; }
-  #dockView .dv-door-age { font-size:10px; color:var(--t3); text-align:right; }
-
-  /* card — main action button */
-  #dockView .dv-cta {
-    width:100%; padding:16px 18px; border:none; border-radius:16px;
-    font-family:var(--font); font-size:16px; font-weight:700;
-    cursor:pointer; touch-action:manipulation; min-height:56px;
-    display:flex; align-items:center; justify-content:center; gap:8px;
-    transition:all .16s; box-shadow:0 4px 14px rgba(0,0,0,.35);
-  }
-  #dockView .dv-cta:active   { transform:scale(.97); }
-  #dockView .dv-cta:disabled { opacity:.35; cursor:not-allowed; transform:none; }
-  #dockView .dv-cta-amber  { background:linear-gradient(135deg,#f5a623,#cc7700); color:#000; }
-  #dockView .dv-cta-cyan   { background:linear-gradient(135deg,#18d4e8,#0a7a8c); color:#000; }
-  #dockView .dv-cta-ghost  { background:var(--s2); border:1.5px solid var(--b1); color:var(--t1); box-shadow:none; }
-  #dockView .dv-cta-locked { background:transparent; border:1.5px solid var(--b0); color:var(--t3); box-shadow:none; cursor:default; pointer-events:none; }
-
-  /* card — secondary buttons */
-  #dockView .dv-sec-row { display:flex; gap:7px; }
-  #dockView .dv-sec {
-    flex:1; padding:10px; border-radius:12px; border:1.5px solid var(--b0);
-    background:var(--s2); font-family:var(--font); font-size:12px; font-weight:600;
-    color:var(--t2); cursor:pointer; touch-action:manipulation; transition:all .14s; min-height:42px;
-  }
-  #dockView .dv-sec:active { transform:scale(.97); }
-  #dockView .dv-issue-sec { border-color:rgba(240,74,74,.22); color:var(--red); background:rgba(240,74,74,.05); }
-  #dockView .dv-issue-sec:active { background:rgba(240,74,74,.1); }
-
-  /* swipe hint */
-  #dockView .dv-swipe-hint { font-size:10px; color:var(--t3); text-align:center; letter-spacing:.04em; padding-top:1px; }
-  @media(pointer:fine) { #dockView .dv-swipe-hint { display:none; } }
-
-  /* ── Empty state ── */
-  #dockView .dv-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:48px 24px; text-align:center; }
-  #dockView .dv-empty-icon { font-size:48px; opacity:.3; }
-  #dockView .dv-empty-msg  { font-size:16px; font-weight:600; color:var(--t2); }
 
   /* ── Login nudge ── */
-  #dockView .dv-nudge { display:none; margin:0 12px 4px; padding:10px 14px; border-radius:12px; border:1px solid rgba(245,166,35,.3); background:rgba(245,166,35,.05); font-size:12px; color:var(--t1); align-items:center; gap:8px; flex-shrink:0; }
+  #dockView .dv-nudge {
+    display:none; margin:6px 12px 0; padding:8px 12px;
+    border-radius:10px; border:1px solid rgba(245,166,35,.25);
+    background:rgba(245,166,35,.05); font-size:11px; font-weight:600;
+    color:var(--t1,#aaa); align-items:center; gap:7px; flex-shrink:0;
+    cursor:pointer;
+  }
   #dockView .dv-nudge.dv-show { display:flex; }
 
   /* ── Bulk bar ── */
-  #dockView .dv-bulk-bar { display:none; align-items:center; gap:8px; padding:8px 16px; background:rgba(24,212,232,.05); border-bottom:1px solid rgba(24,212,232,.15); flex-shrink:0; flex-wrap:wrap; }
+  #dockView .dv-bulk-bar {
+    display:none; align-items:center; gap:8px;
+    padding:7px 12px; background:rgba(24,212,232,.04);
+    border-bottom:1px solid rgba(24,212,232,.12); flex-shrink:0; flex-wrap:wrap;
+  }
   #dockView .dv-bulk-bar.dv-show { display:flex; }
 
-  /* ── Toast ── */
+  /* ── Cards scroll area ── */
+  #dockView .dv-cards {
+    flex:1; overflow-y:auto; overscroll-behavior:contain;
+    padding:8px 10px 16px; display:flex; flex-direction:column; gap:8px;
+    padding-bottom:calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  #dockView .dv-cards::-webkit-scrollbar { width:3px; }
+  #dockView .dv-cards::-webkit-scrollbar-track { background:transparent; }
+  #dockView .dv-cards::-webkit-scrollbar-thumb { background:rgba(255,255,255,.1); border-radius:2px; }
+
+  /* ── Card — compact mobile-first layout ── */
+  #dockView .dv-card {
+    background:rgba(255,255,255,.032); border:1.5px solid rgba(255,255,255,.07);
+    border-radius:16px; overflow:hidden; position:relative;
+    transition:border-color .15s; flex-shrink:0;
+  }
+  /* Left accent stripe */
+  #dockView .dv-card::before {
+    content:""; position:absolute; left:0; top:0; bottom:0;
+    width:3px; border-radius:3px 0 0 3px;
+    background:rgba(255,255,255,.1);
+  }
+  #dockView .dv-card.dv-incoming::before  { background:rgba(255,255,255,.2); }
+  #dockView .dv-card.dv-dropped::before   { background:#b052d9; }
+  #dockView .dv-card.dv-loading           { border-color:rgba(245,166,35,.25); }
+  #dockView .dv-card.dv-loading::before   { background:#f5a623; }
+  #dockView .dv-card.dv-dockready         { border-color:rgba(24,212,232,.25); }
+  #dockView .dv-card.dv-dockready::before { background:#18d4e8; }
+  #dockView .dv-card.dv-ready             { border-color:rgba(25,224,154,.25); }
+  #dockView .dv-card.dv-ready::before     { background:#19e09a; }
+  #dockView .dv-card.dv-departed          { opacity:.55; }
+  #dockView .dv-card.dv-selected          { border-color:rgba(24,212,232,.4); background:rgba(24,212,232,.05); }
+
+  /* Card info row — compact single line */
+  #dockView .dv-card-info {
+    display:flex; align-items:center; gap:10px;
+    padding:11px 14px 11px 18px;
+  }
+  #dockView .dv-trailer {
+    font-size:22px; font-weight:800; letter-spacing:-.02em;
+    color:var(--t0,#fff); line-height:1; flex-shrink:0; min-width:52px;
+  }
+  #dockView .dv-card-mid { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
+  #dockView .dv-card-note { font-size:11px; color:var(--t2,#888); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #dockView .dv-card-badges { display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+  #dockView .dv-status {
+    display:inline-flex; align-items:center; gap:4px;
+    padding:2px 7px; border-radius:6px;
+    font-size:10px; font-weight:700; letter-spacing:.02em; white-space:nowrap;
+  }
+  #dockView .dv-status::before { content:""; width:5px; height:5px; border-radius:50%; flex-shrink:0; }
+  #dockView .dv-st-incoming  { background:rgba(107,139,168,.12); color:var(--t2,#888); }   #dockView .dv-st-incoming::before  { background:var(--t3,#555); }
+  #dockView .dv-st-dropped   { background:rgba(176,82,217,.12);  color:#b052d9; }           #dockView .dv-st-dropped::before   { background:#b052d9; }
+  #dockView .dv-st-loading   { background:rgba(245,166,35,.12);  color:#f5a623; }           #dockView .dv-st-loading::before   { background:#f5a623; }
+  #dockView .dv-st-dockready { background:rgba(24,212,232,.12);  color:#18d4e8; }           #dockView .dv-st-dockready::before { background:#18d4e8; }
+  #dockView .dv-st-ready     { background:rgba(25,224,154,.12);  color:#19e09a; }           #dockView .dv-st-ready::before     { background:#19e09a; }
+  #dockView .dv-st-departed  { background:rgba(80,80,80,.1);     color:var(--t3,#555); }    #dockView .dv-st-departed::before  { background:var(--b1,#222); }
+  #dockView .dv-carrier {
+    font-size:9px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
+    padding:2px 6px; border-radius:5px; border:1px solid; white-space:nowrap;
+  }
+  #dockView .dv-wb  { color:#f5a623; border-color:rgba(245,166,35,.3); background:rgba(245,166,35,.07); }
+  #dockView .dv-ext { color:var(--t2,#888); border-color:rgba(255,255,255,.08); background:rgba(255,255,255,.04); }
+  #dockView .dv-eta {
+    font-size:10px; font-weight:700; color:#18d4e8;
+    background:rgba(24,212,232,.1); border:1px solid rgba(24,212,232,.2);
+    border-radius:5px; padding:2px 6px; white-space:nowrap;
+  }
+  #dockView .dv-eta.dv-arriving { color:#19e09a; background:rgba(25,224,154,.1); border-color:rgba(25,224,154,.3); }
+  #dockView .dv-card-right { display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex-shrink:0; }
+  #dockView .dv-door {
+    font-size:16px; font-weight:800; color:var(--t0,#fff);
+    font-family:monospace; letter-spacing:-.01em;
+    background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.1);
+    border-radius:8px; padding:3px 10px; line-height:1.3; white-space:nowrap;
+  }
+  #dockView .dv-no-door { font-size:10px; color:var(--t3,#555); }
+  #dockView .dv-door-age { font-size:9px; color:var(--t3,#555); text-align:right; }
+  #dockView .dv-ago { font-size:10px; color:var(--t3,#555); }
+
+  /* Card action zone — CTA + secondary row */
+  #dockView .dv-card-actions { padding:0 10px 10px; display:flex; flex-direction:column; gap:6px; }
+
+  #dockView .dv-cta {
+    width:100%; padding:14px 18px; border:none; border-radius:12px;
+    font-family:var(--font); font-size:15px; font-weight:700;
+    cursor:pointer; touch-action:manipulation; min-height:52px;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    transition:all .15s; -webkit-tap-highlight-color:transparent;
+  }
+  #dockView .dv-cta:active   { transform:scale(.97); filter:brightness(.9); }
+  #dockView .dv-cta:disabled { opacity:.35; cursor:not-allowed; transform:none; }
+  #dockView .dv-cta-amber  { background:linear-gradient(135deg,#f5a623,#cc7700); color:#000; box-shadow:0 4px 16px rgba(245,166,35,.25); }
+  #dockView .dv-cta-cyan   { background:linear-gradient(135deg,#18d4e8,#0a7a8c); color:#000; box-shadow:0 4px 16px rgba(24,212,232,.2); }
+  #dockView .dv-cta-ghost  { background:rgba(255,255,255,.05); border:1.5px solid rgba(255,255,255,.1); color:var(--t1,#aaa); }
+  #dockView .dv-cta-locked { background:transparent; color:var(--t3,#555); cursor:default; pointer-events:none; font-size:13px; min-height:36px; padding:8px; }
+
+  /* Sign-in CTA — amber tint to draw attention */
+  #dockView .dv-cta-signin {
+    background:rgba(245,166,35,.08); border:1.5px solid rgba(245,166,35,.25);
+    color:#f5a623; font-size:13px; min-height:44px;
+  }
+
+  #dockView .dv-sec-row { display:flex; gap:6px; }
+  #dockView .dv-sec {
+    flex:1; padding:9px; border-radius:10px; border:1.5px solid rgba(255,255,255,.08);
+    background:rgba(255,255,255,.04); font-family:var(--font); font-size:12px; font-weight:600;
+    color:var(--t2,#888); cursor:pointer; touch-action:manipulation;
+    transition:all .14s; min-height:40px;
+  }
+  #dockView .dv-sec:active { transform:scale(.97); background:rgba(255,255,255,.08); }
+  #dockView .dv-issue-sec { border-color:rgba(240,74,74,.2); color:#f04a4a; background:rgba(240,74,74,.04); }
+  #dockView .dv-issue-sec:active { background:rgba(240,74,74,.1); }
+
+  /* Swipe hint — touch only */
+  #dockView .dv-swipe-hint { font-size:9px; color:var(--t3,#555); text-align:center; padding:3px 0 6px; letter-spacing:.04em; }
+  @media(pointer:fine) { #dockView .dv-swipe-hint { display:none; } }
+
+  /* Empty state */
+  #dockView .dv-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:48px 24px; text-align:center; }
+  #dockView .dv-empty-icon { font-size:40px; opacity:.25; }
+  #dockView .dv-empty-msg  { font-size:15px; font-weight:600; color:var(--t2,#888); }
+
+  /* Toast */
   #dockView .dv-toast {
-    position:fixed; bottom:calc(24px + env(safe-area-inset-bottom,0px)); left:50%;
-    transform:translateX(-50%) translateY(16px);
-    background:var(--s2); border:1px solid var(--b1); border-radius:13px;
-    padding:11px 20px; font-size:14px; font-weight:600; color:var(--t0);
+    position:fixed; bottom:calc(20px + env(safe-area-inset-bottom,0px)); left:50%;
+    transform:translateX(-50%) translateY(12px);
+    background:var(--s2,#1a1a1a); border:1px solid rgba(255,255,255,.1); border-radius:12px;
+    padding:10px 18px; font-size:13px; font-weight:600; color:var(--t0,#fff);
     box-shadow:0 8px 28px rgba(0,0,0,.6); opacity:0; pointer-events:none;
-    transition:opacity .24s, transform .24s; z-index:999;
-    max-width:calc(100vw - 40px); text-align:center; white-space:nowrap;
+    transition:opacity .22s, transform .22s; z-index:999;
+    max-width:calc(100vw - 32px); text-align:center;
   }
   #dockView .dv-toast.dv-on { opacity:1; transform:translateX(-50%) translateY(0); }
 
-  /* Loading spinner */
-  @keyframes dv-load-spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
-
-  /* ── Flashing animations ── */
-  /* Soft glow-pulse for status dots */
-  @keyframes dv-flash-amber  { 0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(245,166,35,0)}  50%{opacity:.7;box-shadow:0 0 0 5px rgba(245,166,35,.18)} }
-  @keyframes dv-flash-cyan   { 0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(24,212,232,0)}   50%{opacity:.7;box-shadow:0 0 0 5px rgba(24,212,232,.18)} }
-  @keyframes dv-flash-green  { 0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(25,224,154,0)}   50%{opacity:.7;box-shadow:0 0 0 5px rgba(25,224,154,.18)} }
-  @keyframes dv-flash-violet { 0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(176,82,217,0)}   50%{opacity:.7;box-shadow:0 0 0 5px rgba(176,82,217,.18)} }
-
-  /* Card left-stripe flash */
-  @keyframes dv-stripe-amber  { 0%,100%{opacity:1} 50%{opacity:.35} }
-  @keyframes dv-stripe-cyan   { 0%,100%{opacity:1} 50%{opacity:.3} }
-  @keyframes dv-stripe-green  { 0%,100%{opacity:1} 50%{opacity:.25} }
-
-  /* Incoming truck icon — more dramatic swing + scale */
-  @keyframes dv-truck-bounce { 0%{transform:translateX(0) scale(1)} 40%{transform:translateX(5px) scale(1.15)} 70%{transform:translateX(-2px) scale(.95)} 100%{transform:translateX(0) scale(1)} }
-
-  /* Arriving now — urgent flash */
-  @keyframes dv-arriving-flash { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(.97)} }
-
-  /* WS connecting dot */
+  /* Animations */
+  @keyframes dv-load-spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+  @keyframes dv-eta-pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+  @keyframes dv-arriving-flash { 0%,100%{opacity:1} 50%{opacity:.55} }
   @keyframes dv-ws-blink { 0%,100%{opacity:1} 50%{opacity:.2} }
-
-  /* Filter pill dots */
+  @keyframes dv-in { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
   @keyframes dv-pill-dot { 0%,100%{transform:scale(1)} 50%{transform:scale(1.5)} }
+  @keyframes dv-flash-amber  { 0%,100%{opacity:1} 50%{opacity:.4} }
+  @keyframes dv-flash-cyan   { 0%,100%{opacity:1} 50%{opacity:.4} }
+  @keyframes dv-flash-green  { 0%,100%{opacity:1} 50%{opacity:.35} }
+  @keyframes dv-flash-violet { 0%,100%{opacity:1} 50%{opacity:.4} }
+  @keyframes dv-stripe-amber { 0%,100%{opacity:1} 50%{opacity:.3} }
+  @keyframes dv-stripe-cyan  { 0%,100%{opacity:1} 50%{opacity:.28} }
+  @keyframes dv-stripe-green { 0%,100%{opacity:1} 50%{opacity:.25} }
+  @keyframes dv-truck-bounce { 0%{transform:translateX(0) scale(1)} 40%{transform:translateX(4px) scale(1.1)} 70%{transform:translateX(-2px) scale(.95)} 100%{transform:translateX(0) scale(1)} }
 
-  /* Apply flashing ── */
-
-  /* Status badge dots */
+  #dockView .dv-eta { animation:dv-eta-pulse 2s ease-in-out infinite; }
+  #dockView .dv-eta.dv-arriving { animation:dv-arriving-flash .7s ease-in-out infinite !important; }
+  #dockView .dv-ws-dot[style*="f5a623"] { animation:dv-ws-blink .9s ease-in-out infinite; }
+  #dockView .dv-fpill.dv-on .dv-fpill-dot { animation:dv-pill-dot 1.8s ease-in-out infinite; }
   #dockView .dv-st-loading::before   { animation:dv-flash-amber  1.6s ease-in-out infinite; }
   #dockView .dv-st-dockready::before { animation:dv-flash-cyan   2s   ease-in-out infinite; }
   #dockView .dv-st-ready::before     { animation:dv-flash-green  2.4s ease-in-out infinite; }
   #dockView .dv-st-dropped::before   { animation:dv-flash-violet 2s   ease-in-out infinite; }
   #dockView .dv-st-incoming::before  { animation:dv-flash-amber  1.2s ease-in-out infinite; }
-
-  /* Card left accent stripe */
   #dockView .dv-card.dv-loading::before   { animation:dv-stripe-amber 1.6s ease-in-out infinite; }
   #dockView .dv-card.dv-dockready::before { animation:dv-stripe-cyan  2s   ease-in-out infinite; }
   #dockView .dv-card.dv-ready::before     { animation:dv-stripe-green 2.4s ease-in-out infinite; }
-  #dockView .dv-card.dv-incoming::before  { animation:dv-stripe-amber 1.2s ease-in-out infinite; }
-
-  /* Filter pill dots — only active filter pulses */
-  #dockView .dv-fpill.dv-on .dv-fpill-dot { animation:dv-pill-dot 1.8s ease-in-out infinite; }
-
-  /* Incoming truck icon */
   #dockView .dv-incoming-icon { animation:dv-truck-bounce 1s cubic-bezier(.4,0,.2,1) infinite; }
-
-  /* ETA arriving badge */
-  #dockView .dv-eta.dv-arriving { animation:dv-arriving-flash .7s ease-in-out infinite !important; }
-
-  /* WS dot — blink when connecting, steady glow when live */
-  #dockView .dv-ws-dot[style*="f5a623"] { animation:dv-ws-blink .9s ease-in-out infinite; }
-
-  /* Card entrance animation */
-  @keyframes dv-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
-  #dockView .dv-cards .dv-card { animation:dv-in .2s cubic-bezier(.4,0,.2,1) both; }
+  #dockView .dv-cards .dv-card { animation:dv-in .18s cubic-bezier(.4,0,.2,1) both; }
   #dockView .dv-cards .dv-card:nth-child(1){animation-delay:.02s}
-  #dockView .dv-cards .dv-card:nth-child(2){animation-delay:.05s}
-  #dockView .dv-cards .dv-card:nth-child(3){animation-delay:.08s}
-  #dockView .dv-cards .dv-card:nth-child(4){animation-delay:.1s}
-  #dockView .dv-cards .dv-card:nth-child(5){animation-delay:.12s}
+  #dockView .dv-cards .dv-card:nth-child(2){animation-delay:.04s}
+  #dockView .dv-cards .dv-card:nth-child(3){animation-delay:.07s}
+  #dockView .dv-cards .dv-card:nth-child(4){animation-delay:.09s}
+  #dockView .dv-cards .dv-card:nth-child(5){animation-delay:.11s}
+
+  /* Desktop: 2-column grid */
+  @media(min-width:640px){
+    #dockView .dv-cards { display:grid; grid-template-columns:repeat(2,1fr); align-content:start; }
+    #dockView .dv-empty { grid-column:1/-1; }
+  }
+  @media(min-width:1024px){
+    #dockView .dv-cards { grid-template-columns:repeat(3,1fr); }
+  }
+
+  /* ── DVP plates panel ── */
+  #dockView .dvp-panel { flex-shrink:0; border-top:1px solid rgba(255,255,255,.04); }
+  #dockView .dvp-toggle {
+    width:100%; display:flex; align-items:center; gap:8px;
+    padding:10px 14px; background:#070a0f; border:none;
+    font-family:var(--font); font-size:12px; font-weight:600; color:var(--t2,#888);
+    cursor:pointer; text-align:left; transition:background .14s;
+  }
+  #dockView .dvp-toggle:active { background:rgba(255,255,255,.04); }
+  #dockView .dvp-toggle-label { flex:1; color:var(--t1,#aaa); letter-spacing:.04em; }
+  #dockView .dvp-summary { font-size:11px; color:var(--t2,#888); }
+  #dockView .dvp-chev { font-size:10px; color:var(--t3,#555); }
+  #dockView .dvp-body { display:none; }
+  #dockView .dvp-body.dvp-body-open { display:block; }
+  #dockView .dvp-grid {
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(70px,1fr));
+    gap:5px; padding:8px 10px 12px; max-height:160px; overflow-y:auto;
+  }
+  #dockView .dvp-card {
+    border-radius:10px; border:1.5px solid rgba(255,255,255,.07);
+    background:rgba(255,255,255,.04); padding:7px 8px;
+    display:flex; flex-direction:column; gap:3px; position:relative; overflow:hidden;
+    cursor:pointer; transition:all .14s;
+  }
+  #dockView .dvp-card:active { transform:scale(.97); }
+  #dockView .dvp-door-num { font-size:14px; font-weight:800; color:var(--t0,#fff); letter-spacing:-.01em; }
+  #dockView .dvp-status { font-size:9px; font-weight:700; letter-spacing:.04em; color:var(--t2,#888); }
+  #dockView .dvp-ok   { border-color:rgba(25,224,154,.2); } #dockView .dvp-ok .dvp-status { color:#19e09a; }
+  #dockView .dvp-svc  { border-color:rgba(245,166,35,.25); } #dockView .dvp-svc .dvp-status { color:#f5a623; }
+  #dockView .dvp-ooo  { border-color:rgba(240,74,74,.25); opacity:.6; } #dockView .dvp-ooo .dvp-status { color:#f04a4a; }
+  #dockView .dvp-editing { border-color:rgba(24,212,232,.3); background:rgba(24,212,232,.05); }
+  #dockView .dvp-select {
+    width:100%; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:6px; color:var(--t0,#fff); font-size:11px; padding:4px 5px;
+    font-family:var(--font); appearance:none; outline:none; margin-top:2px;
+  }
+  #dockView .dvp-save-btn {
+    width:100%; margin-top:4px; padding:5px; border-radius:6px;
+    background:var(--cyan,#18d4e8); border:none; font-weight:700; font-size:11px;
+    color:#000; cursor:pointer;
+  }
+  #dockView .dvp-note-input {
+    width:100%; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1);
+    border-radius:6px; color:var(--t0,#fff); font-size:10px; padding:3px 5px;
+    font-family:var(--font); outline:none; margin-top:2px; resize:none;
+  }
 </style>
 
 <div class="dv-shell">
@@ -1573,13 +1644,13 @@ body{background-image:none!important;background:transparent!important}
       <div class="dv-logo-mark">D</div>
       <div class="dv-logo-text">Dock</div>
     </div>
-    <div class="dv-topbar-center" style="display:flex;align-items:center;justify-content:center;">
+    <div class="dv-topbar-center">
       <a href="/" id="dvBackBtn" class="dv-back-btn" style="display:none;">← Dispatch</a>
     </div>
     <div class="dv-topbar-right">
       <div class="dv-chip" id="dvWsChip"><div class="dv-ws-dot" id="dockWsDot"></div><span id="dockWsText">Connecting</span></div>
-      <div class="dv-chip" id="dvStaffChip">🔑&nbsp;<span id="dvRoleLabel">Sign in</span></div>
-      <div class="dv-chip" id="dvBellChip" style="display:none;padding:5px 10px;font-size:16px;" title="Push notifications">🔕</div>
+      <div class="dv-chip" id="dvStaffChip" data-act="openStaffLogin">🔑&nbsp;<span id="dvRoleLabel">Sign in</span></div>
+      <div class="dv-chip" id="dvBellChip" style="display:none;padding:5px 10px;font-size:15px;" title="Push notifications">🔕</div>
     </div>
   </div>
 
@@ -1595,13 +1666,14 @@ body{background-image:none!important;background:transparent!important}
   <!-- ── Scan / search bar ── -->
   <div class="dv-scan-bar">
     <div class="dv-scan-wrap">
-      <input class="dv-scan-input" id="dockScanInput" placeholder="⚡ Scan or type trailer # to advance…" autocomplete="off" inputmode="text" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go"/>
+      <span class="dv-scan-label">⚡</span>
+      <input class="dv-scan-input" id="dockScanInput" placeholder="Scan or type trailer #…" autocomplete="off" inputmode="text" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go"/>
       <button class="dv-scan-go" id="dvScanGo">
         <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
       </button>
     </div>
     <div class="dv-search-wrap">
-      <span style="color:var(--t3);font-size:13px;flex-shrink:0">🔍</span>
+      <span style="color:var(--t3);font-size:12px;flex-shrink:0">🔍</span>
       <input class="dv-search-input" id="dockSearch" placeholder="Filter…" autocomplete="off" inputmode="search"/>
     </div>
   </div>
@@ -1609,7 +1681,7 @@ body{background-image:none!important;background:transparent!important}
   <!-- ── Filter pills ── -->
   <div class="dv-filters">
     <div class="dv-fpill dv-on" data-dv-filter="active"><div class="dv-fpill-dot" style="background:var(--cyan)"></div>Active</div>
-    <div class="dv-fpill" data-dv-filter="loading"><div class="dv-fpill-dot" style="background:var(--amber)"></div>Loading</div>
+    <div class="dv-fpill" data-dv-filter="loading"><div class="dv-fpill-dot" style="background:#f5a623"></div>Loading</div>
     <div class="dv-fpill" data-dv-filter="dockready"><div class="dv-fpill-dot" style="background:var(--cyan)"></div>Dock Ready</div>
     <div class="dv-fpill" data-dv-filter="incoming"><div class="dv-fpill-dot" style="background:var(--t3)"></div>Incoming</div>
     <div class="dv-fpill" data-dv-filter="all"><div class="dv-fpill-dot" style="background:var(--t3)"></div>All</div>
@@ -1617,13 +1689,13 @@ body{background-image:none!important;background:transparent!important}
   </div>
 
   <!-- ── Login nudge ── -->
-  <div class="dv-nudge" id="dockLoginNudge">🔑 Sign in to update statuses.</div>
+  <div class="dv-nudge" id="dockLoginNudge" data-act="openStaffLogin">🔑 Sign in to update statuses.</div>
 
   <!-- ── Bulk bar ── -->
   <div class="dv-bulk-bar" id="dockBulkBar">
     <span id="dockBulkCount" style="font-size:12px;color:var(--t2);flex:1">0 selected</span>
-    <button class="dv-sec" style="flex:unset;padding:6px 14px;border-color:rgba(245,166,35,.3);color:var(--amber);background:rgba(245,166,35,.08);" id="btnBulkLoading">→ Loading</button>
-    <button class="dv-sec" style="flex:unset;padding:6px 14px;border-color:rgba(24,212,232,.3);color:var(--cyan);background:rgba(24,212,232,.08);" id="btnBulkDockReady">→ Dock Ready</button>
+    <button class="dv-sec" style="flex:unset;padding:6px 12px;border-color:rgba(245,166,35,.3);color:#f5a623;background:rgba(245,166,35,.07);" id="btnBulkLoading">→ Loading</button>
+    <button class="dv-sec" style="flex:unset;padding:6px 12px;border-color:rgba(24,212,232,.3);color:var(--cyan);background:rgba(24,212,232,.07);" id="btnBulkDockReady">→ Dock Ready</button>
   </div>
 
   <!-- ── Cards ── -->

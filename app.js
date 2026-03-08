@@ -1218,40 +1218,36 @@
         +(oooCount?` · <span style="color:var(--red)">${oooCount} OOO</span>`:"");
     }
 
+    // Two-column list — all 15 doors visible, no scroll
+    // Each row: D## · status pill · note   [tap card to edit]
     grid.innerHTML=doors.map(door=>{
       const p=dockPlates[door]||{status:"Unknown",note:""};
       const open=!!plateEditOpen[door]&&canEdit;
       const s=p.status||"Unknown";
-
-      // Card background by plate status (not occupancy — plates panel is about plate health)
-      let cardCls="dvp-unknown";
-      if(s==="OK")cardCls="dvp-ok";
-      else if(s==="Service")cardCls="dvp-svc";
-      else if(s==="Out of Order")cardCls="dvp-ooo";
+      const colCls=s==="OK"?"dvpl-ok":s==="Service"?"dvpl-svc":s==="Out of Order"?"dvpl-ooo":"dvpl-unk";
+      const icon=s==="OK"?"✓":s==="Service"?"⚠":"✕";
+      const shortStatus=s==="Out of Order"?"OOO":s==="Service"?"SVC":"OK";
 
       if(open){
-        return`<div class="dvp-card ${cardCls} dvp-editing" data-door="${esc(door)}">
-          <div class="dvp-door-label">D${esc(door)}</div>
-          <div class="dvp-edit-form">
-            <div class="dvp-status-btns">
-              <button class="dvp-sbtn dvp-sbtn-ok${s==="OK"?" dvp-sbtn-active":""}" data-plate-status-set="${esc(door)}" data-plate-val="OK">✓ OK</button>
-              <button class="dvp-sbtn dvp-sbtn-svc${s==="Service"?" dvp-sbtn-active":""}" data-plate-status-set="${esc(door)}" data-plate-val="Service">⚠ Service</button>
-              <button class="dvp-sbtn dvp-sbtn-ooo${s==="Out of Order"?" dvp-sbtn-active":""}" data-plate-status-set="${esc(door)}" data-plate-val="Out of Order">✕ OOO</button>
-            </div>
-            <input class="dvp-note-input" id="dvp-note-${esc(door)}" placeholder="Add note…" value="${esc(p.note||"")}" data-plate-note="${esc(door)}"/>
-            <div style="display:flex;gap:4px;margin-top:4px;">
-              <button class="dvp-save-btn" data-plate-save="${esc(door)}">Save</button>
-              <button class="dvp-cancel-btn" data-plate-toggle="${esc(door)}">Cancel</button>
-            </div>
+        return`<div class="dvpl-item dvpl-item-editing" data-door="${esc(door)}">
+          <div class="dvpl-edit-hd">
+            <span class="dvpl-edit-door">D${esc(door)}</span>
+            <button class="dvpl-cancel-btn" data-plate-toggle="${esc(door)}">✕</button>
           </div>
+          <div class="dvpl-status-row">
+            <button class="dvp-sbtn dvp-sbtn-ok${s==="OK"?" dvp-sbtn-active":""}" data-plate-status-set="${esc(door)}" data-plate-val="OK">✓ OK</button>
+            <button class="dvp-sbtn dvp-sbtn-svc${s==="Service"?" dvp-sbtn-active":""}" data-plate-status-set="${esc(door)}" data-plate-val="Service">⚠ SVC</button>
+            <button class="dvp-sbtn dvp-sbtn-ooo${s==="Out of Order"?" dvp-sbtn-active":""}" data-plate-status-set="${esc(door)}" data-plate-val="Out of Order">✕ OOO</button>
+          </div>
+          <input class="dvp-note-input dvpl-note-input" id="dvp-note-${esc(door)}" placeholder="Note…" value="${esc(p.note||"")}" data-plate-note="${esc(door)}"/>
+          <button class="dvpl-save-btn" data-plate-save="${esc(door)}">Save</button>
         </div>`;
       }
 
-      return`<div class="dvp-card ${cardCls}" data-door="${esc(door)}">
-        <div class="dvp-door-label">D${esc(door)}</div>
-        <div class="dvp-status-badge">${s==="OK"?"✓":s==="Service"?"⚠":"✕"}</div>
-        ${p.note?`<div class="dvp-note">${esc(p.note)}</div>`:""}
-        ${canEdit?`<button class="dvp-edit-open-btn" data-plate-toggle="${esc(door)}">Edit</button>`:""}
+      return`<div class="dvpl-item ${colCls}" data-door="${esc(door)}" ${canEdit?`data-plate-toggle="${esc(door)}"`:""} role="${canEdit?"button":""}" title="${canEdit?"Tap to edit D"+esc(door):""}">
+        <span class="dvpl-door">D${esc(door)}</span>
+        <span class="dvpl-status-pill ${colCls}-pill">${icon} ${shortStatus}</span>
+        ${p.note?`<span class="dvpl-note">${esc(p.note)}</span>`:"<span class=\"dvpl-note dvpl-note-empty\">—</span>"}
       </div>`;
     }).join("");
 
@@ -2121,7 +2117,7 @@
     if(id==="oac_override"){driverState.overrideMode=true;driverState.assignedDoor="";driverState.selectedDoor="";showDoorPicker("offloadDoorPickerWrap","offloadDoorPickerGrid");updateOffloadSubmitState();return;}
     const doorBtn=direct?.closest?.("[data-door]");
     // Exclude plate cards (dsp-plate-btn), dock reserve grid (dr-door-btn), and detail door grid (dsd-door-btn)
-    const isDoorPickExcluded=doorBtn?.classList?.contains("dsp-plate-btn")||doorBtn?.classList?.contains("dr-door-btn")||doorBtn?.classList?.contains("dsd-door-btn")||direct?.dataset?.plateToggle||direct?.dataset?.plateSave;
+    const isDoorPickExcluded=doorBtn?.classList?.contains("dsp-plate-btn")||doorBtn?.classList?.contains("dvp-card")||doorBtn?.classList?.contains("dvpl-item")||doorBtn?.classList?.contains("dr-door-btn")||doorBtn?.classList?.contains("dsd-door-btn")||direct?.dataset?.plateToggle||direct?.dataset?.plateSave||direct?.dataset?.plateStatusSet||!!direct?.closest?.("[data-plate-toggle]")||!!direct?.closest?.("[data-plate-save]")||!!direct?.closest?.(".dvpl-item");
     if(doorBtn&&doorBtn.dataset.door&&!doorBtn.dataset.dmDoor&&!doorBtn.dataset.act&&!isDoorPickExcluded){driverState.selectedDoor=doorBtn.dataset.door;driverState.overrideMode=true;buildDoorPicker(doorBtn.dataset.picker||"doorPickerGrid");updateDropSubmitState();updateOffloadSubmitState();return;}
     const dtBtn=direct?.closest?.("[data-type]");
     if(dtBtn?.dataset.type){driverState.dropType=dtBtn.dataset.type;el("dtbEmpty")?.classList.toggle("selected",driverState.dropType==="Empty");el("dtbLoaded")?.classList.toggle("selected",driverState.dropType==="Loaded");return;}
@@ -2233,7 +2229,12 @@
       direct.classList.add(direct.classList.contains("dvp-sbtn")?"dvp-sbtn-active":"dpb-sbtn-active");
       return;
     }
-    const tog=direct?.dataset?.plateToggle;if(tog){plateEditOpen[tog]=!plateEditOpen[tog];renderPlates();if(isDock())renderDockPlatesPanel();return;}
+    const tog=direct?.dataset?.plateToggle||direct?.closest?.("[data-plate-toggle]")?.dataset?.plateToggle;
+    if(tog){
+      // Don't re-toggle if clicking inside an already-open edit form
+      if(direct?.closest?.(".dvpl-item-editing")&&!direct?.dataset?.plateToggle)return;
+      plateEditOpen[tog]=!plateEditOpen[tog];renderPlates();if(isDock())renderDockPlatesPanel();return;
+    }
     const psv=direct?.dataset?.plateSave;if(psv)return plateSave(psv);
   });
 

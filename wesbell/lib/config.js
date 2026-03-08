@@ -3,7 +3,7 @@ const path = require('path');
 const fs   = require('fs');
 
 const PORT        = process.env.PORT || 3000;
-const APP_VERSION = process.env.APP_VERSION || '3.6.0';
+const APP_VERSION = process.env.APP_VERSION || '3.7.0';
 const NODE_ENV    = process.env.NODE_ENV || 'development';
 const IS_PROD     = NODE_ENV === 'production';
 

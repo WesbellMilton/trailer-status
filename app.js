@@ -2153,9 +2153,6 @@
     const ws=new WebSocket(`${location.protocol==="https:"?"wss":"ws"}://${location.host}`);
     _ws=ws;
     window._ws=ws;
-    // Message bus: any module can do window._wsBus.addEventListener('msg', cb)
-    // without caring about socket reconnects
-    if(!window._wsBus)window._wsBus=new EventTarget();
     let lastMsg=Date.now();
 
     // Watchdog: if no message in 40s, force close so onclose fires and reconnects
@@ -2195,8 +2192,8 @@
     ws.onerror=()=>{}; // onclose fires after onerror, handles reconnect
     ws.onmessage=evt=>{
       lastMsg=Date.now();let msg;try{msg=JSON.parse(evt.data);}catch{return;}
-      // Fan out to bus listeners (driver view, future modules)
-      if(window._wsBus){const e=new CustomEvent('msg',{detail:msg});window._wsBus.dispatchEvent(e);}
+      // Forward every message to driver view handler (if on driver page)
+      if(window._driverWsMsg)window._driverWsMsg(msg);
       const{type,payload}=msg||{};
       if(type==="state"){trailers=payload||{};renderBoard();if(isSuper())renderSupBoard();if(isDock()){renderDockView();dvUpdateIncoming();window._lspAutoRefresh?.();updateTrackingMap?.();updateTrackingList?.();if(window._loadStatusRefresh&&document.getElementById("lsp-body")?.classList.contains("lsp-open"))window._loadStatusRefresh();}if(isAdmin()&&!isSuper())renderBoard();
         clearTimeout(connectWs._etaTimer);

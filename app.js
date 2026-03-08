@@ -1013,30 +1013,32 @@
       const ctaBtn=hasAction
         ?`<button class="dv-cta ${next.cta}" data-act="dockSet" data-to="${esc(next.to)}" data-trailer-id="${esc(r.trailer)}">${esc(next.label)} →</button>`
         :next?.to
-          ?`<button class="dv-cta dv-cta-ghost" data-act="openStaffLogin">🔑 Sign in to update</button>`
+          ?`<button class="dv-cta dv-cta-signin" data-act="openStaffLogin">🔑 Sign in to update</button>`
           :`<div class="dv-cta dv-cta-locked">${esc(next?.label||"—")}</div>`;
       return`<div class="dv-card ${cc}${isSel?" dv-selected":""}" data-trailer="${esc(r.trailer)}" data-swipe-trailer="${esc(r.trailer)}">
-        <div class="dv-card-top">
-          <div>
-            <div class="dv-trailer">${esc(r.trailer)}</div>
+        <div class="dv-card-info">
+          <div class="dv-trailer">${esc(r.trailer)}</div>
+          <div class="dv-card-mid">
+            <div class="dv-card-badges">
+              <div class="dv-status ${sc}">${esc(r.status)}</div>
+              ${carrierHtml}${etaHtml}
+            </div>
             ${r.note?`<div class="dv-card-note">${esc(r.note)}</div>`:""}
           </div>
           <div class="dv-card-right">
             ${doorHtml}
-            ${r.doorAt&&r.door?`<div class="dv-door-age">⏱ ${timeAgo(r.doorAt)}</div>`:""}
-            <div class="dv-status ${sc}">${esc(r.status)}</div>
+            ${r.doorAt&&r.door?`<div class="dv-door-age">${timeAgo(r.doorAt)}</div>`:""}
+            ${r.updatedAt?`<div class="dv-ago">${esc(timeAgo(r.updatedAt))}</div>`:""}
           </div>
         </div>
-        <div class="dv-card-meta">
-          ${carrierHtml}${etaHtml}
-          ${r.updatedAt?`<span class="dv-ago">${esc(timeAgo(r.updatedAt))}</span>`:""}
+        <div class="dv-card-actions">
+          ${ctaBtn}
+          <div class="dv-sec-row">
+            ${canAct?`<button class="dv-sec dv-issue-sec" data-act="dockReportIssue" data-trailer-id="${esc(r.trailer)}" data-door="${esc(r.door||"")}">⚠ Issue</button>`:""}
+            ${canAct&&!r.door?`<button class="dv-sec" data-act="dockReserveDoor" data-trailer-id="${esc(r.trailer)}">🚪 Reserve Door</button>`:""}
+          </div>
+          <div class="dv-swipe-hint">← Issue &nbsp;&nbsp; Advance →</div>
         </div>
-        ${ctaBtn}
-        <div class="dv-sec-row">
-          ${canAct?`<button class="dv-sec dv-issue-sec" data-act="dockReportIssue" data-trailer-id="${esc(r.trailer)}" data-door="${esc(r.door||"")}">⚠ Issue</button>`:""}
-          ${canAct&&!r.door?`<button class="dv-sec" data-act="dockReserveDoor" data-trailer-id="${esc(r.trailer)}">🚪 Reserve Door</button>`:""}
-        </div>
-        <div class="dv-swipe-hint">← Issue &nbsp;&nbsp; Advance →</div>
       </div>`;
     }).join("");
     // ETA live countdown

@@ -73,8 +73,11 @@ initDb()
         }
       } catch (e) { require('./lib/helpers').logEvent('error', 'archive', 'Auto-archive failed', e.message); }
     }
-    setInterval(archiveDeparted, 3_600_000);
-    archiveDeparted();
+    // FIX: delay first run 10 s so DB is fully ready; run every hour at :00
+    setTimeout(() => {
+      archiveDeparted();
+      setInterval(archiveDeparted, 3_600_000);
+    }, 10_000);
 
     async function backupDb() {
       try {
@@ -88,7 +91,17 @@ initDb()
         console.error('[BACKUP]', e.message);
       }
     }
-    setInterval(backupDb, 3_600_000);
+    // FIX: stagger backup 30 min after archive to avoid simultaneous I/O
+    setTimeout(() => {
+      backupDb();
+      setInterval(backupDb, 3_600_000);
+    }, 30 * 60_000);
+
+    // FIX: WAL checkpoint every 30 min — prevents WAL file growing unbounded
+    setInterval(async () => {
+      try { await checkpoint(); }
+      catch (e) { console.error('[WAL] Checkpoint failed:', e.message); }
+    }, 30 * 60_000).unref();
 
     // ── Graceful shutdown ─────────────────────────────────────────────────────
     let shuttingDown = false;

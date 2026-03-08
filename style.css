@@ -2959,6 +2959,10 @@ img,video,embed,object,iframe {
 .dsp-tbtn:hover{border-color:var(--t2);color:var(--t0);}
 .dsp-tbtn.danger:hover{border-color:var(--red);color:var(--red);}
 .dsp-tbtn-sep{width:1px;height:18px;background:var(--b1);flex-shrink:0;margin:0 2px;}
+/* Panels toggle button: mobile-only */
+.dsp-panels-toggle-btn{display:none;}
+/* Search toggle button: mobile-only */
+.dsp-search-toggle-btn{display:none;}
 
 /* KPI chips — reuse kpi-tile styles but smaller */
 .dsp-kpis .kpi-tile{
@@ -4616,198 +4620,187 @@ select option { background: #0d1119; }
 }
 
 
-/* ═══════════════════════════════════════════
-   DISPATCH VIEW — MOBILE (≤768px)
-   Split layout collapses: right panel becomes
-   a bottom sheet, table goes full width
-═══════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════
+   DISPATCH — MOBILE (<768px)
+   5–8 trailers typical. Goal: all visible, readable, no zoom.
+   Budget (~700px usable on smallest iPhone SE 667px):
+     topbar 48 + bottom-nav 56 = 104px chrome
+     toolbar 44px → rows area = ~500px → 8 × 62px rows = 496px ✓
+   • Toolbar: single row, KPIs scroll, controls compact
+   • Rows: 2-line cards — trailer+status / door+note+action
+   • Panels: bottom sheet behind ⊞ button
+   • Right detail: bottom sheet on row tap
+═══════════════════════════════════════════════════════════ */
 @media(max-width:768px){
 
-  /* Stack workspace vertically — use full dynamic viewport */
+  /* ── Workspace fills viewport minus fixed chrome ── */
   .dsp-workspace{
     flex-direction:column;
-    height:calc(100dvh - 54px);
+    height:calc(100dvh - 48px - 56px);
     overflow:hidden;
   }
-
-  /* Left column: full width, flex column, fills remaining height */
   .dsp-left{
-    flex:1;
-    min-height:0;
-    width:100%;
-    border-right:none;
-    border-bottom:none;
-    display:flex;
-    flex-direction:column;
-    overflow:hidden;
+    flex:1;min-height:0;width:100%;
+    border-right:none;border-bottom:none;
+    display:flex;flex-direction:column;overflow:hidden;
   }
 
-  /* Rows area: scrollable on mobile */
-  .dsp-rows-area{
-    flex:1;
-    min-height:0;
-    overflow-y:auto;
-    -webkit-overflow-scrolling:touch;
-  }
-
-  /* Panels area: capped at 35vh so rows always visible */
-  .dsp-panels-area{
-    max-height:35vh;
-    flex-shrink:0;
-    overflow-y:auto;
-    -webkit-overflow-scrolling:touch;
-  }
-
-  /* Body scrolls naturally on mobile */
-  .dsp-body{
-    max-height:none;
-    overflow:visible;
-    flex:none;
-  }
-
-  /* Toolbar wraps on mobile */
+  /* ── Toolbar: single row, ~44px ── */
   .dsp-toolbar{
-    flex-wrap:wrap;
-    gap:6px;
-    padding:8px 12px;
-    min-height:auto;
+    flex-wrap:nowrap;gap:5px;
+    padding:6px 10px;
+    align-items:center;overflow:hidden;flex-shrink:0;
   }
+  /* KPIs: horizontal scroll, number + short label */
   .dsp-kpis{
-    order:1;
-    width:100%;
-    overflow-x:auto;
-    gap:4px;
-    padding-bottom:4px;
-    scrollbar-width:none;
+    overflow-x:auto;flex-shrink:1;flex-grow:1;
+    gap:3px;scrollbar-width:none;min-width:0;
   }
   .dsp-kpis::-webkit-scrollbar{display:none}
-  .dsp-toolbar-right{
-    order:2;
-    width:100%;
-    flex-wrap:wrap;
-    gap:5px;
+  .dsp-kpis .kpi-tile{padding:3px 7px;white-space:nowrap;}
+  .dsp-kpis .kpi-tile .kpi-val{font-size:12px;line-height:1;}
+  .dsp-kpis .kpi-tile .kpi-label{font-size:8px;}
+  /* Controls on the right */
+  .dsp-toolbar-right{flex-shrink:0;margin-left:4px;gap:4px;flex-wrap:nowrap;}
+  /* Search: hidden until 🔍 tapped */
+  .dsp-search{display:none;}
+  #filterDir{display:none;}
+  #filterStatus{
+    font-size:10px;padding:3px 4px;
+    background:var(--s2);border:1px solid var(--b0);border-radius:4px;
+    color:var(--t1);font-family:var(--mono);max-width:80px;
   }
-  .dsp-search{
-    flex:1 1 120px;
-    min-width:100px;
+  .dsp-tbtn{padding:4px 8px;font-size:10px;display:inline-flex;align-items:center;}
+  .dsp-tbtn-sep{display:none;}
+  /* Search open state */
+  .dsp-toolbar.mob-search-open .dsp-search{
+    display:block;flex:1;min-width:90px;font-size:12px;padding:4px 8px;
   }
+  .dsp-toolbar.mob-search-open #filterStatus{display:none;}
+  /* Mobile-only buttons: shown */
+  .dsp-panels-toggle-btn{
+    display:inline-flex;font-size:13px;padding:4px 8px;
+    border-color:rgba(245,166,35,.3);color:var(--amber);
+  }
+  .dsp-search-toggle-btn{display:inline-flex;font-size:13px;padding:4px 8px;}
 
-  /* Table header hidden on mobile — cards show all info */
+  /* ── Table header: hidden ── */
   .dsp-hd{display:none !important;}
 
-  /* Rows become cards on mobile */
+  /* ── Rows area: all remaining height ── */
+  .dsp-rows-area{
+    flex:1;min-height:0;
+    overflow-y:auto;-webkit-overflow-scrolling:touch;
+  }
+  .dsp-body{max-height:none;overflow:visible;flex:none;}
+
+  /* ── ROW CARDS: 2-line, ~62px — 8 fit in 496px ──
+     Line 1: trailer# (bold)  ·  status badge
+     Line 2: door  ·  note (truncated)  ·  action btn   */
   .dsp-row{
-    grid-template-columns:1fr auto !important;
+    display:grid;
+    grid-template-columns:1fr auto;
     grid-template-rows:auto auto auto;
-    min-height:auto;
-    padding:12px 14px;
-    gap:0;
+    min-height:60px;
+    padding:10px 12px 10px 14px;
+    gap:2px 0;
     border-left-width:3px;
+    border-bottom:1px solid rgba(28,40,64,.7);
   }
+  /* L1 left: trailer number */
   .dsp-row .dc-id{
-    grid-column:1;
-    grid-row:1;
-    font-size:18px;
-    font-weight:500;
-    margin-bottom:4px;
+    grid-column:1;grid-row:1;
+    font-size:16px;font-weight:700;
+    display:flex;align-items:center;gap:5px;
+    line-height:1.2;
   }
-  /* Status tag top-right */
+  /* L1 right: status badge */
   .dsp-row > span:nth-child(2){
-    grid-column:2;
-    grid-row:1;
-    text-align:right;
+    grid-column:2;grid-row:1;
+    display:flex;align-items:flex-start;justify-content:flex-end;
+    padding-left:8px;
   }
-  /* Door */
+  /* L2: door */
   .dsp-row .dc-door-ok,
   .dsp-row .dc-door-empty,
   .dsp-row .dc-door-conflict{
-    grid-column:1;
-    grid-row:2;
-    font-size:12px;
-    margin-bottom:3px;
+    grid-column:1;grid-row:2;
+    font-size:11px;font-family:var(--mono);
+    display:inline-flex;align-items:center;gap:4px;
   }
-  /* Note */
+  /* Note: row 3, spans full width, truncated */
   .dsp-row .dc-note{
-    grid-column:1/-1;
-    grid-row:3;
-    white-space:normal;
-    margin-bottom:5px;
-    font-size:11px;
+    grid-column:1/-1;grid-row:3;
+    font-size:10px;color:var(--t2);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    padding-bottom:2px;
   }
-  /* Age — hidden on mobile to save space */
+  /* Age: hidden */
   .dsp-row .dc-age{display:none;}
-  /* Actions — full width row */
+  /* L2 right: action button */
   .dsp-row .dc-acts{
-    grid-column:1/-1;
-    grid-row:4;
-    gap:5px;
-    flex-wrap:wrap;
-    margin-top:4px;
+    grid-column:2;grid-row:2;
+    display:flex;align-items:center;justify-content:flex-end;
+    gap:4px;padding-left:8px;
   }
+  /* Show up to 2 action buttons on mobile */
+  .dsp-next-btn:not(:first-child):not(:nth-child(2)){display:none;}
   .dsp-next-btn{
-    flex:1 1 auto;
-    min-height:38px;
-    font-size:11px;
-    padding:6px 12px;
+    font-size:10px;padding:5px 10px;
+    min-height:32px;white-space:nowrap;flex-shrink:0;
   }
+  /* Badges — slightly smaller */
+  .dsp-row .stag{font-size:9px;padding:2px 5px;}
+  .omw-badge{font-size:9px;padding:1px 5px;}
+  .t-dir-badge{font-size:8px;padding:1px 3px;}
 
-  /* Right panel becomes bottom sheet */
-  .dsp-right{
+  /* ── Panels: bottom sheet above bottom-nav ── */
+  .dsp-panels-area{
     position:fixed;
-    bottom:0;left:0;right:0;
-    width:100% !important;
-    max-height:75vh;
-    border-left:none;
-    border-top:1px solid var(--divider);
-    border-radius:16px 16px 0 0;
-    z-index:300;
+    bottom:56px;left:0;right:0;
+    z-index:400;max-height:68vh;
+    overflow-y:auto;-webkit-overflow-scrolling:touch;
+    background:rgba(5,8,13,.97);
+    border-top:1px solid rgba(255,255,255,.08);
+    border-radius:16px 16px 0 0;padding-bottom:8px;
+    transform:translateY(100%);
+    transition:transform .28s cubic-bezier(.32,0,.15,1);
+  }
+  .dsp-panels-area.mob-panels-open{transform:translateY(0);}
+  .dsp-panels-area::before{
+    content:"";display:block;width:36px;height:4px;
+    background:rgba(255,255,255,.15);border-radius:2px;margin:10px auto 8px;
+  }
+  .dsp-panels-backdrop{
+    display:none;position:fixed;inset:0;z-index:399;background:rgba(0,0,0,.45);
+  }
+  .dsp-panels-backdrop.mob-panels-open{display:block;}
+
+  /* Status bar: hidden */
+  .dsp-statusbar{display:none;}
+
+  /* ── Right detail panel: bottom sheet ── */
+  .dsp-right{
+    position:fixed;bottom:56px;left:0;right:0;
+    width:100% !important;max-height:75vh;
+    border-left:none;border-top:1px solid var(--divider);
+    border-radius:16px 16px 0 0;z-index:500;
     transform:translateY(100%);
     transition:transform .3s cubic-bezier(.32,0,.15,1);
-    overflow-y:auto;
-    -webkit-overflow-scrolling:touch;
-    padding-bottom:env(safe-area-inset-bottom);
+    overflow-y:auto;-webkit-overflow-scrolling:touch;
+    padding-bottom:max(16px,env(safe-area-inset-bottom));
   }
-  /* Drag handle */
   .dsp-right::before{
-    content:"";
-    display:block;
-    width:36px;height:4px;
-    background:rgba(255,255,255,.15);
-    border-radius:2px;
-    margin:10px auto 0;
+    content:"";display:block;width:36px;height:4px;
+    background:rgba(255,255,255,.15);border-radius:2px;margin:10px auto 0;
   }
-  /* When a trailer is selected, slide up */
-  .dsp-right.panel-open{
-    transform:translateY(0);
-  }
-  /* Default (role controls) stays hidden on mobile until needed */
+  .dsp-right.panel-open{transform:translateY(0);}
   .dsp-right-default{display:none !important;}
-
-  /* Dock plates panel — pinned at bottom, above nav */
-  .dsp-plates{
-    position:sticky;
-    bottom:0;
-    z-index:200;
-    background:rgba(5,8,13,.97);
-  }
-  /* Add bottom padding to scroll area so content clears nav */
-  .dsp-rows-area{ padding-bottom:8px; }
-
-  /* Status bar — compact */
-  .dsp-statusbar{
-    font-size:9px;
-    padding:3px 12px;
-  }
-
-
-
-  /* Detail panel sizing inside sheet */
   .dsp-detail{max-height:75vh;overflow-y:auto;-webkit-overflow-scrolling:touch;}
   .dsd-hd{padding:14px 16px 12px;position:sticky;top:0;background:rgba(7,9,14,.98);z-index:1;}
   .dsd-trailer-id{font-size:22px;}
-  /* Sheet safe-area bottom */
-  .dsp-right { padding-bottom:max(16px, env(safe-area-inset-bottom)); }
 }
+
 
 /* ─── 480px: further compact ─── */
 @media(max-width:480px){

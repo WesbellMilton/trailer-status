@@ -600,14 +600,7 @@ body{background-image:none!important;background:transparent!important}
     let _driverLocationId = 1; // resolved after slug lookup below
     // Warm the server immediately on page load so it's awake by the time the driver taps a button
     // (Render free tier sleeps after 15 min; first API call after sleep can fail mid-wake)
-    let _serverReady = false;
-    (async () => {
-      for (let i = 0; i < 6; i++) {
-        try { const r = await fetch('/health'); if (r.ok) { _serverReady = true; break; } } catch {}
-        await new Promise(r => setTimeout(r, 8000));
-      }
-      _serverReady = true; // stop blocking after ~48s regardless
-    })();
+    fetch('/health').catch(() => {});
     (async () => {
       if (_driverLocSlug) {
         try {
@@ -737,15 +730,6 @@ body{background-image:none!important;background:transparent!important}
         const prefix  = btn.dataset.extPrefix;
         btn.style.pointerEvents = 'none';
         btn.innerHTML = `<span class="ts-ext-carrier-name" style="color:var(--cyan)">Assigning door…</span>`;
-        // Wait for server to be ready (handles Render free-tier cold start)
-        if (!_serverReady) {
-          btn.innerHTML = `<span class="ts-ext-carrier-name" style="color:var(--t2)">Server waking up…</span>`;
-          await new Promise(resolve => {
-            const check = setInterval(() => { if (_serverReady) { clearInterval(check); resolve(); } }, 500);
-            setTimeout(() => { clearInterval(check); _serverReady = true; resolve(); }, 45000);
-          });
-          btn.innerHTML = `<span class="ts-ext-carrier-name" style="color:var(--cyan)">Assigning door…</span>`;
-        }
         const doRequest = () => fetch('/api/driver/ext-drop', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
@@ -756,17 +740,10 @@ body{background-image:none!important;background:transparent!important}
           try {
             res = await doRequest();
           } catch {
-            // First attempt failed — server may be waking up (Render free tier ~30s cold start)
-            btn.innerHTML = `<span class="ts-ext-carrier-name" style="color:var(--t2)">Server waking up…</span>`;
-            await new Promise(r => setTimeout(r, 15000));
-            try {
-              res = await doRequest();
-            } catch {
-              // Second attempt failed — wait longer and try once more
-              btn.innerHTML = `<span class="ts-ext-carrier-name" style="color:var(--t2)">Still connecting…</span>`;
-              await new Promise(r => setTimeout(r, 15000));
-              res = await doRequest();
-            }
+            // First attempt failed (cold start / flaky connection) — wait 8s and retry once
+            btn.innerHTML = `<span class="ts-ext-carrier-name" style="color:var(--t2)">Connecting…</span>`;
+            await new Promise(r => setTimeout(r, 8000));
+            res = await doRequest();
           }
           if (!res.ok) {
             const errText = await res.text().catch(() => `Error ${res.status}`);
@@ -832,9 +809,22 @@ body{background-image:none!important;background:transparent!important}
       state.action = act;
       
       if (act === 'qd') {
-        try { 
-          await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: 'Loaded', carrierType: 'Wesbell' , locationId: _driverLocationId }) }); 
-          showSuccess('Quick Drop Logged', 'Trailer dropped to yard instantly.', [{k:'Trailer',v:state.trailer},{k:'Action',v:'Quick Drop'}]);
+        try {
+          const sendQd = (force) => fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: 'Loaded', carrierType: 'Wesbell', locationId: _driverLocationId, ...(force ? { force: true } : {}) }) });
+          let res = await sendQd(false);
+          if (res.status === 409) {
+            const dup = await res.json().catch(() => ({}));
+            if (dup.duplicate) {
+              const confirmed = confirm(dup.message || `Trailer ${state.trailer} is already on the board. Overwrite?`);
+              if (!confirmed) return;
+              res = await sendQd(true);
+            }
+          }
+          if (res.ok) {
+            showSuccess('Quick Drop Logged', 'Trailer dropped to yard instantly.', [{k:'Trailer',v:state.trailer},{k:'Action',v:'Quick Drop'}]);
+          } else {
+            toast(await res.text().catch(() => 'Drop failed'));
+          }
         } catch(e) { toast('Error connecting to server'); }
       } 
       else if (act === 'shunt') {
@@ -860,10 +850,7 @@ body{background-image:none!important;background:transparent!important}
       else if (act === 'arrive') {
         // REAL ARRIVAL FETCH
         try {
-          const _arriveReq = () => fetch('/api/driver/arrive', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, carrierType: state.carrier || 'Wesbell' , locationId: _driverLocationId }) });
-          let res;
-          try { res = await _arriveReq(); }
-          catch { await new Promise(r => setTimeout(r, 15000)); res = await _arriveReq(); }
+          const res = await fetch('/api/driver/arrive', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, carrierType: state.carrier || 'Wesbell' , locationId: _driverLocationId }) });
           if(res.ok) {
             const data = await res.json();
             if (data.door) {
@@ -966,10 +953,7 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Sending...';
       btn.disabled = true;
       try {
-        const _omwReq = () => fetch('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, eta: state.eta , locationId: _driverLocationId }) });
-        let res;
-        try { res = await _omwReq(); }
-        catch { await new Promise(r => setTimeout(r, 15000)); res = await _omwReq(); }
+        const res = await fetch('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, eta: state.eta , locationId: _driverLocationId }) });
         if(res.ok) {
           const data = await res.json();
           if (data.door) {
@@ -1005,8 +989,22 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Submitting...';
       btn.disabled = true;
       try {
-        const res = await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: state.dropType, carrierType: 'Outside' , locationId: _driverLocationId }) });
+        const sendDrop = (force) => fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: state.dropType, carrierType: 'Outside', locationId: _driverLocationId, ...(force ? { force: true } : {}) }) });
+        let res = await sendDrop(false);
+        if (res.status === 409) {
+          const dup = await res.json().catch(() => ({}));
+          if (dup.duplicate) {
+            btn.textContent = 'Confirm Drop →';
+            btn.disabled = false;
+            const confirmed = confirm(dup.message || `Trailer ${state.trailer} is already on the board. Overwrite?`);
+            if (!confirmed) return;
+            btn.textContent = 'Overwriting...';
+            btn.disabled = true;
+            res = await sendDrop(true);
+          }
+        }
         const data = res.ok ? await res.json().catch(() => ({})) : {};
+        if (!res.ok) { toast(await res.text().catch(() => 'Drop failed')); return; }
         if (data.door) {
           updateLiveDoor(data.door);
           showWaiting(data.door);

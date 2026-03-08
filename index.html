@@ -600,7 +600,14 @@ body{background-image:none!important;background:transparent!important}
     let _driverLocationId = 1; // resolved after slug lookup below
     // Warm the server immediately on page load so it's awake by the time the driver taps a button
     // (Render free tier sleeps after 15 min; first API call after sleep can fail mid-wake)
-    fetch('/health').catch(() => {});
+    let _serverReady = false;
+    (async () => {
+      for (let i = 0; i < 6; i++) {
+        try { const r = await fetch('/health'); if (r.ok) { _serverReady = true; break; } } catch {}
+        await new Promise(r => setTimeout(r, 8000));
+      }
+      _serverReady = true; // stop blocking after ~48s regardless
+    })();
     (async () => {
       if (_driverLocSlug) {
         try {
@@ -730,6 +737,15 @@ body{background-image:none!important;background:transparent!important}
         const prefix  = btn.dataset.extPrefix;
         btn.style.pointerEvents = 'none';
         btn.innerHTML = `<span class="ts-ext-carrier-name" style="color:var(--cyan)">Assigning door…</span>`;
+        // Wait for server to be ready (handles Render free-tier cold start)
+        if (!_serverReady) {
+          btn.innerHTML = `<span class="ts-ext-carrier-name" style="color:var(--t2)">Server waking up…</span>`;
+          await new Promise(resolve => {
+            const check = setInterval(() => { if (_serverReady) { clearInterval(check); resolve(); } }, 500);
+            setTimeout(() => { clearInterval(check); _serverReady = true; resolve(); }, 45000);
+          });
+          btn.innerHTML = `<span class="ts-ext-carrier-name" style="color:var(--cyan)">Assigning door…</span>`;
+        }
         const doRequest = () => fetch('/api/driver/ext-drop', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
@@ -740,10 +756,17 @@ body{background-image:none!important;background:transparent!important}
           try {
             res = await doRequest();
           } catch {
-            // First attempt failed (cold start / flaky connection) — wait 8s and retry once
-            btn.innerHTML = `<span class="ts-ext-carrier-name" style="color:var(--t2)">Connecting…</span>`;
-            await new Promise(r => setTimeout(r, 8000));
-            res = await doRequest();
+            // First attempt failed — server may be waking up (Render free tier ~30s cold start)
+            btn.innerHTML = `<span class="ts-ext-carrier-name" style="color:var(--t2)">Server waking up…</span>`;
+            await new Promise(r => setTimeout(r, 15000));
+            try {
+              res = await doRequest();
+            } catch {
+              // Second attempt failed — wait longer and try once more
+              btn.innerHTML = `<span class="ts-ext-carrier-name" style="color:var(--t2)">Still connecting…</span>`;
+              await new Promise(r => setTimeout(r, 15000));
+              res = await doRequest();
+            }
           }
           if (!res.ok) {
             const errText = await res.text().catch(() => `Error ${res.status}`);
@@ -837,7 +860,10 @@ body{background-image:none!important;background:transparent!important}
       else if (act === 'arrive') {
         // REAL ARRIVAL FETCH
         try {
-          const res = await fetch('/api/driver/arrive', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, carrierType: state.carrier || 'Wesbell' , locationId: _driverLocationId }) });
+          const _arriveReq = () => fetch('/api/driver/arrive', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, carrierType: state.carrier || 'Wesbell' , locationId: _driverLocationId }) });
+          let res;
+          try { res = await _arriveReq(); }
+          catch { await new Promise(r => setTimeout(r, 15000)); res = await _arriveReq(); }
           if(res.ok) {
             const data = await res.json();
             if (data.door) {
@@ -940,7 +966,10 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Sending...';
       btn.disabled = true;
       try {
-        const res = await fetch('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, eta: state.eta , locationId: _driverLocationId }) });
+        const _omwReq = () => fetch('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, eta: state.eta , locationId: _driverLocationId }) });
+        let res;
+        try { res = await _omwReq(); }
+        catch { await new Promise(r => setTimeout(r, 15000)); res = await _omwReq(); }
         if(res.ok) {
           const data = await res.json();
           if (data.door) {

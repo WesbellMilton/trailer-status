@@ -1570,7 +1570,14 @@
         if(url.endsWith("/sw.js"))await reg.unregister();
       }
       _swReg=await navigator.serviceWorker.register("/sw2.js",{scope:"/"});
-      navigator.serviceWorker.addEventListener("message",e=>{if(e.data?.type==="SW_UPDATED")location.reload();});
+      navigator.serviceWorker.addEventListener("message",e=>{
+        if(e.data?.type==="SW_UPDATED"){location.reload();return;}
+        if(e.data?.type==="PUSH_TRAILER_CHECK"&&e.ports?.[0]){
+          const role=isDriver()?"driver":isDispatch()?"dispatcher":isDock()?"dock":"unknown";
+          const trailer=isDriver()?(state.trailer||'').toUpperCase():'';
+          e.ports[0].postMessage({role,trailer});
+        }
+      });
       _swReg.addEventListener("updatefound",()=>{
         const nw=_swReg.installing;if(!nw)return;
         nw.addEventListener("statechange",()=>{if(nw.state==="installed"&&navigator.serviceWorker.controller)toast("Update available","Reload to get the latest version.","warn",10000);});

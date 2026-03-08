@@ -740,8 +740,9 @@ body{background-image:none!important;background:transparent!important}
           try {
             res = await doRequest();
           } catch {
-            // First attempt failed (cold start / flaky connection) — wait 3s and retry once
-            await new Promise(r => setTimeout(r, 3000));
+            // First attempt failed (cold start / flaky connection) — wait 8s and retry once
+            btn.innerHTML = `<span class="ts-ext-carrier-name" style="color:var(--t2)">Connecting…</span>`;
+            await new Promise(r => setTimeout(r, 8000));
             res = await doRequest();
           }
           if (!res.ok) {
@@ -1048,7 +1049,7 @@ body{background-image:none!important;background:transparent!important}
       const doorEl = document.getElementById('ts-wait-door');
       const subEl  = document.getElementById('ts-wait-sub');
       if (doorEl) doorEl.textContent = d || '--';
-      document.getElementById('ts-wait-trailer-tag').textContent = `🚛 ${state.trailer}`;
+      const _wtt = document.getElementById('ts-wait-trailer-tag'); if (_wtt) _wtt.textContent = `🚛 ${state.trailer}`;
       if (subEl) subEl.textContent = d
         ? `You'll be notified the moment your truck is ready for pickup.`
         : `Dispatch is assigning your door. You'll be notified when ready.`;

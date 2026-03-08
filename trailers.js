@@ -78,12 +78,15 @@ router.post('/api/upsert', requireXHR, _rds, async (req, res) => {
         fireWebhook('trailer.ready', { trailer, door, actor });
       } else if (finalStatus === 'Dock Ready') {
         wsBroadcast('notify', { kind: 'dock_ready', trailer, door: door || '' });
+        broadcastPush('🔵 Dock Ready', `${trailer}${door ? ' · Door ' + door : ''} — ready to begin loading`, { trailer, door }).catch(() => {});
         fireWebhook('trailer.dock_ready', { trailer, door, actor });
       } else if (finalStatus === 'Loading') {
         wsBroadcast('notify', { kind: 'loading', trailer, door: door || '' });
+        broadcastPush('🟡 Loading Started', `Trailer ${trailer}${door ? ' at Door ' + door : ''} — loading in progress`, { trailer, door }).catch(() => {});
         fireWebhook('trailer.loading', { trailer, door, actor });
       } else if (finalStatus === 'Departed') {
         wsBroadcast('notify', { kind: 'departed', trailer, door: door || '' });
+        broadcastPush('🚪 Trailer Departed', `${trailer}${door ? ' — Door ' + door + ' now free' : ' has departed'}`, { trailer, door }).catch(() => {});
         fireWebhook('trailer.departed', { trailer, door, actor });
       }
     }
@@ -157,9 +160,8 @@ router.get('/api/load-status', _rr(['dispatcher', 'management', 'admin', 'dock']
     const ids = rows.map(r => r.trailer);
     let statusSinceMap = {};
     if (ids.length > 0) {
-      const { all: dbAll } = require('../db');
       const placeholders = ids.map(() => '?').join(',');
-      const auditRows = await dbAll(
+      const auditRows = await all(
         `SELECT entityId, MAX(at) as at FROM audit
          WHERE entityId IN (${placeholders}) AND action='trailer_status_set'
          GROUP BY entityId`,

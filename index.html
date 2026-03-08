@@ -598,6 +598,9 @@ body{background-image:none!important;background:transparent!important}
     // Read location from URL: /driver?loc=milton sets locationId
     const _driverLocSlug = new URLSearchParams(location.search).get('loc') || '';
     let _driverLocationId = 1; // resolved after slug lookup below
+    // Warm the server immediately on page load so it's awake by the time the driver taps a button
+    // (Render free tier sleeps after 15 min; first API call after sleep can fail mid-wake)
+    fetch('/health').catch(() => {});
     (async () => {
       if (_driverLocSlug) {
         try {
@@ -727,15 +730,23 @@ body{background-image:none!important;background:transparent!important}
         const prefix  = btn.dataset.extPrefix;
         btn.style.pointerEvents = 'none';
         btn.innerHTML = `<span class="ts-ext-carrier-name" style="color:var(--cyan)">Assigning door…</span>`;
-        try {
-          const res = await fetch('/api/driver/ext-drop', {
+        const doRequest = () => fetch('/api/driver/ext-drop', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             body: JSON.stringify({ carrier, prefix, locationId: _driverLocationId })
           });
+        try {
+          let res;
+          try {
+            res = await doRequest();
+          } catch {
+            // First attempt failed (cold start / flaky connection) — wait 3s and retry once
+            await new Promise(r => setTimeout(r, 3000));
+            res = await doRequest();
+          }
           if (!res.ok) {
             const errText = await res.text().catch(() => `Error ${res.status}`);
-            toast(`Server error: ${errText}`, 4000);
+            toast(`Error: ${errText}`, 4000);
             return;
           }
           const data = await res.json().catch(() => ({}));
@@ -747,7 +758,7 @@ body{background-image:none!important;background:transparent!important}
             showWaiting(null);
           }
         } catch {
-          toast('Network error — check connection and try again', 4000);
+          toast('Network error — try again in a moment', 4000);
         } finally {
           btn.style.pointerEvents = '';
           btn.innerHTML = `<span class="ts-ext-carrier-name">${carrier}</span>`;

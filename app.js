@@ -2023,6 +2023,8 @@
     if(!isDriver()){
       try{const p2=await apiJson("/api/dockplates");dockPlates=p2||{};}catch{dockPlates={};}
       try{const b=await apiJson("/api/doorblocks");doorBlocks=b||{};}catch{doorBlocks={};}
+      // Re-render plates panel now that data is loaded (may have rendered empty during /api/state race)
+      if(isDock())renderDockPlatesPanel();
     }
 
     if(isSuper()){

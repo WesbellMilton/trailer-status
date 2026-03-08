@@ -157,8 +157,9 @@ router.get('/api/load-status', _rr(['dispatcher', 'management', 'admin', 'dock']
     const ids = rows.map(r => r.trailer);
     let statusSinceMap = {};
     if (ids.length > 0) {
+      const { all: dbAll } = require('../db');
       const placeholders = ids.map(() => '?').join(',');
-      const auditRows = await all(
+      const auditRows = await dbAll(
         `SELECT entityId, MAX(at) as at FROM audit
          WHERE entityId IN (${placeholders}) AND action='trailer_status_set'
          GROUP BY entityId`,

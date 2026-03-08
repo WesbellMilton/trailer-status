@@ -13,17 +13,6 @@ const { requireDriverAccess } = require('../auth');
 
 const router = Router();
 
-// FIX: door ranges were hardcoded 28–42 throughout. This helper reads the configured
-// range from the locations table (set in migration 7) so it works for any location.
-async function getDoorRange(locationId = 1) {
-  const { get: dbGet } = require('../db');
-  const loc = await dbGet(`SELECT doors_from, doors_to FROM locations WHERE id=?`, [locationId]).catch(() => null);
-  return { from: loc?.doors_from ?? 28, to: loc?.doors_to ?? 42 };
-}
-function isValidDoor(dNum, from, to) {
-  return Number.isFinite(dNum) && dNum >= from && dNum <= to;
-}
-
 // ── /api/driver/eta  (pre-fetch road ETA before OMW submit) ──────────────────
 router.get('/api/driver/eta', requireDriverRate, async (req, res) => {
   try {
@@ -43,8 +32,7 @@ router.get('/api/driver/eta', requireDriverRate, async (req, res) => {
 });
 
 // ── /api/driver/omw ───────────────────────────────────────────────────────────
-// FIX: was missing requireDriverAccess — any unauthenticated request could mutate state
-router.post('/api/driver/omw', requireXHR, requireDriverRate, requireDriverAccess, async (req, res) => {
+router.post('/api/driver/omw', requireXHR, requireDriverRate, async (req, res) => {
   try {
     const trailer = String(req.body.trailer || '').trim().toUpperCase();
     if (!trailer)            return res.status(400).send('Missing trailer number');
@@ -139,8 +127,7 @@ router.get('/api/available-doors', async (req, res) => {
 });
 
 // ── /api/driver/arrive ────────────────────────────────────────────────────────
-// FIX: was missing requireDriverAccess
-router.post('/api/driver/arrive', requireXHR, requireDriverRate, requireDriverAccess, async (req, res) => {
+router.post('/api/driver/arrive', requireXHR, requireDriverRate, async (req, res) => {
   try {
     const trailer     = String(req.body.trailer     || '').trim().toUpperCase();
     const carrierType = String(req.body.carrierType || 'Outside').trim();
@@ -185,15 +172,12 @@ router.post('/api/driver/arrive', requireXHR, requireDriverRate, requireDriverAc
 });
 
 // ── /api/driver/ext-drop  (outside carrier — no trailer number needed) ────────
-router.post('/api/driver/ext-drop', requireXHR, async (req, res) => {
+router.post('/api/driver/ext-drop', requireXHR, requireDriverRate, async (req, res) => {
   try {
     const carrier = String(req.body.carrier || 'Other').trim();
     const prefix  = String(req.body.prefix  || 'EXT').trim().toUpperCase().slice(0, 4);
     const CARRIERS = ['Apex','Gardewine','Manitoulin','TForce','XPO','Other'];
     if (!CARRIERS.includes(carrier)) return res.status(400).send('Invalid carrier');
-
-    // Accept locationId from body for unauthenticated kiosk use (?loc= QR kiosk)
-    const locId = req.user?.locationId || parseInt(req.body.locationId) || 1;
 
     // Generate ref code: PREFIX-YYYYMMDD-NN (NN = sequential count for today)
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -204,7 +188,8 @@ router.post('/api/driver/ext-drop', requireXHR, async (req, res) => {
     const seq = String((existing?.cnt || 0) + 1).padStart(2, '0');
     const refCode = `${prefix}-${today}-${seq}`;
 
-    const now  = Date.now();
+    const now    = Date.now();
+    const locId  = req.user?.locationId || Number(req.body.locationId) || 1;
     const door = await pickBestDoor(refCode, locId) || '';
     if (door) await reserveDoor(door, refCode, carrier, 35, locId);
 
@@ -217,7 +202,7 @@ router.post('/api/driver/ext-drop', requireXHR, async (req, res) => {
          carrierType=excluded.carrierType,updatedAt=excluded.updatedAt`,
       [refCode, 'Inbound', status, door, '', 'Loaded', carrier, now, locId]
     );
-    await audit(req, 'driver', 'ext_drop', 'trailer', refCode, { carrier, door, refCode, locId });
+    await audit(req, 'driver', 'ext_drop', 'trailer', refCode, { carrier, door, refCode });
 
     if (door) {
       broadcastPush(`📦 ${carrier} Drop`, `${refCode} → Door ${door} (auto-assigned)`, { trailer: refCode, door }).catch(() => {});
@@ -227,7 +212,7 @@ router.post('/api/driver/ext-drop', requireXHR, async (req, res) => {
       wsBroadcast('notify', { kind: 'drop', trailer: refCode, door: '', carrierType: carrier, autoAssigned: false });
     }
 
-    await broadcastTrailers(locId);
+    await broadcastTrailers(req.user?.locationId || 1);
     res.json({ ok: true, refCode, door, carrier });
   } catch (e) { console.error('[ext-drop]', e); res.status(500).send('Drop failed'); }
 });
@@ -242,12 +227,7 @@ router.post('/api/driver/drop', requireXHR, requireDriverRate, requireDriverAcce
     if (!trailer)           return res.status(400).send('Missing trailer');
     if (trailer.length > 20) return res.status(400).send('Trailer number too long');
     if (!/^[A-Z0-9\-_. ]+$/.test(trailer)) return res.status(400).send('Invalid trailer number');
-    if (door) {
-      const locId2 = req.user?.locationId || 1;
-      const { from, to } = await getDoorRange(locId2);
-      const dNum = Number(door);
-      if (!isValidDoor(dNum, from, to)) return res.status(400).send(`Invalid door (${from}–${to})`);
-    }
+    if (door) { const dNum = Number(door); if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send('Invalid door (28–42)'); }
     if (!['Empty', 'Loaded'].includes(dropType)) return res.status(400).send('Invalid drop type');
 
     const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
@@ -265,8 +245,8 @@ router.post('/api/driver/drop', requireXHR, requireDriverRate, requireDriverAcce
     let assignedDoor = door || '';
     const needsAutoAssign = !door && carrierType === 'Outside' && dropType === 'Loaded';
     if (needsAutoAssign) {
-      assignedDoor = await pickBestDoor(trailer) || '';
-      if (assignedDoor) await reserveDoor(assignedDoor, trailer, 'Outside', 35);
+      assignedDoor = await pickBestDoor(trailer, req.user?.locationId || 1) || '';
+      if (assignedDoor) await reserveDoor(assignedDoor, trailer, 'Outside', 35, req.user?.locationId || 1);
     }
 
     const dropStatus = assignedDoor ? 'Incoming' : (carrierType === 'Outside' ? 'Dropped' : 'Incoming');
@@ -300,19 +280,17 @@ router.post('/api/crossdock/pickup', requireXHR, requireDriverRate, requireDrive
     if (!trailer)            return res.status(400).send('Missing trailer');
     if (trailer.length > 20) return res.status(400).send('Trailer number too long');
     if (!/^[A-Z0-9\-_. ]+$/.test(trailer)) return res.status(400).send('Invalid trailer number');
-    const locId = req.user?.locationId || 1;
-    const { from, to } = await getDoorRange(locId);
     const dNum = Number(door);
-    if (!isValidDoor(dNum, from, to)) return res.status(400).send(`Invalid door (${from}–${to})`);
+    if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send('Invalid door (28–42)');
     const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
     await run(
       `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt,location_id)
        VALUES(?,?,?,?,?,?,?,?)
        ON CONFLICT(trailer) DO UPDATE SET door=excluded.door,updatedAt=excluded.updatedAt`,
-      [trailer, existing?.direction || 'Cross Dock', existing?.status || 'Ready', door, existing?.note || '', existing?.dropType || '', Date.now(), locId]
+      [trailer, existing?.direction || 'Cross Dock', existing?.status || 'Ready', door, existing?.note || '', existing?.dropType || '', Date.now(), req.user?.locationId || 1]
     );
     await audit(req, 'driver', 'crossdock_pickup', 'trailer', trailer, { door });
-    await broadcastTrailers(locId);
+    await broadcastTrailers(req.user?.locationId || 1);
     res.json({ ok: true });
   } catch { res.status(500).send('Cross dock pickup failed'); }
 });
@@ -325,11 +303,8 @@ router.post('/api/crossdock/offload', requireXHR, requireDriverRate, requireDriv
     if (!trailer)            return res.status(400).send('Missing trailer');
     if (trailer.length > 20) return res.status(400).send('Trailer number too long');
     if (!/^[A-Z0-9\-_. ]+$/.test(trailer)) return res.status(400).send('Invalid trailer number');
-    // FIX: was hardcoded 28–42
-    const locId = req.user?.locationId || 1;
-    const { from, to } = await getDoorRange(locId);
     const dNum = Number(door);
-    if (!isValidDoor(dNum, from, to)) return res.status(400).send(`Invalid door (${from}–${to})`);
+    if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send('Invalid door (28–42)');
     const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
     const ACTIVE   = ['Incoming', 'Dropped', 'Loading', 'Dock Ready', 'Ready'];
     if (existing && ACTIVE.includes(existing.status) && existing.door && existing.door !== door && !req.body.force) {
@@ -342,17 +317,16 @@ router.post('/api/crossdock/offload', requireXHR, requireDriverRate, requireDriv
       `INSERT INTO trailers(trailer,direction,status,door,note,dropType,updatedAt,location_id)
        VALUES(?,?,?,?,?,?,?,?)
        ON CONFLICT(trailer) DO UPDATE SET door=excluded.door,status=excluded.status,dropType=excluded.dropType,updatedAt=excluded.updatedAt`,
-      [trailer, existing?.direction || 'Cross Dock', 'Dropped', door, existing?.note || '', 'Loaded', Date.now(), locId]
+      [trailer, existing?.direction || 'Cross Dock', 'Dropped', door, existing?.note || '', 'Loaded', Date.now(), req.user?.locationId || 1]
     );
     await audit(req, 'driver', 'crossdock_offload', 'trailer', trailer, { door });
-    await broadcastTrailers(locId);
+    await broadcastTrailers(req.user?.locationId || 1);
     res.json({ ok: true });
   } catch { res.status(500).send('Cross dock offload failed'); }
 });
 
 // ── /api/driver/location (GPS + geofencing) ────────────────────────────────────
-// FIX: was missing requireDriverAccess
-router.post('/api/driver/location', requireXHR, requireDriverRate, requireDriverAccess, async (req, res) => {
+router.post('/api/driver/location', requireXHR, requireDriverRate, async (req, res) => {
   try {
     const trailer = String(req.body.trailer || '').trim().toUpperCase();
     const lat     = parseFloat(req.body.lat);
@@ -385,10 +359,11 @@ router.post('/api/driver/location', requireXHR, requireDriverRate, requireDriver
     // If geofence says auto-arrive, fire the arrive logic
     if (autoTriggered && !row.door) {
       const { pickBestDoor, reserveDoor, releaseReservation } = require('../doors');
-      const assignedDoor = await pickBestDoor(trailer);
+      const geoLocId = req.user?.locationId || 1;
+      const assignedDoor = await pickBestDoor(trailer, geoLocId);
       if (assignedDoor) {
         const now = Date.now();
-        await reserveDoor(assignedDoor, trailer, 'Wesbell');
+        await reserveDoor(assignedDoor, trailer, 'Wesbell', null, geoLocId);
         await run(
           `UPDATE trailers SET door=?,status='Incoming',doorAt=?,updatedAt=? WHERE trailer=?`,
           [assignedDoor, now, now, trailer]
@@ -408,21 +383,18 @@ router.post('/api/driver/location', requireXHR, requireDriverRate, requireDriver
 });
 
 // ── /api/driver/shunt ─────────────────────────────────────────────────────────
-// FIX: was missing requireDriverAccess; hardcoded door range replaced with getDoorRange()
-router.post('/api/driver/shunt', requireXHR, requireDriverRate, requireDriverAccess, async (req, res) => {
+router.post('/api/driver/shunt', requireXHR, requireDriverRate, async (req, res) => {
   try {
     const trailer = String(req.body.trailer || '').trim().toUpperCase();
     const door    = String(req.body.door || req.body.newDoor || '').trim();
     if (!trailer) return res.status(400).send('Missing trailer');
     if (!door)    return res.status(400).send('Missing door');
-    const locId = req.user?.locationId || 1;
-    const { from, to } = await getDoorRange(locId);
     const dNum = Number(door);
-    if (!isValidDoor(dNum, from, to)) return res.status(400).send(`Invalid door (${from}–${to})`);
+    if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send('Invalid door (28–42)');
     const existing = await get(`SELECT door FROM trailers WHERE trailer=?`, [trailer]);
     await run(`UPDATE trailers SET door=?,status='Dropped',updatedAt=? WHERE trailer=?`, [door, Date.now(), trailer]);
     await audit(req, 'driver', 'trailer_shunt', 'trailer', trailer, { fromDoor: existing?.door || '—', toDoor: door });
-    await broadcastTrailers(locId);
+    await broadcastTrailers(req.user?.locationId || 1);
     res.json({ ok: true, door });
   } catch (e) { console.error('[driver/shunt]', e); res.status(500).send('Shunt failed'); }
 });
@@ -481,9 +453,9 @@ router.post('/api/qr/scan', requireXHR, requireDriverRate, async (req, res) => {
       if (existing && ACTIVE.includes(existing.status) && existing.door) {
         result = { door: existing.door, alreadyActive: true };
       } else {
-        const assignedDoor = await pickBestDoor(trailer);
+        const assignedDoor = await pickBestDoor(trailer, req.user?.locationId || 1);
         if (!assignedDoor) return res.status(409).send('No doors available.');
-        await reserveDoor(assignedDoor, trailer, 'Wesbell');
+        await reserveDoor(assignedDoor, trailer, 'Wesbell', null, req.user?.locationId || 1);
         await run(
           `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt,doorAt,location_id)
            VALUES(?,?,?,?,?,?,?,?,?,?)
@@ -515,12 +487,9 @@ router.post('/api/qr/scan', requireXHR, requireDriverRate, async (req, res) => {
     } else if (action.startsWith('door/')) {
       const newDoor = action.slice(5);
       const dNum    = Number(newDoor);
-      // FIX: was hardcoded 28–42
-      const locId2 = req.user?.locationId || 1;
-      const { from: qrFrom, to: qrTo } = await getDoorRange(locId2);
-      if (!isValidDoor(dNum, qrFrom, qrTo)) return res.status(400).send(`Invalid door (${qrFrom}–${qrTo})`);
+      if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send('Invalid door');
       await run(`UPDATE trailers SET door=?,updatedAt=? WHERE trailer=?`, [newDoor, now, trailer]);
-      await broadcastTrailers(locId2);
+      await broadcastTrailers(req.user?.locationId || 1);
       result = { door: newDoor };
 
     } else {

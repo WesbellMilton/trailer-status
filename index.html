@@ -835,9 +835,11 @@ body{background-image:none!important;background:transparent!important}
             const data = await res.json();
             if (data.door) {
               updateLiveDoor(data.door);
+              window._driverTrackStart?.();
               showDoorAssigned('Arrived!', data.alreadyActive ? `Head to your assigned Door ${data.door}.` : `Pull straight into Door ${data.door}.`, true, data.door);
             } else {
               // No door yet — show waiting screen so WS can transition to safety check
+              window._driverTrackStart?.();
               showWaiting(null);
             }
           } else {
@@ -938,9 +940,11 @@ body{background-image:none!important;background:transparent!important}
           const data = await res.json();
           if (data.door) {
             updateLiveDoor(data.door);
+            window._driverTrackStart?.();
             showDoorAssigned('Door Assigned!', data.alreadyActive ? `Your trailer is at Door ${data.door}.` : `Head to Door ${data.door}. Dispatch notified.`, true, data.door);
           } else {
             // No door yet — show waiting screen so WS can transition to safety check
+            window._driverTrackStart?.();
             showWaiting(null);
           }
         } else {
@@ -1025,6 +1029,7 @@ body{background-image:none!important;background:transparent!important}
         await fetchWithRetry('/api/confirm-safety', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, door: confirmDoor, action: 'depart', loadSecured: true, dockPlateUp: true , locationId: _driverLocationId }) }, null, null);
         updateLiveDoor(null); 
         if(window._driverOmwStop) window._driverOmwStop();
+        window._driverTrackStop?.();
         showSuccess('Departed! ✓', 'Safe travels! Trailer marked departed.', [{k:'Trailer',v:state.trailer},{k:'Door',v:confirmDoor||'—'}]);
       } catch(e) {
         toast('Network Error');
@@ -1091,9 +1096,87 @@ body{background-image:none!important;background:transparent!important}
     document.getElementById('ts-done-restart').addEventListener('click', () => {
       state = { trailer: '', carrier: '', action: '', eta: 10, dropType: 'Loaded', door: null, assignedDoor: null, safetyChecks: { load: false, plate: false } };
       updateLiveDoor(null);
+      window._driverTrackStop?.();
       document.getElementById('ts-home-trailer').value = '';
       show('ts-s-home');
     });
+
+    // ── Continuous GPS tracking while driver is in session ─────────────────
+    // Sends position to /api/driver/location every 30s while on omw/waiting screens.
+    // Reflects server-computed ETA back onto the waiting screen subtitle.
+    // Stops automatically on safety check, done, or restart.
+    (function initDriverTracking() {
+      let _trackWatch  = null;
+      let _trackTimer  = null;
+      let _trackLat    = null;
+      let _trackLng    = null;
+      let _depotLat    = 43.5048;
+      let _depotLng    = -79.8880;
+      let _active      = false;
+
+      // Fetch depot coords once
+      fetch('/api/depot-coords', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d?.lat) { _depotLat = d.lat; _depotLng = d.lng; } })
+        .catch(() => {});
+
+      function _send() {
+        if (!_active || _trackLat === null || !state.trailer) return;
+        const eta = state.eta || null;
+        fetch('/api/driver/location', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          body: JSON.stringify({ trailer: state.trailer, lat: _trackLat, lng: _trackLng, eta, locationId: _driverLocationId })
+        })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          if (!d || !_active) return;
+          // Reflect server-computed ETA on waiting screen subtitle
+          if (d.eta != null) {
+            const subEl = document.getElementById('ts-wait-sub');
+            if (subEl && document.getElementById('ts-s-waiting')?.classList.contains('ts-active')) {
+              subEl.textContent = `ETA ~${d.eta} min · You'll be notified when your truck is ready.`;
+            }
+          }
+          // Server-triggered geofence auto-arrive
+          if (d.autoTriggered && d.door) {
+            stopTracking();
+            state.assignedDoor = String(d.door);
+            showDoorAssigned('Auto-Arrived!', `Geofence detected — Door ${d.door} assigned.`, true, d.door);
+          }
+        })
+        .catch(() => {}); // silent — tracking is best-effort
+      }
+
+      function startTracking() {
+        if (_active) return;
+        _active = true;
+        if (!navigator.geolocation) return;
+        _trackWatch = navigator.geolocation.watchPosition(
+          pos => {
+            if (pos.coords.accuracy > 200) return; // skip noisy fixes
+            _trackLat = pos.coords.latitude;
+            _trackLng = pos.coords.longitude;
+          },
+          () => {}, // silent on error
+          { enableHighAccuracy: false, maximumAge: 20000, timeout: 15000 }
+        );
+        // Send immediately then every 30s
+        setTimeout(_send, 2000);
+        _trackTimer = setInterval(_send, 30000);
+      }
+
+      function stopTracking() {
+        _active = false;
+        if (_trackWatch !== null) { navigator.geolocation?.clearWatch(_trackWatch); _trackWatch = null; }
+        if (_trackTimer !== null) { clearInterval(_trackTimer); _trackTimer = null; }
+        _trackLat = null; _trackLng = null;
+      }
+
+      // Expose so restart + safety submit can stop tracking
+      window._driverTrackStart = startTracking;
+      window._driverTrackStop  = stopTracking;
+    })();
 
     // ── Live WS updates for driver ─────────────────────────────────────────
     // Registers a global handler on window so it works regardless of WS reconnects.

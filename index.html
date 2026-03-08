@@ -614,7 +614,7 @@ body{background-image:none!important;background:transparent!important}
       throw lastErr; // exhausted retries
     }
 
-
+    let state = { trailer: '', carrier: '', action: '', eta: 10, dropType: 'Loaded', door: null, assignedDoor: null, safetyChecks: { load: false, plate: false } };
 
     // --- Kiosk Mode (Isolate Driver View) ---
     const driverWrap = document.getElementById('driverView');

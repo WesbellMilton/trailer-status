@@ -325,6 +325,12 @@ body{background-image:none!important;background:transparent!important}
         <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
       </button>
     </div>
+    <div class="ts-anim" style="padding:0 24px 8px;text-align:center;">
+      <div style="font-size:12px;color:var(--t2);margin-bottom:10px;letter-spacing:.06em;text-transform:uppercase;">Outside carrier?</div>
+      <button id="ts-home-ext-carrier" style="width:100%;padding:14px;background:rgba(24,212,232,.08);border:1px solid rgba(24,212,232,.25);border-radius:14px;color:var(--cyan,#18d4e8);font-size:15px;font-weight:600;cursor:pointer;letter-spacing:.01em;">
+        🏢 Drop Trailer (Outside Carrier)
+      </button>
+    </div>
   </div>
 
   <div class="ts-screen" id="ts-s-carrier">
@@ -689,6 +695,8 @@ body{background-image:none!important;background:transparent!important}
       document.querySelector('#ts-s-home .ts-hero-sub').textContent = 'Tap below to get your door assignment';
       const inputWrap = document.querySelector('.ts-trailer-input-wrap');
       if (inputWrap) inputWrap.style.display = 'none';
+      const extBtn = document.getElementById('ts-home-ext-carrier');
+      if (extBtn) extBtn.closest('div').style.display = 'none';
       const goBtn = document.createElement('button');
       goBtn.className = 'ts-cta-btn ts-accent ts-anim';
       goBtn.style.cssText = 'margin:0 24px;background:var(--cyan);color:#000;';
@@ -703,6 +711,11 @@ body{background-image:none!important;background:transparent!important}
     document.getElementById('ts-home-go').addEventListener('click', () => {
       if (!state.trailer) { toast('Enter your trailer number'); homeTrailer.focus(); return; }
       show('ts-s-carrier');
+    });
+
+    document.getElementById('ts-home-ext-carrier')?.addEventListener('click', () => {
+      state.carrier = 'Outside';
+      show('ts-s-ext-carrier');
     });
 
     // 2. Carrier Selection

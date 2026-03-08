@@ -1632,26 +1632,28 @@
     // Prefer the visible element — check dock plates panel first (dvp), then dspPlatesGrid, then fallback
     const dvpGrid=document.getElementById("dvPlatesGrid");
     const dspGrid2=document.getElementById("dspPlatesGrid");
+    // Only use dvpGrid when dock view is actually visible (not hidden behind dispatch)
+    const dvpVisible=dvpGrid&&dvpGrid.offsetParent!==null;
 
     // Find the active status button — works for both dock view (dvp-sbtn) and dispatch (dpb-sbtn)
     let status="",note="";
     // Search in: dvpGrid card, then dspGrid2 card, then fallback to legacy select
-    const dvpCard=dvpGrid?.querySelector(`[data-door="${CSS.escape(door)}"]`);
-    const dspCard=dspGrid2?.querySelector(`[data-door="${CSS.escape(door)}"]`)||dspGrid2?.querySelector(`.dsp-plate-btn`);
+    const dvpCard=dvpVisible?dvpGrid.querySelector(`[data-door="${door}"]`):null;
+    const dspCard=dspGrid2?.querySelector(`[data-door="${door}"]`);
     const dvpActiveBtn=dvpCard?.querySelector(".dvp-sbtn-active");
     const dspActiveBtn=dspCard?.querySelector(".dpb-sbtn-active,.dvp-sbtn-active");
 
     if(dvpActiveBtn){
-      const noteInput=dvpCard?.querySelector(`[data-plate-note]`)||document.getElementById(`dvp-note-${CSS.escape(door)}`);
+      const noteInput=dvpCard?.querySelector(`[data-plate-note]`)||document.getElementById(`dvp-note-${door}`);
       status=dvpActiveBtn.dataset.plateVal||"";
       note=(noteInput?.value||"").trim();
     } else if(dspActiveBtn){
-      const noteInput=dspGrid2?.querySelector(`[data-plate-note="${CSS.escape(door)}"]`);
+      const noteInput=dspCard?.querySelector(`[data-plate-note]`);
       status=dspActiveBtn.dataset.plateVal||"";
       note=(noteInput?.value||"").trim();
     } else {
-      const allStatus=[...document.querySelectorAll(`[data-plate-status="${CSS.escape(door)}"]`)];
-      const allNote=[...document.querySelectorAll(`[data-plate-note="${CSS.escape(door)}"]`)];
+      const allStatus=[...document.querySelectorAll(`[data-plate-status="${door}"]`)];
+      const allNote=[...document.querySelectorAll(`[data-plate-note="${door}"]`)];
       const statusEl=allStatus.find(el=>dspGrid2?.contains(el))||allStatus[0];
       const noteEl=allNote.find(el=>dspGrid2?.contains(el))||allNote[0];
       status=(statusEl?.value||"").trim();

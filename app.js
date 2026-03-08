@@ -239,17 +239,23 @@
   }
 
   let _mr=null;
-  function showModal(title,body){
+  function showModal(title,body,confirmLabel,cancelLabel){
     return new Promise(r=>{
       _mr=r;
       el("modalTitle").textContent=title;
       el("modalBody").textContent=body;
+      if(confirmLabel&&el("modalConfirm"))el("modalConfirm").textContent=confirmLabel;
+      if(cancelLabel&&el("modalCancel"))el("modalCancel").textContent=cancelLabel;
       el("modalOv").classList.remove("hidden");
       el("modalConfirm").focus();
     });
   }
-  el("modalCancel")?.addEventListener("click",()=>{el("modalOv").classList.add("hidden");if(_mr){_mr(false);_mr=null;}});
-  el("modalConfirm")?.addEventListener("click",()=>{el("modalOv").classList.add("hidden");if(_mr){_mr(true);_mr=null;}});
+  function _resetModalBtns(){
+    if(el("modalConfirm"))el("modalConfirm").textContent="Confirm";
+    if(el("modalCancel"))el("modalCancel").textContent="Cancel";
+  }
+  el("modalCancel")?.addEventListener("click",()=>{el("modalOv").classList.add("hidden");_resetModalBtns();if(_mr){_mr(false);_mr=null;}});
+  el("modalConfirm")?.addEventListener("click",()=>{el("modalOv").classList.add("hidden");_resetModalBtns();if(_mr){_mr(true);_mr=null;}});
   el("modalOv")?.addEventListener("click",e=>{if(e.target===el("modalOv")){el("modalOv").classList.add("hidden");if(_mr){_mr(false);_mr=null;}}});
   el("dmModalCancel")?.addEventListener("click",()=>el("dmModalOv")?.classList.add("hidden"));
   el("dmModalOv")?.addEventListener("click",e=>{if(e.target===el("dmModalOv"))el("dmModalOv").classList.add("hidden");});
@@ -1434,6 +1440,26 @@
     const btn=el("btnDimMode");if(btn)btn.textContent=on?"☀ Bright":"🌙 Dim";
   }
   function initDimMode(){try{if(localStorage.getItem("wb_dimmode")==="1")document.body.classList.add("dim-mode");}catch{}}
+
+  // ── Light/Dark mode toggle ─────────────────────────────────────────────────
+  function initTheme(){
+    try{
+      const saved=localStorage.getItem("wb_theme");
+      const preferLight=!saved&&window.matchMedia?.("(prefers-color-scheme: light)").matches;
+      const isLight=(saved==="light")||(preferLight);
+      document.body.classList.toggle("light-mode",isLight);
+      const btn=el("btnThemeToggle");
+      if(btn)btn.textContent=isLight?"☀️":"🌙";
+    }catch{}
+  }
+  function toggleTheme(){
+    const isLight=document.body.classList.toggle("light-mode");
+    try{localStorage.setItem("wb_theme",isLight?"light":"dark");}catch{}
+    const btn=el("btnThemeToggle");
+    if(btn)btn.textContent=isLight?"☀️":"🌙";
+  }
+  el("btnThemeToggle")?.addEventListener("click",toggleTheme);
+  initTheme();
   function initDockRememberLogin(){try{if(ROLE)localStorage.setItem("wb_last_role",ROLE);}catch{}}
 
   function syncDockWsDot(state){
@@ -1476,15 +1502,22 @@
     location.href="/login";
   }
 
-  async function dispSave(){
+  async function dispSave(force){
     const trailer=(el("d_trailer")?.value||"").trim();
     if(!trailer)return toast("Validation error","Trailer number is required.","err");
+    const payload={
+      trailer,direction:(el("d_direction")?.value||"").trim(),status:(el("d_status")?.value||"").trim(),
+      door:(el("d_door")?.value||"").trim(),note:(el("d_note")?.value||"").trim(),
+      dropType:(el("d_dropType")?.value||"").trim(),carrierType:(el("d_carrierType")?.value||"").trim(),
+    };
+    if(force)payload.force=true;
     try{
-      await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify({
-        trailer,direction:(el("d_direction")?.value||"").trim(),status:(el("d_status")?.value||"").trim(),
-        door:(el("d_door")?.value||"").trim(),note:(el("d_note")?.value||"").trim(),
-        dropType:(el("d_dropType")?.value||"").trim(),carrierType:(el("d_carrierType")?.value||"").trim(),
-      })});
+      const res=await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify(payload)});
+      if(res?.conflict){
+        const ok=await showModal("⚠️ Door Conflict",res.message||`Door ${res.door} is already occupied.`,"Assign Anyway","Cancel");
+        if(ok)return dispSave(true);
+        return;
+      }
       toast("Saved",`Trailer ${trailer} updated.`,"ok");
       ["d_trailer","d_door","d_note"].forEach(id=>{if(el(id))el(id).value="";});
       el("d_direction").value="Inbound";el("d_status").value="Incoming";el("d_dropType").value="";

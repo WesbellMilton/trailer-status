@@ -11,6 +11,9 @@ const { broadcastPush } = require('../push');
 
 const router = Router();
 
+// Lightweight keep-alive endpoint — no auth required, used by SW to prevent Render spin-down
+router.get('/api/ping', (req, res) => res.json({ ok: true, t: Date.now() }));
+
 router.get('/api/state', async (req, res) => {
   try {
     const { getSession } = require('../auth');
@@ -54,6 +57,25 @@ router.post('/api/upsert', requireXHR, _rds, async (req, res) => {
     const finalStatus  = isDriverDrop ? 'Incoming' : status;
     const allowed = ['Incoming', 'Dropped', 'Loading', 'Dock Ready', 'Ready', 'Departed', ''];
     if (!allowed.includes(finalStatus)) return res.status(400).send('Invalid status');
+
+    // ── Door conflict check ───────────────────────────────────────────────────
+    // Warn (not block) if the requested door is already occupied by a different
+    // active trailer. Client can pass force:true to proceed anyway.
+    const doorChanged = door && door !== (existing?.door || '');
+    if (doorChanged && !req.body.force) {
+      const occupant = await get(
+        `SELECT trailer FROM trailers WHERE door=? AND trailer!=? AND status NOT IN ('Departed','')`,
+        [door, trailer]
+      );
+      if (occupant) {
+        return res.status(409).json({
+          conflict: true,
+          door,
+          occupant: occupant.trailer,
+          message: `Door ${door} is already assigned to trailer ${occupant.trailer}. Proceed anyway?`
+        });
+      }
+    }
 
     const doorAt = (door && door !== existing?.door) ? now : (existing?.doorAt || null);
     await run(

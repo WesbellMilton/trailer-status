@@ -82,3 +82,11 @@ self.addEventListener("notificationclick", evt => {
     })
   );
 });
+
+// ── Keep-Alive: ping server every 14 min to prevent Render free-tier spin-down ──
+// Render spins down after 15 min of inactivity. 14 min pings keep it warm.
+function keepAlive() {
+  fetch('/api/ping', { method: 'GET', cache: 'no-store' }).catch(() => {});
+}
+setInterval(keepAlive, 14 * 60 * 1000);
+keepAlive(); // ping immediately on SW install/activate

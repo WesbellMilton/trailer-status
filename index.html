@@ -95,6 +95,7 @@ body{background-image:none!important;background:transparent!important}
       <div class="chip" role="status" aria-live="polite"><div class="live-dot" id="wsDot"></div><span id="wsText">Connecting</span></div>
       <div class="chip" id="roleBadge" style="display:none;color:var(--amber);">—</div>
       <div class="chip">v<span id="verText">—</span></div>
+      <button class="tb-btn" id="btnThemeToggle" title="Toggle light/dark mode" style="font-size:15px;padding:4px 8px;">🌙</button>
       <button class="tb-btn" id="btnInstallPwa" style="display:none;" title="Add to home screen">⬇ Install</button>
       <button class="tb-btn" id="btnAudit" style="display:none;">Audit</button>
       <button class="tb-btn danger" id="btnLogout" style="display:none;">Sign Out</button>
@@ -611,6 +612,28 @@ body{background-image:none!important;background:transparent!important}
 
     let state = { trailer: '', carrier: '', action: '', eta: 10, dropType: 'Loaded', door: null, assignedDoor: null, safetyChecks: { load: false, plate: false } };
 
+    // ── Connection Recovery: persist state so page reload restores position ──
+    const WB_RECOVERY_KEY = 'wb_driver_recovery';
+    const RECOVERY_SCREENS = ['ts-s-waiting', 'ts-s-safety', 'ts-s-actions', 'ts-s-omw', 'ts-s-drop'];
+    function saveRecovery(screenId) {
+      try {
+        // Only persist mid-flow screens — not home/done
+        if (!RECOVERY_SCREENS.includes(screenId)) { clearRecovery(); return; }
+        localStorage.setItem(WB_RECOVERY_KEY, JSON.stringify({ state: JSON.parse(JSON.stringify(state)), screen: screenId, at: Date.now() }));
+      } catch {}
+    }
+    function clearRecovery() { try { localStorage.removeItem(WB_RECOVERY_KEY); } catch {} }
+    function loadRecovery() {
+      try {
+        const raw = localStorage.getItem(WB_RECOVERY_KEY);
+        if (!raw) return null;
+        const rec = JSON.parse(raw);
+        // Expire after 4 hours — stale sessions shouldn't restore
+        if (!rec || Date.now() - rec.at > 4 * 3600 * 1000) { clearRecovery(); return null; }
+        return rec;
+      } catch { return null; }
+    }
+
     // --- Kiosk Mode (Isolate Driver View) ---
     const driverWrap = document.getElementById('driverView');
     const globalTopbar = document.querySelector('.topbar');
@@ -625,6 +648,36 @@ body{background-image:none!important;background:transparent!important}
     // Lock the view immediately and watch for routing changes
     checkIsolation();
     new MutationObserver(checkIsolation).observe(driverWrap, { attributes: true, attributeFilter: ['style'] });
+
+    // ── Connection Recovery: check for saved session on load ─────────────────
+    (function tryRestoreSession() {
+      const rec = loadRecovery();
+      if (!rec || !rec.screen || !rec.state?.trailer) return;
+      // Show a non-intrusive banner at the bottom of the home screen
+      const banner = document.createElement('div');
+      banner.id = 'wb-recovery-banner';
+      banner.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:900;background:rgba(14,20,32,.96);border:1px solid rgba(245,166,35,.35);border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:12px;max-width:340px;width:calc(100% - 32px);box-shadow:0 8px 32px rgba(0,0,0,.5);backdrop-filter:blur(8px);';
+      const minAgo = Math.round((Date.now() - rec.at) / 60000);
+      const timeStr = minAgo < 1 ? 'just now' : `${minAgo}m ago`;
+      banner.innerHTML = `<span style="font-size:20px">📶</span><div style="flex:1;min-width:0"><div style="color:#f5a623;font-weight:600;font-size:13px">Resume where you left off?</div><div style="color:#a8bdd4;font-size:11px;margin-top:2px">Trailer ${rec.state.trailer} · ${timeStr}</div></div><button id="wb-rec-yes" style="background:rgba(245,166,35,.15);border:1px solid rgba(245,166,35,.4);color:#f5a623;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;flex-shrink:0">Resume</button><button id="wb-rec-no" style="background:none;border:none;color:#7a95b0;font-size:18px;cursor:pointer;line-height:1;padding:4px">×</button>`;
+      document.body.appendChild(banner);
+      document.getElementById('wb-rec-yes')?.addEventListener('click', () => {
+        Object.assign(state, rec.state);
+        banner.remove();
+        // Restore trailer input for context
+        const inp = document.getElementById('ts-home-trailer');
+        if (inp) inp.value = state.trailer || '';
+        // Restore GPS tracking if mid-flow
+        if (['ts-s-waiting', 'ts-s-omw'].includes(rec.screen)) window._driverTrackStart?.();
+        show(rec.screen);
+      });
+      document.getElementById('wb-rec-no')?.addEventListener('click', () => {
+        clearRecovery();
+        banner.remove();
+      });
+      // Auto-dismiss after 30s
+      setTimeout(() => { if (document.getElementById('wb-recovery-banner')) { clearRecovery(); banner.remove(); } }, 30000);
+    })();
 
     // --- Progress & Navigation Manager ---
     let _omwGeoWatch = null;
@@ -648,6 +701,7 @@ body{background-image:none!important;background:transparent!important}
         next.classList.add('ts-active');
         next.querySelectorAll('.ts-anim').forEach(el => { el.style.animation = 'none'; el.offsetHeight; el.style.animation = ''; });
       }
+      saveRecovery(id);
       
       // Update Progress Bar
       const prog = {
@@ -1095,6 +1149,7 @@ body{background-image:none!important;background:transparent!important}
     // -- Restart --
     document.getElementById('ts-done-restart').addEventListener('click', () => {
       state = { trailer: '', carrier: '', action: '', eta: 10, dropType: 'Loaded', door: null, assignedDoor: null, safetyChecks: { load: false, plate: false } };
+      clearRecovery();
       updateLiveDoor(null);
       window._driverTrackStop?.();
       document.getElementById('ts-home-trailer').value = '';

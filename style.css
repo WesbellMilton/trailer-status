@@ -15,6 +15,41 @@
   --ease-out-quart:cubic-bezier(.25,.46,.45,.94);
   --ease-in-out-quint:cubic-bezier(.83,0,.17,1);
 }
+/* ── Light Mode ──────────────────────────────────────────────────────────── */
+body.light-mode {
+  --bg:#f0f4f8; --s0:#e4eaf2; --s1:#dce4ef; --s2:#d0daea; --s3:#c4d0e3;
+  --b0:#b8c8de; --b1:#a0b5cf; --b2:#8aa2bf;
+  --t0:#0d1b2e; --t1:#1e3249; --t2:#3a567a; --t3:#6080a0;
+  --amber:#c47a00; --amber-bg:rgba(196,122,0,.10); --amber-bd:rgba(196,122,0,.28);
+  --cyan:#0096a8;  --cyan-bg:rgba(0,150,168,.07);  --cyan-bd:rgba(0,150,168,.22);
+  --green:#0a8a5e; --green-bg:rgba(10,138,94,.07);  --green-bd:rgba(10,138,94,.22);
+  --red:#c0282a;   --red-bg:rgba(192,40,42,.08);    --red-bd:rgba(192,40,42,.22);
+  --violet:#6a42c8;--violet-bg:rgba(106,66,200,.08);--violet-bd:rgba(106,66,200,.20);
+  --sh:0 2px 12px rgba(0,0,0,.12);
+  --sh-lg:0 16px 40px rgba(0,0,0,.16);
+}
+body.light-mode { background:var(--bg); color:var(--t0); }
+body.light-mode .topbar,
+body.light-mode .bottom-nav { background:var(--s0); border-color:var(--b0); }
+body.light-mode .chip { background:var(--s1); color:var(--t2); border-color:var(--b1); }
+body.light-mode .tb-btn { background:var(--s1); color:var(--t1); border-color:var(--b1); }
+body.light-mode .tb-btn:hover { background:var(--s2); }
+body.light-mode .modal-box,
+body.light-mode .toast { background:var(--s0); border-color:var(--b1); }
+body.light-mode input, body.light-mode select, body.light-mode textarea {
+  background:var(--s1); color:var(--t0); border-color:var(--b1);
+}
+body.light-mode input:focus, body.light-mode select:focus { border-color:var(--amber); }
+body.light-mode .tbl-row { background:var(--s1); border-color:var(--b0); }
+body.light-mode .tbl-row:hover { background:var(--s2); }
+body.light-mode .dsp-hd { background:var(--s0); border-color:var(--b0); color:var(--t2); }
+body.light-mode .dsp-panels-area { background:var(--s0); border-color:var(--b0); }
+body.light-mode .dpl-card { background:var(--s1); border-color:var(--b0); }
+body.light-mode .dv-shell, body.light-mode #dockView { background:var(--bg); }
+body.light-mode .dv-topbar { background:var(--s0); border-color:var(--b0); }
+body.light-mode .dv-card { background:var(--s1); border-color:var(--b0); }
+body.light-mode .dsp-right, body.light-mode .dsp-detail { background:var(--s0); border-color:var(--b0); }
+body.light-mode .btn { filter: brightness(1.05); }
 
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 ::-webkit-scrollbar{width:5px;height:5px}

@@ -715,11 +715,13 @@ body{background-image:none!important;background:transparent!important}
             body: JSON.stringify({ carrier, prefix, locationId: _driverLocationId })
           });
           const data = res.ok ? await res.json().catch(() => ({})) : {};
+          if (data.refCode) state.trailer = data.refCode; // poll needs the real trailer ID
           if (data.door) {
             updateLiveDoor(data.door);
             showDoorAssigned('Door Assigned!', `Pull straight into Door ${data.door}.`, true, data.door);
           } else {
-            showSuccess('Drop Logged', 'No doors free right now — dispatch has been notified.', [{k:'Carrier',v:carrier},{k:'Ref',v:data.refCode||'—'}]);
+            // No door yet — show waiting screen so poll can catch Ready
+            showWaiting(null);
           }
         } catch {
           toast('Network error — try again');
@@ -939,8 +941,14 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Submitting...';
       btn.disabled = true;
       try {
-        await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: state.dropType, carrierType: 'Outside' , locationId: _driverLocationId }) });
-        showSuccess('Drop Logged', 'Dispatch will assign your door on the board.', [{k:'Trailer',v:state.trailer},{k:'Type',v:state.dropType},{k:'Carrier',v:'Outside'}]);
+        const res = await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: state.dropType, carrierType: 'Outside' , locationId: _driverLocationId }) });
+        const data = res.ok ? await res.json().catch(() => ({})) : {};
+        if (data.door) {
+          updateLiveDoor(data.door);
+          showWaiting(data.door);
+        } else {
+          showWaiting(null);
+        }
       } catch(e) {
         toast('Network Error');
       } finally {

@@ -1712,11 +1712,6 @@ body{background-image:none!important;background:transparent!important}
     </div>
   </div>
 
-  <!-- ── Cards ── -->
-  <div class="dv-cards" id="dockCards">
-    <div class="dv-empty"><div class="dv-empty-icon">🏭</div><div class="dv-empty-msg">Loading…</div></div>
-  </div>
-
   <!-- ── Dock Plates Panel ── -->
   <div class="dvp-panel" id="dvPlatesPanel">
     <button class="dvp-toggle" id="dvPlatesToggle">
@@ -1724,9 +1719,14 @@ body{background-image:none!important;background:transparent!important}
       <span class="dvp-summary" id="dvPlatesSummary">—</span>
       <span class="dvp-chev">▾</span>
     </button>
-    <div class="dvp-body" id="dvPlatesBody">
-      <div class="dvp-grid" id="dvPlatesGrid"></div>
+    <div class="dvp-body dvp-body-open" id="dvPlatesBody">
+      <div id="dvPlatesGrid"></div>
     </div>
+  </div>
+
+  <!-- ── Cards ── -->
+  <div class="dv-cards" id="dockCards">
+    <div class="dv-empty"><div class="dv-empty-icon">🏭</div><div class="dv-empty-msg">Loading…</div></div>
   </div>
 
   <!-- ── Toast ── -->

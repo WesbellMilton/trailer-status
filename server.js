@@ -21,6 +21,7 @@ const { PORT, APP_VERSION } = require('./lib/config');
 
 // ── Middleware (order matters) ────────────────────────────────────────────────
 const mw = require('./lib/middleware');
+app.set('trust proxy', 1); // Render sits behind a load balancer — read real IP from X-Forwarded-For
 app.use(mw.gzip);
 app.use(mw.securityHeaders);
 app.use(mw.requestTimeout);

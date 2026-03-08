@@ -733,17 +733,21 @@ body{background-image:none!important;background:transparent!important}
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             body: JSON.stringify({ carrier, prefix, locationId: _driverLocationId })
           });
-          const data = res.ok ? await res.json().catch(() => ({})) : {};
-          if (data.refCode) state.trailer = data.refCode; // poll needs the real trailer ID
+          if (!res.ok) {
+            const errText = await res.text().catch(() => `Error ${res.status}`);
+            toast(`Server error: ${errText}`, 4000);
+            return;
+          }
+          const data = await res.json().catch(() => ({}));
+          if (data.refCode) state.trailer = data.refCode;
           if (data.door) {
             updateLiveDoor(data.door);
             showDoorAssigned('Door Assigned!', `Pull straight into Door ${data.door}.`, true, data.door);
           } else {
-            // No door yet — show waiting screen so poll can catch Ready
             showWaiting(null);
           }
         } catch {
-          toast('Network error — try again');
+          toast('Network error — check connection and try again', 4000);
         } finally {
           btn.style.pointerEvents = '';
           btn.innerHTML = `<span class="ts-ext-carrier-name">${carrier}</span>`;

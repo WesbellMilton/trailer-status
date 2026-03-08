@@ -185,12 +185,15 @@ router.post('/api/driver/arrive', requireXHR, requireDriverRate, requireDriverAc
 });
 
 // ── /api/driver/ext-drop  (outside carrier — no trailer number needed) ────────
-router.post('/api/driver/ext-drop', requireXHR, requireDriverRate, async (req, res) => {
+router.post('/api/driver/ext-drop', requireXHR, async (req, res) => {
   try {
     const carrier = String(req.body.carrier || 'Other').trim();
     const prefix  = String(req.body.prefix  || 'EXT').trim().toUpperCase().slice(0, 4);
     const CARRIERS = ['Apex','Gardewine','Manitoulin','TForce','XPO','Other'];
     if (!CARRIERS.includes(carrier)) return res.status(400).send('Invalid carrier');
+
+    // Accept locationId from body for unauthenticated kiosk use (?loc= QR kiosk)
+    const locId = req.user?.locationId || parseInt(req.body.locationId) || 1;
 
     // Generate ref code: PREFIX-YYYYMMDD-NN (NN = sequential count for today)
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -202,8 +205,8 @@ router.post('/api/driver/ext-drop', requireXHR, requireDriverRate, async (req, r
     const refCode = `${prefix}-${today}-${seq}`;
 
     const now  = Date.now();
-    const door = await pickBestDoor(refCode) || '';
-    if (door) await reserveDoor(door, refCode, carrier, 35);
+    const door = await pickBestDoor(refCode, locId) || '';
+    if (door) await reserveDoor(door, refCode, carrier, 35, locId);
 
     const status = door ? 'Incoming' : 'Dropped';
     await run(
@@ -212,9 +215,9 @@ router.post('/api/driver/ext-drop', requireXHR, requireDriverRate, async (req, r
        ON CONFLICT(trailer) DO UPDATE SET
          status=excluded.status,door=excluded.door,
          carrierType=excluded.carrierType,updatedAt=excluded.updatedAt`,
-      [refCode, 'Inbound', status, door, '', 'Loaded', carrier, now, req.user?.locationId || 1]
+      [refCode, 'Inbound', status, door, '', 'Loaded', carrier, now, locId]
     );
-    await audit(req, 'driver', 'ext_drop', 'trailer', refCode, { carrier, door, refCode });
+    await audit(req, 'driver', 'ext_drop', 'trailer', refCode, { carrier, door, refCode, locId });
 
     if (door) {
       broadcastPush(`📦 ${carrier} Drop`, `${refCode} → Door ${door} (auto-assigned)`, { trailer: refCode, door }).catch(() => {});
@@ -224,7 +227,7 @@ router.post('/api/driver/ext-drop', requireXHR, requireDriverRate, async (req, r
       wsBroadcast('notify', { kind: 'drop', trailer: refCode, door: '', carrierType: carrier, autoAssigned: false });
     }
 
-    await broadcastTrailers(req.user?.locationId || 1);
+    await broadcastTrailers(locId);
     res.json({ ok: true, refCode, door, carrier });
   } catch (e) { console.error('[ext-drop]', e); res.status(500).send('Drop failed'); }
 });

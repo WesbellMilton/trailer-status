@@ -1311,14 +1311,13 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
 }
 
 /* ═══════════════════════════════════════════
-   DEVICE-SPECIFIC OPTIMIZATIONS
-   iPhone 14/15/16/17 (390px) · Pro Max (430-440px)
-   Samsung Galaxy S24/S25 (360px) · Plus/Ultra (384px)
+   DEVICE BREAKPOINTS (driver/dock portal sizing)
+   Small  ≤390px : Galaxy S24, iPhone SE/14/15/16 standard
+   Large  ≥428px : Pro Max, large Android
 ═══════════════════════════════════════════ */
 
-/* ── Samsung Galaxy S24/S25 base (360px) ── */
-@media only screen and (max-width:390px) and (-webkit-min-device-pixel-ratio:2){
-  /* Tighter padding to maximise usable space on 360px viewport */
+/* ── Small phones (≤390px) ── */
+@media(max-width:390px){
   .driver-pbody{padding:10px 12px}
   .driver-shell{padding:6px 8px 40px}
   .dock-cards{padding:6px 10px;gap:7px}
@@ -1334,20 +1333,12 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
   .checkline{padding:12px;min-height:60px}
   .kpi .k-val{font-size:22px !important}
   .plate-grid{grid-template-columns:repeat(3,1fr) !important}
-  /* Bottom nav label stays readable */
   .bn-item{font-size:8px}
+  .trailer-hero-input{font-size:24px !important}
 }
 
-/* ── Samsung Galaxy S24+/S25+ / Ultra (384px) ── */
-@media only screen and (min-width:375px) and (max-width:414px) and (-webkit-min-device-pixel-ratio:2.5){
-  .driver-shell{padding:10px 12px 40px}
-  .driver-pbody{padding:14px}
-  .dock-cards{padding:8px 14px}
-  .door-picker-grid{grid-template-columns:repeat(4,1fr) !important}
-}
-
-/* ── iPhone 14 / 15 / 16 / 17 standard & Pro (390px @3x) ── */
-@media only screen and (width:390px) and (-webkit-device-pixel-ratio:3){
+/* ── Standard phones (391–427px) — iPhone 14/15/16 Pro ── */
+@media(min-width:391px) and (max-width:427px){
   .driver-shell{padding:10px 14px 40px}
   .trailer-hero-input{font-size:26px !important}
   .dc-trailer{font-size:26px !important}
@@ -1356,39 +1347,23 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
   .who-btn{min-height:88px}
   .flow-btn{min-height:62px}
   .driver-submit{min-height:60px}
-  /* Dynamic Island clearance — extra top padding on driver topbar */
   .driver-topbar{margin-top:4px}
 }
 
-/* ── iPhone 14 Pro Max / 15 Pro Max / 16 Pro Max (430px @3x) ── */
-@media only screen and (min-width:428px) and (max-width:435px) and (-webkit-device-pixel-ratio:3){
-  /* More room — can show more content */
-  .driver-wrap{max-width:460px}
-  .door-picker-grid{grid-template-columns:repeat(5,1fr) !important;gap:7px}
-  .door-btn{min-height:56px;font-size:14px}
-  .who-grid{gap:14px}
-  .who-btn{min-height:100px}
-  .flow-btn{min-height:68px;padding:16px 18px}
-  .dc-trailer{font-size:30px !important}
-  .dc-door-badge{font-size:24px !important;padding:6px 14px !important}
-  .dc-action-btn{min-height:64px !important;font-size:17px !important}
-  .dock-cards{padding:10px 18px}
-  .driver-submit{min-height:64px;font-size:15px}
-  .kpi .k-val{font-size:32px}
-}
-
-/* ── iPhone 17 Pro Max (440px @3x) ── */
-@media only screen and (min-width:436px) and (max-width:450px) and (-webkit-device-pixel-ratio:3){
+/* ── Large phones (≥428px) — Pro Max, large Android ── */
+@media(min-width:428px){
   .driver-wrap{max-width:470px}
-  .door-picker-grid{grid-template-columns:repeat(5,1fr) !important;gap:8px}
-  .door-btn{min-height:58px;font-size:15px}
-  .who-btn{min-height:104px}
-  .flow-btn{min-height:70px;padding:16px 20px}
-  .dc-trailer{font-size:32px !important}
-  .dc-door-badge{font-size:26px !important;padding:6px 16px !important}
-  .dc-action-btn{min-height:66px !important;font-size:18px !important}
-  .dock-cards{padding:10px 20px}
-  .driver-submit{min-height:66px;font-size:16px}
+  .door-picker-grid{grid-template-columns:repeat(5,1fr) !important;gap:7px}
+  .door-btn{min-height:57px;font-size:14px}
+  .who-grid{gap:14px}
+  .who-btn{min-height:102px}
+  .flow-btn{min-height:69px;padding:16px 19px}
+  .dc-trailer{font-size:31px !important}
+  .dc-door-badge{font-size:25px !important;padding:6px 15px !important}
+  .dc-action-btn{min-height:65px !important;font-size:17px !important}
+  .dock-cards{padding:10px 19px}
+  .driver-submit{min-height:65px;font-size:15px}
+  .kpi .k-val{font-size:32px}
 }
 
 /* ── iOS Safari — fix 100vh including browser chrome ── */
@@ -1772,198 +1747,53 @@ input, select, textarea {
   }
 }
 
-/* ── iPhone SE / small Android (320–374px) ── */
-@media screen and (max-width:374px) {
-  .brand-name { font-size:11px; }
-  .brand-mark { width:22px; height:22px; font-size:9px; }
-  .nav-item span { display:none; }
-  .nav-item svg { display:block !important; }
-  .dc-trailer { font-size:18px !important; }
-  .dc-door-badge { font-size:16px !important; }
-  .door-picker-grid { grid-template-columns:repeat(3,1fr) !important; }
-  .who-grid { grid-template-columns:1fr !important; }
-  .who-btn { min-height:70px; }
-  .plate-grid { grid-template-columns:repeat(2,1fr) !important; }
-  .kpi { flex:1 1 60px; padding:10px 8px; }
-  .kpi .k-val { font-size:18px !important; }
-  .driver-submit { font-size:13px; min-height:52px; }
-  .trailer-hero-input { font-size:22px !important; }
-  .dock-filter-btn { padding:5px 10px; font-size:10px; }
+/* ── Tiny phones ≤374px (iPhone SE, small Android) ── */
+@media(max-width:374px){
+  .brand-name{font-size:11px}
+  .brand-mark{width:22px;height:22px;font-size:9px}
+  .nav-item span{display:none}
+  .nav-item svg{display:block !important}
+  .dc-trailer{font-size:18px !important}
+  .dc-door-badge{font-size:16px !important}
+  .door-picker-grid{grid-template-columns:repeat(3,1fr) !important}
+  .who-grid{grid-template-columns:1fr !important}
+  .who-btn{min-height:70px}
+  .plate-grid{grid-template-columns:repeat(2,1fr) !important}
+  .kpi{flex:1 1 60px;padding:10px 8px}
+  .kpi .k-val{font-size:18px !important}
+  .driver-submit{font-size:13px;min-height:52px}
+  .trailer-hero-input{font-size:22px !important}
+  .dock-filter-btn{padding:5px 10px;font-size:10px}
+  .dock-cards{padding:6px 10px;gap:7px}
+  .dock-card{padding:11px 12px}
+  .driver-shell{padding:6px 8px 40px}
 }
 
-/* ── iPhone SE 2nd/3rd gen (375px @2x) ── */
-@media screen and (width:375px) and (-webkit-device-pixel-ratio:2) {
-  .driver-wrap { max-width:100%; }
-  .door-picker-grid { grid-template-columns:repeat(4,1fr) !important; }
-  .who-btn { min-height:84px; }
-  .trailer-hero-input { font-size:24px !important; }
+/* ── Tablets/foldables (720px+) — hide bottom nav, show top nav ── */
+@media(min-width:720px){
+  .bottom-nav{display:none !important}
+  .topbar .nav{display:flex !important}
+  main{padding-bottom:0 !important}
+  .dock-shell{max-width:100%}
+  .driver-wrap{max-width:520px}
 }
-
-/* ── Samsung Galaxy S24/S25 base (360px @3x) ── */
-@media screen and (max-width:360px) and (-webkit-min-device-pixel-ratio:2.5) {
-  .dock-cards { padding:6px 10px; gap:7px; }
-  .dock-card { padding:11px 12px; }
-  .dc-trailer { font-size:20px !important; }
-  .dc-door-badge { font-size:17px !important; padding:3px 7px !important; }
-  .dc-action-btn { font-size:14px !important; min-height:54px !important; padding:12px !important; }
-  .driver-pbody { padding:10px 12px; }
-  .driver-shell { padding:6px 8px 40px; }
-  .door-picker-grid { grid-template-columns:repeat(4,1fr) !important; gap:4px; }
-  .door-btn { min-height:46px; font-size:12px; }
-  .who-btn { min-height:72px; padding:8px; }
-  .flow-btn { min-height:54px; padding:10px 12px; }
-  .driver-submit { min-height:54px; font-size:13px; }
-  .checkline { padding:10px 12px; min-height:58px; }
-  .plate-grid { grid-template-columns:repeat(3,1fr) !important; }
-  .kpi .k-val { font-size:20px !important; }
-  .bn-item { font-size:8px; padding:3px 6px; }
+@media(min-width:720px) and (max-width:820px){
+  .grid-main{grid-template-columns:1fr 1fr !important}
+  .driver-wrap{max-width:600px}
+  .door-picker-grid{grid-template-columns:repeat(6,1fr) !important;gap:8px}
+  .door-btn{min-height:56px}
+  .plate-grid{grid-template-columns:repeat(7,1fr) !important}
+  .who-grid{grid-template-columns:repeat(2,1fr);gap:14px}
+  .who-btn{min-height:110px}
+  .dock-cards{padding:12px 20px}
 }
-
-/* ── iPhone 14 / 15 / 16 / 17 standard (390px @3x) ── */
-@media screen and (width:390px) and (-webkit-device-pixel-ratio:3) {
-  .driver-wrap { max-width:100%; }
-  .door-picker-grid { grid-template-columns:repeat(4,1fr) !important; gap:6px; }
-  .door-btn { min-height:54px; }
-  .who-btn { min-height:90px; }
-  .flow-btn { min-height:64px; }
-  .driver-submit { min-height:62px; }
-  .trailer-hero-input { font-size:26px !important; }
-  .dc-trailer { font-size:26px !important; }
-  .dc-action-btn { min-height:60px !important; }
+@media(min-width:740px) and (max-width:830px){
+  .grid-main{grid-template-columns:1fr 260px}
+  .plate-grid{grid-template-columns:repeat(8,1fr) !important}
 }
-
-/* ── iPhone 16 Pro / 17 Pro / 15 Pro (393px @3x) ── */
-@media screen and (width:393px) and (-webkit-device-pixel-ratio:3) {
-  .door-picker-grid { grid-template-columns:repeat(4,1fr) !important; gap:6px; }
-  .door-btn { min-height:54px; }
-  .who-btn { min-height:92px; }
-  .driver-submit { min-height:62px; }
-  .dc-trailer { font-size:27px !important; }
-  .dc-action-btn { min-height:61px !important; }
-}
-
-/* ── iPhone 17 Air (402px @3x) ── */
-@media screen and (width:402px) and (-webkit-device-pixel-ratio:3) {
-  .door-picker-grid { grid-template-columns:repeat(5,1fr) !important; gap:6px; }
-  .door-btn { min-height:52px; }
-  .who-btn { min-height:94px; }
-  .driver-submit { min-height:63px; }
-  .dc-trailer { font-size:28px !important; }
-}
-
-/* ── Samsung Galaxy S24+/S25+ (384px @~3x) ── */
-@media screen and (min-width:380px) and (max-width:390px) and (-webkit-min-device-pixel-ratio:2.5) {
-  .door-picker-grid { grid-template-columns:repeat(4,1fr) !important; gap:5px; }
-  .door-btn { min-height:52px; }
-  .driver-pbody { padding:14px; }
-  .dock-cards { padding:8px 14px; }
-}
-
-/* ── Samsung Galaxy A55 / Z Flip / S25 Ultra (412px @~3x) ── */
-@media screen and (min-width:410px) and (max-width:415px) {
-  .driver-wrap { max-width:100%; }
-  .door-picker-grid { grid-template-columns:repeat(5,1fr) !important; gap:6px; }
-  .door-btn { min-height:54px; font-size:13px; }
-  .who-btn { min-height:96px; }
-  .flow-btn { min-height:66px; padding:14px 16px; }
-  .dc-trailer { font-size:28px !important; }
-  .dc-door-badge { font-size:22px !important; padding:5px 11px !important; }
-  .dc-action-btn { min-height:62px !important; font-size:16px !important; }
-  .driver-submit { min-height:63px; }
-  .dock-cards { padding:10px 16px; }
-  .kpi .k-val { font-size:30px; }
-}
-
-/* ── iPhone 14+/15+/16+ / 14 Pro Max (428–430px @3x) ── */
-@media screen and (min-width:426px) and (max-width:432px) and (-webkit-device-pixel-ratio:3) {
-  .driver-wrap { max-width:460px; }
-  .door-picker-grid { grid-template-columns:repeat(5,1fr) !important; gap:7px; }
-  .door-btn { min-height:56px; font-size:14px; }
-  .who-btn { min-height:100px; }
-  .flow-btn { min-height:68px; padding:16px 18px; }
-  .dc-trailer { font-size:30px !important; }
-  .dc-door-badge { font-size:24px !important; padding:5px 13px !important; box-shadow:0 2px 16px rgba(245,166,35,.2); }
-  .dc-action-btn { min-height:64px !important; font-size:17px !important; }
-  .dock-cards { padding:10px 18px; }
-  .driver-submit { min-height:64px; font-size:15px; }
-  .kpi .k-val { font-size:32px; }
-  .plate-grid { grid-template-columns:repeat(5,1fr) !important; }
-}
-
-/* ── iPhone 17 Pro Max / 16 Pro Max (440px @3x) ── */
-@media screen and (min-width:438px) and (max-width:445px) and (-webkit-device-pixel-ratio:3) {
-  .driver-wrap { max-width:470px; }
-  .door-picker-grid { grid-template-columns:repeat(5,1fr) !important; gap:8px; }
-  .door-btn { min-height:58px; font-size:15px; }
-  .who-grid { gap:14px; }
-  .who-btn { min-height:106px; }
-  .flow-btn { min-height:70px; padding:16px 20px; }
-  .dc-trailer { font-size:32px !important; }
-  .dc-door-badge { font-size:26px !important; padding:6px 15px !important; box-shadow:0 3px 18px rgba(245,166,35,.22); }
-  .dc-action-btn { min-height:66px !important; font-size:18px !important; }
-  .dock-cards { padding:10px 20px; }
-  .driver-submit { min-height:66px; font-size:16px; }
-  .kpi .k-val { font-size:34px; }
-  .plate-grid { grid-template-columns:repeat(5,1fr) !important; }
-}
-
-/* ── Samsung Galaxy Z Fold — cover screen (360px tall phone mode) ── */
-@media screen and (max-width:360px) and (min-height:800px) {
-  .dock-cards { padding:8px 12px; }
-  .driver-shell { padding:8px 10px 40px; }
-}
-
-/* ── Samsung Galaxy Z Fold — inner screen (768px tablet mode) ── */
-@media screen and (min-width:720px) and (max-width:820px) and (-webkit-min-device-pixel-ratio:2) {
-  /* Treat as small tablet — show 2 column layout */
-  .grid-main { grid-template-columns:1fr 1fr !important; }
-  .driver-wrap { max-width:600px; }
-  .door-picker-grid { grid-template-columns:repeat(6,1fr) !important; gap:8px; }
-  .door-btn { min-height:56px; }
-  .plate-grid { grid-template-columns:repeat(7,1fr) !important; }
-  .who-grid { grid-template-columns:repeat(2,1fr); gap:14px; }
-  .who-btn { min-height:110px; }
-  .dock-shell { max-width:100%; }
-  .dock-cards { padding:12px 20px; }
-  .bottom-nav { display:none !important; }
-  .topbar .nav { display:flex !important; }
-  main { padding-bottom:0 !important; }
-}
-
-/* ── iPad mini 6/7 (744px) ── */
-@media screen and (min-width:740px) and (max-width:760px) and (-webkit-min-device-pixel-ratio:2) {
-  .grid-main { grid-template-columns:1fr 260px; }
-  .plate-grid { grid-template-columns:repeat(8,1fr) !important; }
-  .bottom-nav { display:none !important; }
-  .topbar .nav { display:flex !important; }
-  main { padding-bottom:0 !important; }
-}
-
-/* ── iPad 10th gen (820px) ── */
-@media screen and (min-width:816px) and (max-width:824px) and (-webkit-min-device-pixel-ratio:2) {
-  .grid-main { grid-template-columns:1fr 280px; }
-  .plate-grid { grid-template-columns:repeat(8,1fr) !important; }
-  .bottom-nav { display:none !important; }
-  .topbar .nav { display:flex !important; }
-  main { padding-bottom:0 !important; }
-}
-
-/* ── iPad Air 11" / Pro 11" (834px) ── */
-@media screen and (min-width:830px) and (max-width:840px) and (-webkit-min-device-pixel-ratio:2) {
-  .grid-main { grid-template-columns:1fr 300px; }
-  .plate-grid { grid-template-columns:repeat(8,1fr) !important; }
-  .bottom-nav { display:none !important; }
-  .topbar .nav { display:flex !important; }
-  main { padding-bottom:0 !important; }
-}
-
-/* ── All iPads (768px+) — hide bottom nav, show top nav ── */
-@media screen and (min-width:768px) and (-webkit-min-device-pixel-ratio:2) {
-  .bottom-nav { display:none !important; }
-  .topbar .nav { display:flex !important; }
-  main { padding-bottom:0 !important; }
-  .dock-shell { max-width:100%; }
-  .driver-wrap { max-width:520px; }
+@media(min-width:830px){
+  .grid-main{grid-template-columns:1fr 300px}
+  .plate-grid{grid-template-columns:repeat(8,1fr) !important}
 }
 
 /* ── Landscape on all phones ── */

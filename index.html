@@ -807,11 +807,13 @@ body{background-image:none!important;background:transparent!important}
               updateLiveDoor(data.door);
               showDoorAssigned('Arrived!', data.alreadyActive ? `Head to your assigned Door ${data.door}.` : `Pull straight into Door ${data.door}.`, true, data.door);
             } else {
-              toast('No door available — please ask dispatch.');
+              // No door yet — show waiting screen so WS can transition to safety check
+              showWaiting(null);
             }
           } else {
             const msg = await res.text().catch(() => '');
             toast(msg || 'Failed to get door — please ask dispatch.');
+            showWaiting(null);
           }
         } catch(e) { toast('Network error'); }
       }
@@ -908,11 +910,13 @@ body{background-image:none!important;background:transparent!important}
             updateLiveDoor(data.door);
             showDoorAssigned('Door Assigned!', data.alreadyActive ? `Your trailer is at Door ${data.door}.` : `Head to Door ${data.door}. Dispatch notified.`, true, data.door);
           } else {
-            toast('No door available — please ask dispatch.');
+            // No door yet — show waiting screen so WS can transition to safety check
+            showWaiting(null);
           }
         } else {
           const msg = await res.text().catch(() => '');
-          toast(msg || 'No door available — please ask dispatch.');
+          showWaiting(null);
+          toast(msg || 'Registered — dispatch will assign your door.');
         }
       } catch(e) {
         toast('Network Error');
@@ -995,13 +999,17 @@ body{background-image:none!important;background:transparent!important}
     });
 
     // -- Door Display Helper --
-    // showWaiting — door assigned, waiting for dispatch to mark Ready
+    // showWaiting — door assigned (or pending), waiting for dispatch to mark Ready
     function showWaiting(door) {
-      const d = door || state.assignedDoor || '--';
-      state.assignedDoor = d !== '--' ? d : state.assignedDoor;
-      document.getElementById('ts-wait-door').textContent = d;
+      const d = door || state.assignedDoor || null;
+      if (d) state.assignedDoor = d;
+      const doorEl = document.getElementById('ts-wait-door');
+      const subEl  = document.getElementById('ts-wait-sub');
+      if (doorEl) doorEl.textContent = d || '--';
       document.getElementById('ts-wait-trailer-tag').textContent = `🚛 ${state.trailer}`;
-      document.getElementById('ts-wait-sub').textContent = `You'll be notified the moment your truck is ready for pickup.`;
+      if (subEl) subEl.textContent = d
+        ? `You'll be notified the moment your truck is ready for pickup.`
+        : `Dispatch is assigning your door. You'll be notified when ready.`;
       show('ts-s-waiting');
     }
 
@@ -1057,19 +1065,26 @@ body{background-image:none!important;background:transparent!important}
     (function hookDriverWs() {
       function myTrailer() { return (state.trailer || '').toUpperCase(); }
 
-      // Screens where the driver has an active session and should receive updates
-      const ACTIVE_SCREENS = ['ts-s-waiting','ts-s-door','ts-s-safety','ts-s-done'];
-      // Screens to check for "are we mid-session" (not yet at done, not at home)
-      const MID_SCREENS    = ['ts-s-waiting','ts-s-door','ts-s-omw'];
+      // Screens where driver is NOT yet in a session (no trailer committed yet)
+      const PRE_SESSION = new Set(['ts-s-home', 'ts-s-carrier']);
 
       function isOnScreen(id) {
         const el = document.getElementById(id);
         return el && el.classList.contains('ts-active');
       }
-      function isInSession() {
-        // Any mid-session screen, OR trailer is set (handles done screen edge case)
-        return MID_SCREENS.some(isOnScreen) || (!!state.trailer && !isOnScreen('ts-s-home'));
+      function activeScreen() {
+        const el = document.querySelector('#driverView .ts-screen.ts-active');
+        return el ? el.id : null;
       }
+      function isInSession() {
+        // In session if trailer is set AND we're past home/carrier screens
+        if (!state.trailer) return false;
+        const cur = activeScreen();
+        return cur !== null && !PRE_SESSION.has(cur);
+      }
+      // All screens that should respond to dispatch updates
+      const ACTIVE_SCREENS = ['ts-s-actions','ts-s-omw','ts-s-drop','ts-s-ext-carrier',
+                              'ts-s-door-select','ts-s-waiting','ts-s-door','ts-s-safety','ts-s-done'];
 
       // Update the waiting screen door number when dispatch assigns/changes a door
       function refreshWaitDoor(door) {

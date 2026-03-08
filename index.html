@@ -1057,13 +1057,34 @@ body{background-image:none!important;background:transparent!important}
     (function hookDriverWs() {
       function myTrailer() { return (state.trailer || '').toUpperCase(); }
 
+      // Screens where the driver has an active session and should receive updates
+      const ACTIVE_SCREENS = ['ts-s-waiting','ts-s-door','ts-s-safety','ts-s-done'];
+      // Screens to check for "are we mid-session" (not yet at done, not at home)
+      const MID_SCREENS    = ['ts-s-waiting','ts-s-door','ts-s-omw'];
+
+      function isOnScreen(id) {
+        const el = document.getElementById(id);
+        return el && el.classList.contains('ts-active');
+      }
+      function isInSession() {
+        // Any mid-session screen, OR trailer is set (handles done screen edge case)
+        return MID_SCREENS.some(isOnScreen) || (!!state.trailer && !isOnScreen('ts-s-home'));
+      }
+
       // Update the waiting screen door number when dispatch assigns/changes a door
       function refreshWaitDoor(door) {
         if (!door) return;
         state.assignedDoor = String(door);
-        const el = document.getElementById('ts-wait-door');
-        if (el) el.textContent = door;
+        const doorEl = document.getElementById('ts-wait-door');
+        if (doorEl) doorEl.textContent = door;
         updateLiveDoor(door);
+      }
+
+      // Navigate to waiting screen — called when dispatch assigns a door
+      // but driver may currently be on done/success screen from a drop
+      function goToWaiting(door) {
+        if (door) refreshWaitDoor(door);
+        showWaiting(door || state.assignedDoor || '--');
       }
 
       function onBusMsg(e) {
@@ -1071,59 +1092,58 @@ body{background-image:none!important;background:transparent!important}
         if (!msg) return;
         const { type, payload } = msg;
 
-        // ── state broadcast: dispatch changed this trailer's door or status ──
-        if (type === 'state' && myTrailer()) {
+        // ── state broadcast: full trailer table pushed after any change ──
+        if (type === 'state') {
+          if (!myTrailer()) return;
           const rec = payload?.[myTrailer()];
+          console.log('[driver-ws] state recv — trailer:', myTrailer(), 'rec:', rec, 'inSession:', isInSession());
           if (!rec) return;
-          const activeScreens = ['ts-s-waiting','ts-s-door'];
-          const onActive = activeScreens.some(id => {
-            const el = document.getElementById(id);
-            return el && el.classList.contains('ts-active');
-          });
-          if (onActive && rec.door && rec.door !== state.assignedDoor) {
+          // Door updated by dispatch
+          if (rec.door && rec.door !== state.assignedDoor) {
             refreshWaitDoor(rec.door);
-            toast(`Door updated → ${rec.door}`, 2500);
+            if (isOnScreen('ts-s-waiting'))
+              toast(`Door ${rec.door} assigned`, 3000);
           }
-          // If dispatch marks ready while driver is on waiting screen
-          if (rec.status === 'Ready') {
-            const waiting = document.getElementById('ts-s-waiting');
-            if (waiting && waiting.classList.contains('ts-active')) {
-              if (rec.door) state.assignedDoor = String(rec.door);
-              showSafetyCheck();
-            }
+          // Status set to Ready — trigger safety check from ANY mid-session screen
+          if (rec.status === 'Ready' && isInSession()) {
+            console.log('[driver-ws] state→Ready — calling showSafetyCheck');
+            if (rec.door) state.assignedDoor = String(rec.door);
+            showSafetyCheck();
           }
           return;
         }
 
         if (type !== 'notify' || !payload) return;
         const { kind, trailer, door } = payload;
-        if (!trailer || (myTrailer() && myTrailer() !== trailer.toUpperCase())) return;
+
+        console.log('[driver-ws] notify recv — kind:', kind, 'trailer:', trailer, 'door:', door, 'myTrailer:', myTrailer(), 'inSession:', isInSession());
+
+        // Trailer filter: if we know our trailer, only react to matching events
+        if (!myTrailer()) { console.log('[driver-ws] skip — no myTrailer set'); return; }
+        if (myTrailer() !== trailer.toUpperCase()) { console.log('[driver-ws] skip — trailer mismatch', myTrailer(), '!==', trailer.toUpperCase()); return; }
 
         // ── Door assigned by dispatch after a drop ──
         if (kind === 'drop' && door) {
-          const waiting = document.getElementById('ts-s-waiting');
-          if (waiting && waiting.classList.contains('ts-active')) {
-            refreshWaitDoor(door);
-            toast(`Door ${door} assigned`, 3000);
+          if (isOnScreen('ts-s-done') || isOnScreen('ts-s-waiting')) {
+            goToWaiting(door);
+            toast(`Door ${door} assigned — hang tight`, 4000);
           }
         }
 
-        // ── Ready: transition waiting → safety check ──
+        // ── Ready: transition to safety check from ANY active screen ──
         if (kind === 'ready') {
           if (door) state.assignedDoor = String(door);
-          const waiting = document.getElementById('ts-s-waiting');
-          if (waiting && waiting.classList.contains('ts-active')) {
+          console.log('[driver-ws] ready — inSession:', isInSession(), 'active screens:', ACTIVE_SCREENS.filter(isOnScreen));
+          if (isInSession()) {
             showSafetyCheck();
+          } else {
+            console.warn('[driver-ws] ready fired but isInSession()=false — state.trailer:', state.trailer);
           }
         }
 
-        // ── Departed: if dispatch marks it departed, return to home ──
+        // ── Departed: if dispatch marks it departed while driver is still active ──
         if (kind === 'departed') {
-          const safety = document.getElementById('ts-s-safety');
-          const waiting = document.getElementById('ts-s-waiting');
-          const onSafetyOrWait = (safety && safety.classList.contains('ts-active')) ||
-                                 (waiting && waiting.classList.contains('ts-active'));
-          if (onSafetyOrWait) {
+          if (ACTIVE_SCREENS.some(isOnScreen)) {
             showSuccess('Trailer Departed', 'Dispatch has marked your trailer as departed.', [
               {k:'Trailer', v:state.trailer}, {k:'Door', v:state.assignedDoor||'—'}
             ]);
@@ -1131,11 +1151,13 @@ body{background-image:none!important;background:transparent!important}
         }
       }
 
-      // Bus is created by app.js before first WS message — wait for it if needed
+      // Bus is created by app.js on first WS connect — poll until available
       function attach() {
         if (window._wsBus) {
           window._wsBus.addEventListener('msg', onBusMsg);
+          console.log('[driver] WS bus attached ✓');
         } else {
+          console.log('[driver] _wsBus not ready, retrying...');
           setTimeout(attach, 200);
         }
       }

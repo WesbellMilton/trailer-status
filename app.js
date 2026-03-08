@@ -56,6 +56,10 @@
     return r;
   };
   const esc=s=>String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
+  // Shared constants
+  const DOORS=[];for(let _d=28;_d<=42;_d++)DOORS.push(String(_d));
+  const canEditPlates=()=>ROLE==="dispatcher"||ROLE==="dock"||ROLE==="management"||ROLE==="admin";
+  const canEditTrailers=()=>ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin";
 
   // BUG FIX: unified fetch helper — was split between apiJson and an undefined apiFetch
   async function apiJson(url,opts){
@@ -268,6 +272,11 @@
   const STATUS_ROW={Loading:"r-loading",Ready:"r-ready","Dock Ready":"r-dockready",Dropped:"r-dropped",Incoming:"r-incoming",Departed:"r-departed"};
   const OCC_STATUS_CLS={Incoming:"occ-incoming",Dropped:"occ-dropped",Loading:"occ-loading","Dock Ready":"occ-dockready",Ready:"occ-ready",Departed:"occ-departed",Blocked:"occ-blocked"};
   const STATUS_TAG={Loading:"stag-loading",Ready:"stag-ready","Dock Ready":"stag-dockready",Dropped:"stag-dropped",Incoming:"stag-incoming",Departed:"stag-departed"};
+  const NEXT_STATUS={
+    Incoming:["Dropped","Departed"],Dropped:["Loading","Departed"],
+    Loading:["Dock Ready","Departed"],"Dock Ready":["Ready","Departed"],
+    Ready:["Departed"],Departed:["Incoming"],
+  };
 
   const statusTag=s=>`<span class="stag ${STATUS_TAG[s]||"stag-unknown"}"><span class="sp"></span>${esc(s||"—")}</span>`;
   const carrierTag=c=>{
@@ -307,8 +316,8 @@
     const occupied=getOccupiedDoors();
     const canEdit=ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin"||ROLE==="dock";
     let html="";
-    for(let d=28;d<=42;d++){
-      const ds=String(d),occ=occupied[ds],isBlock=occ?.status==="Blocked";
+    for(const ds of DOORS){
+      const occ=occupied[ds],isBlock=occ?.status==="Blocked";
       const cls=occ?(isBlock?"dm-occupied dm-blocked":`dm-occupied dm-${(STATUS_ROW[occ.status]||"r-incoming").replace("r-","")}`):"dm-free";
       const clickable=canEdit?" dm-clickable":"",attrs=canEdit?`tabindex="0" role="button"`:"";
       html+=`<div class="dm-cell ${cls}${clickable}" data-dm-door="${ds}" ${attrs}>
@@ -370,11 +379,7 @@
     const canEdit=!readOnly&&(ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin");
     const canDock=!readOnly&&(ROLE==="dock"||ROLE==="admin");
     const occupied=getOccupiedDoors();
-    const NEXT_STATUS={
-      Incoming:["Dropped","Departed"],Dropped:["Loading","Departed"],
-      Loading:["Dock Ready","Departed"],"Dock Ready":["Ready","Departed"],
-      Ready:["Departed"],Departed:["Incoming"],
-    };
+
     tbodyEl.innerHTML=filt.map(r=>{
       const rowCls=STATUS_ROW[r.status]||"";
       const omwActive=r.omwAt&&r.status==="Incoming";
@@ -428,11 +433,7 @@
     const canEdit=ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin";
     const canDock=ROLE==="dock"||ROLE==="admin";
     const occupied=getOccupiedDoors();
-    const NEXT_STATUS={
-      Incoming:["Dropped","Departed"],Dropped:["Loading","Departed"],
-      Loading:["Dock Ready","Departed"],"Dock Ready":["Ready","Departed"],
-      Ready:["Departed"],Departed:["Incoming"],
-    };
+
     const NB_CLS={Dropped:"",Loading:"nb-loading","Dock Ready":"nb-dockready",Ready:"nb-ready",Departed:"nb-departed",Incoming:""};
     tbodyEl.innerHTML=filt.map(r=>{
       const rowCls=STATUS_ROW[r.status]||"";
@@ -533,11 +534,7 @@
     el("dsdTrailerId").textContent=trailerId;
     el("dsdMeta").innerHTML=`${r.direction||"—"} · ${r.carrierType||"—"}<br>${fmtTime(r.updatedAt)||"—"}`;
     // Status buttons
-    const NEXT_STATUS={
-      Incoming:["Dropped","Departed"],Dropped:["Loading","Departed"],
-      Loading:["Dock Ready","Departed"],"Dock Ready":["Ready","Departed"],
-      Ready:["Departed"],Departed:["Incoming"],
-    };
+
     const DSB_CLS={Dropped:"dsb-dropped",Loading:"dsb-loading","Dock Ready":"dsb-dockready",Ready:"dsb-ready",Departed:"dsb-departed",Incoming:"dsb-incoming"};
     const nexts=NEXT_STATUS[r.status]||[];
     const statusRow=el("dsdStatusRow");
@@ -627,8 +624,8 @@
 
   function renderPlates(){
     if(isDriver())return;
-    const canEdit=ROLE==="dispatcher"||ROLE==="dock"||ROLE==="management"||ROLE==="admin";
-    const doors=[];for(let d=28;d<=42;d++)doors.push(String(d));
+    const canEdit=canEditPlates();
+    const doors=DOORS;
     const v=Object.values(dockPlates||{});
     const summary=`${v.filter(p=>p?.status==="OK").length} OK · ${v.filter(p=>p?.status==="Service").length} Svc · ${v.filter(p=>p?.status==="Out of Order").length} OOO`;
     ["platesMini","platesMini2"].forEach(id=>{const e=el(id);if(e)e.textContent=summary;});
@@ -677,7 +674,7 @@
   function renderDspOccupancy(){
     if(isDriver())return;
     const grid=el("dspOccGrid");if(!grid)return;
-    const doors=[];for(let d=28;d<=42;d++)doors.push(String(d));
+    const doors=DOORS;
     const occupied=getOccupiedDoors();
     const freeCount=doors.filter(d=>!occupied[d]).length;
     const loadCount=doors.filter(d=>occupied[d]?.status==="Loading").length;
@@ -692,8 +689,8 @@
   function renderDspPlates(){
     if(isDriver())return;
     const grid=el("dspPlatesGrid");if(!grid)return;
-    const canEdit=ROLE==="dispatcher"||ROLE==="dock"||ROLE==="management"||ROLE==="admin";
-    const doors=[];for(let d=28;d<=42;d++)doors.push(String(d));
+    const canEdit=canEditPlates();
+    const doors=DOORS;
     const v=Object.values(dockPlates||{});
     const sumEl=el("dspPlatesSummary");
     const okCount=v.filter(p=>p?.status==="OK").length;
@@ -821,7 +818,7 @@
         const countdownTxt = rem === null ? "OMW" : arriving ? "Arriving" : `${rem}m`;
         const doorHtml = r.door ? `<span class="dsp-eta-door">D${esc(r.door)}</span>` : "";
         const noteTxt  = r.note || (r.carrierType && r.carrierType !== "Wesbell" ? r.carrierType : "");
-        return `<div class="dsp-eta-row ${rowCls}" style="--eta-pct:${pct}%" data-eta-arrives="${eta||""}">
+        return `<div class="dsp-eta-row ${rowCls}" style="--eta-pct:${pct}%" data-eta-arrives="${eta||""}" data-eta-dur="${eta&&r.omwAt?eta-r.omwAt:0}">
           <span class="dsp-eta-trailer">${esc(r.trailer)}</span>
           ${doorHtml}
           <div class="dsp-eta-meta">
@@ -836,8 +833,9 @@
     list.innerHTML = buildRows();
 
     if (sumEl) {
-      const arriving = incoming.filter(r => r.omwEta && Math.max(0, Math.ceil((r.omwAt + r.omwEta * 60000 - now) / 60000)) === 0).length;
-      const soon     = incoming.filter(r => r.omwEta && Math.max(0, Math.ceil((r.omwAt + r.omwEta * 60000 - now) / 60000)) <= 10 && Math.max(0, Math.ceil((r.omwAt + r.omwEta * 60000 - now) / 60000)) > 0).length;
+      const _rem=r=>r.omwEta?Math.max(0,Math.ceil((r.omwAt+r.omwEta*60000-now)/60000)):null;
+      const arriving = incoming.filter(r=>_rem(r)===0).length;
+      const soon     = incoming.filter(r=>{const m=_rem(r);return m!==null&&m>0&&m<=10;}).length;
       sumEl.innerHTML = `${incoming.length} truck${incoming.length > 1 ? "s" : ""}`
         + (arriving ? ` · <span style="color:#19e09a">1 arriving</span>` : "")
         + (soon ? ` · <span style="color:#f5a623">${soon} &lt;10m</span>` : "");
@@ -856,11 +854,8 @@
         row.classList.toggle("eta-soon", soon);
         const cd = row.querySelector(".dsp-eta-countdown");
         if (cd) cd.textContent = arriving ? "Arriving" : `${rem}m`;
-        const pct = Math.min(100, Math.round(((Date.now() - (eta - (rem + (arriving ? 0 : 0)) * 60000)) / (eta - (eta - row._omwAt))) * 100));
-        // Simpler progress: just increment by recalculating
-        const omwAt = eta - (parseInt(row.dataset.etaEta) || 0) * 60000;
-        const total = eta - omwAt;
-        if (total > 0) row.style.setProperty("--eta-pct", Math.min(100, Math.round(((Date.now() - omwAt) / total) * 100)) + "%");
+        const omwDur=parseInt(row.dataset.etaDur)||0;
+        if(omwDur>0){const pct=Math.min(100,Math.round(((Date.now()-(eta-omwDur))/omwDur)*100));row.style.setProperty("--eta-pct",pct+"%");}
       });
     }, 30000);
   }
@@ -1081,7 +1076,7 @@
 
   function renderDvOccupancy(){
     const grid=el("dvOccGrid");if(!grid)return;
-    const doors=[];for(let d=28;d<=42;d++)doors.push(String(d));
+    const doors=DOORS;
     const occupied=getOccupiedDoors();
     const freeCount=doors.filter(d=>!occupied[d]).length;
     const loadCount=doors.filter(d=>occupied[d]?.status==="Loading").length;
@@ -1187,8 +1182,6 @@
   }
 
   // ── DOCK VIEW — OCCUPANCY + PLATES PANELS ────────────────────────────
-  let _dvPlatesInited=false;
-
   function _wireDvPanel(toggleId,bodyId){
     const tog=document.getElementById(toggleId),body=document.getElementById(bodyId);
     if(!tog||!body)return;
@@ -1205,8 +1198,8 @@
   function renderDockPlatesPanel(){
     const grid=document.getElementById("dvPlatesGrid");
     if(!grid)return;
-    const canEdit=ROLE==="dispatcher"||ROLE==="dock"||ROLE==="management"||ROLE==="admin";
-    const doors=[];for(let d=28;d<=42;d++)doors.push(String(d));
+    const canEdit=canEditPlates();
+    const doors=DOORS;
     const v=Object.values(dockPlates||{});
     const okCount=v.filter(p=>p?.status==="OK").length;
     const svcCount=v.filter(p=>p?.status==="Service").length;
@@ -1251,17 +1244,13 @@
       </div>`;
     }).join("");
 
-    if(!_dvPlatesInited){
-      _dvPlatesInited=true;
-      _wireDvPanel("dvPlatesToggle","dvPlatesBody");
-      _wireDvPanel("dvOccToggle","dvOccBody");
-    }
+
   }
 
   // legacy — kept for map view modal in global click handler
   function renderDockDoorMapView(cards,rows,canAct){
     const byDoor={};rows.forEach(r=>{if(r.door)byDoor[r.door]=r;});
-    const doors=[];for(let d=28;d<=42;d++)doors.push(String(d));
+    const doors=DOORS;
     cards.innerHTML=`<div class="dock-map-full"><div class="dmf-header"><span class="dmf-title">Door Occupancy</span><span class="dmf-free">${doors.filter(d=>!byDoor[d]).length} free</span></div><div class="dmf-grid">${doors.map(door=>{
       const r=byDoor[door],blocked=doorBlocks[door];
       if(blocked)return`<div class="dmf-cell dmf-blocked"><div class="dmf-door">D${door}</div><div class="dmf-status">Blocked</div></div>`;
@@ -1352,6 +1341,8 @@
     el("btnDimMode")?.addEventListener("click",toggleDimMode);
     el("btnDockStaffLogin")?.addEventListener("click",()=>el("staffLoginOv")?.classList.remove("hidden"));
     el("btnVoiceDock")?.addEventListener("click",startVoiceInput);
+    _wireDvPanel("dvPlatesToggle","dvPlatesBody");
+    _wireDvPanel("dvOccToggle","dvOccBody");
   }
 
   function openQuickIssue(trailer,door){
@@ -1379,7 +1370,7 @@
     el("dr_trailer").textContent=trailer;ov.classList.remove("hidden");
     const grid=el("dr_door_grid");if(!grid)return;
     const occupied=getOccupiedDoors();
-    const doors=[];for(let d=28;d<=42;d++)doors.push(String(d));
+    const doors=DOORS;
     grid.innerHTML=doors.map(d=>{
       const occ=occupied[d]||doorBlocks[d];
       return`<button class="dr-door-btn ${occ?"dr-door-occ":""}" data-door="${d}" ${occ?"disabled":""} onclick="selectReserveDoor(this,'${d}')">${d}${occ?`<span class='dr-occ-lbl'>${occ.trailer||"Block"}</span>`:""}</button>`;
@@ -2103,7 +2094,7 @@
 
     if(id==="btnArrDone"||id==="btnOmwDone")return driverRestart();
     if(id==="btnBackToFlow"){
-      const sb=document.querySelector("[data-flow='shunt']");if(sb)sb.style.display=isOutside?"none":"";
+      const sb=document.querySelector("[data-flow='shunt']");if(sb)sb.style.display="";
     }
     if(id==="btnDriverDrop")return driverDrop();
     if(id==="btnXdockPickup")return xdockPickup();
@@ -3061,26 +3052,24 @@
   window.updateTrackingList=function(){};
 
 
-  // ── Legacy / stub functions (driver view is self-contained in index.html) ──
-  async function driverDrop(){console.warn("[legacy] driverDrop called — driver view is self-contained");}
-  async function xdockPickup(){console.warn("[legacy] xdockPickup called");}
-  async function xdockOffload(){console.warn("[legacy] xdockOffload called");}
-  async function confSafety(){console.warn("[legacy] confSafety called");}
-  async function driverShunt(){console.warn("[legacy] driverShunt called");}
-  function selectFlow(f){console.warn("[legacy] selectFlow called",f);}
-  function onTrailerInput(){console.warn("[legacy] onTrailerInput called");}
-  function onPickupTrailerInput(){console.warn("[legacy] onPickupTrailerInput called");}
-  function onOffloadTrailerInput(){console.warn("[legacy] onOffloadTrailerInput called");}
-  function buildShuntDoorPicker(){console.warn("[legacy] buildShuntDoorPicker called");}
-  function buildDoorPicker(){console.warn("[legacy] buildDoorPicker called");}
-  function showDoorPicker(){console.warn("[legacy] showDoorPicker called");}
-  function updateShuntSubmitState(){console.warn("[legacy] updateShuntSubmitState called");}
-  function updateDropSubmitState(){console.warn("[legacy] updateDropSubmitState called");}
-  function updateOffloadSubmitState(){console.warn("[legacy] updateOffloadSubmitState called");}
-  function updateSafetySubmitState(){console.warn("[legacy] updateSafetySubmitState called");}
+  // Stubs for functions called from click handler / event wires that live in driver view
+  function driverDrop(){}
+  function xdockPickup(){}
+  function xdockOffload(){}
+  function confSafety(){}
+  function driverShunt(){}
+  function selectFlow(){}
+  function onTrailerInput(){}
+  function onPickupTrailerInput(){}
+  function onOffloadTrailerInput(){}
+  function buildShuntDoorPicker(){}
+  function buildDoorPicker(){}
+  function showDoorPicker(){}
+  function updateShuntSubmitState(){}
+  function updateDropSubmitState(){}
+  function updateOffloadSubmitState(){}
+  function updateSafetySubmitState(){}
   function openDockIssueModal(t,d){openQuickIssue(t,d||"");}
-  async function loadIssueReports(){console.warn("[legacy] loadIssueReports — no UI yet");}
-  // isOutside: referenced in btnBackToFlow which is also legacy
-  const isOutside=false;
+  async function loadIssueReports(){}
 
 })();

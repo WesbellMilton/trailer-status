@@ -5405,6 +5405,50 @@ select option { background: #0d1119; }
   border-top-color: rgba(24,212,232,.1);
 }
 
+/* ── ETA tracking panel ── */
+.dsp-eta-panel .dsp-plates-toggle {
+  border-top-color: rgba(245,166,35,.15);
+}
+.dsp-eta-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px; border-radius: 10px;
+  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06);
+  position: relative; overflow: hidden; transition: border-color .2s;
+}
+.dsp-eta-row.eta-arriving {
+  border-color: rgba(25,224,154,.3); background: rgba(25,224,154,.05);
+}
+.dsp-eta-row.eta-soon {
+  border-color: rgba(245,166,35,.25); background: rgba(245,166,35,.04);
+}
+/* Progress bar fill */
+.dsp-eta-row::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+  background: rgba(245,166,35,.07); border-radius: 10px 0 0 10px;
+  width: var(--eta-pct, 0%); transition: width 1s linear; pointer-events: none;
+}
+.dsp-eta-row.eta-arriving::before { background: rgba(25,224,154,.08); }
+.dsp-eta-trailer {
+  font-family: var(--mono); font-size: 13px; font-weight: 700;
+  color: var(--t0); min-width: 52px; flex-shrink: 0;
+}
+.dsp-eta-door {
+  font-size: 11px; font-weight: 600; color: var(--t2);
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+  border-radius: 6px; padding: 2px 8px; flex-shrink: 0; font-family: var(--mono);
+}
+.dsp-eta-meta { flex: 1; min-width: 0; }
+.dsp-eta-note { font-size: 11px; color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dsp-eta-since { font-size: 10px; color: var(--t3); }
+.dsp-eta-countdown {
+  font-size: 14px; font-weight: 800; font-family: var(--mono);
+  color: #f5a623; flex-shrink: 0; min-width: 52px; text-align: right;
+  letter-spacing: -.02em;
+}
+.dsp-eta-row.eta-arriving .dsp-eta-countdown { color: #19e09a; }
+.dsp-eta-omw-only .dsp-eta-countdown { color: var(--t2); font-size: 11px; font-weight: 600; }
+
+
 /* Plate status icon (large, centered in plate card) */
 .dpb-status-icon {
   font-size: 18px;

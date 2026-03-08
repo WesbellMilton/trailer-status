@@ -515,6 +515,7 @@
     if(_selectedTrailer)renderDetailPanel(_selectedTrailer);
     renderDspOccupancy();
     renderDspPlates();
+    renderDspEta();
   }
 
   // ── DETAIL PANEL ─────────────────────────────────────────────────────────
@@ -648,6 +649,7 @@
     });
     renderDspOccupancy();
     renderDspPlates();
+    renderDspEta();
   }
 
   // ── Shared occupancy card helpers ─────────────────────────────────────
@@ -747,6 +749,86 @@
     }
     wirePanel("dspOccToggle","dspOccBody");
     wirePanel("dspPlatesToggle","dspPlatesBody");
+    wirePanel("dspEtaToggle","dspEtaBody");
+  }
+
+  // ── ETA tracking panel ────────────────────────────────────────────────
+  let _etaCountdownTimer = null;
+
+  function renderDspEta() {
+    const panel = el("dspEtaPanel");
+    const list  = el("dspEtaList");
+    const sumEl = el("dspEtaSummary");
+    if (!list) return;
+
+    const incoming = Object.entries(trailers)
+      .map(([t, r]) => ({ trailer: t, ...r }))
+      .filter(r => r.status === "Incoming" && r.omwAt)
+      .sort((a, b) => {
+        const etaA = a.omwEta ? a.omwAt + a.omwEta * 60000 : Infinity;
+        const etaB = b.omwEta ? b.omwAt + b.omwEta * 60000 : Infinity;
+        return etaA - etaB;
+      });
+
+    // Show/hide panel
+    if (panel) panel.style.display = incoming.length ? "" : "none";
+    if (!incoming.length) { clearInterval(_etaCountdownTimer); _etaCountdownTimer = null; return; }
+
+    const now = Date.now();
+
+    function buildRows() {
+      return incoming.map(r => {
+        const eta    = r.omwEta ? r.omwAt + r.omwEta * 60000 : null;
+        const rem    = eta ? Math.max(0, Math.ceil((eta - Date.now()) / 60000)) : null;
+        const pct    = eta ? Math.min(100, Math.round(((Date.now() - r.omwAt) / (eta - r.omwAt)) * 100)) : 0;
+        const arriving = rem === 0;
+        const soon     = rem !== null && rem <= 10 && !arriving;
+        const rowCls   = arriving ? "eta-arriving" : soon ? "eta-soon" : rem === null ? "dsp-eta-omw-only" : "";
+        const countdownTxt = rem === null ? "OMW" : arriving ? "Arriving" : `${rem}m`;
+        const doorHtml = r.door ? `<span class="dsp-eta-door">D${esc(r.door)}</span>` : "";
+        const noteTxt  = r.note || (r.carrierType && r.carrierType !== "Wesbell" ? r.carrierType : "");
+        return `<div class="dsp-eta-row ${rowCls}" style="--eta-pct:${pct}%" data-eta-arrives="${eta||""}">
+          <span class="dsp-eta-trailer">${esc(r.trailer)}</span>
+          ${doorHtml}
+          <div class="dsp-eta-meta">
+            ${noteTxt ? `<div class="dsp-eta-note">${esc(noteTxt)}</div>` : ""}
+            <div class="dsp-eta-since">OMW ${timeAgo(r.omwAt)}</div>
+          </div>
+          <span class="dsp-eta-countdown">${countdownTxt}</span>
+        </div>`;
+      }).join("");
+    }
+
+    list.innerHTML = buildRows();
+
+    if (sumEl) {
+      const arriving = incoming.filter(r => r.omwEta && Math.max(0, Math.ceil((r.omwAt + r.omwEta * 60000 - now) / 60000)) === 0).length;
+      const soon     = incoming.filter(r => r.omwEta && Math.max(0, Math.ceil((r.omwAt + r.omwEta * 60000 - now) / 60000)) <= 10 && Math.max(0, Math.ceil((r.omwAt + r.omwEta * 60000 - now) / 60000)) > 0).length;
+      sumEl.innerHTML = `${incoming.length} truck${incoming.length > 1 ? "s" : ""}`
+        + (arriving ? ` · <span style="color:#19e09a">1 arriving</span>` : "")
+        + (soon ? ` · <span style="color:#f5a623">${soon} &lt;10m</span>` : "");
+    }
+
+    // Live countdown — tick every 30s, update just the countdowns + progress bars
+    clearInterval(_etaCountdownTimer);
+    _etaCountdownTimer = setInterval(() => {
+      list.querySelectorAll(".dsp-eta-row").forEach(row => {
+        const eta = parseInt(row.dataset.etaArrives);
+        if (!eta) return;
+        const rem = Math.max(0, Math.ceil((eta - Date.now()) / 60000));
+        const arriving = rem === 0;
+        const soon = rem <= 10 && !arriving;
+        row.classList.toggle("eta-arriving", arriving);
+        row.classList.toggle("eta-soon", soon);
+        const cd = row.querySelector(".dsp-eta-countdown");
+        if (cd) cd.textContent = arriving ? "Arriving" : `${rem}m`;
+        const pct = Math.min(100, Math.round(((Date.now() - (eta - (rem + (arriving ? 0 : 0)) * 60000)) / (eta - (eta - row._omwAt))) * 100));
+        // Simpler progress: just increment by recalculating
+        const omwAt = eta - (parseInt(row.dataset.etaEta) || 0) * 60000;
+        const total = eta - omwAt;
+        if (total > 0) row.style.setProperty("--eta-pct", Math.min(100, Math.round(((Date.now() - omwAt) / total) * 100)) + "%");
+      });
+    }, 30000);
   }
 
   function renderSupConf(){

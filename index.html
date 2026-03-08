@@ -293,24 +293,6 @@ body{background-image:none!important;background:transparent!important}
     #driverView .ts-toast { position:absolute; bottom:20px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--surface2); border:1px solid var(--border2); border-radius:14px; padding:16px 24px; font-size:15px; font-weight:600; color:var(--t0); white-space:nowrap; z-index:999; transition:transform .3s cubic-bezier(.4,0,.2,1); pointer-events:none; box-shadow:0 10px 30px rgba(0,0,0,0.5); }
     #driverView .ts-toast.ts-show { transform:translateX(-50%) translateY(0); }
     @keyframes ts-fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
-    @keyframes ts-pulse-ring{0%{transform:scale(1);opacity:.6}70%{transform:scale(1.22);opacity:0}100%{transform:scale(1.22);opacity:0}}
-    @keyframes ts-spin-arc{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-    @keyframes ts-door-pop{0%{transform:scale(1)}35%{transform:scale(1.28)}70%{transform:scale(.94)}100%{transform:scale(1)}}
-    @keyframes ts-dot-live{0%,100%{opacity:1;box-shadow:0 0 8px rgba(25,224,154,.6)}50%{opacity:.55;box-shadow:0 0 18px rgba(25,224,154,1)}}
-    @keyframes ts-badge-flash{0%{background:rgba(245,166,35,.45);color:#fff;transform:scale(1.08)}100%{background:rgba(245,166,35,.08);color:var(--yellow);transform:scale(1)}}
-    #driverView .ts-dot { animation: ts-dot-live 2s ease-in-out infinite; }
-    #driverView .ts-wait-ring-wrap { position:relative; display:flex; align-items:center; justify-content:center; }
-    #driverView .ts-wait-ring-wrap::before { content:""; position:absolute; inset:-6px; border-radius:50%; border:2px solid rgba(245,166,35,.5); animation:ts-pulse-ring 2.4s ease-out infinite; pointer-events:none; }
-    #driverView .ts-wait-ring-wrap::after  { content:""; position:absolute; inset:-6px; border-radius:50%; border:2px solid rgba(245,166,35,.35); animation:ts-pulse-ring 2.4s ease-out infinite .8s; pointer-events:none; }
-    #driverView .ts-wait-ring-wrap.ts-has-door::before { border-color:rgba(25,224,154,.6); }
-    #driverView .ts-wait-ring-wrap.ts-has-door::after  { border-color:rgba(25,224,154,.4); }
-    #driverView .ts-wait-arc { position:absolute; inset:-12px; border-radius:50%; border:2px solid transparent; border-top-color:rgba(245,166,35,.4); animation:ts-spin-arc 3s linear infinite; pointer-events:none; }
-    #driverView .ts-wait-arc.ts-has-door { border-top-color:rgba(25,224,154,.5); }
-    #driverView .ts-door-number.ts-door-flash { animation:ts-door-pop .45s cubic-bezier(.175,.885,.32,1.275) both; }
-    #driverView .ts-live-badge { display:inline-flex; align-items:center; gap:5px; background:rgba(245,166,35,.08); border:1px solid rgba(245,166,35,.2); border-radius:20px; padding:5px 12px; font-size:11px; font-weight:600; color:var(--yellow); letter-spacing:.04em; }
-    #driverView .ts-live-badge .ts-dot { width:6px; height:6px; border-radius:50%; background:var(--yellow); flex-shrink:0; animation:ts-dot-live 2s ease-in-out infinite; }
-    #driverView .ts-live-badge.ts-live-green { background:rgba(25,224,154,.08); border-color:rgba(25,224,154,.2); color:var(--green); }
-    #driverView .ts-live-badge.ts-live-green .ts-dot { background:var(--green); }
     #driverView .ts-anim { animation:ts-fadeUp .4s ease both; }
   </style>
 
@@ -329,7 +311,6 @@ body{background-image:none!important;background:transparent!important}
   <div class="ts-screen ts-active" id="ts-s-home">
     <div class="ts-topbar ts-anim">
       <div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div>
-      <a href="/" id="drBackBtn" class="dv-back-btn" style="display:none;">← Dispatch</a>
       <div class="ts-status-chip"><div class="ts-dot"></div>Live</div>
     </div>
     <div class="ts-hero">
@@ -531,23 +512,23 @@ body{background-image:none!important;background:transparent!important}
       <div id="ts-wait-trailer-tag" class="ts-trailer-tag"></div>
     </div>
     <div class="ts-door-hero">
-      <div class="ts-wait-ring-wrap" id="ts-wait-ring-wrap">
-        <div class="ts-wait-arc" id="ts-wait-arc"></div>
-        <div class="ts-door-ring ts-done ts-anim" id="ts-wait-ring" style="border-color:rgba(245,166,35,.35);box-shadow:0 0 40px rgba(245,166,35,.12);">
-          <div>
-            <div style="font-size:13px;font-weight:600;letter-spacing:.14em;color:var(--t2);text-transform:uppercase;text-align:center;margin-bottom:6px">Your Door</div>
-            <div class="ts-door-number" id="ts-wait-door">--</div>
-          </div>
+      <div class="ts-door-ring ts-done ts-anim" id="ts-wait-ring" style="border-color:rgba(245,166,35,.35);box-shadow:0 0 40px rgba(245,166,35,.12);">
+        <div>
+          <div style="font-size:13px;font-weight:600;letter-spacing:.14em;color:var(--t2);text-transform:uppercase;text-align:center;margin-bottom:6px">Your Door</div>
+          <div class="ts-door-number" id="ts-wait-door">--</div>
         </div>
       </div>
       <div class="ts-door-headline ts-anim">Hang tight</div>
       <div class="ts-door-sub ts-anim" id="ts-wait-sub">You&#8217;ll be notified the moment your truck is ready for pickup.</div>
     </div>
     <div style="padding:0 24px 32px;display:flex;flex-direction:column;gap:10px;align-items:center;">
-      <div id="ts-wait-live-badge" class="ts-live-badge">
-        <div class="ts-dot"></div><span>Waiting for dispatch</span>
+      <div style="display:flex;align-items:center;gap:10px;background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.2);border-radius:12px;padding:14px 18px;width:100%;max-width:360px;">
+        <div style="font-size:22px;">🔔</div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--t0);margin-bottom:2px;">Waiting for dispatch</div>
+          <div style="font-size:11px;color:var(--t2);">This screen updates automatically when marked Ready.</div>
+        </div>
       </div>
-      <div style="font-size:11px;color:var(--t3);text-align:center;margin-top:2px;">This screen updates live when marked Ready.</div>
     </div>
   </div>
 
@@ -598,29 +579,6 @@ body{background-image:none!important;background:transparent!important}
     // Read location from URL: /driver?loc=milton sets locationId
     const _driverLocSlug = new URLSearchParams(location.search).get('loc') || '';
     let _driverLocationId = 1; // resolved after slug lookup below
-    // Warm the server on page load — Render free tier sleeps after 15 min (cold start ~30-50s)
-    let _serverReady = false;
-    (async () => {
-      for (let i = 0; i < 8; i++) {
-        try { const r = await fetch('/health'); if (r.ok) { _serverReady = true; return; } } catch {}
-        await new Promise(r => setTimeout(r, 7000));
-      }
-      _serverReady = true;
-    })();
-
-    // driverFetch: retries up to 3 times with 15s gaps on network failure (cold start resilience)
-    async function driverFetch(url, opts, statusEl) {
-      const attempt = () => fetch(url, opts);
-      const wait = (ms, msg) => {
-        if (statusEl) statusEl.textContent = msg;
-        return new Promise(r => setTimeout(r, ms));
-      };
-      try { return await attempt(); } catch {}
-      await wait(15000, 'Server waking up…');
-      try { return await attempt(); } catch {}
-      await wait(15000, 'Still connecting…');
-      return await attempt();
-    }
     (async () => {
       if (_driverLocSlug) {
         try {
@@ -630,7 +588,27 @@ body{background-image:none!important;background:transparent!important}
       }
     })();
 
-    let state = { trailer: '', carrier: '', action: '', eta: 10, dropType: 'Loaded', door: null, assignedDoor: null, safetyChecks: { load: false, plate: false } };
+    // Retry helper — handles Render cold-start timeouts transparently
+    // Retries up to 3x with 1.5s → 3s → 5s backoff, shows "Retrying…" after first failure
+    async function fetchWithRetry(url, opts, btnEl, retryLabel) {
+      const delays = [1500, 3000, 5000];
+      let lastErr;
+      for (let i = 0; i <= delays.length; i++) {
+        try {
+          const res = await fetch(url, opts);
+          return res; // success — return raw Response (caller handles ok/not-ok)
+        } catch(e) {
+          lastErr = e;
+          if (i < delays.length) {
+            if (btnEl && retryLabel) btnEl.innerHTML = `<span class="ts-ext-carrier-name" style="color:var(--amber,#f5a623)">${retryLabel} (retry ${i+1}/3)…</span>`;
+            await new Promise(r => setTimeout(r, delays[i]));
+          }
+        }
+      }
+      throw lastErr; // exhausted retries
+    }
+
+
 
     // --- Kiosk Mode (Isolate Driver View) ---
     const driverWrap = document.getElementById('driverView');
@@ -702,16 +680,7 @@ body{background-image:none!important;background:transparent!important}
     }
 
     document.querySelectorAll('#driverView [data-back]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const target = btn.dataset.back;
-        // Returning to home resets session — clear banner and trailer state
-        if (target === 'ts-s-home') {
-          state.assignedDoor = null;
-          state.door = null;
-          updateLiveDoor(null);
-        }
-        show(target);
-      });
+      btn.addEventListener('click', () => show(btn.dataset.back));
     });
 
     // If URL has ?loc= param it's the outside carrier QR — skip trailer entry entirely
@@ -726,11 +695,6 @@ body{background-image:none!important;background:transparent!important}
       goBtn.textContent = 'Get My Door →';
       goBtn.addEventListener('click', () => show('ts-s-ext-carrier'));
       document.querySelector('#ts-s-home').appendChild(goBtn);
-      // In QR mode, Back from carrier picker returns to home (not ts-s-carrier which doesn't exist in this flow)
-      const extCarrierBackBtn = document.querySelector('#ts-s-ext-carrier .ts-back-btn');
-      if (extCarrierBackBtn) extCarrierBackBtn.dataset.back = 'ts-s-home';
-      // Ensure any stale banner from a previous session is cleared on fresh QR load
-      updateLiveDoor(null);
     }
 
     // 1. Trailer Input
@@ -764,34 +728,23 @@ body{background-image:none!important;background:transparent!important}
         const prefix  = btn.dataset.extPrefix;
         btn.style.pointerEvents = 'none';
         btn.innerHTML = `<span class="ts-ext-carrier-name" style="color:var(--cyan)">Assigning door…</span>`;
-        const doRequest = () => driverFetch('/api/driver/ext-drop', {
+        try {
+          const res = await fetchWithRetry('/api/driver/ext-drop', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             body: JSON.stringify({ carrier, prefix, locationId: _driverLocationId })
-          }, btn);
-        try {
-          const res = await doRequest();
-          if (!res.ok) {
-            const errText = await res.text().catch(() => `Error ${res.status}`);
-            toast(`Error: ${errText}`, 4000);
-            return;
-          }
-          const data = await res.json().catch(() => ({}));
-          if (data.refCode) state.trailer = data.refCode;
-          state.action = 'ext-drop';
+          }, btn, 'Assigning door');
+          const data = res.ok ? await res.json().catch(() => ({})) : {};
+          if (data.refCode) state.trailer = data.refCode; // poll needs the real trailer ID
           if (data.door) {
             updateLiveDoor(data.door);
-            // Outside carriers don't wait for dispatch — show door immediately and let them proceed
-            showSuccess('Door Assigned!', `Pull straight into Door ${data.door}.`, [
-              { k: 'Carrier', v: carrier },
-              { k: 'Ref Code', v: data.refCode || state.trailer || '—' },
-              { k: 'Door', v: data.door }
-            ]);
+            showDoorAssigned('Door Assigned!', `Pull straight into Door ${data.door}.`, true, data.door);
           } else {
+            // No door yet — show waiting screen so poll can catch Ready
             showWaiting(null);
           }
         } catch {
-          toast('Network error — try again in a moment', 4000);
+          toast('Network error — check your connection and try again');
         } finally {
           btn.style.pointerEvents = '';
           btn.innerHTML = `<span class="ts-ext-carrier-name">${carrier}</span>`;
@@ -841,28 +794,15 @@ body{background-image:none!important;background:transparent!important}
       state.action = act;
       
       if (act === 'qd') {
-        try {
-          const opts = (force) => ({ method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: 'Loaded', carrierType: 'Wesbell', locationId: _driverLocationId, ...(force ? { force: true } : {}) }) });
-          let res = await driverFetch('/api/driver/drop', opts(false));
-          if (res.status === 409) {
-            const dup = await res.json().catch(() => ({}));
-            if (dup.duplicate) {
-              const ok = confirm(dup.message || `Trailer ${state.trailer} is already on the board. Overwrite?`);
-              if (!ok) return;
-              res = await driverFetch('/api/driver/drop', opts(true));
-            }
-          }
-          if (res.ok) {
-            showSuccess('Quick Drop Logged', 'Trailer dropped to yard instantly.', [{k:'Trailer',v:state.trailer},{k:'Action',v:'Quick Drop'}]);
-          } else {
-            toast(await res.text().catch(() => 'Drop failed'));
-          }
-        } catch(e) { toast('Network error — try again'); }
+        try { 
+          await fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: 'Loaded', carrierType: 'Wesbell' , locationId: _driverLocationId }) }); 
+          showSuccess('Quick Drop Logged', 'Trailer dropped to yard instantly.', [{k:'Trailer',v:state.trailer},{k:'Action',v:'Quick Drop'}]);
+        } catch(e) { toast('Error connecting to server'); }
       } 
       else if (act === 'shunt') {
         showDoorSelector('Shunt <span>Trailer</span>', 'Move to which door?', async () => {
           try {
-            await driverFetch('/api/driver/shunt', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, newDoor: state.door , locationId: _driverLocationId }) });
+            await fetch('/api/driver/shunt', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, newDoor: state.door , locationId: _driverLocationId }) });
             showSuccess('Shunt Complete', `Trailer moved to Door ${state.door}.`, [{k:'Trailer',v:state.trailer},{k:'New Door',v:state.door}]);
           } catch(e) { toast('Error shunting trailer'); }
         });
@@ -882,7 +822,7 @@ body{background-image:none!important;background:transparent!important}
       else if (act === 'arrive') {
         // REAL ARRIVAL FETCH
         try {
-          const res = await driverFetch('/api/driver/arrive', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, carrierType: state.carrier || 'Wesbell' , locationId: _driverLocationId }) });
+          const res = await fetchWithRetry('/api/driver/arrive', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, carrierType: state.carrier || 'Wesbell' , locationId: _driverLocationId }) }, null, null);
           if(res.ok) {
             const data = await res.json();
             if (data.door) {
@@ -897,7 +837,9 @@ body{background-image:none!important;background:transparent!important}
             toast(msg || 'Failed to get door — please ask dispatch.');
             showWaiting(null);
           }
-        } catch(e) { toast('Network error — try again'); }
+        } catch(e) { toast('Network error'); }
+      }
+      else if (act === 'drop') {
         show('ts-s-drop');
       }
     }
@@ -983,7 +925,7 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Sending...';
       btn.disabled = true;
       try {
-        const res = await driverFetch('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, eta: state.eta , locationId: _driverLocationId }) }, btn);
+        const res = await fetchWithRetry('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, eta: state.eta , locationId: _driverLocationId }) }, null, null);
         if(res.ok) {
           const data = await res.json();
           if (data.door) {
@@ -1019,26 +961,16 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Submitting...';
       btn.disabled = true;
       try {
-        const mkOpts = (force) => ({ method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: state.dropType, carrierType: 'Outside', locationId: _driverLocationId, ...(force ? { force: true } : {}) }) });
-        let res = await driverFetch('/api/driver/drop', mkOpts(false), btn);
-        if (res.status === 409) {
-          const dup = await res.json().catch(() => ({}));
-          if (dup.duplicate) {
-            btn.textContent = 'Confirm Drop →';
-            btn.disabled = false;
-            const ok = confirm(dup.message || `Trailer ${state.trailer} is already on the board. Overwrite?`);
-            if (!ok) return;
-            btn.textContent = 'Overwriting...';
-            btn.disabled = true;
-            res = await driverFetch('/api/driver/drop', mkOpts(true), btn);
-          }
+        const res = await fetchWithRetry('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: state.dropType, carrierType: 'Outside' , locationId: _driverLocationId }) }, null, null);
+        const data = res.ok ? await res.json().catch(() => ({})) : {};
+        if (data.door) {
+          updateLiveDoor(data.door);
+          showWaiting(data.door);
+        } else {
+          showWaiting(null);
         }
-        if (!res.ok) { toast(await res.text().catch(() => 'Drop failed')); return; }
-        const data = await res.json().catch(() => ({}));
-        if (data.door) { updateLiveDoor(data.door); showWaiting(data.door); }
-        else { showWaiting(null); }
       } catch(e) {
-        toast('Network error — try again');
+        toast('Network Error');
       } finally {
         btn.textContent = 'Confirm Drop →';
         btn.disabled = false;
@@ -1082,7 +1014,7 @@ body{background-image:none!important;background:transparent!important}
       btn.disabled = true;
       try {
         const confirmDoor = state.door || state.assignedDoor || '';
-        await driverFetch('/api/confirm-safety', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, door: confirmDoor, action: 'depart', loadSecured: true, dockPlateUp: true , locationId: _driverLocationId }) });
+        await fetchWithRetry('/api/confirm-safety', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, door: confirmDoor, action: 'depart', loadSecured: true, dockPlateUp: true , locationId: _driverLocationId }) }, null, null);
         updateLiveDoor(null); 
         if(window._driverOmwStop) window._driverOmwStop();
         showSuccess('Departed! ✓', 'Safe travels! Trailer marked departed.', [{k:'Trailer',v:state.trailer},{k:'Door',v:confirmDoor||'—'}]);
@@ -1102,23 +1034,10 @@ body{background-image:none!important;background:transparent!important}
       const doorEl = document.getElementById('ts-wait-door');
       const subEl  = document.getElementById('ts-wait-sub');
       if (doorEl) doorEl.textContent = d || '--';
-      const _wtt = document.getElementById('ts-wait-trailer-tag'); if (_wtt) _wtt.textContent = `🚛 ${state.trailer}`;
+      document.getElementById('ts-wait-trailer-tag').textContent = `🚛 ${state.trailer}`;
       if (subEl) subEl.textContent = d
         ? `You'll be notified the moment your truck is ready for pickup.`
         : `Dispatch is assigning your door. You'll be notified when ready.`;
-      // Reset ring colours — refreshWaitDoor will flip to green when door arrives
-      const ring  = document.getElementById('ts-wait-ring');
-      const arc   = document.getElementById('ts-wait-arc');
-      const wrap  = document.getElementById('ts-wait-ring-wrap');
-      const badge = document.getElementById('ts-wait-live-badge');
-      if (!d) {
-        if (ring)  { ring.style.borderColor='rgba(245,166,35,.35)'; ring.style.boxShadow='0 0 40px rgba(245,166,35,.12)'; }
-        if (arc)   arc.classList.remove('ts-has-door');
-        if (wrap)  wrap.classList.remove('ts-has-door');
-        if (badge) { badge.classList.remove('ts-live-green'); badge.querySelector('span').textContent = 'Waiting for dispatch'; }
-      } else {
-        refreshWaitDoor(d);
-      }
       show('ts-s-waiting');
     }
 
@@ -1128,19 +1047,12 @@ body{background-image:none!important;background:transparent!important}
       document.querySelectorAll('#ts-s-safety .ts-check-item').forEach(c => c.classList.remove('ts-checked'));
       document.getElementById('ts-safety-submit').disabled = true;
       state.door = state.assignedDoor || state.door;
+      // Update safety screen header to show door
       const safetyTitle = document.querySelector('#ts-s-safety .ts-screen-title');
       if (safetyTitle) safetyTitle.innerHTML = `Safety <span>Check</span>`;
       const safetyDoor = document.getElementById('ts-safety-door-badge');
       if (safetyDoor) safetyDoor.textContent = state.door ? `Door ${state.door}` : '';
-      // Flash "Ready!" on badge, then navigate after short pause
-      const badge = document.getElementById('ts-wait-live-badge');
-      if (badge && isOnScreen('ts-s-waiting')) {
-        badge.classList.add('ts-live-green');
-        badge.querySelector('span').textContent = '✓ Ready — proceeding…';
-        setTimeout(() => show('ts-s-safety'), 800);
-      } else {
-        show('ts-s-safety');
-      }
+      show('ts-s-safety');
     }
 
     function showDoorAssigned(headline, sub, showSafety, door) {
@@ -1169,21 +1081,11 @@ body{background-image:none!important;background:transparent!important}
 
     // -- Restart --
     document.getElementById('ts-done-restart').addEventListener('click', () => {
-      window._driverRestart();
-    });
-
-    // Full driver session reset — called by ts-done-restart AND by app.js Start Over button
-    window._driverRestart = function() {
       state = { trailer: '', carrier: '', action: '', eta: 10, dropType: 'Loaded', door: null, assignedDoor: null, safetyChecks: { load: false, plate: false } };
       updateLiveDoor(null);
       document.getElementById('ts-home-trailer').value = '';
-      // In QR mode, restart goes straight to ext-carrier; otherwise home
-      if (_driverLocSlug) {
-        show('ts-s-ext-carrier');
-      } else {
-        show('ts-s-home');
-      }
-    };
+      show('ts-s-home');
+    });
 
     // ── Live WS updates for driver ─────────────────────────────────────────
     // Registers a global handler on window so it works regardless of WS reconnects.
@@ -1207,23 +1109,8 @@ body{background-image:none!important;background:transparent!important}
       function refreshWaitDoor(door) {
         if (!door) return;
         state.assignedDoor = String(door);
-        const doorEl = document.getElementById('ts-wait-door');
-        if (doorEl) {
-          doorEl.textContent = door;
-          // Flash-pop animation on update
-          doorEl.classList.remove('ts-door-flash');
-          void doorEl.offsetWidth; // reflow
-          doorEl.classList.add('ts-door-flash');
-        }
-        // Flip ring/arc/badge to green — door is confirmed
-        const ring = document.getElementById('ts-wait-ring');
-        const arc  = document.getElementById('ts-wait-arc');
-        const wrap = document.getElementById('ts-wait-ring-wrap');
-        const badge = document.getElementById('ts-wait-live-badge');
-        if (ring)  { ring.style.borderColor='rgba(25,224,154,.5)'; ring.style.boxShadow='0 0 40px rgba(25,224,154,.15)'; }
-        if (arc)   arc.classList.add('ts-has-door');
-        if (wrap)  wrap.classList.add('ts-has-door');
-        if (badge) { badge.classList.add('ts-live-green'); badge.querySelector('span').textContent = 'Door ' + door + ' — waiting for Ready'; }
+        const el = document.getElementById('ts-wait-door');
+        if (el) el.textContent = door;
         updateLiveDoor(door);
       }
 
@@ -1831,6 +1718,11 @@ body{background-image:none!important;background:transparent!important}
     <button class="dv-sec" style="flex:unset;padding:6px 12px;border-color:rgba(24,212,232,.3);color:var(--cyan);background:rgba(24,212,232,.07);" id="btnBulkDockReady">→ Dock Ready</button>
   </div>
 
+  <!-- ── Cards ── -->
+  <div class="dv-cards" id="dockCards">
+    <div class="dv-empty"><div class="dv-empty-icon">🏭</div><div class="dv-empty-msg">Loading…</div></div>
+  </div>
+
   <!-- ── Dock Plates Panel ── -->
   <div class="dvp-panel" id="dvPlatesPanel">
     <button class="dvp-toggle" id="dvPlatesToggle">
@@ -1838,14 +1730,9 @@ body{background-image:none!important;background:transparent!important}
       <span class="dvp-summary" id="dvPlatesSummary">—</span>
       <span class="dvp-chev">▾</span>
     </button>
-    <div class="dvp-body dvp-body-open" id="dvPlatesBody">
-      <div id="dvPlatesGrid"></div>
+    <div class="dvp-body" id="dvPlatesBody">
+      <div class="dvp-grid" id="dvPlatesGrid"></div>
     </div>
-  </div>
-
-  <!-- ── Cards ── -->
-  <div class="dv-cards" id="dockCards">
-    <div class="dv-empty"><div class="dv-empty-icon">🏭</div><div class="dv-empty-msg">Loading…</div></div>
   </div>
 
   <!-- ── Toast ── -->
@@ -1884,8 +1771,6 @@ body{background-image:none!important;background:transparent!important}
           <button class="dsp-tbtn" id="btnHistoryBoard" title="History">🕐</button>
           <button class="dsp-tbtn" id="btnAudit" style="display:none;" title="Audit log">📋</button>
           <button class="dsp-tbtn danger" id="btnLogout" style="display:none;" title="Sign out">↩</button>
-          <button class="dsp-tbtn dsp-panels-toggle-btn" id="btnDspPanels" title="Occupancy / Plates / ETA">⊞</button>
-          <button class="dsp-tbtn dsp-search-toggle-btn" id="btnDspSearch" title="Search">🔍</button>
         </div>
       </div>
 
@@ -1907,18 +1792,6 @@ body{background-image:none!important;background:transparent!important}
 
       <!-- BOTTOM: always-visible panels area (never clipped) -->
       <div class="dsp-panels-area" id="dspPanelsArea">
-
-        <!-- ETA tracking panel — incoming trucks with live countdowns -->
-        <div class="dsp-plates dsp-eta-panel" id="dspEtaPanel" style="display:none;">
-          <button class="dsp-plates-toggle" id="dspEtaToggle" aria-expanded="true">
-            <span class="dsp-plates-title">📍 INCOMING ETA</span>
-            <span class="dsp-plates-summary" id="dspEtaSummary">—</span>
-            <span class="dsp-plates-chev">▴</span>
-          </button>
-          <div class="dsp-plates-body dsp-plates-open" id="dspEtaBody">
-            <div id="dspEtaList" style="display:flex;flex-direction:column;gap:4px;padding:6px 10px 8px;"></div>
-          </div>
-        </div>
 
         <!-- dock occupancy — which trailer is at which door -->
         <div class="dsp-plates dsp-occ-panel" id="dspOccPanel">
@@ -2115,6 +1988,12 @@ body{background-image:none!important;background:transparent!important}
     <span id="panelSub"></span>
   </div>
 
+
+
+
+      </div>
+      </div>
+  </div>
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true">

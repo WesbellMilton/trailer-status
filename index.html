@@ -1787,6 +1787,18 @@ body{background-image:none!important;background:transparent!important}
       <!-- BOTTOM: always-visible panels area (never clipped) -->
       <div class="dsp-panels-area" id="dspPanelsArea">
 
+        <!-- ETA tracking panel — incoming trucks with live countdowns -->
+        <div class="dsp-plates dsp-eta-panel" id="dspEtaPanel" style="display:none;">
+          <button class="dsp-plates-toggle" id="dspEtaToggle" aria-expanded="true">
+            <span class="dsp-plates-title">📍 INCOMING ETA</span>
+            <span class="dsp-plates-summary" id="dspEtaSummary">—</span>
+            <span class="dsp-plates-chev">▴</span>
+          </button>
+          <div class="dsp-plates-body dsp-plates-open" id="dspEtaBody">
+            <div id="dspEtaList" style="display:flex;flex-direction:column;gap:4px;padding:6px 10px 8px;"></div>
+          </div>
+        </div>
+
         <!-- dock occupancy — which trailer is at which door -->
         <div class="dsp-plates dsp-occ-panel" id="dspOccPanel">
           <button class="dsp-plates-toggle" id="dspOccToggle" aria-expanded="true">

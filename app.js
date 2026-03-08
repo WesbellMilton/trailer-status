@@ -524,6 +524,7 @@
     if(!r){closeDetailPanel();return;}
     // Mobile: slide up the right panel as a bottom sheet
     el("dspRight")?.classList.add("panel-open");
+    _closeMobPanels();
     const canEdit=ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin";
     _selectedTrailer=trailerId;
     el("dspRightEmpty").style.display="none";
@@ -750,6 +751,39 @@
     wirePanel("dspOccToggle","dspOccBody");
     wirePanel("dspPlatesToggle","dspPlatesBody");
     wirePanel("dspEtaToggle","dspEtaBody");
+
+    // ── Mobile panels sheet ──────────────────────────────────────
+    // Inject backdrop once
+    if(!el("dspPanelsBackdrop")){
+      const bd=document.createElement("div");
+      bd.id="dspPanelsBackdrop";
+      bd.className="dsp-panels-backdrop";
+      document.body.appendChild(bd);
+      bd.addEventListener("click",_closeMobPanels);
+    }
+    el("btnDspPanels")?.addEventListener("click",_toggleMobPanels);
+
+    // Mobile search toggle — reveals search input in toolbar
+    el("btnDspSearch")?.addEventListener("click",()=>{
+      const tb=el("dspToolbar");if(!tb)return;
+      const open=tb.classList.toggle("mob-search-open");
+      if(open){el("search")?.focus();}
+      else{if(el("search"))el("search").value="";renderBoard();}
+    });
+  }
+
+  function _toggleMobPanels(){
+    const pa=el("dspPanelsArea"),bd=el("dspPanelsBackdrop");
+    if(!pa)return;
+    const open=pa.classList.toggle("mob-panels-open");
+    bd?.classList.toggle("mob-panels-open",open);
+    const btn=el("btnDspPanels");
+    if(btn)btn.style.background=open?"rgba(245,166,35,.15)":"";
+  }
+  function _closeMobPanels(){
+    el("dspPanelsArea")?.classList.remove("mob-panels-open");
+    el("dspPanelsBackdrop")?.classList.remove("mob-panels-open");
+    const btn=el("btnDspPanels");if(btn)btn.style.background="";
   }
 
   // ── ETA tracking panel ────────────────────────────────────────────────

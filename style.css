@@ -3596,12 +3596,12 @@ img,video,embed,object,iframe {
 
 /* Dispatch plates grid — uses same flex-column row layout as dock view */
 /* .dsp-plates-grid shares #dvPlatesGrid rules above */
-/* Dispatch plates panel — flex-column list of dvpl-rows */
+/* Dispatch plates panel — same dpl-card grid as dock view */
 #dspPlatesGrid {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 4px 8px 8px;
+  gap: 4px;
+  padding: 6px 10px 10px;
 }
 
 /* Base card */

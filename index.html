@@ -293,6 +293,24 @@ body{background-image:none!important;background:transparent!important}
     #driverView .ts-toast { position:absolute; bottom:20px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--surface2); border:1px solid var(--border2); border-radius:14px; padding:16px 24px; font-size:15px; font-weight:600; color:var(--t0); white-space:nowrap; z-index:999; transition:transform .3s cubic-bezier(.4,0,.2,1); pointer-events:none; box-shadow:0 10px 30px rgba(0,0,0,0.5); }
     #driverView .ts-toast.ts-show { transform:translateX(-50%) translateY(0); }
     @keyframes ts-fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+    @keyframes ts-pulse-ring{0%{transform:scale(1);opacity:.6}70%{transform:scale(1.22);opacity:0}100%{transform:scale(1.22);opacity:0}}
+    @keyframes ts-spin-arc{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+    @keyframes ts-door-pop{0%{transform:scale(1)}35%{transform:scale(1.28)}70%{transform:scale(.94)}100%{transform:scale(1)}}
+    @keyframes ts-dot-live{0%,100%{opacity:1;box-shadow:0 0 8px rgba(25,224,154,.6)}50%{opacity:.55;box-shadow:0 0 18px rgba(25,224,154,1)}}
+    @keyframes ts-badge-flash{0%{background:rgba(245,166,35,.45);color:#fff;transform:scale(1.08)}100%{background:rgba(245,166,35,.08);color:var(--yellow);transform:scale(1)}}
+    #driverView .ts-dot { animation: ts-dot-live 2s ease-in-out infinite; }
+    #driverView .ts-wait-ring-wrap { position:relative; display:flex; align-items:center; justify-content:center; }
+    #driverView .ts-wait-ring-wrap::before { content:""; position:absolute; inset:-6px; border-radius:50%; border:2px solid rgba(245,166,35,.5); animation:ts-pulse-ring 2.4s ease-out infinite; pointer-events:none; }
+    #driverView .ts-wait-ring-wrap::after  { content:""; position:absolute; inset:-6px; border-radius:50%; border:2px solid rgba(245,166,35,.35); animation:ts-pulse-ring 2.4s ease-out infinite .8s; pointer-events:none; }
+    #driverView .ts-wait-ring-wrap.ts-has-door::before { border-color:rgba(25,224,154,.6); }
+    #driverView .ts-wait-ring-wrap.ts-has-door::after  { border-color:rgba(25,224,154,.4); }
+    #driverView .ts-wait-arc { position:absolute; inset:-12px; border-radius:50%; border:2px solid transparent; border-top-color:rgba(245,166,35,.4); animation:ts-spin-arc 3s linear infinite; pointer-events:none; }
+    #driverView .ts-wait-arc.ts-has-door { border-top-color:rgba(25,224,154,.5); }
+    #driverView .ts-door-number.ts-door-flash { animation:ts-door-pop .45s cubic-bezier(.175,.885,.32,1.275) both; }
+    #driverView .ts-live-badge { display:inline-flex; align-items:center; gap:5px; background:rgba(245,166,35,.08); border:1px solid rgba(245,166,35,.2); border-radius:20px; padding:5px 12px; font-size:11px; font-weight:600; color:var(--yellow); letter-spacing:.04em; }
+    #driverView .ts-live-badge .ts-dot { width:6px; height:6px; border-radius:50%; background:var(--yellow); flex-shrink:0; animation:ts-dot-live 2s ease-in-out infinite; }
+    #driverView .ts-live-badge.ts-live-green { background:rgba(25,224,154,.08); border-color:rgba(25,224,154,.2); color:var(--green); }
+    #driverView .ts-live-badge.ts-live-green .ts-dot { background:var(--green); }
     #driverView .ts-anim { animation:ts-fadeUp .4s ease both; }
   </style>
 
@@ -311,6 +329,7 @@ body{background-image:none!important;background:transparent!important}
   <div class="ts-screen ts-active" id="ts-s-home">
     <div class="ts-topbar ts-anim">
       <div class="ts-logo"><div class="ts-logo-mark">W</div><div class="ts-logo-text">Wesbell</div></div>
+      <a href="/" id="drBackBtn" class="dv-back-btn" style="display:none;">← Dispatch</a>
       <div class="ts-status-chip"><div class="ts-dot"></div>Live</div>
     </div>
     <div class="ts-hero">
@@ -512,23 +531,23 @@ body{background-image:none!important;background:transparent!important}
       <div id="ts-wait-trailer-tag" class="ts-trailer-tag"></div>
     </div>
     <div class="ts-door-hero">
-      <div class="ts-door-ring ts-done ts-anim" id="ts-wait-ring" style="border-color:rgba(245,166,35,.35);box-shadow:0 0 40px rgba(245,166,35,.12);">
-        <div>
-          <div style="font-size:13px;font-weight:600;letter-spacing:.14em;color:var(--t2);text-transform:uppercase;text-align:center;margin-bottom:6px">Your Door</div>
-          <div class="ts-door-number" id="ts-wait-door">--</div>
+      <div class="ts-wait-ring-wrap" id="ts-wait-ring-wrap">
+        <div class="ts-wait-arc" id="ts-wait-arc"></div>
+        <div class="ts-door-ring ts-done ts-anim" id="ts-wait-ring" style="border-color:rgba(245,166,35,.35);box-shadow:0 0 40px rgba(245,166,35,.12);">
+          <div>
+            <div style="font-size:13px;font-weight:600;letter-spacing:.14em;color:var(--t2);text-transform:uppercase;text-align:center;margin-bottom:6px">Your Door</div>
+            <div class="ts-door-number" id="ts-wait-door">--</div>
+          </div>
         </div>
       </div>
       <div class="ts-door-headline ts-anim">Hang tight</div>
       <div class="ts-door-sub ts-anim" id="ts-wait-sub">You&#8217;ll be notified the moment your truck is ready for pickup.</div>
     </div>
     <div style="padding:0 24px 32px;display:flex;flex-direction:column;gap:10px;align-items:center;">
-      <div style="display:flex;align-items:center;gap:10px;background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.2);border-radius:12px;padding:14px 18px;width:100%;max-width:360px;">
-        <div style="font-size:22px;">🔔</div>
-        <div>
-          <div style="font-size:12px;font-weight:600;color:var(--t0);margin-bottom:2px;">Waiting for dispatch</div>
-          <div style="font-size:11px;color:var(--t2);">This screen updates automatically when marked Ready.</div>
-        </div>
+      <div id="ts-wait-live-badge" class="ts-live-badge">
+        <div class="ts-dot"></div><span>Waiting for dispatch</span>
       </div>
+      <div style="font-size:11px;color:var(--t3);text-align:center;margin-top:2px;">This screen updates live when marked Ready.</div>
     </div>
   </div>
 
@@ -1018,6 +1037,19 @@ body{background-image:none!important;background:transparent!important}
       if (subEl) subEl.textContent = d
         ? `You'll be notified the moment your truck is ready for pickup.`
         : `Dispatch is assigning your door. You'll be notified when ready.`;
+      // Reset ring colours — refreshWaitDoor will flip to green when door arrives
+      const ring  = document.getElementById('ts-wait-ring');
+      const arc   = document.getElementById('ts-wait-arc');
+      const wrap  = document.getElementById('ts-wait-ring-wrap');
+      const badge = document.getElementById('ts-wait-live-badge');
+      if (!d) {
+        if (ring)  { ring.style.borderColor='rgba(245,166,35,.35)'; ring.style.boxShadow='0 0 40px rgba(245,166,35,.12)'; }
+        if (arc)   arc.classList.remove('ts-has-door');
+        if (wrap)  wrap.classList.remove('ts-has-door');
+        if (badge) { badge.classList.remove('ts-live-green'); badge.querySelector('span').textContent = 'Waiting for dispatch'; }
+      } else {
+        refreshWaitDoor(d);
+      }
       show('ts-s-waiting');
     }
 
@@ -1027,12 +1059,19 @@ body{background-image:none!important;background:transparent!important}
       document.querySelectorAll('#ts-s-safety .ts-check-item').forEach(c => c.classList.remove('ts-checked'));
       document.getElementById('ts-safety-submit').disabled = true;
       state.door = state.assignedDoor || state.door;
-      // Update safety screen header to show door
       const safetyTitle = document.querySelector('#ts-s-safety .ts-screen-title');
       if (safetyTitle) safetyTitle.innerHTML = `Safety <span>Check</span>`;
       const safetyDoor = document.getElementById('ts-safety-door-badge');
       if (safetyDoor) safetyDoor.textContent = state.door ? `Door ${state.door}` : '';
-      show('ts-s-safety');
+      // Flash "Ready!" on badge, then navigate after short pause
+      const badge = document.getElementById('ts-wait-live-badge');
+      if (badge && isOnScreen('ts-s-waiting')) {
+        badge.classList.add('ts-live-green');
+        badge.querySelector('span').textContent = '✓ Ready — proceeding…';
+        setTimeout(() => show('ts-s-safety'), 800);
+      } else {
+        show('ts-s-safety');
+      }
     }
 
     function showDoorAssigned(headline, sub, showSafety, door) {
@@ -1089,8 +1128,23 @@ body{background-image:none!important;background:transparent!important}
       function refreshWaitDoor(door) {
         if (!door) return;
         state.assignedDoor = String(door);
-        const el = document.getElementById('ts-wait-door');
-        if (el) el.textContent = door;
+        const doorEl = document.getElementById('ts-wait-door');
+        if (doorEl) {
+          doorEl.textContent = door;
+          // Flash-pop animation on update
+          doorEl.classList.remove('ts-door-flash');
+          void doorEl.offsetWidth; // reflow
+          doorEl.classList.add('ts-door-flash');
+        }
+        // Flip ring/arc/badge to green — door is confirmed
+        const ring = document.getElementById('ts-wait-ring');
+        const arc  = document.getElementById('ts-wait-arc');
+        const wrap = document.getElementById('ts-wait-ring-wrap');
+        const badge = document.getElementById('ts-wait-live-badge');
+        if (ring)  { ring.style.borderColor='rgba(25,224,154,.5)'; ring.style.boxShadow='0 0 40px rgba(25,224,154,.15)'; }
+        if (arc)   arc.classList.add('ts-has-door');
+        if (wrap)  wrap.classList.add('ts-has-door');
+        if (badge) { badge.classList.add('ts-live-green'); badge.querySelector('span').textContent = 'Door ' + door + ' — waiting for Ready'; }
         updateLiveDoor(door);
       }
 
@@ -1982,12 +2036,6 @@ body{background-image:none!important;background:transparent!important}
     <span id="panelSub"></span>
   </div>
 
-
-
-
-      </div>
-      </div>
-  </div>
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true">

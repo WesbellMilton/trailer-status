@@ -1100,7 +1100,7 @@
     // update role label
     if(el("dvRoleLabel"))el("dvRoleLabel").textContent=ROLE?ROLE.charAt(0).toUpperCase()+ROLE.slice(1):"Sign in";
     // Show back-to-dispatch for dispatchers viewing dock
-    const bb=el("dvBackBtn");if(bb)bb.style.display=(ROLE&&["dispatcher","admin","management"].includes(ROLE))?"":"none";
+    const bb=el("dvBackBtn");if(bb)bb.style.display=(ROLE&&["dispatcher","admin","management"].includes(ROLE))?"inline-flex":"none";
     const q=(el("dockSearch")?.value||"").trim().toLowerCase();
     const rows=Object.entries(trailers).map(([t,r])=>({trailer:t,...r}))
       .filter(r=>{
@@ -1310,7 +1310,7 @@
   function initDockView(){
     // Show "← Dispatch" back button for non-dock roles
     if(ROLE&&ROLE!=="dock"){
-      const bb=el("dvBackBtn");if(bb&&["dispatcher","admin","management"].includes(ROLE))bb.style.display="";
+      const bb=el("dvBackBtn");if(bb&&["dispatcher","admin","management"].includes(ROLE))bb.style.display="inline-flex";
     }
     // Staff chip sign-in
     el("dvStaffChip")?.addEventListener("click",()=>el("btnDockStaffLogin")?.click());
@@ -1968,6 +1968,10 @@
       el("driverView").style.display="";
       const logoutBtn=el("btnLogout");
       if(logoutBtn){logoutBtn.style.display="";logoutBtn.textContent="↩ Start Over";logoutBtn.onclick=e=>{e.stopImmediatePropagation();try{sessionStorage.removeItem("wb_whoType");}catch{}driverRestart();};}
+      el("btnAudit").style.display="none";
+      // Show back-to-dispatch for staff viewing driver view
+      const drbb=el("drBackBtn");
+      if(drbb)drbb.style.display=(ROLE&&["dispatcher","admin","management"].includes(ROLE))?"inline-flex":"none";
       el("btnAudit").style.display="none";
       renderSessionHistory();initPush();
       // ── QR auto-load: handle ?qr=1&trailer=X&action=Y in URL ──

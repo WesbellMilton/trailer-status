@@ -60,11 +60,12 @@ router.post('/api/driver/omw', requireXHR, requireDriverRate, async (req, res) =
       return res.json({ ok: true, door: existing.door || '', alreadyActive: true, status: existing.status });
 
     const locId = req.user?.locationId || 1;
-    const assignedDoor = await pickBestDoor(trailer, locId);
-    if (!assignedDoor) return res.status(409).send('No doors available right now. Please ask dispatch.');
-    // Hold door for ETA + 5 min grace (minimum 35 min if no ETA given)
-    const holdMinutes  = eta ? eta + 5 : 35;
-    await reserveDoor(assignedDoor, trailer, 'Wesbell', holdMinutes, locId);
+    const assignedDoor = await pickBestDoor(trailer, locId) || null;
+    // Reserve door if one was found; otherwise trailer goes on board without a door
+    if (assignedDoor) {
+      const holdMinutes = eta ? eta + 5 : 35;
+      await reserveDoor(assignedDoor, trailer, 'Wesbell', holdMinutes, locId);
+    }
 
     const note = eta ? `ETA ~${eta} min` : 'On my way';
     const now  = Date.now();
@@ -75,14 +76,17 @@ router.post('/api/driver/omw', requireXHR, requireDriverRate, async (req, res) =
          direction=excluded.direction,status=excluded.status,door=excluded.door,
          note=excluded.note,dropType=excluded.dropType,carrierType=excluded.carrierType,
          updatedAt=excluded.updatedAt,omwAt=excluded.omwAt,omwEta=excluded.omwEta`,
-      [trailer, 'Inbound', 'Incoming', assignedDoor, note, 'Loaded', 'Wesbell', now, now, eta, req.user?.locationId || 1]
+      [trailer, 'Inbound', 'Incoming', assignedDoor || '', note, 'Loaded', 'Wesbell', now, now, eta, req.user?.locationId || 1]
     );
-    await audit(req, 'driver', 'omw', 'trailer', trailer, { door: assignedDoor, eta });
+    await audit(req, 'driver', 'omw', 'trailer', trailer, { door: assignedDoor || '', eta });
     await broadcastTrailers(req.user?.locationId || 1);
-    broadcastPush('🚛 Driver On My Way', `Trailer ${trailer} → Door ${assignedDoor}${eta ? ` · ETA ~${eta} min` : ''}`,
-      { type: 'omw', trailer, door: assignedDoor }).catch(() => {});
-    wsBroadcast('omw', { trailer, door: assignedDoor, eta, at: now });
-    fireWebhook('driver.omw', { trailer, door: assignedDoor, eta });
+    broadcastPush('🚛 Driver On My Way',
+      assignedDoor
+        ? `Trailer ${trailer} → Door ${assignedDoor}${eta ? ` · ETA ~${eta} min` : ''}`
+        : `Trailer ${trailer} on the way — needs door assignment`,
+      { type: 'omw', trailer, door: assignedDoor || '' }).catch(() => {});
+    wsBroadcast('omw', { trailer, door: assignedDoor || '', eta, at: now });
+    fireWebhook('driver.omw', { trailer, door: assignedDoor || '', eta });
     res.json({ ok: true, door: assignedDoor, alreadyActive: false, eta });
   } catch (e) { console.error('[omw]', e); res.status(500).send('OMW failed'); }
 });
@@ -144,12 +148,11 @@ router.post('/api/driver/arrive', requireXHR, requireDriverRate, async (req, res
     }
 
     const locId = req.user?.locationId || 1;
-    const assignedDoor = await pickBestDoor(trailer, locId);
-    if (!assignedDoor) return res.status(409).send('No doors available. Please ask dispatch.');
-    await reserveDoor(assignedDoor, trailer, carrierType, null, locId);
+    const assignedDoor = await pickBestDoor(trailer, locId) || null;
+    if (assignedDoor) await reserveDoor(assignedDoor, trailer, carrierType, null, locId);
 
-    const now         = Date.now();
-    const useDropType = existing?.dropType || dropType;
+    const now          = Date.now();
+    const useDropType  = existing?.dropType  || dropType;
     const useDirection = existing?.direction || direction;
     await run(
       `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt,doorAt,location_id)
@@ -158,14 +161,17 @@ router.post('/api/driver/arrive', requireXHR, requireDriverRate, async (req, res
          direction=excluded.direction,status=excluded.status,door=excluded.door,
          dropType=excluded.dropType,carrierType=excluded.carrierType,
          updatedAt=excluded.updatedAt,doorAt=excluded.doorAt`,
-      [trailer, useDirection, 'Incoming', assignedDoor, existing?.note || '', useDropType, carrierType, now, now, req.user?.locationId || 1]
+      [trailer, useDirection, 'Incoming', assignedDoor || '', existing?.note || '', useDropType, carrierType, now, assignedDoor ? now : null, req.user?.locationId || 1]
     );
-    await releaseReservation(trailer);
-    await audit(req, 'driver', 'arrive', 'trailer', trailer, { door: assignedDoor, carrierType });
-    broadcastPush('✅ Driver Arrived', `Trailer ${trailer} at Door ${assignedDoor}`, { type: 'arrive', trailer, door: assignedDoor }).catch(() => {});
-    wsBroadcast('arrive', { trailer, door: assignedDoor, at: now });
-    wsBroadcast('notify', { kind: 'arrive', trailer, door: assignedDoor });
-    fireWebhook('driver.arrived', { trailer, door: assignedDoor });
+    if (assignedDoor) await releaseReservation(trailer);
+    await audit(req, 'driver', 'arrive', 'trailer', trailer, { door: assignedDoor || '', carrierType });
+    broadcastPush(
+      assignedDoor ? '✅ Driver Arrived' : '🚛 Driver Arrived — Needs Door',
+      assignedDoor ? `Trailer ${trailer} at Door ${assignedDoor}` : `Trailer ${trailer} arrived — no door available`,
+      { type: 'arrive', trailer, door: assignedDoor || '' }).catch(() => {});
+    wsBroadcast('arrive', { trailer, door: assignedDoor || '', at: now });
+    wsBroadcast('notify', { kind: 'arrive', trailer, door: assignedDoor || '' });
+    fireWebhook('driver.arrived', { trailer, door: assignedDoor || '' });
     await broadcastTrailers(req.user?.locationId || 1);
     res.json({ ok: true, door: assignedDoor, alreadyActive: false });
   } catch (e) { console.error('[arrive]', e); res.status(500).send('Arrival failed'); }
@@ -189,9 +195,8 @@ router.post('/api/driver/ext-drop', requireXHR, requireDriverRate, async (req, r
     const refCode = `${prefix}-${today}-${seq}`;
 
     const now  = Date.now();
-    const extLocId = req.user?.locationId || 1;
-    const door = await pickBestDoor(refCode, extLocId) || '';
-    if (door) await reserveDoor(door, refCode, carrier, 35, extLocId);
+    const door = await pickBestDoor(refCode) || '';
+    if (door) await reserveDoor(door, refCode, carrier, 35);
 
     const status = door ? 'Incoming' : 'Dropped';
     await run(
@@ -244,10 +249,9 @@ router.post('/api/driver/drop', requireXHR, requireDriverRate, requireDriverAcce
     // Empty drops go to Dropped — nothing to load yet, no door needed
     let assignedDoor = door || '';
     const needsAutoAssign = !door && carrierType === 'Outside' && dropType === 'Loaded';
-    const dropLocId = req.user?.locationId || 1;
     if (needsAutoAssign) {
-      assignedDoor = await pickBestDoor(trailer, dropLocId) || '';
-      if (assignedDoor) await reserveDoor(assignedDoor, trailer, 'Outside', 35, dropLocId);
+      assignedDoor = await pickBestDoor(trailer) || '';
+      if (assignedDoor) await reserveDoor(assignedDoor, trailer, 'Outside', 35);
     }
 
     const dropStatus = assignedDoor ? 'Incoming' : (carrierType === 'Outside' ? 'Dropped' : 'Incoming');
@@ -360,11 +364,10 @@ router.post('/api/driver/location', requireXHR, requireDriverRate, async (req, r
     // If geofence says auto-arrive, fire the arrive logic
     if (autoTriggered && !row.door) {
       const { pickBestDoor, reserveDoor, releaseReservation } = require('../doors');
-      const geoLocId = req.user?.locationId || 1;
-      const assignedDoor = await pickBestDoor(trailer, geoLocId);
+      const assignedDoor = await pickBestDoor(trailer);
       if (assignedDoor) {
         const now = Date.now();
-        await reserveDoor(assignedDoor, trailer, 'Wesbell', null, geoLocId);
+        await reserveDoor(assignedDoor, trailer, 'Wesbell');
         await run(
           `UPDATE trailers SET door=?,status='Incoming',doorAt=?,updatedAt=? WHERE trailer=?`,
           [assignedDoor, now, now, trailer]
@@ -454,10 +457,9 @@ router.post('/api/qr/scan', requireXHR, requireDriverRate, async (req, res) => {
       if (existing && ACTIVE.includes(existing.status) && existing.door) {
         result = { door: existing.door, alreadyActive: true };
       } else {
-        const qrLocId = req.user?.locationId || 1;
-        const assignedDoor = await pickBestDoor(trailer, qrLocId);
+        const assignedDoor = await pickBestDoor(trailer);
         if (!assignedDoor) return res.status(409).send('No doors available.');
-        await reserveDoor(assignedDoor, trailer, 'Wesbell', null, qrLocId);
+        await reserveDoor(assignedDoor, trailer, 'Wesbell');
         await run(
           `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt,doorAt,location_id)
            VALUES(?,?,?,?,?,?,?,?,?,?)

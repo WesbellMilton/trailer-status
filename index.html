@@ -598,9 +598,29 @@ body{background-image:none!important;background:transparent!important}
     // Read location from URL: /driver?loc=milton sets locationId
     const _driverLocSlug = new URLSearchParams(location.search).get('loc') || '';
     let _driverLocationId = 1; // resolved after slug lookup below
-    // Warm the server immediately on page load so it's awake by the time the driver taps a button
-    // (Render free tier sleeps after 15 min; first API call after sleep can fail mid-wake)
-    fetch('/health').catch(() => {});
+    // Warm the server on page load — Render free tier sleeps after 15 min (cold start ~30-50s)
+    let _serverReady = false;
+    (async () => {
+      for (let i = 0; i < 8; i++) {
+        try { const r = await fetch('/health'); if (r.ok) { _serverReady = true; return; } } catch {}
+        await new Promise(r => setTimeout(r, 7000));
+      }
+      _serverReady = true;
+    })();
+
+    // driverFetch: retries up to 3 times with 15s gaps on network failure (cold start resilience)
+    async function driverFetch(url, opts, statusEl) {
+      const attempt = () => fetch(url, opts);
+      const wait = (ms, msg) => {
+        if (statusEl) statusEl.textContent = msg;
+        return new Promise(r => setTimeout(r, ms));
+      };
+      try { return await attempt(); } catch {}
+      await wait(15000, 'Server waking up…');
+      try { return await attempt(); } catch {}
+      await wait(15000, 'Still connecting…');
+      return await attempt();
+    }
     (async () => {
       if (_driverLocSlug) {
         try {
@@ -730,21 +750,13 @@ body{background-image:none!important;background:transparent!important}
         const prefix  = btn.dataset.extPrefix;
         btn.style.pointerEvents = 'none';
         btn.innerHTML = `<span class="ts-ext-carrier-name" style="color:var(--cyan)">Assigning door…</span>`;
-        const doRequest = () => fetch('/api/driver/ext-drop', {
+        const doRequest = () => driverFetch('/api/driver/ext-drop', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             body: JSON.stringify({ carrier, prefix, locationId: _driverLocationId })
-          });
+          }, btn);
         try {
-          let res;
-          try {
-            res = await doRequest();
-          } catch {
-            // First attempt failed (cold start / flaky connection) — wait 8s and retry once
-            btn.innerHTML = `<span class="ts-ext-carrier-name" style="color:var(--t2)">Connecting…</span>`;
-            await new Promise(r => setTimeout(r, 8000));
-            res = await doRequest();
-          }
+          const res = await doRequest();
           if (!res.ok) {
             const errText = await res.text().catch(() => `Error ${res.status}`);
             toast(`Error: ${errText}`, 4000);
@@ -810,14 +822,14 @@ body{background-image:none!important;background:transparent!important}
       
       if (act === 'qd') {
         try {
-          const sendQd = (force) => fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: 'Loaded', carrierType: 'Wesbell', locationId: _driverLocationId, ...(force ? { force: true } : {}) }) });
-          let res = await sendQd(false);
+          const opts = (force) => ({ method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: 'Loaded', carrierType: 'Wesbell', locationId: _driverLocationId, ...(force ? { force: true } : {}) }) });
+          let res = await driverFetch('/api/driver/drop', opts(false));
           if (res.status === 409) {
             const dup = await res.json().catch(() => ({}));
             if (dup.duplicate) {
-              const confirmed = confirm(dup.message || `Trailer ${state.trailer} is already on the board. Overwrite?`);
-              if (!confirmed) return;
-              res = await sendQd(true);
+              const ok = confirm(dup.message || `Trailer ${state.trailer} is already on the board. Overwrite?`);
+              if (!ok) return;
+              res = await driverFetch('/api/driver/drop', opts(true));
             }
           }
           if (res.ok) {
@@ -825,12 +837,12 @@ body{background-image:none!important;background:transparent!important}
           } else {
             toast(await res.text().catch(() => 'Drop failed'));
           }
-        } catch(e) { toast('Error connecting to server'); }
+        } catch(e) { toast('Network error — try again'); }
       } 
       else if (act === 'shunt') {
         showDoorSelector('Shunt <span>Trailer</span>', 'Move to which door?', async () => {
           try {
-            await fetch('/api/driver/shunt', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, newDoor: state.door , locationId: _driverLocationId }) });
+            await driverFetch('/api/driver/shunt', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, newDoor: state.door , locationId: _driverLocationId }) });
             showSuccess('Shunt Complete', `Trailer moved to Door ${state.door}.`, [{k:'Trailer',v:state.trailer},{k:'New Door',v:state.door}]);
           } catch(e) { toast('Error shunting trailer'); }
         });
@@ -850,7 +862,7 @@ body{background-image:none!important;background:transparent!important}
       else if (act === 'arrive') {
         // REAL ARRIVAL FETCH
         try {
-          const res = await fetch('/api/driver/arrive', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, carrierType: state.carrier || 'Wesbell' , locationId: _driverLocationId }) });
+          const res = await driverFetch('/api/driver/arrive', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, carrierType: state.carrier || 'Wesbell' , locationId: _driverLocationId }) });
           if(res.ok) {
             const data = await res.json();
             if (data.door) {
@@ -953,7 +965,7 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Sending...';
       btn.disabled = true;
       try {
-        const res = await fetch('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, eta: state.eta , locationId: _driverLocationId }) });
+        const res = await driverFetch('/api/driver/omw', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, eta: state.eta , locationId: _driverLocationId }) }, btn);
         if(res.ok) {
           const data = await res.json();
           if (data.door) {
@@ -989,30 +1001,26 @@ body{background-image:none!important;background:transparent!important}
       btn.textContent = 'Submitting...';
       btn.disabled = true;
       try {
-        const sendDrop = (force) => fetch('/api/driver/drop', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: state.dropType, carrierType: 'Outside', locationId: _driverLocationId, ...(force ? { force: true } : {}) }) });
-        let res = await sendDrop(false);
+        const mkOpts = (force) => ({ method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, dropType: state.dropType, carrierType: 'Outside', locationId: _driverLocationId, ...(force ? { force: true } : {}) }) });
+        let res = await driverFetch('/api/driver/drop', mkOpts(false), btn);
         if (res.status === 409) {
           const dup = await res.json().catch(() => ({}));
           if (dup.duplicate) {
             btn.textContent = 'Confirm Drop →';
             btn.disabled = false;
-            const confirmed = confirm(dup.message || `Trailer ${state.trailer} is already on the board. Overwrite?`);
-            if (!confirmed) return;
+            const ok = confirm(dup.message || `Trailer ${state.trailer} is already on the board. Overwrite?`);
+            if (!ok) return;
             btn.textContent = 'Overwriting...';
             btn.disabled = true;
-            res = await sendDrop(true);
+            res = await driverFetch('/api/driver/drop', mkOpts(true), btn);
           }
         }
-        const data = res.ok ? await res.json().catch(() => ({})) : {};
         if (!res.ok) { toast(await res.text().catch(() => 'Drop failed')); return; }
-        if (data.door) {
-          updateLiveDoor(data.door);
-          showWaiting(data.door);
-        } else {
-          showWaiting(null);
-        }
+        const data = await res.json().catch(() => ({}));
+        if (data.door) { updateLiveDoor(data.door); showWaiting(data.door); }
+        else { showWaiting(null); }
       } catch(e) {
-        toast('Network Error');
+        toast('Network error — try again');
       } finally {
         btn.textContent = 'Confirm Drop →';
         btn.disabled = false;
@@ -1056,7 +1064,7 @@ body{background-image:none!important;background:transparent!important}
       btn.disabled = true;
       try {
         const confirmDoor = state.door || state.assignedDoor || '';
-        await fetch('/api/confirm-safety', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, door: confirmDoor, action: 'depart', loadSecured: true, dockPlateUp: true , locationId: _driverLocationId }) });
+        await driverFetch('/api/confirm-safety', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ trailer: state.trailer, door: confirmDoor, action: 'depart', loadSecured: true, dockPlateUp: true , locationId: _driverLocationId }) });
         updateLiveDoor(null); 
         if(window._driverOmwStop) window._driverOmwStop();
         showSuccess('Departed! ✓', 'Safe travels! Trailer marked departed.', [{k:'Trailer',v:state.trailer},{k:'Door',v:confirmDoor||'—'}]);

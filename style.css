@@ -5073,7 +5073,149 @@ select option { background: #0d1119; }
 .dvp-cancel-btn:hover { background: rgba(255,255,255,.06); color: var(--t2); }
 
 /* ═══════════════════════════════════════════════════════════════
-   DISPATCHER COLOR ENHANCEMENTS
+   DOCK PLATES — LIST LAYOUT (dvpl-*)
+   Two-column grid, each item is a tappable row.
+   All 15 doors fit with no scroll.
+═══════════════════════════════════════════════════════════════ */
+
+/* Container: 2-column grid */
+#dvPlatesGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 8px 12px 12px;
+}
+
+/* Each row item */
+.dvpl-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.06);
+  background: rgba(255,255,255,.025);
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+  min-height: 40px;
+  user-select: none;
+}
+.dvpl-item:hover { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.12); }
+.dvpl-item:active { background: rgba(255,255,255,.07); }
+
+/* Door label */
+.dvpl-door {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--t2);
+  flex-shrink: 0;
+  min-width: 28px;
+}
+
+/* Status pill */
+.dvpl-status-pill {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  letter-spacing: .02em;
+}
+.dvpl-ok-pill    { background: rgba(25,224,154,.15);  color: var(--green); border: 1px solid rgba(25,224,154,.3); }
+.dvpl-svc-pill   { background: rgba(245,166,35,.15);  color: var(--amber); border: 1px solid rgba(245,166,35,.3); }
+.dvpl-ooo-pill   { background: rgba(240,74,74,.15);   color: var(--red);   border: 1px solid rgba(240,74,74,.3); }
+.dvpl-unk-pill   { background: rgba(255,255,255,.05); color: var(--t3);    border: 1px solid rgba(255,255,255,.08); }
+
+/* Note text */
+.dvpl-note {
+  font-size: 10px;
+  color: var(--t2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.dvpl-note-empty { color: var(--t3); }
+
+/* Status tints on the row itself */
+.dvpl-ok  { border-color: rgba(25,224,154,.18);  background: rgba(25,224,154,.04); }
+.dvpl-svc { border-color: rgba(245,166,35,.25);  background: rgba(245,166,35,.05); }
+.dvpl-ooo { border-color: rgba(240,74,74,.3);    background: rgba(240,74,74,.06); }
+
+/* ── Edit state: item expands to show form ── */
+.dvpl-item-editing {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  cursor: default;
+  grid-column: span 2; /* editing card spans full width */
+  padding: 10px 12px;
+  background: rgba(255,255,255,.04);
+  border-color: rgba(245,166,35,.25);
+}
+.dvpl-item-editing:hover { background: rgba(255,255,255,.04); border-color: rgba(245,166,35,.25); }
+
+.dvpl-edit-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.dvpl-edit-door {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--t1);
+}
+.dvpl-cancel-btn {
+  background: none;
+  border: none;
+  color: var(--t3);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+.dvpl-cancel-btn:hover { background: rgba(255,255,255,.07); color: var(--t1); }
+
+.dvpl-status-row {
+  display: flex;
+  gap: 5px;
+}
+.dvpl-status-row .dvp-sbtn {
+  flex: 1;
+  min-height: 34px;
+  font-size: 11px;
+}
+
+.dvpl-note-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
+.dvpl-save-btn {
+  background: rgba(245,166,35,.15);
+  border: 1px solid rgba(245,166,35,.3);
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  width: 100%;
+  text-align: center;
+  transition: background .15s;
+}
+.dvpl-save-btn:hover { background: rgba(245,166,35,.25); }
+
+
    Row status bars more vivid; status tags richer; toolbar accent
 ═══════════════════════════════════════════════════════════════ */
 

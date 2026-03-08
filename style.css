@@ -3596,7 +3596,13 @@ img,video,embed,object,iframe {
 
 /* Dispatch plates grid — uses same flex-column row layout as dock view */
 /* .dsp-plates-grid shares #dvPlatesGrid rules above */
-.dsp-plates-grid { } /* placeholder to keep specificity intact */
+/* Dispatch plates panel — flex-column list of dvpl-rows */
+#dspPlatesGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px 8px;
+}
 
 /* Base card */
 .dsp-plate-btn {
@@ -4897,131 +4903,184 @@ select option { background: #0d1119; }
 .dvp-cancel-btn:hover { background: rgba(255,255,255,.06); color: var(--t2); }
 
 /* ═══════════════════════════════════════════════════════════════
-   DOCK PLATES — COMPACT INLINE ROW (dvpl-*)
-   Single row per door: door label + 3 instant-toggle status btns + note chip
-   Works identically in dock view, dispatch panels, management.
-   No expand/collapse — everything at a glance, single tap to change.
+   DOCK PLATES GRID (dpl-*)
+   Occ-card visual language — same 8+7 two-row grid layout as
+   door occupancy, colored by plate status instead of trailer state.
+   Used only in dock view; dispatch panels keep dvpl-row layout.
 ═══════════════════════════════════════════════════════════════ */
 
-/* Grid: single column list, full width */
-#dvPlatesGrid,
-#dspPlatesGrid {
+/* Grid container — two rows like occupancy map */
+#dvPlatesGrid {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 4px 8px 8px;
+  gap: 4px;
+  padding: 6px 10px 10px;
 }
 
-/* Each row */
-.dvpl-row {
+.dpl-row {
+  display: grid;
+  gap: 4px;
+}
+/* Row A: doors 28–35 = 8 doors */
+.dpl-row:first-child { grid-template-columns: repeat(8, 1fr); }
+/* Row B: doors 36–42 = 7 doors */
+.dpl-row:last-child  { grid-template-columns: repeat(7, 1fr); }
+
+/* Base card — matches occ-card proportions but slightly shorter */
+.dpl-card {
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.06);
+  background: rgba(255,255,255,.025);
+  padding: 6px 4px 5px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(255,255,255,.05);
-  background: rgba(255,255,255,.02);
-  min-height: 36px;
-  user-select: none;
-  transition: background .12s;
+  gap: 3px;
+  min-height: 56px;
+  text-align: center;
+  transition: border-color .15s, background .15s;
+  position: relative;
+  cursor: default;
 }
-.dvpl-row:hover { background: rgba(255,255,255,.04); }
 
-/* Door label — fixed width */
-.dvpl-door {
+/* Door label */
+.dpl-door {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  line-height: 1;
+  color: var(--t3);
+}
+
+/* Status text (read-only) */
+.dpl-status-lbl {
   font-family: var(--mono);
   font-size: 11px;
   font-weight: 700;
-  color: var(--t2);
-  flex-shrink: 0;
-  min-width: 28px;
-}
-
-/* 3-button toggle strip */
-.dvpl-toggles {
-  display: flex;
-  gap: 3px;
-  flex-shrink: 0;
-}
-.dvpl-tbtn {
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 8px;
-  border-radius: 4px;
-  border: 1px solid rgba(255,255,255,.07);
-  background: transparent;
-  color: rgba(255,255,255,.3);
-  cursor: pointer;
-  min-height: 26px;
-  min-width: 32px;
-  transition: background .1s, border-color .1s, color .1s;
   line-height: 1;
 }
-.dvpl-tbtn:active { transform: scale(.93); }
 
-/* OK */
-.dvpl-tbtn-ok { border-color: rgba(25,224,154,.15); color: rgba(25,224,154,.45); }
-.dvpl-tbtn-ok:hover { background: rgba(25,224,154,.1); color: var(--green); border-color: rgba(25,224,154,.4); }
-.dvpl-tbtn-ok.dvpl-tbtn-active { background: rgba(25,224,154,.18); color: var(--green); border-color: rgba(25,224,154,.5); box-shadow: 0 0 6px rgba(25,224,154,.2); }
+/* Note (read-only small text) */
+.dpl-note-ro {
+  font-size: 8px;
+  color: var(--t3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
 
-/* SVC */
-.dvpl-tbtn-svc { border-color: rgba(245,166,35,.15); color: rgba(245,166,35,.45); }
-.dvpl-tbtn-svc:hover { background: rgba(245,166,35,.1); color: var(--amber); border-color: rgba(245,166,35,.4); }
-.dvpl-tbtn-svc.dvpl-tbtn-active { background: rgba(245,166,35,.18); color: var(--amber); border-color: rgba(245,166,35,.5); box-shadow: 0 0 6px rgba(245,166,35,.2); }
+/* ── Per-status card colours ── */
+/* OK — green */
+.dpl-card-ok {
+  border-color: rgba(25,224,154,.35);
+  background: rgba(25,224,154,.09);
+  box-shadow: 0 0 10px rgba(25,224,154,.08);
+}
+.dpl-card-ok .dpl-door  { color: rgba(25,224,154,.6); }
+.dpl-card-ok .dpl-status-lbl { color: var(--green); }
 
-/* OOO */
-.dvpl-tbtn-ooo { border-color: rgba(240,74,74,.15); color: rgba(240,74,74,.4); }
-.dvpl-tbtn-ooo:hover { background: rgba(240,74,74,.1); color: var(--red); border-color: rgba(240,74,74,.4); }
-.dvpl-tbtn-ooo.dvpl-tbtn-active { background: rgba(240,74,74,.18); color: var(--red); border-color: rgba(240,74,74,.5); box-shadow: 0 0 6px rgba(240,74,74,.2); }
+/* Service — amber */
+.dpl-card-svc {
+  border-color: rgba(245,166,35,.35);
+  background: rgba(245,166,35,.08);
+  box-shadow: 0 0 10px rgba(245,166,35,.07);
+}
+.dpl-card-svc .dpl-door { color: rgba(245,166,35,.6); }
+.dpl-card-svc .dpl-status-lbl { color: var(--amber); }
 
-/* Row tints based on active status */
-.dvpl-ok  { border-color: rgba(25,224,154,.12);  background: rgba(25,224,154,.03); }
-.dvpl-svc { border-color: rgba(245,166,35,.18);  background: rgba(245,166,35,.04); }
-.dvpl-ooo { border-color: rgba(240,74,74,.22);   background: rgba(240,74,74,.05); }
-.dvpl-unk { border-color: rgba(255,255,255,.05); background: rgba(255,255,255,.02); }
+/* Out of Order — red */
+.dpl-card-ooo {
+  border-color: rgba(240,74,74,.35);
+  background: rgba(240,74,74,.07);
+  box-shadow: 0 0 10px rgba(240,74,74,.07);
+}
+.dpl-card-ooo .dpl-door { color: rgba(240,74,74,.65); }
+.dpl-card-ooo .dpl-status-lbl { color: var(--red); }
 
-/* Note chip — tapping opens inline edit */
-.dvpl-note-chip {
-  flex: 1;
-  min-width: 0;
-  font-size: 10px;
+/* Unknown */
+.dpl-card-unk {
+  border-color: rgba(255,255,255,.06);
+  background: rgba(255,255,255,.02);
+}
+.dpl-card-unk .dpl-door { color: rgba(255,255,255,.2); }
+.dpl-card-unk .dpl-status-lbl { color: rgba(255,255,255,.18); }
+
+/* ── Edit state: three inline status buttons + note chip ── */
+.dpl-btns {
+  display: flex;
+  gap: 2px;
+}
+.dpl-sbtn {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--mono);
+  width: 24px;
+  height: 22px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.04);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .1s, border-color .1s, color .1s;
+  padding: 0;
+  line-height: 1;
+}
+.dpl-sbtn:active { transform: scale(.88); }
+
+.dpl-ok  { color: rgba(25,224,154,.5);  border-color: rgba(25,224,154,.15); }
+.dpl-svc { color: rgba(245,166,35,.5);  border-color: rgba(245,166,35,.15); }
+.dpl-ooo { color: rgba(240,74,74,.45);  border-color: rgba(240,74,74,.15); }
+
+.dpl-ok:hover,  .dpl-ok.dpl-active  { background: rgba(25,224,154,.18); color: var(--green); border-color: rgba(25,224,154,.5); box-shadow: 0 0 5px rgba(25,224,154,.2); }
+.dpl-svc:hover, .dpl-svc.dpl-active { background: rgba(245,166,35,.18); color: var(--amber); border-color: rgba(245,166,35,.5); box-shadow: 0 0 5px rgba(245,166,35,.2); }
+.dpl-ooo:hover, .dpl-ooo.dpl-active { background: rgba(240,74,74,.18);  color: var(--red);   border-color: rgba(240,74,74,.5);  box-shadow: 0 0 5px rgba(240,74,74,.2); }
+
+/* Note chip — tapping opens inline input */
+.dpl-note-chip {
+  font-size: 8px;
   font-family: var(--mono);
   color: var(--t3);
   background: transparent;
   border: 1px dashed rgba(255,255,255,.1);
-  border-radius: 4px;
-  padding: 2px 6px;
+  border-radius: 3px;
+  padding: 1px 4px;
   cursor: pointer;
-  text-align: left;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-height: 22px;
-  transition: border-color .12s, background .12s, color .12s;
+  max-width: 100%;
+  min-height: 14px;
+  transition: border-color .12s, color .12s;
+  line-height: 1.3;
 }
-.dvpl-note-chip:hover { border-color: rgba(255,255,255,.25); background: rgba(255,255,255,.04); color: var(--t1); }
-.dvpl-note-chip-set { border-style: solid; border-color: rgba(255,255,255,.15); color: var(--t2); }
+.dpl-note-chip:hover { border-color: rgba(255,255,255,.3); color: var(--t1); }
+.dpl-note-set { border-style: solid; border-color: rgba(255,255,255,.2); color: var(--t2); }
 
-/* Inline note edit input */
-.dvpl-note-edit {
-  flex: 1;
-  min-width: 0;
-  font-size: 11px;
-  font-family: var(--mono);
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(245,166,35,.4);
-  border-radius: 4px;
-  color: var(--t1);
-  padding: 3px 7px;
-  min-height: 26px;
+/* Inline note input */
+.dpl-note-input {
+  width: 100%;
   box-sizing: border-box;
+  font-size: 9px;
+  font-family: var(--mono);
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(245,166,35,.5);
+  border-radius: 3px;
+  color: var(--t1);
+  padding: 2px 5px;
+  min-height: 18px;
   outline: none;
 }
-.dvpl-note-edit:focus { border-color: var(--amber); background: rgba(255,255,255,.08); box-shadow: 0 0 0 2px rgba(245,166,35,.15); }
-.dvpl-note-edit::placeholder { color: rgba(255,255,255,.2); }
+.dpl-note-input:focus { border-color: var(--amber); box-shadow: 0 0 0 2px rgba(245,166,35,.15); }
+.dpl-note-input::placeholder { color: rgba(255,255,255,.2); }
 
-/* Read-only status pill (for non-edit roles) */
+/* ── Dispatch panels still use dvpl-row layout ── */
+/* dvpl-* styles are kept below for dispatch/management plates panel */
+
+/* Shared status pill (dispatch panels, read-only) */
 .dvpl-status-pill {
   font-family: var(--mono);
   font-size: 10px;
@@ -5035,7 +5094,6 @@ select option { background: #0d1119; }
 .dvpl-ooo-pill { background: rgba(240,74,74,.15);  color: var(--red);   border: 1px solid rgba(240,74,74,.3); }
 .dvpl-unk-pill { background: rgba(255,255,255,.05);color: var(--t3);    border: 1px solid rgba(255,255,255,.08); }
 
-/* Note text next to pill (read-only) */
 .dvpl-note-chip.dvpl-note-chip-set { color: var(--t2); }
 
 

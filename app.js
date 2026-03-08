@@ -1087,7 +1087,6 @@
   function renderDockView(){
     const cards=el("dockCards"),countEl=el("dockCount");if(!cards)return;
     renderDockPlatesPanel();
-    renderDvOccupancy();
     dvUpdateIncoming();
     // update role label
     if(el("dvRoleLabel"))el("dvRoleLabel").textContent=ROLE?ROLE.charAt(0).toUpperCase()+ROLE.slice(1):"Sign in";
@@ -1206,31 +1205,40 @@
         +(svcCount?` · <span style="color:var(--amber)">${svcCount} SVC</span>`:"")
         +(oooCount?` · <span style="color:var(--red)">${oooCount} OOO</span>`:"");
     }
-    // Compact inline-toggle rows — all 15 doors, no expand, instant save on tap
-    grid.innerHTML=doors.map(door=>{
+    // Occ-card style grid — same visual language as door occupancy, plate-status colors
+    const row1=doors.filter(d=>parseInt(d)<=35);
+    const row2=doors.filter(d=>parseInt(d)>35);
+    const buildCard=door=>{
       const p=dockPlates[door]||{status:"Unknown",note:""};
       const s=p.status||"Unknown";
-      const rowCls=s==="OK"?"dvpl-ok":s==="Service"?"dvpl-svc":s==="Out of Order"?"dvpl-ooo":"dvpl-unk";
+      const isOK=s==="OK", isSvc=s==="Service", isOOO=s==="Out of Order";
+      const cardCls=isOK?"dpl-card-ok":isSvc?"dpl-card-svc":isOOO?"dpl-card-ooo":"dpl-card-unk";
+      const statusLabel=isOK?"OK":isSvc?"SVC":isOOO?"OOO":"—";
       const noteEditOpen=!!plateEditOpen[`note_${door}`];
-      if(!canEdit){
-        const icon=s==="OK"?"✓":s==="Service"?"⚠":"✕";
-        const pillCls=s==="OK"?"dvpl-ok-pill":s==="Service"?"dvpl-svc-pill":s==="Out of Order"?"dvpl-ooo-pill":"dvpl-unk-pill";
-        return`<div class="dvpl-row ${rowCls}"><span class="dvpl-door">D${esc(door)}</span><span class="dvpl-status-pill ${pillCls}">${icon} ${s==="Out of Order"?"OOO":s==="Service"?"SVC":s==="OK"?"OK":"—"}</span>${p.note?`<span class="dvpl-note-chip">${esc(p.note)}</span>`:""}</div>`;
+      if(canEdit){
+        return`<div class="dpl-card ${cardCls}" data-door="${esc(door)}">
+          <div class="dpl-door">D${esc(door)}</div>
+          <div class="dpl-btns">
+            <button class="dpl-sbtn dpl-ok${isOK?" dpl-active":""}" data-plate-instant="${esc(door)}" data-plate-val="OK" title="OK">✓</button>
+            <button class="dpl-sbtn dpl-svc${isSvc?" dpl-active":""}" data-plate-instant="${esc(door)}" data-plate-val="Service" title="Service">⚠</button>
+            <button class="dpl-sbtn dpl-ooo${isOOO?" dpl-active":""}" data-plate-instant="${esc(door)}" data-plate-val="Out of Order" title="OOO">✕</button>
+          </div>
+          ${noteEditOpen
+            ?`<input class="dpl-note-input" id="dvpn-${esc(door)}" placeholder="Note…" value="${esc(p.note||"")}" data-plate-note="${esc(door)}" data-plate-note-door="${esc(door)}" autofocus/>`
+            :`<button class="dpl-note-chip${p.note?" dpl-note-set":""}" data-plate-note-open="${esc(door)}">${p.note?esc(p.note):"+"}</button>`
+          }
+        </div>`;
       }
-      return`<div class="dvpl-row ${rowCls}" data-door="${esc(door)}">
-        <span class="dvpl-door">D${esc(door)}</span>
-        <div class="dvpl-toggles">
-          <button class="dvpl-tbtn dvpl-tbtn-ok${s==="OK"?" dvpl-tbtn-active":""}" data-plate-instant="${esc(door)}" data-plate-val="OK">✓</button>
-          <button class="dvpl-tbtn dvpl-tbtn-svc${s==="Service"?" dvpl-tbtn-active":""}" data-plate-instant="${esc(door)}" data-plate-val="Service">⚠</button>
-          <button class="dvpl-tbtn dvpl-tbtn-ooo${s==="Out of Order"?" dvpl-tbtn-active":""}" data-plate-instant="${esc(door)}" data-plate-val="Out of Order">✕</button>
-        </div>
-        ${noteEditOpen
-          ?`<input class="dvpl-note-edit" id="dvpn-${esc(door)}" placeholder="Note…" value="${esc(p.note||"")}" data-plate-note="${esc(door)}" data-plate-note-door="${esc(door)}" autofocus/>`
-          :`<button class="dvpl-note-chip ${p.note?"dvpl-note-chip-set":""}" data-plate-note-open="${esc(door)}">${p.note?esc(p.note):"+"}</button>`
-        }
+      // Read-only card
+      return`<div class="dpl-card ${cardCls}">
+        <div class="dpl-door">D${esc(door)}</div>
+        <div class="dpl-status-lbl">${statusLabel}</div>
+        ${p.note?`<div class="dpl-note-ro">${esc(p.note)}</div>`:""}
       </div>`;
-    }).join("");
-    // Focus note input if one was just opened
+    };
+    grid.innerHTML=
+      `<div class="dpl-row">${row1.map(buildCard).join("")}</div>`+
+      `<div class="dpl-row">${row2.map(buildCard).join("")}</div>`;
     const noteInput=grid.querySelector("[autofocus]");
     if(noteInput)setTimeout(()=>noteInput.focus(),30);
   }
@@ -1330,7 +1338,6 @@
     el("btnDockStaffLogin")?.addEventListener("click",()=>el("staffLoginOv")?.classList.remove("hidden"));
     el("btnVoiceDock")?.addEventListener("click",startVoiceInput);
     _wireDvPanel("dvPlatesToggle","dvPlatesBody");
-    _wireDvPanel("dvOccToggle","dvOccBody");
   }
 
   function openQuickIssue(trailer,door){
@@ -2096,7 +2103,7 @@
     if(id==="oac_override"){driverState.overrideMode=true;driverState.assignedDoor="";driverState.selectedDoor="";showDoorPicker("offloadDoorPickerWrap","offloadDoorPickerGrid");updateOffloadSubmitState();return;}
     const doorBtn=direct?.closest?.("[data-door]");
     // Exclude plate cards (dsp-plate-btn), dock reserve grid (dr-door-btn), and detail door grid (dsd-door-btn)
-    const isDoorPickExcluded=doorBtn?.classList?.contains("dsp-plate-btn")||doorBtn?.classList?.contains("dvp-card")||doorBtn?.classList?.contains("dvpl-item")||doorBtn?.classList?.contains("dvpl-row")||doorBtn?.classList?.contains("dr-door-btn")||doorBtn?.classList?.contains("dsd-door-btn")||direct?.dataset?.plateToggle||direct?.dataset?.plateSave||direct?.dataset?.plateStatusSet||direct?.dataset?.plateInstant||direct?.dataset?.plateNoteOpen||direct?.dataset?.plateNoteDoor||!!direct?.closest?.("[data-plate-toggle]")||!!direct?.closest?.("[data-plate-save]")||!!direct?.closest?.(".dvpl-item")||!!direct?.closest?.(".dvpl-row");
+    const isDoorPickExcluded=doorBtn?.classList?.contains("dsp-plate-btn")||doorBtn?.classList?.contains("dvp-card")||doorBtn?.classList?.contains("dvpl-item")||doorBtn?.classList?.contains("dvpl-row")||doorBtn?.classList?.contains("dpl-card")||doorBtn?.classList?.contains("dr-door-btn")||doorBtn?.classList?.contains("dsd-door-btn")||direct?.dataset?.plateToggle||direct?.dataset?.plateSave||direct?.dataset?.plateStatusSet||direct?.dataset?.plateInstant||direct?.dataset?.plateNoteOpen||direct?.dataset?.plateNoteDoor||!!direct?.closest?.("[data-plate-toggle]")||!!direct?.closest?.("[data-plate-save]")||!!direct?.closest?.(".dvpl-item")||!!direct?.closest?.(".dvpl-row")||!!direct?.closest?.(".dpl-card");
     if(doorBtn&&doorBtn.dataset.door&&!doorBtn.dataset.dmDoor&&!doorBtn.dataset.act&&!isDoorPickExcluded){driverState.selectedDoor=doorBtn.dataset.door;driverState.overrideMode=true;buildDoorPicker(doorBtn.dataset.picker||"doorPickerGrid");updateDropSubmitState();updateOffloadSubmitState();return;}
     const dtBtn=direct?.closest?.("[data-type]");
     if(dtBtn?.dataset.type){driverState.dropType=dtBtn.dataset.type;el("dtbEmpty")?.classList.toggle("selected",driverState.dropType==="Empty");el("dtbLoaded")?.classList.toggle("selected",driverState.dropType==="Loaded");return;}

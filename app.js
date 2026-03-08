@@ -2031,9 +2031,7 @@
       renderSupBoard();renderSupConf();loadAuditInto(null,el("supAuditCount"),0);loadIssueReports();renderPlates();
       const adminPinRow=el("adminPinRow");if(adminPinRow)adminPinRow.style.display=ROLE==="admin"?"":"none";
     }
-    if(ROLE==="admin"&&!isSuper()){renderBoard();renderRolePanel();let open=false;try{open=localStorage.getItem("platesOpen")==="1";}catch{}setPlatesOpen(open);}
-    else if(ROLE==="management"&&!isSuper()){renderRolePanel();renderBoard();let open=false;try{open=localStorage.getItem("platesOpen")==="1";}catch{}setPlatesOpen(open);}
-    else if(isDock()){
+    if(isDock()){
       initDockView();
       // Show loading skeleton immediately
       const cards=el("dockCards");

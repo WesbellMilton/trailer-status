@@ -2060,6 +2060,7 @@
 
     if(direct?.closest?.("#dockPlatesToggle")){setPlatesOpen(el("dockPlatesToggle").getAttribute("aria-expanded")!=="true");return;}
     if(direct?.closest?.("#dockPlatesToggle2")){setPlatesOpen2(el("dockPlatesToggle2").getAttribute("aria-expanded")!=="true");return;}
+    if(direct?.closest?.("#dvPlatesToggle")){const b=el("dvPlatesBody"),chev=el("dvPlatesToggle")?.querySelector(".dvp-chev");if(!b)return;const open=b.classList.contains("dvp-body-open");b.classList.toggle("dvp-body-open",!open);if(chev)chev.textContent=open?"▾":"▴";return;}
     // PIN accordions
     for(const[tog,body] of [["pinMgmtToggle","pinMgmtBody"],["adminPinToggle","adminPinBody"],["adminLocToggle","adminLocBody"],["adminOverviewToggle","adminOverviewBody"]]){
       if(direct?.closest?.(`#${tog}`)){const t=el(tog),b=el(body);if(!t||!b)return;const open=t.getAttribute("aria-expanded")==="true";t.setAttribute("aria-expanded",open?"false":"true");b.style.maxHeight=open?"0px":(b.scrollHeight+40)+"px";if(!open&&tog==="adminLocToggle")loadAdminLocations();if(!open&&tog==="adminOverviewToggle")loadAdminOverview();return;}

@@ -5279,14 +5279,6 @@ select option { background: #0d1119; }
    Each door gets a colored card reflecting trailer status
 ═══════════════════════════════════════════════════════════════ */
 
-/* Shared grid — same 5-col layout as plates */
-#dspOccGrid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 5px;
-  padding: 8px 12px 12px;
-}
-
 /* Base card */
 .occ-card {
   border-radius: 9px;

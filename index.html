@@ -702,7 +702,16 @@ body{background-image:none!important;background:transparent!important}
     }
 
     document.querySelectorAll('#driverView [data-back]').forEach(btn => {
-      btn.addEventListener('click', () => show(btn.dataset.back));
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.back;
+        // Returning to home resets session — clear banner and trailer state
+        if (target === 'ts-s-home') {
+          state.assignedDoor = null;
+          state.door = null;
+          updateLiveDoor(null);
+        }
+        show(target);
+      });
     });
 
     // If URL has ?loc= param it's the outside carrier QR — skip trailer entry entirely
@@ -717,6 +726,11 @@ body{background-image:none!important;background:transparent!important}
       goBtn.textContent = 'Get My Door →';
       goBtn.addEventListener('click', () => show('ts-s-ext-carrier'));
       document.querySelector('#ts-s-home').appendChild(goBtn);
+      // In QR mode, Back from carrier picker returns to home (not ts-s-carrier which doesn't exist in this flow)
+      const extCarrierBackBtn = document.querySelector('#ts-s-ext-carrier .ts-back-btn');
+      if (extCarrierBackBtn) extCarrierBackBtn.dataset.back = 'ts-s-home';
+      // Ensure any stale banner from a previous session is cleared on fresh QR load
+      updateLiveDoor(null);
     }
 
     // 1. Trailer Input
@@ -764,9 +778,15 @@ body{background-image:none!important;background:transparent!important}
           }
           const data = await res.json().catch(() => ({}));
           if (data.refCode) state.trailer = data.refCode;
+          state.action = 'ext-drop';
           if (data.door) {
             updateLiveDoor(data.door);
-            showDoorAssigned('Door Assigned!', `Pull straight into Door ${data.door}.`, true, data.door);
+            // Outside carriers don't wait for dispatch — show door immediately and let them proceed
+            showSuccess('Door Assigned!', `Pull straight into Door ${data.door}.`, [
+              { k: 'Carrier', v: carrier },
+              { k: 'Ref Code', v: data.refCode || state.trailer || '—' },
+              { k: 'Door', v: data.door }
+            ]);
           } else {
             showWaiting(null);
           }
@@ -877,9 +897,7 @@ body{background-image:none!important;background:transparent!important}
             toast(msg || 'Failed to get door — please ask dispatch.');
             showWaiting(null);
           }
-        } catch(e) { toast('Network error'); }
-      }
-      else if (act === 'drop') {
+        } catch(e) { toast('Network error — try again'); }
         show('ts-s-drop');
       }
     }
@@ -1151,11 +1169,21 @@ body{background-image:none!important;background:transparent!important}
 
     // -- Restart --
     document.getElementById('ts-done-restart').addEventListener('click', () => {
+      window._driverRestart();
+    });
+
+    // Full driver session reset — called by ts-done-restart AND by app.js Start Over button
+    window._driverRestart = function() {
       state = { trailer: '', carrier: '', action: '', eta: 10, dropType: 'Loaded', door: null, assignedDoor: null, safetyChecks: { load: false, plate: false } };
       updateLiveDoor(null);
       document.getElementById('ts-home-trailer').value = '';
-      show('ts-s-home');
-    });
+      // In QR mode, restart goes straight to ext-carrier; otherwise home
+      if (_driverLocSlug) {
+        show('ts-s-ext-carrier');
+      } else {
+        show('ts-s-home');
+      }
+    };
 
     // ── Live WS updates for driver ─────────────────────────────────────────
     // Registers a global handler on window so it works regardless of WS reconnects.

@@ -1062,6 +1062,7 @@ body{background-image:none!important;background:transparent!important}
     // ── Live WS updates for driver ─────────────────────────────────────────
     // Registers a global handler on window so it works regardless of WS reconnects.
     // app.js calls window._driverWsMsg(msg) on every incoming WS message.
+    // Also polls /api/driver/assignment every 5s as fallback for WS drops.
     (function hookDriverWs() {
       const PRE_SESSION = new Set(['ts-s-home', 'ts-s-carrier']);
 
@@ -1084,6 +1085,25 @@ body{background-image:none!important;background:transparent!important}
         if (el) el.textContent = door;
         updateLiveDoor(door);
       }
+
+      // Poll server for trailer status — catches Ready even when WS was offline
+      async function pollStatus() {
+        if (!myTrailer() || !isInSession()) return;
+        // Don't poll if already on safety or done screen
+        if (isOnScreen('ts-s-safety') || isOnScreen('ts-s-done')) return;
+        try {
+          const r = await fetch('/api/driver/assignment?trailer=' + encodeURIComponent(myTrailer()),
+            { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+          if (!r.ok) return;
+          const d = await r.json();
+          if (!d.found) return;
+          if (d.door && d.door !== state.assignedDoor) refreshWaitDoor(d.door);
+          if (d.status === 'Ready') { showSafetyCheck(); return; }
+        } catch {}
+      }
+
+      // Poll every 5 seconds while driver is in session
+      setInterval(pollStatus, 5000);
 
       window._driverWsMsg = function(msg) {
         if (!msg) return;

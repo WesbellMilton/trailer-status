@@ -3594,16 +3594,9 @@ img,video,embed,object,iframe {
 .dps-ooo { color: rgba(240,74,74,.7); }
 .dsp-plates-chev { font-size: 10px; color: rgba(255,255,255,.15); flex-shrink: 0; }
 
-/* Grid — 5 columns across all 15 doors */
-.dsp-plates-grid {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 3px;
-  padding: 3px 12px 10px;
-}
-@media (max-width: 700px) {
-  .dsp-plates-grid { grid-template-columns: repeat(5, 1fr); }
-}
+/* Dispatch plates grid — uses same flex-column row layout as dock view */
+/* .dsp-plates-grid shares #dvPlatesGrid rules above */
+.dsp-plates-grid { } /* placeholder to keep specificity intact */
 
 /* Base card */
 .dsp-plate-btn {
@@ -4683,7 +4676,8 @@ select option { background: #0d1119; }
 .dvp-summary { flex: 1; font-size: 10px; font-weight: 400; letter-spacing: .04em; color: var(--t3); }
 .dvp-chev { flex-shrink: 0; font-size: 10px; transition: transform .2s; }
 
-.dvp-body { overflow: hidden; transition: max-height .3s ease; }
+.dvp-body { overflow: hidden; max-height: 0; transition: max-height .28s cubic-bezier(.22,1,.36,1); }
+.dvp-body.dvp-body-open { max-height: 800px; }
 
 .dvp-grid {
   display: grid;
@@ -4903,37 +4897,37 @@ select option { background: #0d1119; }
 .dvp-cancel-btn:hover { background: rgba(255,255,255,.06); color: var(--t2); }
 
 /* ═══════════════════════════════════════════════════════════════
-   DOCK PLATES — LIST LAYOUT (dvpl-*)
-   Two-column grid, each item is a tappable row.
-   All 15 doors fit with no scroll.
+   DOCK PLATES — COMPACT INLINE ROW (dvpl-*)
+   Single row per door: door label + 3 instant-toggle status btns + note chip
+   Works identically in dock view, dispatch panels, management.
+   No expand/collapse — everything at a glance, single tap to change.
 ═══════════════════════════════════════════════════════════════ */
 
-/* Container: 2-column grid */
-#dvPlatesGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  padding: 8px 12px 12px;
+/* Grid: single column list, full width */
+#dvPlatesGrid,
+#dspPlatesGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px 8px;
 }
 
-/* Each row item */
-.dvpl-item {
+/* Each row */
+.dvpl-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(255,255,255,.06);
-  background: rgba(255,255,255,.025);
-  cursor: pointer;
-  transition: background .15s, border-color .15s;
-  min-height: 40px;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,.05);
+  background: rgba(255,255,255,.02);
+  min-height: 36px;
   user-select: none;
+  transition: background .12s;
 }
-.dvpl-item:hover { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.12); }
-.dvpl-item:active { background: rgba(255,255,255,.07); }
+.dvpl-row:hover { background: rgba(255,255,255,.04); }
 
-/* Door label */
+/* Door label — fixed width */
 .dvpl-door {
   font-family: var(--mono);
   font-size: 11px;
@@ -4943,7 +4937,91 @@ select option { background: #0d1119; }
   min-width: 28px;
 }
 
-/* Status pill */
+/* 3-button toggle strip */
+.dvpl-toggles {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.dvpl-tbtn {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,.07);
+  background: transparent;
+  color: rgba(255,255,255,.3);
+  cursor: pointer;
+  min-height: 26px;
+  min-width: 32px;
+  transition: background .1s, border-color .1s, color .1s;
+  line-height: 1;
+}
+.dvpl-tbtn:active { transform: scale(.93); }
+
+/* OK */
+.dvpl-tbtn-ok { border-color: rgba(25,224,154,.15); color: rgba(25,224,154,.45); }
+.dvpl-tbtn-ok:hover { background: rgba(25,224,154,.1); color: var(--green); border-color: rgba(25,224,154,.4); }
+.dvpl-tbtn-ok.dvpl-tbtn-active { background: rgba(25,224,154,.18); color: var(--green); border-color: rgba(25,224,154,.5); box-shadow: 0 0 6px rgba(25,224,154,.2); }
+
+/* SVC */
+.dvpl-tbtn-svc { border-color: rgba(245,166,35,.15); color: rgba(245,166,35,.45); }
+.dvpl-tbtn-svc:hover { background: rgba(245,166,35,.1); color: var(--amber); border-color: rgba(245,166,35,.4); }
+.dvpl-tbtn-svc.dvpl-tbtn-active { background: rgba(245,166,35,.18); color: var(--amber); border-color: rgba(245,166,35,.5); box-shadow: 0 0 6px rgba(245,166,35,.2); }
+
+/* OOO */
+.dvpl-tbtn-ooo { border-color: rgba(240,74,74,.15); color: rgba(240,74,74,.4); }
+.dvpl-tbtn-ooo:hover { background: rgba(240,74,74,.1); color: var(--red); border-color: rgba(240,74,74,.4); }
+.dvpl-tbtn-ooo.dvpl-tbtn-active { background: rgba(240,74,74,.18); color: var(--red); border-color: rgba(240,74,74,.5); box-shadow: 0 0 6px rgba(240,74,74,.2); }
+
+/* Row tints based on active status */
+.dvpl-ok  { border-color: rgba(25,224,154,.12);  background: rgba(25,224,154,.03); }
+.dvpl-svc { border-color: rgba(245,166,35,.18);  background: rgba(245,166,35,.04); }
+.dvpl-ooo { border-color: rgba(240,74,74,.22);   background: rgba(240,74,74,.05); }
+.dvpl-unk { border-color: rgba(255,255,255,.05); background: rgba(255,255,255,.02); }
+
+/* Note chip — tapping opens inline edit */
+.dvpl-note-chip {
+  flex: 1;
+  min-width: 0;
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--t3);
+  background: transparent;
+  border: 1px dashed rgba(255,255,255,.1);
+  border-radius: 4px;
+  padding: 2px 6px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 22px;
+  transition: border-color .12s, background .12s, color .12s;
+}
+.dvpl-note-chip:hover { border-color: rgba(255,255,255,.25); background: rgba(255,255,255,.04); color: var(--t1); }
+.dvpl-note-chip-set { border-style: solid; border-color: rgba(255,255,255,.15); color: var(--t2); }
+
+/* Inline note edit input */
+.dvpl-note-edit {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-family: var(--mono);
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(245,166,35,.4);
+  border-radius: 4px;
+  color: var(--t1);
+  padding: 3px 7px;
+  min-height: 26px;
+  box-sizing: border-box;
+  outline: none;
+}
+.dvpl-note-edit:focus { border-color: var(--amber); background: rgba(255,255,255,.08); box-shadow: 0 0 0 2px rgba(245,166,35,.15); }
+.dvpl-note-edit::placeholder { color: rgba(255,255,255,.2); }
+
+/* Read-only status pill (for non-edit roles) */
 .dvpl-status-pill {
   font-family: var(--mono);
   font-size: 10px;
@@ -4951,99 +5029,14 @@ select option { background: #0d1119; }
   padding: 2px 6px;
   border-radius: 4px;
   flex-shrink: 0;
-  letter-spacing: .02em;
 }
-.dvpl-ok-pill    { background: rgba(25,224,154,.15);  color: var(--green); border: 1px solid rgba(25,224,154,.3); }
-.dvpl-svc-pill   { background: rgba(245,166,35,.15);  color: var(--amber); border: 1px solid rgba(245,166,35,.3); }
-.dvpl-ooo-pill   { background: rgba(240,74,74,.15);   color: var(--red);   border: 1px solid rgba(240,74,74,.3); }
-.dvpl-unk-pill   { background: rgba(255,255,255,.05); color: var(--t3);    border: 1px solid rgba(255,255,255,.08); }
+.dvpl-ok-pill  { background: rgba(25,224,154,.15); color: var(--green); border: 1px solid rgba(25,224,154,.3); }
+.dvpl-svc-pill { background: rgba(245,166,35,.15); color: var(--amber); border: 1px solid rgba(245,166,35,.3); }
+.dvpl-ooo-pill { background: rgba(240,74,74,.15);  color: var(--red);   border: 1px solid rgba(240,74,74,.3); }
+.dvpl-unk-pill { background: rgba(255,255,255,.05);color: var(--t3);    border: 1px solid rgba(255,255,255,.08); }
 
-/* Note text */
-.dvpl-note {
-  font-size: 10px;
-  color: var(--t2);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  min-width: 0;
-}
-.dvpl-note-empty { color: var(--t3); }
-
-/* Status tints on the row itself */
-.dvpl-ok  { border-color: rgba(25,224,154,.18);  background: rgba(25,224,154,.04); }
-.dvpl-svc { border-color: rgba(245,166,35,.25);  background: rgba(245,166,35,.05); }
-.dvpl-ooo { border-color: rgba(240,74,74,.3);    background: rgba(240,74,74,.06); }
-
-/* ── Edit state: item expands to show form ── */
-.dvpl-item-editing {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 6px;
-  cursor: default;
-  grid-column: span 2; /* editing card spans full width */
-  padding: 10px 12px;
-  background: rgba(255,255,255,.04);
-  border-color: rgba(245,166,35,.25);
-}
-.dvpl-item-editing:hover { background: rgba(255,255,255,.04); border-color: rgba(245,166,35,.25); }
-
-.dvpl-edit-hd {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.dvpl-edit-door {
-  font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--t1);
-}
-.dvpl-cancel-btn {
-  background: none;
-  border: none;
-  color: var(--t3);
-  font-size: 14px;
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
-  line-height: 1;
-}
-.dvpl-cancel-btn:hover { background: rgba(255,255,255,.07); color: var(--t1); }
-
-.dvpl-status-row {
-  display: flex;
-  gap: 5px;
-}
-.dvpl-status-row .dvp-sbtn {
-  flex: 1;
-  min-height: 34px;
-  font-size: 11px;
-}
-
-.dvpl-note-input {
-  width: 100%;
-  box-sizing: border-box;
-  font-size: 12px;
-  padding: 6px 8px;
-}
-
-.dvpl-save-btn {
-  background: rgba(245,166,35,.15);
-  border: 1px solid rgba(245,166,35,.3);
-  color: var(--amber);
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 600;
-  padding: 7px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  width: 100%;
-  text-align: center;
-  transition: background .15s;
-}
-.dvpl-save-btn:hover { background: rgba(245,166,35,.25); }
+/* Note text next to pill (read-only) */
+.dvpl-note-chip.dvpl-note-chip-set { color: var(--t2); }
 
 
    Row status bars more vivid; status tags richer; toolbar accent
@@ -5576,12 +5569,12 @@ select option { background: #0d1119; }
   display: none !important;
 }
 .dvp-body.dvp-body-open {
-  display: block !important;
-  max-height: 38vh;
-  overflow-y: auto !important;
+  max-height: 800px;
+  overflow-y: auto;
 }
 .dvp-body:not(.dvp-body-open) {
-  display: none !important;
+  max-height: 0 !important;
+  overflow: hidden !important;
 }
 .dsp-plates { flex-shrink: 0; }
 .dsp-plates-chev { opacity: .4; }

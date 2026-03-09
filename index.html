@@ -775,6 +775,8 @@ body{background-image:none!important;background:transparent!important}
         if (state.carrier === 'Outside') {
           show('ts-s-ext-carrier');
         } else {
+          // Wesbell driver — enable chat
+          window._chatDriverOk = true;
           document.getElementById('ts-actions-trailer-tag').textContent = `🚛 ${state.trailer}`;
           buildActions();
           show('ts-s-actions');
@@ -2356,6 +2358,53 @@ body{background-image:none!important;background:transparent!important}
       <button class="m-close" onclick="document.getElementById('historyBoardOv').classList.add('hidden')">✕</button>
     </div>
     <div class="m-body" id="historyBoardBody" style="padding:0;overflow-y:auto;max-height:70vh;"></div>
+  </div>
+</div>
+
+<!-- ── Chat Bubble + Panel ─────────────────────────────────────── -->
+<div id="chatBubble" style="display:none;">
+  <span id="chatBubbleUnread" class="chat-bubble-unread" style="display:none;">0</span>
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+</div>
+
+<div id="chatPanel" class="chat-panel">
+  <div class="chat-panel-hd">
+    <div class="chat-panel-title">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span>Team Chat</span>
+    </div>
+    <button class="chat-close-btn" id="chatCloseBtn" aria-label="Close chat">✕</button>
+  </div>
+
+  <div class="chat-channels" id="chatChannels">
+    <!-- tabs injected by JS -->
+  </div>
+
+  <div class="chat-messages" id="chatMessages">
+    <div class="chat-loading">Loading…</div>
+  </div>
+
+  <div class="chat-input-row">
+    <input class="chat-input" id="chatInput" type="text" placeholder="Message…" maxlength="1000" autocomplete="off"/>
+    <button class="chat-send-btn" id="chatSendBtn" aria-label="Send">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- Driver name modal -->
+<div class="modal-ov hidden" id="driverNameOv">
+  <div class="modal" style="max-width:320px;">
+    <div class="m-hd">
+      <span class="m-title">Your Name</span>
+    </div>
+    <div class="m-body" style="padding:16px;">
+      <p style="font-size:13px;color:var(--t1);margin-bottom:12px;">Enter your name so the team knows who you are in chat.</p>
+      <input class="fi" id="driverNameInput" type="text" placeholder="e.g. John" maxlength="40" autocomplete="off"/>
+      <div class="m-btns" style="margin-top:14px;">
+        <button class="btn btn-primary" id="driverNameSaveBtn">Save &amp; Open Chat</button>
+      </div>
+    </div>
   </div>
 </div>
 

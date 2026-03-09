@@ -2058,6 +2058,8 @@
       rebuildDoors();
       // Expose for driver view and other modules
       window._doorsFrom=_doorsFrom;window._doorsTo=_doorsTo;
+      // Expose for chat module
+      window._chatRole=ROLE;window._chatLocId=_locationId;window._chatReady=true;
       if(w?.redirectTo&&ROLE&&w.redirectTo!==location.pathname){location.replace(w.redirectTo);return;}
     }catch{ROLE=null;VERSION="";}
     el("verText").textContent=VERSION||"—";
@@ -3279,6 +3281,371 @@
     lb.classList.add('open');
     img.src=`/api/issue-reports/${encodeURIComponent(id)}/photo`;
     img.onerror=()=>lb.classList.remove('open');
+  }
+
+})();
+
+/* ══════════════════════════════════════════════════════════════════
+   CHAT MODULE
+══════════════════════════════════════════════════════════════════ */
+(function chatModule() {
+  'use strict';
+
+  // ── State ──────────────────────────────────────────────────────
+  let _open       = false;
+  let _channel    = 'general';
+  let _channels   = [];
+  let _unread     = {};       // { channel: count }
+  let _lastSeen   = {};       // { channel: timestamp } — persisted to localStorage
+  let _oldest     = {};       // { channel: id } — for load-more
+  let _role       = null;
+  let _sender     = null;     // display name
+  let _locId      = 1;
+  let _wsRef      = null;     // reference to shared WS
+
+  const CSRF = { 'X-Requested-With': 'XMLHttpRequest' };
+
+  // ── DOM refs ───────────────────────────────────────────────────
+  const $ = id => document.getElementById(id);
+  const bubble   = () => $('chatBubble');
+  const panel    = () => $('chatPanel');
+  const msgArea  = () => $('chatMessages');
+  const input    = () => $('chatInput');
+  const chTabs   = () => $('chatChannels');
+  const unreadDot= () => $('chatBubbleUnread');
+
+  // ── Init ───────────────────────────────────────────────────────
+  async function init() {
+    // Wait for whoami to resolve (window._chatReady set by main IIFE)
+    let attempts = 0;
+    while (!window._chatReady && attempts++ < 40) await sleep(100);
+
+    _role  = window._chatRole  || null;
+    _locId = window._chatLocId || 1;
+
+    if (!_role) return; // not logged in — no chat
+
+    // Drivers: only Wesbell carriers get chat
+    if (_role === 'driver') {
+      // Wait until driver flow has set carrier type
+      await sleep(500);
+      if (!window._chatDriverOk) return;
+    }
+
+    _sender = getSenderName();
+    loadLastSeen();
+    await loadChannels();
+    wireBubble();
+    wirePanel();
+    wireWS();
+    showBubble();
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  // ── Sender name ────────────────────────────────────────────────
+  function getSenderName() {
+    if (_role === 'driver') {
+      return localStorage.getItem('wb_driver_name') || 'Driver';
+    }
+    const names = { dispatcher:'Dispatcher', dock:'Dock', management:'Management', admin:'Admin' };
+    return names[_role] || 'User';
+  }
+
+  // ── Channels ───────────────────────────────────────────────────
+  async function loadChannels() {
+    try {
+      const since = Math.max(0, ...Object.values(_lastSeen));
+      const data = await apiFetch(`/api/chat/channels?since=${since}`);
+      _channels = data.channels || ['general'];
+      _unread   = data.unread   || {};
+      // Don't count messages as unread if we've never opened chat
+      renderChannelTabs();
+      updateBubbleBadge();
+    } catch {}
+  }
+
+  function renderChannelTabs() {
+    const tabs = chTabs();
+    if (!tabs) return;
+    tabs.innerHTML = _channels.map(ch => {
+      const u = _unread[ch] || 0;
+      return `<button class="chat-ch-tab${ch===_channel?' active':''}" data-ch="${ch}">
+        #${ch}${u>0?`<span class="chat-ch-unread">${u>99?'99+':u}</span>`:''}
+      </button>`;
+    }).join('');
+    tabs.querySelectorAll('.chat-ch-tab').forEach(btn => {
+      btn.addEventListener('click', () => switchChannel(btn.dataset.ch));
+    });
+  }
+
+  async function switchChannel(ch) {
+    if (!_channels.includes(ch)) return;
+    _channel = ch;
+    _unread[ch] = 0;
+    markSeen(ch);
+    renderChannelTabs();
+    updateBubbleBadge();
+    msgArea().innerHTML = '<div class="chat-loading">Loading…</div>';
+    await loadHistory();
+  }
+
+  // ── History ────────────────────────────────────────────────────
+  async function loadHistory(before = null) {
+    try {
+      const url = `/api/chat/history?channel=${_channel}&limit=50${before?'&before='+before:''}`;
+      const rows = await apiFetch(url);
+      if (!before) {
+        msgArea().innerHTML = '';
+        _oldest[_channel] = null;
+      }
+      if (!rows.length) {
+        if (!before) msgArea().innerHTML = '<div class="chat-loading">No messages yet. Say hello 👋</div>';
+        return;
+      }
+      if (_oldest[_channel] == null || rows[0].id < _oldest[_channel]) _oldest[_channel] = rows[0].id;
+
+      if (rows.length === 50) prependLoadMore();
+      if (before) {
+        const existing = msgArea().querySelector('.chat-load-more');
+        existing?.remove();
+      }
+      const frag = document.createDocumentFragment();
+      let lastDate = null;
+      rows.forEach(msg => {
+        const d = new Date(msg.at).toLocaleDateString('en-CA');
+        if (d !== lastDate) { frag.appendChild(dateSep(d)); lastDate = d; }
+        frag.appendChild(buildMsg(msg));
+      });
+      if (before) {
+        msgArea().insertBefore(frag, msgArea().firstChild);
+      } else {
+        msgArea().appendChild(frag);
+        scrollBottom();
+      }
+    } catch (e) {
+      msgArea().innerHTML = '<div class="chat-loading" style="color:var(--red)">Failed to load messages.</div>';
+    }
+  }
+
+  function prependLoadMore() {
+    const wrap = document.createElement('div');
+    wrap.className = 'chat-load-more';
+    wrap.innerHTML = '<button class="chat-load-more-btn">Load older messages</button>';
+    wrap.querySelector('button').addEventListener('click', () => {
+      loadHistory(_oldest[_channel]);
+    });
+    msgArea().insertBefore(wrap, msgArea().firstChild);
+  }
+
+  // ── Build message element ──────────────────────────────────────
+  function buildMsg(msg) {
+    const isMe  = (msg.sender === _sender && msg.role === _role);
+    const isBot = msg.sender === 'Wesbell AI';
+    const cls   = isBot ? 'bot' : isMe ? 'mine' : 'theirs';
+    const metaCls = isBot ? 'chat-msg-bot' : isMe ? 'chat-msg-mine' : '';
+    const time  = new Date(msg.at).toLocaleTimeString('en-CA', { hour:'2-digit', minute:'2-digit' });
+    const div   = document.createElement('div');
+    div.className = `chat-msg ${cls}`;
+    div.dataset.id = msg.id;
+    div.innerHTML = `
+      <div class="chat-msg-meta ${metaCls}">
+        <span class="chat-msg-sender">${esc(msg.sender)}</span>
+        <span>${time}</span>
+      </div>
+      <div class="chat-msg-body">${esc(msg.body)}</div>`;
+    return div;
+  }
+
+  function dateSep(dateStr) {
+    const d = document.createElement('div');
+    d.className = 'chat-date-sep';
+    d.textContent = dateStr === new Date().toLocaleDateString('en-CA') ? 'Today' : dateStr;
+    return d;
+  }
+
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Send ───────────────────────────────────────────────────────
+  async function send() {
+    const inp = input();
+    const body = inp?.value.trim();
+    if (!body) return;
+    inp.value = '';
+    inp.focus();
+    const sendBtn = $('chatSendBtn');
+    if (sendBtn) sendBtn.disabled = true;
+    try {
+      await apiFetch('/api/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...CSRF },
+        body: JSON.stringify({ channel: _channel, body, sender: _sender }),
+      });
+    } catch {
+      inp.value = body; // restore on failure
+    } finally {
+      if (sendBtn) sendBtn.disabled = false;
+    }
+  }
+
+  // ── WS integration ─────────────────────────────────────────────
+  function wireWS() {
+    // Patch into the main app's WS onmessage
+    const checkWs = setInterval(() => {
+      if (!window._ws) return;
+      clearInterval(checkWs);
+      _wsRef = window._ws;
+      const origOnMessage = _wsRef.onmessage;
+      _wsRef.onmessage = (evt) => {
+        if (origOnMessage) origOnMessage.call(_wsRef, evt);
+        try {
+          const msg = JSON.parse(evt.data);
+          if (msg.type === 'chat') handleIncoming(msg.payload);
+        } catch {}
+      };
+    }, 200);
+
+    // Re-hook when WS reconnects
+    setInterval(() => {
+      if (window._ws && window._ws !== _wsRef) {
+        _wsRef = window._ws;
+        const origOnMessage = _wsRef.onmessage;
+        _wsRef.onmessage = (evt) => {
+          if (origOnMessage) origOnMessage.call(_wsRef, evt);
+          try {
+            const msg = JSON.parse(evt.data);
+            if (msg.type === 'chat') handleIncoming(msg.payload);
+          } catch {}
+        };
+      }
+    }, 3000);
+  }
+
+  function handleIncoming(msg) {
+    if (!msg || msg.channel !== _channel) {
+      // Different channel — increment unread
+      if (msg?.channel && _channels.includes(msg.channel)) {
+        _unread[msg.channel] = (_unread[msg.channel] || 0) + 1;
+        renderChannelTabs();
+        updateBubbleBadge();
+      }
+      return;
+    }
+    // Same channel — append if open
+    if (_open) {
+      const area = msgArea();
+      const atBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 60;
+      const d = new Date(msg.at).toLocaleDateString('en-CA');
+      const lastSep = area.querySelector('.chat-date-sep:last-of-type');
+      if (!lastSep || lastSep.textContent !== (d === new Date().toLocaleDateString('en-CA') ? 'Today' : d)) {
+        area.appendChild(dateSep(d));
+      }
+      area.appendChild(buildMsg(msg));
+      if (atBottom) scrollBottom();
+      markSeen(_channel);
+    } else {
+      _unread[_channel] = (_unread[_channel] || 0) + 1;
+      updateBubbleBadge();
+    }
+  }
+
+  // ── Bubble & panel wiring ──────────────────────────────────────
+  function wireBubble() {
+    const b = bubble();
+    if (!b) return;
+    b.addEventListener('click', togglePanel);
+  }
+
+  function wirePanel() {
+    $('chatCloseBtn')?.addEventListener('click', closePanel);
+    $('chatSendBtn')?.addEventListener('click', send);
+    input()?.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+
+    // Driver name modal
+    $('driverNameSaveBtn')?.addEventListener('click', () => {
+      const v = $('driverNameInput')?.value.trim();
+      if (!v) return;
+      localStorage.setItem('wb_driver_name', v);
+      _sender = v;
+      $('driverNameOv')?.classList.add('hidden');
+      openPanel();
+    });
+  }
+
+  async function togglePanel() {
+    if (_open) closePanel();
+    else {
+      // Driver: check if name is set
+      if (_role === 'driver' && !localStorage.getItem('wb_driver_name')) {
+        $('driverNameOv')?.classList.remove('hidden');
+        return;
+      }
+      openPanel();
+    }
+  }
+
+  async function openPanel() {
+    _open = true;
+    panel()?.classList.add('chat-panel-open');
+    bubble()?.classList.add('chat-open');
+    _unread[_channel] = 0;
+    markSeen(_channel);
+    renderChannelTabs();
+    updateBubbleBadge();
+    await loadHistory();
+  }
+
+  function closePanel() {
+    _open = false;
+    panel()?.classList.remove('chat-panel-open');
+    bubble()?.classList.remove('chat-open');
+  }
+
+  function showBubble() {
+    const b = bubble();
+    if (b) b.style.display = 'flex';
+  }
+
+  function scrollBottom() {
+    const area = msgArea();
+    if (area) area.scrollTop = area.scrollHeight;
+  }
+
+  // ── Unread tracking ────────────────────────────────────────────
+  function loadLastSeen() {
+    try { _lastSeen = JSON.parse(localStorage.getItem('wb_chat_seen') || '{}'); } catch { _lastSeen = {}; }
+  }
+  function markSeen(ch) {
+    _lastSeen[ch] = Date.now();
+    try { localStorage.setItem('wb_chat_seen', JSON.stringify(_lastSeen)); } catch {}
+  }
+  function updateBubbleBadge() {
+    const total = Object.values(_unread).reduce((a, b) => a + b, 0);
+    const dot = unreadDot();
+    if (!dot) return;
+    if (total > 0) {
+      dot.textContent = total > 99 ? '99+' : String(total);
+      dot.style.display = 'flex';
+    } else {
+      dot.style.display = 'none';
+    }
+  }
+
+  // ── API helper ─────────────────────────────────────────────────
+  async function apiFetch(url, opts = {}) {
+    const r = await fetch(url, opts);
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  }
+
+  // ── Boot ───────────────────────────────────────────────────────
+  // Wait for DOM ready then init
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    setTimeout(init, 100); // slight delay so main IIFE sets window._chatReady
   }
 
 })();

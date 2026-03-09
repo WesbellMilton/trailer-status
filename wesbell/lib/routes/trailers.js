@@ -11,6 +11,9 @@ const { broadcastPush } = require('../push');
 
 const router = Router();
 
+// Lightweight keep-alive endpoint — no auth required, used by SW to prevent Render spin-down
+router.get('/api/ping', (req, res) => res.json({ ok: true, t: Date.now() }));
+
 router.get('/api/state', async (req, res) => {
   try {
     const { getSession } = require('../auth');
@@ -55,6 +58,25 @@ router.post('/api/upsert', requireXHR, _rds, async (req, res) => {
     const allowed = ['Incoming', 'Dropped', 'Loading', 'Dock Ready', 'Ready', 'Departed', ''];
     if (!allowed.includes(finalStatus)) return res.status(400).send('Invalid status');
 
+    // ── Door conflict check ───────────────────────────────────────────────────
+    // Warn (not block) if the requested door is already occupied by a different
+    // active trailer. Client can pass force:true to proceed anyway.
+    const doorChanged = door && door !== (existing?.door || '');
+    if (doorChanged && !req.body.force) {
+      const occupant = await get(
+        `SELECT trailer FROM trailers WHERE door=? AND trailer!=? AND status NOT IN ('Departed','')`,
+        [door, trailer]
+      );
+      if (occupant) {
+        return res.status(409).json({
+          conflict: true,
+          door,
+          occupant: occupant.trailer,
+          message: `Door ${door} is already assigned to trailer ${occupant.trailer}. Proceed anyway?`
+        });
+      }
+    }
+
     const doorAt = (door && door !== existing?.door) ? now : (existing?.doorAt || null);
     await run(
       `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt,doorAt)
@@ -78,12 +100,15 @@ router.post('/api/upsert', requireXHR, _rds, async (req, res) => {
         fireWebhook('trailer.ready', { trailer, door, actor });
       } else if (finalStatus === 'Dock Ready') {
         wsBroadcast('notify', { kind: 'dock_ready', trailer, door: door || '' });
+        broadcastPush('🔵 Dock Ready', `${trailer}${door ? ' · Door ' + door : ''} — ready to begin loading`, { trailer, door }).catch(() => {});
         fireWebhook('trailer.dock_ready', { trailer, door, actor });
       } else if (finalStatus === 'Loading') {
         wsBroadcast('notify', { kind: 'loading', trailer, door: door || '' });
+        broadcastPush('🟡 Loading Started', `Trailer ${trailer}${door ? ' at Door ' + door : ''} — loading in progress`, { trailer, door }).catch(() => {});
         fireWebhook('trailer.loading', { trailer, door, actor });
       } else if (finalStatus === 'Departed') {
         wsBroadcast('notify', { kind: 'departed', trailer, door: door || '' });
+        broadcastPush('🚪 Trailer Departed', `${trailer}${door ? ' — Door ' + door + ' now free' : ' has departed'}`, { trailer, door }).catch(() => {});
         fireWebhook('trailer.departed', { trailer, door, actor });
       }
     }
@@ -99,8 +124,11 @@ router.post('/api/delete', requireXHR, _rr(['dispatcher', 'management', 'admin']
   try {
     const trailer = String(req.body.trailer || '').trim().toUpperCase();
     if (!trailer) return res.status(400).send('Missing trailer');
+    // FIX: capture last known state before deletion for forensic audit trail
+    const before = await get(`SELECT status, door, direction FROM trailers WHERE trailer=?`, [trailer]);
     await run(`DELETE FROM trailers WHERE trailer=?`, [trailer]);
-    await audit(req, actor, 'trailer_delete', 'trailer', trailer, {});
+    await audit(req, actor, 'trailer_delete', 'trailer', trailer,
+      { lastStatus: before?.status || '—', lastDoor: before?.door || '—', direction: before?.direction || '—' });
     await broadcastTrailers();
     res.json({ ok: true });
   } catch { res.status(500).send('Delete failed'); }
@@ -109,8 +137,12 @@ router.post('/api/delete', requireXHR, _rr(['dispatcher', 'management', 'admin']
 router.post('/api/clear', requireXHR, _rr(['dispatcher', 'management', 'admin']), async (req, res) => {
   const actor = req.user?.role || 'unknown';
   try {
+    // FIX: capture count before clearing for audit trail
+    const countRow = await get(`SELECT COUNT(*) as cnt FROM trailers`);
+    const count = countRow?.cnt || 0;
     await run(`DELETE FROM trailers`);
-    await audit(req, actor, 'trailer_clear_all', 'trailer', '*', {});
+    await audit(req, actor, 'trailer_clear_all', 'trailer', '*',
+      { trailersCleared: count });
     await broadcastTrailers();
     res.json({ ok: true });
   } catch { res.status(500).send('Clear failed'); }
@@ -145,19 +177,30 @@ router.get('/api/load-status', _rr(['dispatcher', 'management', 'admin', 'dock']
   try {
     const { all } = require('../db');
     const rows = await all(`SELECT * FROM trailers WHERE status NOT IN ('Departed','') ORDER BY updatedAt DESC`);
-    const result = await Promise.all(rows.map(async r => {
-      const lastChange = await get(
-        `SELECT at FROM audit WHERE entityId=? AND action='trailer_status_set' ORDER BY at DESC LIMIT 1`,
-        [r.trailer]
+    // FIX: was N+1 — one audit query per trailer row. Single query fetches last status change
+    // for all trailers at once; we then join in JS.
+    const ids = rows.map(r => r.trailer);
+    let statusSinceMap = {};
+    if (ids.length > 0) {
+      const placeholders = ids.map(() => '?').join(',');
+      const auditRows = await all(
+        `SELECT entityId, MAX(at) as at FROM audit
+         WHERE entityId IN (${placeholders}) AND action='trailer_status_set'
+         GROUP BY entityId`,
+        ids
       );
+      for (const a of auditRows) statusSinceMap[a.entityId] = a.at;
+    }
+    const result = rows.map(r => {
+      const statusSince = statusSinceMap[r.trailer] || r.updatedAt;
       return {
         trailer: r.trailer, status: r.status, door: r.door || '', direction: r.direction || '',
         dropType: r.dropType || '', carrierType: r.carrierType || '',
         updatedAt: r.updatedAt, doorAt: r.doorAt || null, omwAt: r.omwAt || null, omwEta: r.omwEta || null,
-        statusSince: lastChange?.at || r.updatedAt,
-        timeInStatusMs: Date.now() - (lastChange?.at || r.updatedAt),
+        statusSince,
+        timeInStatusMs: Date.now() - statusSince,
       };
-    }));
+    });
     res.json(result);
   } catch (e) { console.error('[load-status]', e); res.status(500).send('Load status failed'); }
 });

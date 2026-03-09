@@ -1,119 +1,132 @@
 'use strict';
-/**
- * chat.js — Team Chat routes for Wesbell Dispatch
- * GET  /api/chat/history?channel=general   — last 100 messages
- * POST /api/chat/send                       — post a message (text + optional base64 image)
- * DELETE /api/chat/message/:id             — delete own message (dispatchers/admin can delete any)
- *
- * WS broadcast on send: { type: 'chat', payload: { id, at, channel, role, name, text, imageData } }
- */
 const { Router } = require('express');
+const { requireRole, requireDriverAccess, getSession } = require('../auth');
 const { run, get, all } = require('../db');
-const { requireXHR } = require('../middleware');
-const { wsBroadcast } = require('../ws');
-const { audit } = require('../helpers');
+const { wsBroadcastToLocation } = require('../ws');
+const { ipOf } = require('../middleware');
 
 const router = Router();
+const MAX_PHOTO_BYTES = 4 * 1024 * 1024;
 
-// ── Roles allowed to use chat ──────────────────────────────────────────────────
-const CHAT_ROLES = new Set(['dispatcher', 'management', 'admin', 'dock']);
+const CHANNEL_ROLES = {
+  general  : ['dispatcher','dock','management','admin','driver'],
+  dispatch : ['dispatcher','management','admin'],
+  dock     : ['dock','dispatcher','management','admin'],
+  drivers  : ['dispatcher','dock','management','admin','driver'],
+};
+const VALID_CHANNELS = Object.keys(CHANNEL_ROLES);
+const canAccess = (role, ch) => !!(role && (CHANNEL_ROLES[ch]||[]).includes(role));
 
 function requireChat(req, res, next) {
-  const s = require('../auth').getSession(req);
-  if (!s || !CHAT_ROLES.has(s.role)) return res.status(401).json({ error: 'Not authorized' });
-  req._session = s;
+  const s = getSession(req);
+  if (!s?.role) return res.status(401).send('Not authenticated');
+  req.chatRole  = s.role;
+  req.chatLocId = s.locationId || 1;
   next();
 }
 
-// Role display names
-const ROLE_LABEL = {
-  dispatcher: 'Dispatcher',
-  dock:       'Dock',
-  management: 'Management',
-  admin:      'Admin',
-};
+function roleName(r) {
+  return {dispatcher:'Dispatcher',dock:'Dock',management:'Management',admin:'Admin',driver:'Driver'}[r]||'User';
+}
 
-// ── GET /api/chat/history ─────────────────────────────────────────────────────
+function parseRow(r) {
+  return {
+    id: r.id, at: r.at, channel: r.channel, role: r.role, sender: r.sender, body: r.body,
+    reply_to: r.reply_to||null,
+    reactions: r.reactions ? JSON.parse(r.reactions) : {},
+    has_photo: !!(r.has_photo||r.photo_data),
+    photo_mime: r.photo_mime||null,
+  };
+}
+
 router.get('/api/chat/history', requireChat, async (req, res) => {
   try {
-    const channel = String(req.query.channel || 'general').slice(0, 32).replace(/[^a-z0-9_-]/gi, '');
+    const channel = VALID_CHANNELS.includes(req.query.channel) ? req.query.channel : 'general';
+    if (!canAccess(req.chatRole, channel)) return res.status(403).send('No access');
+    const limit  = Math.min(100, Math.max(1, Number(req.query.limit)||50));
+    const before = Number(req.query.before)||Number.MAX_SAFE_INTEGER;
     const rows = await all(
-      `SELECT id, at, channel, role, name, text, imageData
-         FROM chat_messages
-        WHERE channel = ?
-        ORDER BY at DESC
-        LIMIT 100`,
-      [channel]
+      `SELECT id,at,channel,role,sender,body,reply_to,reactions,photo_mime,
+              (CASE WHEN photo_data IS NOT NULL THEN 1 ELSE 0 END) as has_photo
+       FROM messages WHERE channel=? AND location_id=? AND id<? ORDER BY at DESC LIMIT ?`,
+      [channel, req.chatLocId, before, limit]
     );
-    // Return oldest-first to the client
-    res.json({ messages: rows.reverse() });
-  } catch (e) {
-    console.error('[chat] history error:', e.message);
-    res.status(500).json({ error: 'Failed to load messages' });
-  }
+    res.json(rows.reverse().map(parseRow));
+  } catch(e){ console.error('[chat]',e.message); res.status(500).send('History failed'); }
 });
 
-// ── POST /api/chat/send ───────────────────────────────────────────────────────
-router.post('/api/chat/send', requireXHR, requireChat, async (req, res) => {
+router.post('/api/chat/send', requireChat, async (req, res) => {
   try {
-    const s       = req._session;
-    const channel = String(req.body.channel || 'general').slice(0, 32).replace(/[^a-z0-9_-]/gi, '');
-    const text    = String(req.body.text || '').trim().slice(0, 2000);
-    const name    = ROLE_LABEL[s.role] || s.role;
-
-    // Optional base64 image — cap at ~4 MB (base64 overhead ~33%)
-    let imageData = null;
-    if (req.body.imageData) {
-      const raw = String(req.body.imageData);
-      if (raw.length > 5_500_000) return res.status(413).json({ error: 'Image too large (max ~4 MB)' });
-      // Validate it's a data URI
-      if (!/^data:image\/(png|jpe?g|gif|webp);base64,/.test(raw)) {
-        return res.status(400).json({ error: 'Invalid image format' });
-      }
-      imageData = raw;
+    const channel  = VALID_CHANNELS.includes(req.body.channel) ? req.body.channel : 'general';
+    if (!canAccess(req.chatRole, channel)) return res.status(403).send('No access');
+    const body     = String(req.body.body||'').trim().slice(0,1000);
+    const sender   = String(req.body.sender||'').trim().slice(0,60)||roleName(req.chatRole);
+    const reply_to = req.body.reply_to ? Number(req.body.reply_to) : null;
+    const photoData= req.body.photo_data||null;
+    const photoMime= req.body.photo_mime||null;
+    if (!body && !photoData) return res.status(400).send('Empty message');
+    if (photoData) {
+      if (!photoMime?.startsWith('image/')) return res.status(400).send('Invalid photo type');
+      if (photoData.length*0.75 > MAX_PHOTO_BYTES) return res.status(413).send('Photo too large (max 4MB)');
     }
-
-    if (!text && !imageData) return res.status(400).json({ error: 'Message is empty' });
-
+    if (reply_to) {
+      const parent = await get(`SELECT id FROM messages WHERE id=? AND channel=? AND location_id=?`,[reply_to,channel,req.chatLocId]);
+      if (!parent) return res.status(400).send('Invalid reply_to');
+    }
     const at = Date.now();
-    const r  = await run(
-      `INSERT INTO chat_messages (at, channel, role, name, text, imageData)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [at, channel, s.role, name, text, imageData]
+    const result = await run(
+      `INSERT INTO messages(at,channel,role,sender,body,reply_to,photo_data,photo_mime,location_id) VALUES(?,?,?,?,?,?,?,?,?)`,
+      [at,channel,req.chatRole,sender,body||'',reply_to,photoData,photoMime,req.chatLocId]
     );
-
-    const msg = { id: r.lastID, at, channel, role: s.role, name, text, imageData };
-    wsBroadcast('chat', msg);
-
-    await audit(req, s.role, 'chat_send', 'chat_message', String(r.lastID), { channel, textLen: text.length, hasImage: !!imageData });
-
-    res.json({ ok: true, message: msg });
-  } catch (e) {
-    console.error('[chat] send error:', e.message);
-    res.status(500).json({ error: 'Failed to send message' });
-  }
+    const msg = {id:result.lastID,at,channel,role:req.chatRole,sender,body:body||'',reply_to,reactions:{},has_photo:!!photoData,photo_mime:photoMime};
+    wsBroadcastToLocation(req.chatLocId,'chat',{type:'message',data:msg});
+    res.json({ok:true,id:result.lastID});
+  } catch(e){ console.error('[chat]',e.message); res.status(500).send('Send failed'); }
 });
 
-// ── DELETE /api/chat/message/:id ──────────────────────────────────────────────
-router.delete('/api/chat/message/:id', requireXHR, requireChat, async (req, res) => {
+router.post('/api/chat/react', requireChat, async (req, res) => {
   try {
-    const s  = req._session;
-    const id = parseInt(req.params.id);
-    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid id' });
+    const id    = Number(req.body.id);
+    const emoji = String(req.body.emoji||'').trim();
+    const ALLOWED = ['👍','✅','👀','⚠️','🚛','🔧'];
+    if (!id || !ALLOWED.includes(emoji)) return res.status(400).send('Invalid');
+    const row = await get(`SELECT reactions,channel,location_id FROM messages WHERE id=? AND location_id=?`,[id,req.chatLocId]);
+    if (!row) return res.status(404).send('Not found');
+    if (!canAccess(req.chatRole,row.channel)) return res.status(403).send('No access');
+    const reactions = row.reactions ? JSON.parse(row.reactions) : {};
+    if (!reactions[emoji]) reactions[emoji]=[];
+    const idx = reactions[emoji].indexOf(req.chatRole);
+    if (idx===-1) reactions[emoji].push(req.chatRole);
+    else reactions[emoji].splice(idx,1);
+    if (!reactions[emoji].length) delete reactions[emoji];
+    await run(`UPDATE messages SET reactions=? WHERE id=?`,[JSON.stringify(reactions),id]);
+    wsBroadcastToLocation(req.chatLocId,'chat',{type:'reaction',data:{id,reactions}});
+    res.json({ok:true,reactions});
+  } catch(e){ console.error('[chat]',e.message); res.status(500).send('React failed'); }
+});
 
-    const row = await get(`SELECT id, role FROM chat_messages WHERE id = ?`, [id]);
-    if (!row) return res.status(404).json({ error: 'Not found' });
+router.get('/api/chat/photo/:id', requireChat, async (req, res) => {
+  try {
+    const row = await get(`SELECT photo_data,photo_mime,channel FROM messages WHERE id=? AND location_id=?`,[req.params.id,req.chatLocId]);
+    if (!row?.photo_data) return res.status(404).send('No photo');
+    if (!canAccess(req.chatRole,row.channel)) return res.status(403).send('No access');
+    res.setHeader('Content-Type',row.photo_mime||'image/jpeg');
+    res.setHeader('Cache-Control','private, max-age=86400');
+    res.send(Buffer.from(row.photo_data,'base64'));
+  } catch(e){ console.error('[chat]',e.message); res.status(500).send('Photo failed'); }
+});
 
-    const canDelete = s.role === 'admin' || s.role === 'management' || row.role === s.role;
-    if (!canDelete) return res.status(403).json({ error: 'Cannot delete this message' });
-
-    await run(`DELETE FROM chat_messages WHERE id = ?`, [id]);
-    wsBroadcast('chat_delete', { id });
-
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: 'Delete failed' });
-  }
+router.get('/api/chat/channels', requireChat, async (req, res) => {
+  try {
+    const accessible = VALID_CHANNELS.filter(c=>canAccess(req.chatRole,c));
+    const since = Number(req.query.since)||0;
+    const counts = {};
+    for (const ch of accessible) {
+      const row = await get(`SELECT COUNT(*) as cnt FROM messages WHERE channel=? AND location_id=? AND at>?`,[ch,req.chatLocId,since]);
+      counts[ch] = row?.cnt||0;
+    }
+    res.json({channels:accessible,unread:counts});
+  } catch(e){ console.error('[chat]',e.message); res.status(500).send('Channels failed'); }
 });
 
 module.exports = router;

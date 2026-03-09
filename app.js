@@ -1,6 +1,6 @@
 (() => {
   const CSRF = {"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"};
-  let ROLE=null, VERSION="", _locationId=1, trailers={}, dockPlates={}, doorBlocks={}, confirmations=[];
+  let ROLE=null, VERSION="", _locationId=1, _doorsFrom=28, _doorsTo=42, trailers={}, dockPlates={}, doorBlocks={}, confirmations=[];
   const plateEditOpen={}, shuntOpen={};
   const el=id=>document.getElementById(id);
   const path=()=>location.pathname.toLowerCase();
@@ -57,7 +57,9 @@
   };
   const esc=s=>String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
   // Shared constants
-  const DOORS=[];for(let _d=28;_d<=42;_d++)DOORS.push(String(_d));
+  let DOORS=[];
+  function rebuildDoors(){DOORS=[];for(let _d=_doorsFrom;_d<=_doorsTo;_d++)DOORS.push(String(_d));}
+  rebuildDoors(); // init with defaults (28-42) — overwritten after whoami resolves
   const canEditPlates=()=>ROLE==="dispatcher"||ROLE==="dock"||ROLE==="management"||ROLE==="admin";
   const canEditTrailers=()=>ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin";
 
@@ -259,6 +261,13 @@
   el("modalOv")?.addEventListener("click",e=>{if(e.target===el("modalOv")){el("modalOv").classList.add("hidden");if(_mr){_mr(false);_mr=null;}}});
   el("dmModalCancel")?.addEventListener("click",()=>el("dmModalOv")?.classList.add("hidden"));
   el("dmModalOv")?.addEventListener("click",e=>{if(e.target===el("dmModalOv"))el("dmModalOv").classList.add("hidden");});
+  // Issue reports refresh button
+  el("btnRefreshIssues")?.addEventListener("click",()=>loadIssueReports());
+  // Issue photo lightbox close
+  const _closeLightbox=()=>el("issueLightbox")?.classList.remove("open");
+  el("issueLightboxClose")?.addEventListener("click",_closeLightbox);
+  el("issueLightbox")?.addEventListener("click",e=>{if(e.target===el("issueLightbox"))_closeLightbox();});
+  document.addEventListener("keydown",e=>{if(e.key==="Escape"&&el("issueLightbox")?.classList.contains("open"))_closeLightbox();});
 
   function lockScroll(){document.body.style.overflow="hidden";}
   function unlockScroll(){document.body.style.overflow="";}
@@ -516,9 +525,10 @@
     const lu=el("lastUpdated");if(lu)lu.textContent="Updated "+fmtTime(Date.now());
     renderDockMap();
     const occupied=getOccupiedDoors();
-    const occupiedInRange=Object.keys(occupied).filter(d=>{const n=parseInt(d);return n>=28&&n<=42;}).length;
+    const occupiedInRange=Object.keys(occupied).filter(d=>{const n=parseInt(d);return n>=_doorsFrom&&n<=_doorsTo;}).length;
+    const totalDoors=_doorsTo-_doorsFrom+1;
     const badge=el("dockMapFreeCount");
-    if(badge)badge.textContent=`${15-occupiedInRange} free`;
+    if(badge)badge.textContent=`${totalDoors-occupiedInRange} free`;
     if(_selectedTrailer)renderDetailPanel(_selectedTrailer);
     renderDspOccupancy();
     renderDspPlates();
@@ -2044,6 +2054,12 @@
   async function loadInitial(){
     try{
       const w=await apiJson("/api/whoami");ROLE=w?.role;VERSION=w?.version||"";_locationId=w?.locationId||1;
+      _doorsFrom=w?.doorsFrom||28;_doorsTo=w?.doorsTo||42;
+      rebuildDoors();
+      // Expose for driver view and other modules
+      window._doorsFrom=_doorsFrom;window._doorsTo=_doorsTo;
+      // Expose for chat module
+      window._chatRole=ROLE;window._chatLocId=_locationId;window._chatReady=true;
       if(w?.redirectTo&&ROLE&&w.redirectTo!==location.pathname){location.replace(w.redirectTo);return;}
     }catch{ROLE=null;VERSION="";}
     el("verText").textContent=VERSION||"—";
@@ -2473,8 +2489,6 @@
       // Forward every message to driver view handler (if on driver page)
       if(window._driverWsMsg)window._driverWsMsg(msg);
       const{type,payload}=msg||{};
-      // Team chat handler
-      if(window._chatWsMsg)window._chatWsMsg(type,payload);
       if(type==="state"){trailers=payload||{};renderBoard();if(isSuper())renderSupBoard();if(isDock()){renderDockView();dvUpdateIncoming();window._lspAutoRefresh?.();updateTrackingMap?.();updateTrackingList?.();if(window._loadStatusRefresh&&document.getElementById("lsp-body")?.classList.contains("lsp-open"))window._loadStatusRefresh();}if(isAdmin()&&!isSuper())renderBoard();
         clearTimeout(connectWs._etaTimer);
         connectWs._etaTimer=setTimeout(function tickEta(){renderBoard();if(isDock()){renderDockView();dvUpdateIncoming();}connectWs._etaTimer=setTimeout(tickEta,60000);},60000);
@@ -2569,6 +2583,8 @@
           if(!isDriver()){
             if(isDock())toast("⚠️ Issue Filed",`${trailer}${door?" Door "+door+" — ":""}${payload.note?.slice(0,60)||""}`,"warn",10000);
             _notifPush({icon:"⚠️",title:`Issue: ${trailer}`,body:`${door?"Door "+door+" — ":""}${payload.note?.slice(0,80)||""}`,kind:"issue",trailer,door,at:Date.now()});
+            // Refresh issue reports panel live if management view is visible
+            if(el('managementView')?.style.display!=="none")loadIssueReports();
           }
         } else {
           if(payload?.message)_notifPush({icon:"🔔",title:payload.title||"Notification",body:payload.message,kind:"generic",at:Date.now()});
@@ -3215,416 +3231,686 @@
   function updateOffloadSubmitState(){}
   function updateSafetySubmitState(){}
   function openDockIssueModal(t,d){openQuickIssue(t,d||"");}
-  async function loadIssueReports(){}
+  async function loadIssueReports(){
+    const body=el('supIssueBody');
+    const countBadge=el('supIssueCount');
+    if(!body)return;
+    try{
+      const rows=await apiJson('/api/issue-reports?limit=100');
+      if(!rows||!rows.length){
+        body.innerHTML='<div style="padding:24px;text-align:center;color:var(--t3);font-family:var(--mono);font-size:11px;">No issue reports yet.</div>';
+        if(countBadge)countBadge.textContent='0';
+        return;
+      }
+      if(countBadge)countBadge.textContent=rows.length>=100?'99+':String(rows.length);
+      const rowsHtml=rows.map(r=>{
+        const timeStr=fmtTime(r.at);
+        const agoStr=timeAgo(r.at);
+        const photoBtn=r.has_photo
+          ?`<button class="issue-view-photo" data-id="${esc(r.id)}" title="View photo" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:4px;border:1px solid rgba(245,166,35,.3);background:rgba(245,166,35,.08);color:var(--amber);font-size:10px;font-family:var(--mono);cursor:pointer;white-space:nowrap;">📷 Photo</button>`
+          :'<span style="color:var(--t3);font-size:10px;font-family:var(--mono);">—</span>';
+        const noteHtml=r.note
+          ?`<span title="${esc(r.note)}" style="display:block;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.note)}</span>`
+          :'<span style="color:var(--t3);">—</span>';
+        return `<tr>
+          <td class="mono muted" title="${esc(timeStr)}">${esc(agoStr)}</td>
+          <td class="mono" style="font-weight:600;color:var(--amber);">${esc(r.trailer||'—')}</td>
+          <td class="mono" style="color:var(--t1);">${r.door?'Door '+esc(r.door):'—'}</td>
+          <td style="font-size:11px;color:var(--t1);">${noteHtml}</td>
+          <td>${photoBtn}</td>
+        </tr>`;
+      }).join('');
+      body.innerHTML=`<div class="data-tbl-wrap"><table>
+        <thead><tr><th>When</th><th>Trailer</th><th>Door</th><th>Note</th><th>Photo</th></tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table></div>`;
+      // Wire photo buttons
+      body.querySelectorAll('.issue-view-photo').forEach(btn=>{
+        btn.addEventListener('click',()=>openIssueLightboxById(btn.dataset.id));
+      });
+    }catch(e){
+      body.innerHTML='<div style="padding:16px;color:var(--red);font-family:var(--mono);font-size:11px;">Failed to load issue reports.</div>';
+    }
+  }
+
+  async function openIssueLightboxById(id){
+    const lb=el('issueLightbox');
+    const img=el('issueLightboxImg');
+    if(!lb||!img)return;
+    img.src='';
+    lb.classList.add('open');
+    img.src=`/api/issue-reports/${encodeURIComponent(id)}/photo`;
+    img.onerror=()=>lb.classList.remove('open');
+  }
 
 })();
 
-// ═══════════════════════════════════════════════════════════════════
-// TEAM CHAT MODULE
-// ═══════════════════════════════════════════════════════════════════
-(function() {
+/* ══════════════════════════════════════════════════════════════════
+   GLASS COMMAND — CHAT MODULE
+══════════════════════════════════════════════════════════════════ */
+(function glassChatModule() {
   'use strict';
 
-  // ── State ────────────────────────────────────────────────────────
-  let _open       = false;
-  let _channel    = 'general';
-  let _myRole     = null;   // set from ROLE global
-  let _pendingImg = null;   // { dataUrl }
-  let _unread     = {};     // channel → count
-  let _histLoaded = new Set();
-  let _typingTimer = null;
+  // ── State ──────────────────────────────────────────────────────
+  let _open      = false;
+  let _channel   = 'general';
+  let _channels  = [];
+  let _unread    = {};
+  let _lastSeen  = {};
+  let _oldest    = {};
+  let _role      = null;
+  let _sender    = null;
+  let _locId     = 1;
+  let _replyTo   = null;   // { id, sender, body }
+  let _photoData = null;   // base64
+  let _photoMime = null;
+  let _wsRef     = null;
+  let _emojiTarget = null; // msg id for open emoji picker
+  let _msgCache  = {};     // id → msg object, for reply previews
 
-  // Role avatar colours (consistent per role)
-  const ROLE_COLOR = {
-    dispatcher: '#47c8ff',
-    dock:       '#e8ff47',
-    management: '#ff9f43',
-    admin:      '#ff6b6b',
+  const XHR = { 'X-Requested-With': 'XMLHttpRequest' };
+
+  // ── DOM ────────────────────────────────────────────────────────
+  const $  = id => document.getElementById(id);
+  const gc = {
+    bubble   : () => $('chatBubble'),
+    panel    : () => $('gcPanel'),
+    messages : () => $('gcMessages'),
+    channels : () => $('gcChannels'),
+    input    : () => $('gcInput'),
+    send     : () => $('gcSend'),
+    badge    : () => $('gcUnreadBadge'),
+    dragOv   : () => $('gcDragOverlay'),
+    replyBan : () => $('gcReplyBanner'),
+    replySnd : () => $('gcReplySender'),
+    replyBod : () => $('gcReplyBody'),
+    replyCnl : () => $('gcReplyCancel'),
+    photoPv  : () => $('gcPhotoPreview'),
+    photoImg : () => $('gcPhotoPreviewImg'),
+    photoRm  : () => $('gcPhotoRemove'),
+    fileInp  : () => $('gcFileInput'),
+    picker   : () => $('gcEmojiPicker'),
+    lb       : () => $('gcLightbox'),
+    lbImg    : () => $('gcLightboxImg'),
+    lbClose  : () => $('gcLightboxClose'),
+    nameOv   : () => $('gcNameOv'),
+    nameInp  : () => $('gcNameInput'),
+    nameSave : () => $('gcNameSave'),
   };
-  const ROLE_INITIAL = {
-    dispatcher: 'D',
-    dock:       'K',
-    management: 'M',
-    admin:      'A',
-  };
 
-  function getMyRole() { return (typeof ROLE !== 'undefined' ? ROLE : null); }
+  // ── Init ───────────────────────────────────────────────────────
+  async function init() {
+    let attempts = 0;
+    while (!window._chatReady && attempts++ < 50) await sleep(100);
 
-  // ── Toggle open/close ────────────────────────────────────────────
-  window._chatToggle = function() {
-    _open = !_open;
-    const panel = document.getElementById('chatPanel');
-    if (!panel) return;
-    if (_open) {
-      panel.classList.add('open');
-      clearUnread(_channel);
-      if (!_histLoaded.has(_channel)) loadHistory(_channel);
-      setTimeout(() => document.getElementById('cpInput')?.focus(), 300);
-    } else {
-      panel.classList.remove('open');
+    _role  = window._chatRole  || null;
+    _locId = window._chatLocId || 1;
+    if (!_role) return;
+
+    if (_role === 'driver') {
+      await sleep(600);
+      if (!window._chatDriverOk) return;
     }
-  };
 
-  // ── Channel switch ───────────────────────────────────────────────
-  window._chatChannel = function(btn) {
-    const ch = btn.dataset.ch;
-    if (ch === _channel) return;
-    document.querySelectorAll('.cp-ch-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+    _sender = getSender();
+    loadLastSeen();
+    await loadChannels();
+    wire();
+    showBubble();
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  function getSender() {
+    if (_role === 'driver') return localStorage.getItem('wb_driver_name') || 'Driver';
+    return {dispatcher:'Dispatcher',dock:'Dock',management:'Management',admin:'Admin'}[_role] || 'User';
+  }
+
+  // ── Channels ───────────────────────────────────────────────────
+  async function loadChannels() {
+    try {
+      const vals = Object.values(_lastSeen);
+      const since = vals.length ? Math.max(0, ...vals) : 0;
+      const data = await api(`/api/chat/channels?since=${since}`);
+      _channels = data.channels || ['general'];
+      _unread   = data.unread   || {};
+      renderChannelPills();
+      updateBadge();
+    } catch {
+      _channels = ['general'];
+      renderChannelPills();
+    }
+  }
+
+  function renderChannelPills() {
+    const el = gc.channels();
+    if (!el) return;
+    el.innerHTML = _channels.map(ch => {
+      const u = _unread[ch] || 0;
+      return `<button class="gc-ch-pill${ch===_channel?' active':''}" data-ch="${ch}">
+        #${ch}${u > 0 ? '<span class="gc-ch-dot"></span>' : ''}
+      </button>`;
+    }).join('');
+    el.querySelectorAll('.gc-ch-pill').forEach(b => {
+      b.addEventListener('click', () => switchChannel(b.dataset.ch));
+    });
+  }
+
+  async function switchChannel(ch) {
+    if (!_channels.includes(ch)) return;
     _channel = ch;
-    document.getElementById('cpSubtitle').textContent = '#' + ch;
-    document.getElementById('cpInput').placeholder = 'Message #' + ch;
-    const msgs = document.getElementById('cpMessages');
-    msgs.innerHTML = '<div class="cp-loading"><div class="cp-load-dots"><div class="cp-load-dot"></div><div class="cp-load-dot"></div><div class="cp-load-dot"></div></div></div>';
-    clearUnread(ch);
-    if (!_histLoaded.has(ch)) loadHistory(ch);
-  };
+    _unread[ch] = 0;
+    markSeen(ch);
+    renderChannelPills();
+    updateBadge();
+    gc.messages().innerHTML = '<div class="gc-empty-state"><div class="gc-empty-icon">⏳</div><div class="gc-empty-text">Loading…</div></div>';
+    await loadHistory();
+  }
 
-  // ── Load history ─────────────────────────────────────────────────
-  async function loadHistory(channel) {
-    const msgs = document.getElementById('cpMessages');
-    setStatus('connecting', 'Loading messages…');
+  // ── History ────────────────────────────────────────────────────
+  async function loadHistory(before = null) {
     try {
-      const res = await fetch(`/api/chat/history?channel=${encodeURIComponent(channel)}`, {
-        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-      });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
-      msgs.innerHTML = '';
-      if (!data.messages || data.messages.length === 0) {
-        msgs.innerHTML = '<div class="cp-sys">No messages yet. Say hello! 👋</div>';
-      } else {
-        let lastDay = '';
-        data.messages.forEach(m => {
-          const day = new Date(m.at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-          if (day !== lastDay) {
-            const div = document.createElement('div');
-            div.className = 'cp-day';
-            div.textContent = day;
-            msgs.appendChild(div);
-            lastDay = day;
-          }
-          appendMessage(m, false);
-        });
+      const url = `/api/chat/history?channel=${_channel}&limit=50${before ? '&before='+before : ''}`;
+      const rows = await api(url);
+      if (!before) {
+        gc.messages().innerHTML = '';
+        _oldest[_channel] = null;
       }
-      scrollToBottom();
-      _histLoaded.add(channel);
-      setStatus('hidden');
-    } catch (e) {
-      msgs.innerHTML = `<div class="cp-err-state">
-        <span>⚠️ Failed to load messages</span>
-        <span style="font-size:10px;opacity:.6">${e.message}</span>
-        <button onclick="window._chatRetry()">Retry</button>
-      </div>`;
-      setStatus('error', 'Connection error');
-    }
-  }
-
-  window._chatRetry = function() { _histLoaded.delete(_channel); loadHistory(_channel); };
-
-  // ── Append a message to the panel ────────────────────────────────
-  function appendMessage(m, animate) {
-    const msgs = document.getElementById('cpMessages');
-    if (!msgs) return;
-
-    // Remove empty-state msg
-    const empty = msgs.querySelector('.cp-sys');
-    if (empty && empty.textContent.includes('No messages')) empty.remove();
-
-    const myRole  = getMyRole();
-    const isMine  = m.role === myRole;
-    const color   = ROLE_COLOR[m.role] || '#888';
-    const initial = ROLE_INITIAL[m.role] || (m.name||'?')[0].toUpperCase();
-    const timeStr = new Date(m.at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-
-    const row = document.createElement('div');
-    row.className = 'cp-msg' + (isMine ? ' cp-mine' : '');
-    row.id = 'cpm-' + m.id;
-    if (animate) row.style.animation = 'cpMsgIn .18s ease both';
-
-    // Build bubble content
-    const textHtml = m.text
-      ? `<div class="cp-text">${escapeChat(m.text)}</div>`
-      : '';
-    const imgHtml = m.imageData
-      ? `<div class="cp-msg-img" onclick="window._chatLightbox('${m.id}','${escapeAttr(m.imageData)}')">
-           <img src="${escapeAttr(m.imageData)}" alt="image" loading="lazy"/>
-         </div>`
-      : '';
-
-    // Delete button (own messages or admin/management)
-    const canDel = isMine || myRole === 'admin' || myRole === 'management';
-    const delBtn = canDel
-      ? `<button class="cp-msg-del" onclick="window._chatDelete(${m.id})" title="Delete">✕</button>`
-      : '';
-
-    row.innerHTML = `
-      <div class="cp-avatar" style="background:${color}">${initial}</div>
-      <div class="cp-bubble">
-        <div class="cp-meta">
-          <span class="cp-name">${escapeChat(m.name)}</span>
-          <span class="cp-time">${timeStr}</span>
-        </div>
-        ${textHtml}
-        ${imgHtml}
-      </div>
-      ${delBtn}
-    `;
-
-    msgs.appendChild(row);
-  }
-
-  // ── Scroll to bottom ─────────────────────────────────────────────
-  function scrollToBottom() {
-    const msgs = document.getElementById('cpMessages');
-    if (msgs) msgs.scrollTop = msgs.scrollHeight;
-  }
-
-  // ── Send message ─────────────────────────────────────────────────
-  window._chatSend = async function() {
-    const input = document.getElementById('cpInput');
-    const text  = (input?.value || '').trim();
-    if (!text && !_pendingImg) return;
-
-    const sendBtn = document.getElementById('cpSend');
-    if (sendBtn) sendBtn.disabled = true;
-
-    try {
-      const body = { channel: _channel, text };
-      if (_pendingImg) body.imageData = _pendingImg.dataUrl;
-
-      const res = await fetch('/api/chat/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-          ...(typeof CSRF !== 'undefined' ? CSRF : {})
-        },
-        body: JSON.stringify(body)
-      });
-
-      if (!res.ok) {
-        const err = await res.text();
-        showToast('Chat error', err || 'Failed to send', 'err');
+      if (rows.length === 0 && !before) {
+        gc.messages().innerHTML = '<div class="gc-empty-state"><div class="gc-empty-icon">💬</div><div class="gc-empty-text">No messages yet — say hi 👋</div></div>';
         return;
       }
+      rows.forEach(r => { _msgCache[r.id] = r; });
+      if (_oldest[_channel] == null || (rows[0] && rows[0].id < _oldest[_channel])) {
+        _oldest[_channel] = rows[0]?.id;
+      }
+      if (rows.length === 50) insertLoadMore();
+      if (before) gc.messages().querySelector('.gc-load-more')?.remove();
 
-      // Clear input
-      if (input) { input.value = ''; input.style.height = 'auto'; }
-      clearPendingImg();
-    } catch (e) {
-      showToast('Chat error', e.message, 'err');
-    } finally {
-      if (sendBtn) sendBtn.disabled = !((document.getElementById('cpInput')?.value||'').trim() || _pendingImg);
+      const frag = document.createDocumentFragment();
+      let prevSender = null, prevDay = null;
+      rows.forEach((msg, i) => {
+        const day = dayStr(msg.at);
+        if (day !== prevDay) { frag.appendChild(mkDateSep(day)); prevDay = day; prevSender = null; }
+        const cont = (msg.sender === prevSender);
+        frag.appendChild(mkMsg(msg, cont));
+        prevSender = msg.sender;
+      });
+      if (before) {
+        gc.messages().insertBefore(frag, gc.messages().firstChild);
+      } else {
+        gc.messages().appendChild(frag);
+        scrollBottom();
+      }
+    } catch {
+      gc.messages().innerHTML = '<div class="gc-empty-state"><div class="gc-empty-icon">⚠️</div><div class="gc-empty-text" style="color:#e05252">Failed to load</div></div>';
     }
-  };
+  }
 
-  window._chatKey = function(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      window._chatSend();
+  function insertLoadMore() {
+    const w = document.createElement('div');
+    w.className = 'gc-load-more';
+    w.innerHTML = '<button class="gc-load-more-btn">↑ Load older</button>';
+    w.querySelector('button').addEventListener('click', () => loadHistory(_oldest[_channel]));
+    gc.messages().insertBefore(w, gc.messages().firstChild);
+  }
+
+  // ── Build message element ──────────────────────────────────────
+  function mkMsg(msg, cont = false) {
+    const mine = (msg.sender === _sender && msg.role === _role);
+    const wrap = document.createElement('div');
+    wrap.className = `gc-msg gc-msg--${mine?'mine':'theirs'}${cont?' gc-msg--cont':' gc-msg--new-group'}`;
+    wrap.dataset.id = msg.id;
+
+    const time = fmtTime(msg.at);
+    let inner = '';
+
+    // meta (sender + time) — hidden on cont
+    inner += `<div class="gc-msg-meta">
+      <span class="gc-msg-sender">${esc(msg.sender)}</span>
+      <span class="gc-msg-time">${time}</span>
+    </div>`;
+
+    // reply quote
+    if (msg.reply_to && _msgCache[msg.reply_to]) {
+      const parent = _msgCache[msg.reply_to];
+      inner += `<div class="gc-reply-quote">
+        <div class="gc-reply-quote-sender">${esc(parent.sender)}</div>
+        <div class="gc-reply-quote-body">${parent.has_photo ? '📷 Photo' : esc(parent.body)}</div>
+      </div>`;
     }
-  };
 
-  window._chatInputChange = function(el) {
-    el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
-    const sendBtn = document.getElementById('cpSend');
-    if (sendBtn) sendBtn.disabled = !el.value.trim() && !_pendingImg;
-  };
+    // bubble
+    inner += `<div class="gc-msg-bubble">`;
+    if (msg.body) inner += esc(msg.body).replace(/\n/g,'<br>');
+    if (msg.has_photo) {
+      inner += `<div class="gc-msg-photo" data-photo-id="${msg.id}">
+        <img src="/api/chat/photo/${msg.id}" alt="Photo" loading="lazy"/>
+      </div>`;
+    }
+    inner += `</div>`;
 
-  // ── Image handling ────────────────────────────────────────────────
-  window._chatFileChange = function(input) {
-    const file = input.files[0];
+    // action buttons
+    inner += `<div class="gc-msg-actions">
+      <button class="gc-msg-action-btn" data-action="react" data-id="${msg.id}" title="React">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M8 13s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+      </button>
+      <button class="gc-msg-action-btn" data-action="reply" data-id="${msg.id}" title="Reply">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+      </button>
+    </div>`;
+
+    // reactions
+    const rxKeys = Object.keys(msg.reactions || {});
+    if (rxKeys.length) {
+      inner += `<div class="gc-reactions">`;
+      rxKeys.forEach(emoji => {
+        const users = msg.reactions[emoji] || [];
+        const mine2 = users.includes(_role);
+        inner += `<button class="gc-reaction-pill${mine2?' mine':''}" data-action="react-pill" data-id="${msg.id}" data-emoji="${emoji}">
+          ${emoji}<span class="gc-reaction-count">${users.length}</span>
+        </button>`;
+      });
+      inner += `</div>`;
+    }
+
+    wrap.innerHTML = inner;
+
+    // wire photo click
+    wrap.querySelectorAll('.gc-msg-photo').forEach(p => {
+      p.addEventListener('click', () => openLightbox(`/api/chat/photo/${p.dataset.photoId}`));
+    });
+
+    return wrap;
+  }
+
+  function mkDateSep(label) {
+    const d = document.createElement('div');
+    d.className = 'gc-date-sep';
+    d.textContent = label;
+    return d;
+  }
+
+  // ── Actions (react, reply) via delegation ──────────────────────
+  function wireMessageActions() {
+    gc.messages().addEventListener('click', e => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      const id = Number(btn.dataset.id);
+      if (action === 'react') showEmojiPicker(id, btn);
+      if (action === 'reply') startReply(id);
+      if (action === 'react-pill') doReact(id, btn.dataset.emoji);
+    });
+  }
+
+  // ── Emoji picker ───────────────────────────────────────────────
+  function showEmojiPicker(msgId, anchor) {
+    _emojiTarget = msgId;
+    const picker = gc.picker();
+    if (!picker) return;
+    const rect = anchor.getBoundingClientRect();
+    picker.style.display = 'flex';
+    // Position above the button
+    const ph = picker.offsetHeight || 50;
+    let top  = rect.top - ph - 8;
+    let left = rect.left - 20;
+    if (top < 8) top = rect.bottom + 8;
+    const maxLeft = window.innerWidth - 270;
+    if (left > maxLeft) left = maxLeft;
+    if (left < 8) left = 8;
+    picker.style.top  = top  + 'px';
+    picker.style.left = left + 'px';
+  }
+
+  function hideEmojiPicker() {
+    const p = gc.picker();
+    if (p) p.style.display = 'none';
+    _emojiTarget = null;
+  }
+
+  async function doReact(msgId, emoji) {
+    hideEmojiPicker();
+    try {
+      await api('/api/chat/react', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json', ...XHR },
+        body: JSON.stringify({ id: msgId, emoji }),
+      });
+    } catch {}
+  }
+
+  // ── Reply ──────────────────────────────────────────────────────
+  function startReply(msgId) {
+    const msg = _msgCache[msgId];
+    if (!msg) return;
+    _replyTo = { id: msgId, sender: msg.sender, body: msg.has_photo ? '📷 Photo' : msg.body };
+    const ban = gc.replyBan();
+    if (ban) ban.style.display = '';
+    if (gc.replySnd()) gc.replySnd().textContent = msg.sender;
+    if (gc.replyBod()) gc.replyBod().textContent = _replyTo.body;
+    gc.input()?.focus();
+  }
+
+  function cancelReply() {
+    _replyTo = null;
+    const ban = gc.replyBan();
+    if (ban) ban.style.display = 'none';
+  }
+
+  // ── Photo attach ───────────────────────────────────────────────
+  function attachPhoto(file) {
     if (!file || !file.type.startsWith('image/')) return;
+    if (file.size > 4.5 * 1024 * 1024) { alert('Photo must be under 4 MB'); return; }
     const reader = new FileReader();
     reader.onload = e => {
-      _pendingImg = { dataUrl: e.target.result };
-      renderImgPreview();
+      const b64 = e.target.result.split(',')[1];
+      _photoData = b64;
+      _photoMime = file.type;
+      const pv = gc.photoPv();
+      if (pv) { pv.style.display = ''; gc.photoImg().src = e.target.result; }
     };
     reader.readAsDataURL(file);
-    input.value = '';
-  };
-
-  function renderImgPreview() {
-    const strip = document.getElementById('cpImgStrip');
-    if (!strip) return;
-    if (!_pendingImg) { strip.innerHTML = ''; strip.classList.remove('has-img'); return; }
-    strip.classList.add('has-img');
-    strip.innerHTML = `<div class="cp-thumb-wrap">
-      <img src="${_pendingImg.dataUrl}" alt=""/>
-      <button class="cp-thumb-rm" onclick="window._chatRmImg()">✕</button>
-    </div>`;
-    const sendBtn = document.getElementById('cpSend');
-    if (sendBtn) sendBtn.disabled = false;
   }
 
-  function clearPendingImg() {
-    _pendingImg = null;
-    renderImgPreview();
+  function clearPhoto() {
+    _photoData = null; _photoMime = null;
+    const pv = gc.photoPv();
+    if (pv) { pv.style.display = 'none'; gc.photoImg().src = ''; }
+    const fi = gc.fileInp();
+    if (fi) fi.value = '';
   }
 
-  window._chatRmImg = function() {
-    clearPendingImg();
-    const sendBtn = document.getElementById('cpSend');
-    if (sendBtn) sendBtn.disabled = !(document.getElementById('cpInput')?.value||'').trim();
-  };
+  // ── Send ───────────────────────────────────────────────────────
+  async function send() {
+    const inp  = gc.input();
+    const body = inp?.value.trim() || '';
+    if (!body && !_photoData) return;
 
-  // ── Lightbox ─────────────────────────────────────────────────────
-  window._chatLightbox = function(id, src) {
-    const lb  = document.getElementById('chatLightbox');
-    const img = document.getElementById('chatLbImg');
-    if (!lb || !img) return;
-    // Find the actual src from the DOM to avoid attr escaping issues
-    const msgEl = document.getElementById('cpm-' + id);
-    const realSrc = msgEl?.querySelector('.cp-msg-img img')?.src || src;
-    img.src = realSrc;
-    lb.classList.add('open');
-  };
+    inp.value = '';
+    const sendBtn = gc.send();
+    if (sendBtn) sendBtn.disabled = true;
 
-  // ── Delete ────────────────────────────────────────────────────────
-  window._chatDelete = async function(id) {
+    const payload = {
+      channel: _channel,
+      body,
+      sender: _sender,
+      reply_to: _replyTo?.id || null,
+      photo_data: _photoData,
+      photo_mime: _photoMime,
+    };
+
+    cancelReply();
+    clearPhoto();
+
     try {
-      const res = await fetch(`/api/chat/message/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest',
-          ...(typeof CSRF !== 'undefined' ? CSRF : {})
-        }
+      await api('/api/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json', ...XHR },
+        body: JSON.stringify(payload),
       });
-      if (!res.ok) { showToast('Delete failed', await res.text(), 'err'); return; }
-      // optimistic remove — WS chat_delete will also fire
-      const el = document.getElementById('cpm-' + id);
-      if (el) el.remove();
-    } catch (e) {
-      showToast('Delete failed', e.message, 'err');
-    }
-  };
-
-  // ── Unread badge ──────────────────────────────────────────────────
-  function addUnread(channel) {
-    if (_open && _channel === channel) return;
-    _unread[channel] = (_unread[channel] || 0) + 1;
-    // Channel tab badge
-    const btn = document.querySelector(`.cp-ch-btn[data-ch="${channel}"]`);
-    if (btn) {
-      let badge = btn.querySelector('.cp-ch-unread');
-      if (!badge) {
-        badge = document.createElement('span');
-        badge.className = 'cp-ch-unread';
-        btn.appendChild(badge);
-      }
-      badge.textContent = _unread[channel];
-    }
-    // Topbar badge
-    const topBadge = document.getElementById('chatUnreadBadge');
-    if (topBadge) topBadge.style.display = '';
+    } catch { inp.value = body; }
+    finally { if (sendBtn) sendBtn.disabled = false; }
   }
 
-  function clearUnread(channel) {
-    _unread[channel] = 0;
-    const btn = document.querySelector(`.cp-ch-btn[data-ch="${channel}"]`);
-    btn?.querySelector('.cp-ch-unread')?.remove();
-    // Hide topbar badge if all channels clear
-    const anyUnread = Object.values(_unread).some(v => v > 0);
-    const topBadge = document.getElementById('chatUnreadBadge');
-    if (topBadge && !anyUnread) topBadge.style.display = 'none';
+  // ── WS ─────────────────────────────────────────────────────────
+  function wireWS() {
+    const hook = ws => {
+      if (!ws || ws._gcHooked) return;
+      ws._gcHooked = true;
+      const orig = ws.onmessage;
+      ws.onmessage = evt => {
+        if (orig) orig.call(ws, evt);
+        try {
+          const m = JSON.parse(evt.data);
+          if (m.type === 'chat') handleWS(m.payload);
+        } catch {}
+      };
+    };
+    const poll = setInterval(() => {
+      if (window._ws) { hook(window._ws); _wsRef = window._ws; }
+      if (_wsRef && window._ws !== _wsRef) hook(window._ws);
+    }, 500);
   }
 
-  // ── Status bar ────────────────────────────────────────────────────
-  function setStatus(state, text) {
-    const el = document.getElementById('cpStatus');
-    const tx = document.getElementById('cpStatusText');
-    if (!el) return;
-    el.className = 'cp-status ' + (state === 'hidden' ? 'hidden' : state);
-    if (tx && text) tx.textContent = text;
-  }
-
-  // ── WS message handler (called from main WS onmessage) ───────────
-  // Hook into the existing WS handler
-  window._chatWsMsg = function(type, payload) {
-    if (type === 'chat') {
-      const m = payload;
-      if (!m || !m.id) return;
-      // If panel is open and on this channel, append
-      if (_open && _channel === m.channel) {
-        appendMessage(m, true);
-        scrollToBottom();
-      } else {
-        addUnread(m.channel);
-        // Show a toast if panel is closed
-        if (!_open) {
-          const myRole = getMyRole();
-          if (m.role !== myRole) {
-            showToast(`💬 ${m.name}`, m.text ? m.text.slice(0, 60) : '📷 Image', 'ok', 5000);
-          }
+  function handleWS(payload) {
+    if (!payload?.type) return;
+    if (payload.type === 'message') {
+      const msg = payload.data;
+      _msgCache[msg.id] = msg;
+      if (msg.channel !== _channel) {
+        if (_channels.includes(msg.channel)) {
+          _unread[msg.channel] = (_unread[msg.channel]||0) + 1;
+          renderChannelPills();
+          updateBadge();
         }
+        return;
       }
-      // If history loaded, mark channel as having loaded so new messages render on next open
-      _histLoaded.add(m.channel);
-    } else if (type === 'chat_delete') {
-      const el = document.getElementById('cpm-' + payload?.id);
-      if (el) {
-        el.style.opacity = '0';
-        el.style.transform = 'scale(.95)';
-        el.style.transition = 'all .15s';
-        setTimeout(() => el.remove(), 150);
+      if (_open) {
+        const area = gc.messages();
+        const atBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 80;
+        // Remove empty state if present
+        area.querySelector('.gc-empty-state')?.remove();
+        // Date sep if needed
+        const day = dayStr(msg.at);
+        const lastSep = area.querySelector('.gc-date-sep:last-of-type');
+        const lastDay = lastSep?.textContent;
+        if (day !== lastDay) area.appendChild(mkDateSep(day));
+        // Consecutive check
+        const prevMsgEl = area.querySelector('.gc-msg:last-of-type');
+        const prevSender = prevMsgEl ? _msgCache[Number(prevMsgEl.dataset.id)]?.sender : null;
+        area.appendChild(mkMsg(msg, msg.sender === prevSender));
+        if (atBottom) scrollBottom();
+        markSeen(_channel);
+      } else {
+        _unread[_channel] = (_unread[_channel]||0) + 1;
+        renderChannelPills();
+        updateBadge();
       }
     }
-  };
-
-  // ── Escape helpers ────────────────────────────────────────────────
-  function escapeChat(s) {
-    return String(s)
-      .replace(/&/g,'&amp;')
-      .replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;')
-      .replace(/`([^`]+)`/g, '<code>$1</code>');
-  }
-  function escapeAttr(s) {
-    return String(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-  }
-
-  // ── Show chat button when logged in ──────────────────────────────
-  function maybeShowChatBtn() {
-    const myRole = getMyRole();
-    const chatRoles = ['dispatcher','management','admin','dock'];
-    const btn = document.getElementById('btnChatToggle');
-    if (btn && myRole && chatRoles.includes(myRole)) {
-      btn.style.display = '';
+    if (payload.type === 'reaction') {
+      const { id, reactions } = payload.data;
+      if (_msgCache[id]) _msgCache[id].reactions = reactions;
+      // Update DOM
+      const el = gc.messages().querySelector(`[data-id="${id}"]`);
+      if (!el) return;
+      let rxRow = el.querySelector('.gc-reactions');
+      const keys = Object.keys(reactions || {});
+      if (!keys.length) { rxRow?.remove(); return; }
+      if (!rxRow) {
+        rxRow = document.createElement('div');
+        rxRow.className = 'gc-reactions';
+        el.querySelector('.gc-msg-bubble')?.after(rxRow);
+      }
+      rxRow.innerHTML = keys.map(emoji => {
+        const users = reactions[emoji]||[];
+        const mine2 = users.includes(_role);
+        return `<button class="gc-reaction-pill${mine2?' mine':''}" data-action="react-pill" data-id="${id}" data-emoji="${emoji}">
+          ${emoji}<span class="gc-reaction-count">${users.length}</span>
+        </button>`;
+      }).join('');
     }
   }
 
-  // ── CSS animation ────────────────────────────────────────────────
-  const style = document.createElement('style');
-  style.textContent = `@keyframes cpMsgIn { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }`;
-  document.head.appendChild(style);
+  // ── Panel open/close ───────────────────────────────────────────
+  function togglePanel() {
+    _open ? closePanel() : openPanel();
+  }
 
-  // ── Drag & drop images onto chat panel ───────────────────────────
-  document.addEventListener('DOMContentLoaded', () => {
-    maybeShowChatBtn();
-    const panel = document.getElementById('chatPanel');
-    if (panel) {
-      panel.addEventListener('dragover', e => { e.preventDefault(); });
+  async function openPanel() {
+    if (_role === 'driver' && !localStorage.getItem('wb_driver_name')) {
+      gc.nameOv()?.classList.remove('hidden');
+      return;
+    }
+    _open = true;
+    gc.panel()?.classList.add('gc-panel--open');
+    gc.bubble()?.classList.add('gc-bubble--open');
+    document.body.classList.add('gc-board-dim');
+    _unread[_channel] = 0;
+    markSeen(_channel);
+    renderChannelPills();
+    updateBadge();
+    await loadHistory();
+    gc.input()?.focus();
+  }
+
+  function closePanel() {
+    _open = false;
+    gc.panel()?.classList.remove('gc-panel--open');
+    gc.bubble()?.classList.remove('gc-bubble--open');
+    document.body.classList.remove('gc-board-dim');
+    hideEmojiPicker();
+    cancelReply();
+  }
+
+  function showBubble() {
+    const b = gc.bubble();
+    if (b) b.style.display = 'flex';
+  }
+
+  // ── Lightbox ───────────────────────────────────────────────────
+  function openLightbox(src) {
+    const lb = gc.lb();
+    if (!lb) return;
+    gc.lbImg().src = src;
+    lb.style.display = 'flex';
+  }
+  function closeLightbox() {
+    const lb = gc.lb();
+    if (lb) { lb.style.display = 'none'; gc.lbImg().src = ''; }
+  }
+
+  // ── Wire everything ────────────────────────────────────────────
+  function wire() {
+    // Bubble
+    gc.bubble()?.addEventListener('click', togglePanel);
+
+    // Panel close
+    gc.panel()?.querySelector('#gcClose')?.addEventListener('click', closePanel);
+
+    // Input / send
+    gc.input()?.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    });
+    gc.send()?.addEventListener('click', send);
+
+    // File input
+    gc.fileInp()?.addEventListener('change', e => attachPhoto(e.target.files[0]));
+    gc.photoRm()?.addEventListener('click', clearPhoto);
+
+    // Reply cancel
+    gc.replyCnl()?.addEventListener('click', cancelReply);
+
+    // Message actions (delegated)
+    wireMessageActions();
+
+    // Emoji picker buttons
+    gc.picker()?.querySelectorAll('.gc-emoji-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (_emojiTarget) doReact(_emojiTarget, btn.dataset.emoji);
+      });
+    });
+
+    // Close emoji picker on outside click
+    document.addEventListener('click', e => {
+      const picker = gc.picker();
+      if (picker && !picker.contains(e.target) && !e.target.closest('[data-action="react"]')) {
+        hideEmojiPicker();
+      }
+    }, true);
+
+    // Lightbox
+    gc.lbClose()?.addEventListener('click', closeLightbox);
+    gc.lb()?.addEventListener('click', e => { if (e.target === gc.lb()) closeLightbox(); });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        closeLightbox();
+        closePanel();
+        hideEmojiPicker();
+      }
+    });
+
+    // Drag & drop onto panel
+    const panel = gc.panel();
+    const dragOv = gc.dragOv();
+    if (panel && dragOv) {
+      panel.addEventListener('dragover', e => { e.preventDefault(); dragOv.classList.add('active'); });
+      panel.addEventListener('dragleave', e => { if (!panel.contains(e.relatedTarget)) dragOv.classList.remove('active'); });
       panel.addEventListener('drop', e => {
         e.preventDefault();
-        const file = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/'));
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = ev => { _pendingImg = { dataUrl: ev.target.result }; renderImgPreview(); };
-        reader.readAsDataURL(file);
+        dragOv.classList.remove('active');
+        const file = e.dataTransfer.files[0];
+        if (file) attachPhoto(file);
       });
     }
-  });
 
-  // Poll for role availability (set after login)
-  const _roleCheck = setInterval(() => {
-    const role = getMyRole();
-    if (role) {
-      maybeShowChatBtn();
-      clearInterval(_roleCheck);
-    }
-  }, 1000);
+    // Driver name modal
+    gc.nameSave()?.addEventListener('click', () => {
+      const v = gc.nameInp()?.value.trim();
+      if (!v) return;
+      localStorage.setItem('wb_driver_name', v);
+      _sender = v;
+      gc.nameOv()?.classList.add('hidden');
+      openPanel();
+    });
+    gc.nameInp()?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') gc.nameSave()?.click();
+    });
 
-  // Export the WS hook (called from main onmessage handler below)
+    // Paste image anywhere in panel
+    document.addEventListener('paste', e => {
+      if (!_open) return;
+      const item = [...(e.clipboardData?.items||[])].find(i => i.type.startsWith('image/'));
+      if (item) attachPhoto(item.getAsFile());
+    });
+
+    wireWS();
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────
+  function scrollBottom() {
+    const a = gc.messages();
+    if (a) a.scrollTop = a.scrollHeight;
+  }
+
+  function loadLastSeen() {
+    try { _lastSeen = JSON.parse(localStorage.getItem('wb_gc_seen') || '{}'); } catch { _lastSeen = {}; }
+  }
+  function markSeen(ch) {
+    _lastSeen[ch] = Date.now();
+    try { localStorage.setItem('wb_gc_seen', JSON.stringify(_lastSeen)); } catch {}
+  }
+  function updateBadge() {
+    const total = Object.values(_unread).reduce((a,b)=>a+b, 0);
+    const b = gc.badge();
+    if (!b) return;
+    if (total > 0) { b.textContent = total > 99 ? '99+' : String(total); b.style.display = 'flex'; }
+    else b.style.display = 'none';
+  }
+
+  function dayStr(ts) {
+    const d = new Date(ts);
+    const t = new Date();
+    if (d.toDateString() === t.toDateString()) return 'Today';
+    const y = new Date(t); y.setDate(t.getDate()-1);
+    if (d.toDateString() === y.toDateString()) return 'Yesterday';
+    return d.toLocaleDateString('en-CA', { month:'short', day:'numeric' });
+  }
+  function fmtTime(ts) {
+    return new Date(ts).toLocaleTimeString('en-CA', { hour:'2-digit', minute:'2-digit' });
+  }
+  function esc(s) {
+    return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  async function api(url, opts = {}) {
+    const r = await fetch(url, opts);
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  }
+
+  // ── Boot ───────────────────────────────────────────────────────
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else setTimeout(init, 120);
+
 })();

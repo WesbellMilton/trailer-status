@@ -1,98 +1,119 @@
 'use strict';
+/**
+ * chat.js — Team Chat routes for Wesbell Dispatch
+ * GET  /api/chat/history?channel=general   — last 100 messages
+ * POST /api/chat/send                       — post a message (text + optional base64 image)
+ * DELETE /api/chat/message/:id             — delete own message (dispatchers/admin can delete any)
+ *
+ * WS broadcast on send: { type: 'chat', payload: { id, at, channel, role, name, text, imageData } }
+ */
 const { Router } = require('express');
-const { requireRole, requireDriverAccess, getSession } = require('../auth');
 const { run, get, all } = require('../db');
-const { wsBroadcastToLocation } = require('../ws');
+const { requireXHR } = require('../middleware');
+const { wsBroadcast } = require('../ws');
 const { audit } = require('../helpers');
-const { ipOf } = require('../middleware');
 
 const router = Router();
 
-// ── Channel access map ────────────────────────────────────────────────────────
-// Which roles can read/post to which channels
-const CHANNEL_ROLES = {
-  general  : ['dispatcher', 'dock', 'management', 'admin', 'driver'],
-  dispatch : ['dispatcher', 'management', 'admin'],
-  dock     : ['dock', 'dispatcher', 'management', 'admin'],
-  drivers  : ['dispatcher', 'dock', 'management', 'admin', 'driver'],
-};
+// ── Roles allowed to use chat ──────────────────────────────────────────────────
+const CHAT_ROLES = new Set(['dispatcher', 'management', 'admin', 'dock']);
 
-const VALID_CHANNELS = Object.keys(CHANNEL_ROLES);
-
-function canAccessChannel(role, channel) {
-  if (!role) return false;
-  return (CHANNEL_ROLES[channel] || []).includes(role);
-}
-
-// ── Middleware: any logged-in role (including driver via session) ───────────
 function requireChat(req, res, next) {
-  const s = getSession(req);
-  if (!s?.role) return res.status(401).send('Not authenticated');
-  req.chatRole   = s.role;
-  req.chatLocId  = s.locationId || 1;
+  const s = require('../auth').getSession(req);
+  if (!s || !CHAT_ROLES.has(s.role)) return res.status(401).json({ error: 'Not authorized' });
+  req._session = s;
   next();
 }
 
-// ── GET /api/chat/history?channel=general&before=<id>&limit=50 ───────────────
+// Role display names
+const ROLE_LABEL = {
+  dispatcher: 'Dispatcher',
+  dock:       'Dock',
+  management: 'Management',
+  admin:      'Admin',
+};
+
+// ── GET /api/chat/history ─────────────────────────────────────────────────────
 router.get('/api/chat/history', requireChat, async (req, res) => {
   try {
-    const channel = VALID_CHANNELS.includes(req.query.channel) ? req.query.channel : 'general';
-    if (!canAccessChannel(req.chatRole, channel)) return res.status(403).send('No access to channel');
-    const limit  = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
-    const before = Number(req.query.before) || Number.MAX_SAFE_INTEGER;
+    const channel = String(req.query.channel || 'general').slice(0, 32).replace(/[^a-z0-9_-]/gi, '');
     const rows = await all(
-      `SELECT id, at, channel, role, sender, body
-       FROM messages
-       WHERE channel=? AND location_id=? AND id<?
-       ORDER BY at DESC LIMIT ?`,
-      [channel, req.chatLocId, before, limit]
+      `SELECT id, at, channel, role, name, text, imageData
+         FROM chat_messages
+        WHERE channel = ?
+        ORDER BY at DESC
+        LIMIT 100`,
+      [channel]
     );
-    res.json(rows.reverse()); // chronological order
-  } catch { res.status(500).send('History fetch failed'); }
+    // Return oldest-first to the client
+    res.json({ messages: rows.reverse() });
+  } catch (e) {
+    console.error('[chat] history error:', e.message);
+    res.status(500).json({ error: 'Failed to load messages' });
+  }
 });
 
 // ── POST /api/chat/send ───────────────────────────────────────────────────────
-router.post('/api/chat/send', requireChat, async (req, res) => {
+router.post('/api/chat/send', requireXHR, requireChat, async (req, res) => {
   try {
-    const channel = VALID_CHANNELS.includes(req.body.channel) ? req.body.channel : 'general';
-    if (!canAccessChannel(req.chatRole, channel)) return res.status(403).send('No access to channel');
-    const body   = String(req.body.body || '').trim().slice(0, 1000);
-    const sender = String(req.body.sender || '').trim().slice(0, 60) || roleName(req.chatRole);
-    if (!body) return res.status(400).send('Empty message');
+    const s       = req._session;
+    const channel = String(req.body.channel || 'general').slice(0, 32).replace(/[^a-z0-9_-]/gi, '');
+    const text    = String(req.body.text || '').trim().slice(0, 2000);
+    const name    = ROLE_LABEL[s.role] || s.role;
+
+    // Optional base64 image — cap at ~4 MB (base64 overhead ~33%)
+    let imageData = null;
+    if (req.body.imageData) {
+      const raw = String(req.body.imageData);
+      if (raw.length > 5_500_000) return res.status(413).json({ error: 'Image too large (max ~4 MB)' });
+      // Validate it's a data URI
+      if (!/^data:image\/(png|jpe?g|gif|webp);base64,/.test(raw)) {
+        return res.status(400).json({ error: 'Invalid image format' });
+      }
+      imageData = raw;
+    }
+
+    if (!text && !imageData) return res.status(400).json({ error: 'Message is empty' });
 
     const at = Date.now();
-    const result = await run(
-      `INSERT INTO messages(at, channel, role, sender, body, location_id) VALUES(?,?,?,?,?,?)`,
-      [at, channel, req.chatRole, sender, body, req.chatLocId]
+    const r  = await run(
+      `INSERT INTO chat_messages (at, channel, role, name, text, imageData)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [at, channel, s.role, name, text, imageData]
     );
-    const msg = { id: result.lastID, at, channel, role: req.chatRole, sender, body };
-    wsBroadcastToLocation(req.chatLocId, 'chat', msg);
 
-    res.json({ ok: true, id: result.lastID });
-  } catch { res.status(500).send('Send failed'); }
+    const msg = { id: r.lastID, at, channel, role: s.role, name, text, imageData };
+    wsBroadcast('chat', msg);
+
+    await audit(req, s.role, 'chat_send', 'chat_message', String(r.lastID), { channel, textLen: text.length, hasImage: !!imageData });
+
+    res.json({ ok: true, message: msg });
+  } catch (e) {
+    console.error('[chat] send error:', e.message);
+    res.status(500).json({ error: 'Failed to send message' });
+  }
 });
 
-// ── GET /api/chat/channels ────────────────────────────────────────────────────
-// Returns list of channels accessible to the caller with unread counts
-router.get('/api/chat/channels', requireChat, async (req, res) => {
+// ── DELETE /api/chat/message/:id ──────────────────────────────────────────────
+router.delete('/api/chat/message/:id', requireXHR, requireChat, async (req, res) => {
   try {
-    const accessible = VALID_CHANNELS.filter(c => canAccessChannel(req.chatRole, c));
-    const since = Number(req.query.since) || 0;
-    const counts = {};
-    for (const ch of accessible) {
-      const row = await get(
-        `SELECT COUNT(*) as cnt FROM messages WHERE channel=? AND location_id=? AND at>?`,
-        [ch, req.chatLocId, since]
-      );
-      counts[ch] = row?.cnt || 0;
-    }
-    res.json({ channels: accessible, unread: counts });
-  } catch { res.status(500).send('Channels fetch failed'); }
-});
+    const s  = req._session;
+    const id = parseInt(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid id' });
 
-function roleName(role) {
-  const names = { dispatcher: 'Dispatcher', dock: 'Dock', management: 'Management', admin: 'Admin', driver: 'Driver' };
-  return names[role] || 'User';
-}
+    const row = await get(`SELECT id, role FROM chat_messages WHERE id = ?`, [id]);
+    if (!row) return res.status(404).json({ error: 'Not found' });
+
+    const canDelete = s.role === 'admin' || s.role === 'management' || row.role === s.role;
+    if (!canDelete) return res.status(403).json({ error: 'Cannot delete this message' });
+
+    await run(`DELETE FROM chat_messages WHERE id = ?`, [id]);
+    wsBroadcast('chat_delete', { id });
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Delete failed' });
+  }
+});
 
 module.exports = router;

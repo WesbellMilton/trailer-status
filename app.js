@@ -1,6 +1,6 @@
 (() => {
   const CSRF = {"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"};
-  let ROLE=null, VERSION="", _locationId=1, _doorsFrom=28, _doorsTo=42, trailers={}, dockPlates={}, doorBlocks={}, confirmations=[];
+  let ROLE=null, VERSION="", _locationId=1, trailers={}, dockPlates={}, doorBlocks={}, confirmations=[];
   const plateEditOpen={}, shuntOpen={};
   const el=id=>document.getElementById(id);
   const path=()=>location.pathname.toLowerCase();
@@ -57,9 +57,7 @@
   };
   const esc=s=>String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
   // Shared constants
-  let DOORS=[];
-  function rebuildDoors(){DOORS=[];for(let _d=_doorsFrom;_d<=_doorsTo;_d++)DOORS.push(String(_d));}
-  rebuildDoors(); // init with defaults (28-42) — overwritten after whoami resolves
+  const DOORS=[];for(let _d=28;_d<=42;_d++)DOORS.push(String(_d));
   const canEditPlates=()=>ROLE==="dispatcher"||ROLE==="dock"||ROLE==="management"||ROLE==="admin";
   const canEditTrailers=()=>ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin";
 
@@ -261,13 +259,6 @@
   el("modalOv")?.addEventListener("click",e=>{if(e.target===el("modalOv")){el("modalOv").classList.add("hidden");if(_mr){_mr(false);_mr=null;}}});
   el("dmModalCancel")?.addEventListener("click",()=>el("dmModalOv")?.classList.add("hidden"));
   el("dmModalOv")?.addEventListener("click",e=>{if(e.target===el("dmModalOv"))el("dmModalOv").classList.add("hidden");});
-  // Issue reports refresh button
-  el("btnRefreshIssues")?.addEventListener("click",()=>loadIssueReports());
-  // Issue photo lightbox close
-  const _closeLightbox=()=>el("issueLightbox")?.classList.remove("open");
-  el("issueLightboxClose")?.addEventListener("click",_closeLightbox);
-  el("issueLightbox")?.addEventListener("click",e=>{if(e.target===el("issueLightbox"))_closeLightbox();});
-  document.addEventListener("keydown",e=>{if(e.key==="Escape"&&el("issueLightbox")?.classList.contains("open"))_closeLightbox();});
 
   function lockScroll(){document.body.style.overflow="hidden";}
   function unlockScroll(){document.body.style.overflow="";}
@@ -525,10 +516,9 @@
     const lu=el("lastUpdated");if(lu)lu.textContent="Updated "+fmtTime(Date.now());
     renderDockMap();
     const occupied=getOccupiedDoors();
-    const occupiedInRange=Object.keys(occupied).filter(d=>{const n=parseInt(d);return n>=_doorsFrom&&n<=_doorsTo;}).length;
-    const totalDoors=_doorsTo-_doorsFrom+1;
+    const occupiedInRange=Object.keys(occupied).filter(d=>{const n=parseInt(d);return n>=28&&n<=42;}).length;
     const badge=el("dockMapFreeCount");
-    if(badge)badge.textContent=`${totalDoors-occupiedInRange} free`;
+    if(badge)badge.textContent=`${15-occupiedInRange} free`;
     if(_selectedTrailer)renderDetailPanel(_selectedTrailer);
     renderDspOccupancy();
     renderDspPlates();
@@ -2054,12 +2044,6 @@
   async function loadInitial(){
     try{
       const w=await apiJson("/api/whoami");ROLE=w?.role;VERSION=w?.version||"";_locationId=w?.locationId||1;
-      _doorsFrom=w?.doorsFrom||28;_doorsTo=w?.doorsTo||42;
-      rebuildDoors();
-      // Expose for driver view and other modules
-      window._doorsFrom=_doorsFrom;window._doorsTo=_doorsTo;
-      // Expose for chat module
-      window._chatRole=ROLE;window._chatLocId=_locationId;window._chatReady=true;
       if(w?.redirectTo&&ROLE&&w.redirectTo!==location.pathname){location.replace(w.redirectTo);return;}
     }catch{ROLE=null;VERSION="";}
     el("verText").textContent=VERSION||"—";
@@ -2489,6 +2473,8 @@
       // Forward every message to driver view handler (if on driver page)
       if(window._driverWsMsg)window._driverWsMsg(msg);
       const{type,payload}=msg||{};
+      // Team chat handler
+      if(window._chatWsMsg)window._chatWsMsg(type,payload);
       if(type==="state"){trailers=payload||{};renderBoard();if(isSuper())renderSupBoard();if(isDock()){renderDockView();dvUpdateIncoming();window._lspAutoRefresh?.();updateTrackingMap?.();updateTrackingList?.();if(window._loadStatusRefresh&&document.getElementById("lsp-body")?.classList.contains("lsp-open"))window._loadStatusRefresh();}if(isAdmin()&&!isSuper())renderBoard();
         clearTimeout(connectWs._etaTimer);
         connectWs._etaTimer=setTimeout(function tickEta(){renderBoard();if(isDock()){renderDockView();dvUpdateIncoming();}connectWs._etaTimer=setTimeout(tickEta,60000);},60000);
@@ -2583,8 +2569,6 @@
           if(!isDriver()){
             if(isDock())toast("⚠️ Issue Filed",`${trailer}${door?" Door "+door+" — ":""}${payload.note?.slice(0,60)||""}`,"warn",10000);
             _notifPush({icon:"⚠️",title:`Issue: ${trailer}`,body:`${door?"Door "+door+" — ":""}${payload.note?.slice(0,80)||""}`,kind:"issue",trailer,door,at:Date.now()});
-            // Refresh issue reports panel live if management view is visible
-            if(el('managementView')?.style.display!=="none")loadIssueReports();
           }
         } else {
           if(payload?.message)_notifPush({icon:"🔔",title:payload.title||"Notification",body:payload.message,kind:"generic",at:Date.now()});
@@ -3231,425 +3215,416 @@
   function updateOffloadSubmitState(){}
   function updateSafetySubmitState(){}
   function openDockIssueModal(t,d){openQuickIssue(t,d||"");}
-  async function loadIssueReports(){
-    const body=el('supIssueBody');
-    const countBadge=el('supIssueCount');
-    if(!body)return;
-    try{
-      const rows=await apiJson('/api/issue-reports?limit=100');
-      if(!rows||!rows.length){
-        body.innerHTML='<div style="padding:24px;text-align:center;color:var(--t3);font-family:var(--mono);font-size:11px;">No issue reports yet.</div>';
-        if(countBadge)countBadge.textContent='0';
-        return;
-      }
-      if(countBadge)countBadge.textContent=rows.length>=100?'99+':String(rows.length);
-      const rowsHtml=rows.map(r=>{
-        const timeStr=fmtTime(r.at);
-        const agoStr=timeAgo(r.at);
-        const photoBtn=r.has_photo
-          ?`<button class="issue-view-photo" data-id="${esc(r.id)}" title="View photo" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:4px;border:1px solid rgba(245,166,35,.3);background:rgba(245,166,35,.08);color:var(--amber);font-size:10px;font-family:var(--mono);cursor:pointer;white-space:nowrap;">📷 Photo</button>`
-          :'<span style="color:var(--t3);font-size:10px;font-family:var(--mono);">—</span>';
-        const noteHtml=r.note
-          ?`<span title="${esc(r.note)}" style="display:block;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.note)}</span>`
-          :'<span style="color:var(--t3);">—</span>';
-        return `<tr>
-          <td class="mono muted" title="${esc(timeStr)}">${esc(agoStr)}</td>
-          <td class="mono" style="font-weight:600;color:var(--amber);">${esc(r.trailer||'—')}</td>
-          <td class="mono" style="color:var(--t1);">${r.door?'Door '+esc(r.door):'—'}</td>
-          <td style="font-size:11px;color:var(--t1);">${noteHtml}</td>
-          <td>${photoBtn}</td>
-        </tr>`;
-      }).join('');
-      body.innerHTML=`<div class="data-tbl-wrap"><table>
-        <thead><tr><th>When</th><th>Trailer</th><th>Door</th><th>Note</th><th>Photo</th></tr></thead>
-        <tbody>${rowsHtml}</tbody>
-      </table></div>`;
-      // Wire photo buttons
-      body.querySelectorAll('.issue-view-photo').forEach(btn=>{
-        btn.addEventListener('click',()=>openIssueLightboxById(btn.dataset.id));
-      });
-    }catch(e){
-      body.innerHTML='<div style="padding:16px;color:var(--red);font-family:var(--mono);font-size:11px;">Failed to load issue reports.</div>';
-    }
-  }
-
-  async function openIssueLightboxById(id){
-    const lb=el('issueLightbox');
-    const img=el('issueLightboxImg');
-    if(!lb||!img)return;
-    img.src='';
-    lb.classList.add('open');
-    img.src=`/api/issue-reports/${encodeURIComponent(id)}/photo`;
-    img.onerror=()=>lb.classList.remove('open');
-  }
+  async function loadIssueReports(){}
 
 })();
 
-/* ══════════════════════════════════════════════════════════════════
-   CHAT MODULE
-══════════════════════════════════════════════════════════════════ */
-(function chatModule() {
+// ═══════════════════════════════════════════════════════════════════
+// TEAM CHAT MODULE
+// ═══════════════════════════════════════════════════════════════════
+(function() {
   'use strict';
 
-  // ── State ──────────────────────────────────────────────────────
+  // ── State ────────────────────────────────────────────────────────
   let _open       = false;
   let _channel    = 'general';
-  let _channels   = [];
-  let _unread     = {};       // { channel: count }
-  let _lastSeen   = {};       // { channel: timestamp } — persisted to localStorage
-  let _oldest     = {};       // { channel: id } — for load-more
-  let _role       = null;
-  let _sender     = null;     // display name
-  let _locId      = 1;
-  let _wsRef      = null;     // reference to shared WS
+  let _myRole     = null;   // set from ROLE global
+  let _pendingImg = null;   // { dataUrl }
+  let _unread     = {};     // channel → count
+  let _histLoaded = new Set();
+  let _typingTimer = null;
 
-  const CSRF = { 'X-Requested-With': 'XMLHttpRequest' };
+  // Role avatar colours (consistent per role)
+  const ROLE_COLOR = {
+    dispatcher: '#47c8ff',
+    dock:       '#e8ff47',
+    management: '#ff9f43',
+    admin:      '#ff6b6b',
+  };
+  const ROLE_INITIAL = {
+    dispatcher: 'D',
+    dock:       'K',
+    management: 'M',
+    admin:      'A',
+  };
 
-  // ── DOM refs ───────────────────────────────────────────────────
-  const $ = id => document.getElementById(id);
-  const bubble   = () => $('chatBubble');
-  const panel    = () => $('chatPanel');
-  const msgArea  = () => $('chatMessages');
-  const input    = () => $('chatInput');
-  const chTabs   = () => $('chatChannels');
-  const unreadDot= () => $('chatBubbleUnread');
+  function getMyRole() { return (typeof ROLE !== 'undefined' ? ROLE : null); }
 
-  // ── Init ───────────────────────────────────────────────────────
-  async function init() {
-    // Wait for whoami to resolve (window._chatReady set by main IIFE)
-    let attempts = 0;
-    while (!window._chatReady && attempts++ < 40) await sleep(100);
-
-    _role  = window._chatRole  || null;
-    _locId = window._chatLocId || 1;
-
-    if (!_role) return; // not logged in — no chat
-
-    // Drivers: only Wesbell carriers get chat
-    if (_role === 'driver') {
-      // Wait until driver flow has set carrier type
-      await sleep(500);
-      if (!window._chatDriverOk) return;
-    }
-
-    _sender = getSenderName();
-    loadLastSeen();
-    await loadChannels();
-    wireBubble();
-    wirePanel();
-    wireWS();
-    showBubble();
-  }
-
-  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-  // ── Sender name ────────────────────────────────────────────────
-  function getSenderName() {
-    if (_role === 'driver') {
-      return localStorage.getItem('wb_driver_name') || 'Driver';
-    }
-    const names = { dispatcher:'Dispatcher', dock:'Dock', management:'Management', admin:'Admin' };
-    return names[_role] || 'User';
-  }
-
-  // ── Channels ───────────────────────────────────────────────────
-  async function loadChannels() {
-    try {
-      const vals = Object.values(_lastSeen);
-      const since = vals.length ? Math.max(0, ...vals) : 0;
-      const data = await apiFetch(`/api/chat/channels?since=${since}`);
-      _channels = data.channels || ['general'];
-      _unread   = data.unread   || {};
-      // Don't count messages as unread if we've never opened chat
-      renderChannelTabs();
-      updateBubbleBadge();
-    } catch {
-      _channels = ['general'];
-      renderChannelTabs();
-    }
-  }
-
-  function renderChannelTabs() {
-    const tabs = chTabs();
-    if (!tabs) return;
-    tabs.innerHTML = _channels.map(ch => {
-      const u = _unread[ch] || 0;
-      return `<button class="chat-ch-tab${ch===_channel?' active':''}" data-ch="${ch}">
-        #${ch}${u>0?`<span class="chat-ch-unread">${u>99?'99+':u}</span>`:''}
-      </button>`;
-    }).join('');
-    tabs.querySelectorAll('.chat-ch-tab').forEach(btn => {
-      btn.addEventListener('click', () => switchChannel(btn.dataset.ch));
-    });
-  }
-
-  async function switchChannel(ch) {
-    if (!_channels.includes(ch)) return;
-    _channel = ch;
-    _unread[ch] = 0;
-    markSeen(ch);
-    renderChannelTabs();
-    updateBubbleBadge();
-    msgArea().innerHTML = '<div class="chat-loading">Loading…</div>';
-    await loadHistory();
-  }
-
-  // ── History ────────────────────────────────────────────────────
-  async function loadHistory(before = null) {
-    try {
-      const url = `/api/chat/history?channel=${_channel}&limit=50${before?'&before='+before:''}`;
-      const rows = await apiFetch(url);
-      if (!before) {
-        msgArea().innerHTML = '';
-        _oldest[_channel] = null;
-      }
-      if (!rows.length) {
-        if (!before) msgArea().innerHTML = '<div class="chat-loading">No messages yet. Say hello 👋</div>';
-        return;
-      }
-      if (_oldest[_channel] == null || rows[0].id < _oldest[_channel]) _oldest[_channel] = rows[0].id;
-
-      if (rows.length === 50) prependLoadMore();
-      if (before) {
-        const existing = msgArea().querySelector('.chat-load-more');
-        existing?.remove();
-      }
-      const frag = document.createDocumentFragment();
-      let lastDate = null;
-      rows.forEach(msg => {
-        const d = new Date(msg.at).toLocaleDateString('en-CA');
-        if (d !== lastDate) { frag.appendChild(dateSep(d)); lastDate = d; }
-        frag.appendChild(buildMsg(msg));
-      });
-      if (before) {
-        msgArea().insertBefore(frag, msgArea().firstChild);
-      } else {
-        msgArea().appendChild(frag);
-        scrollBottom();
-      }
-    } catch (e) {
-      msgArea().innerHTML = '<div class="chat-loading" style="color:var(--red)">Failed to load messages.</div>';
-    }
-  }
-
-  function prependLoadMore() {
-    const wrap = document.createElement('div');
-    wrap.className = 'chat-load-more';
-    wrap.innerHTML = '<button class="chat-load-more-btn">Load older messages</button>';
-    wrap.querySelector('button').addEventListener('click', () => {
-      loadHistory(_oldest[_channel]);
-    });
-    msgArea().insertBefore(wrap, msgArea().firstChild);
-  }
-
-  // ── Build message element ──────────────────────────────────────
-  function buildMsg(msg) {
-    const isMe  = (msg.sender === _sender && msg.role === _role);
-    const isBot = msg.sender === 'Wesbell AI';
-    const cls   = isBot ? 'bot' : isMe ? 'mine' : 'theirs';
-    const metaCls = isBot ? 'chat-msg-bot' : isMe ? 'chat-msg-mine' : '';
-    const time  = new Date(msg.at).toLocaleTimeString('en-CA', { hour:'2-digit', minute:'2-digit' });
-    const div   = document.createElement('div');
-    div.className = `chat-msg ${cls}`;
-    div.dataset.id = msg.id;
-    div.innerHTML = `
-      <div class="chat-msg-meta ${metaCls}">
-        <span class="chat-msg-sender">${esc(msg.sender)}</span>
-        <span>${time}</span>
-      </div>
-      <div class="chat-msg-body">${esc(msg.body)}</div>`;
-    return div;
-  }
-
-  function dateSep(dateStr) {
-    const d = document.createElement('div');
-    d.className = 'chat-date-sep';
-    d.textContent = dateStr === new Date().toLocaleDateString('en-CA') ? 'Today' : dateStr;
-    return d;
-  }
-
-  function esc(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
-  // ── Send ───────────────────────────────────────────────────────
-  async function send() {
-    const inp = input();
-    const body = inp?.value.trim();
-    if (!body) return;
-    inp.value = '';
-    inp.focus();
-    const sendBtn = $('chatSendBtn');
-    if (sendBtn) sendBtn.disabled = true;
-    try {
-      await apiFetch('/api/chat/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...CSRF },
-        body: JSON.stringify({ channel: _channel, body, sender: _sender }),
-      });
-    } catch {
-      inp.value = body; // restore on failure
-    } finally {
-      if (sendBtn) sendBtn.disabled = false;
-    }
-  }
-
-  // ── WS integration ─────────────────────────────────────────────
-  function wireWS() {
-    // Patch into the main app's WS onmessage
-    const checkWs = setInterval(() => {
-      if (!window._ws) return;
-      clearInterval(checkWs);
-      _wsRef = window._ws;
-      const origOnMessage = _wsRef.onmessage;
-      _wsRef.onmessage = (evt) => {
-        if (origOnMessage) origOnMessage.call(_wsRef, evt);
-        try {
-          const msg = JSON.parse(evt.data);
-          if (msg.type === 'chat') handleIncoming(msg.payload);
-        } catch {}
-      };
-    }, 200);
-
-    // Re-hook when WS reconnects
-    setInterval(() => {
-      if (window._ws && window._ws !== _wsRef) {
-        _wsRef = window._ws;
-        const origOnMessage = _wsRef.onmessage;
-        _wsRef.onmessage = (evt) => {
-          if (origOnMessage) origOnMessage.call(_wsRef, evt);
-          try {
-            const msg = JSON.parse(evt.data);
-            if (msg.type === 'chat') handleIncoming(msg.payload);
-          } catch {}
-        };
-      }
-    }, 3000);
-  }
-
-  function handleIncoming(msg) {
-    if (!msg || msg.channel !== _channel) {
-      // Different channel — increment unread
-      if (msg?.channel && _channels.includes(msg.channel)) {
-        _unread[msg.channel] = (_unread[msg.channel] || 0) + 1;
-        renderChannelTabs();
-        updateBubbleBadge();
-      }
-      return;
-    }
-    // Same channel — append if open
+  // ── Toggle open/close ────────────────────────────────────────────
+  window._chatToggle = function() {
+    _open = !_open;
+    const panel = document.getElementById('chatPanel');
+    if (!panel) return;
     if (_open) {
-      const area = msgArea();
-      const atBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 60;
-      const d = new Date(msg.at).toLocaleDateString('en-CA');
-      const lastSep = area.querySelector('.chat-date-sep:last-of-type');
-      if (!lastSep || lastSep.textContent !== (d === new Date().toLocaleDateString('en-CA') ? 'Today' : d)) {
-        area.appendChild(dateSep(d));
-      }
-      area.appendChild(buildMsg(msg));
-      if (atBottom) scrollBottom();
-      markSeen(_channel);
+      panel.classList.add('open');
+      clearUnread(_channel);
+      if (!_histLoaded.has(_channel)) loadHistory(_channel);
+      setTimeout(() => document.getElementById('cpInput')?.focus(), 300);
     } else {
-      _unread[_channel] = (_unread[_channel] || 0) + 1;
-      updateBubbleBadge();
+      panel.classList.remove('open');
+    }
+  };
+
+  // ── Channel switch ───────────────────────────────────────────────
+  window._chatChannel = function(btn) {
+    const ch = btn.dataset.ch;
+    if (ch === _channel) return;
+    document.querySelectorAll('.cp-ch-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    _channel = ch;
+    document.getElementById('cpSubtitle').textContent = '#' + ch;
+    document.getElementById('cpInput').placeholder = 'Message #' + ch;
+    const msgs = document.getElementById('cpMessages');
+    msgs.innerHTML = '<div class="cp-loading"><div class="cp-load-dots"><div class="cp-load-dot"></div><div class="cp-load-dot"></div><div class="cp-load-dot"></div></div></div>';
+    clearUnread(ch);
+    if (!_histLoaded.has(ch)) loadHistory(ch);
+  };
+
+  // ── Load history ─────────────────────────────────────────────────
+  async function loadHistory(channel) {
+    const msgs = document.getElementById('cpMessages');
+    setStatus('connecting', 'Loading messages…');
+    try {
+      const res = await fetch(`/api/chat/history?channel=${encodeURIComponent(channel)}`, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      msgs.innerHTML = '';
+      if (!data.messages || data.messages.length === 0) {
+        msgs.innerHTML = '<div class="cp-sys">No messages yet. Say hello! 👋</div>';
+      } else {
+        let lastDay = '';
+        data.messages.forEach(m => {
+          const day = new Date(m.at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+          if (day !== lastDay) {
+            const div = document.createElement('div');
+            div.className = 'cp-day';
+            div.textContent = day;
+            msgs.appendChild(div);
+            lastDay = day;
+          }
+          appendMessage(m, false);
+        });
+      }
+      scrollToBottom();
+      _histLoaded.add(channel);
+      setStatus('hidden');
+    } catch (e) {
+      msgs.innerHTML = `<div class="cp-err-state">
+        <span>⚠️ Failed to load messages</span>
+        <span style="font-size:10px;opacity:.6">${e.message}</span>
+        <button onclick="window._chatRetry()">Retry</button>
+      </div>`;
+      setStatus('error', 'Connection error');
     }
   }
 
-  // ── Bubble & panel wiring ──────────────────────────────────────
-  function wireBubble() {
-    const b = bubble();
-    if (!b) return;
-    b.addEventListener('click', togglePanel);
+  window._chatRetry = function() { _histLoaded.delete(_channel); loadHistory(_channel); };
+
+  // ── Append a message to the panel ────────────────────────────────
+  function appendMessage(m, animate) {
+    const msgs = document.getElementById('cpMessages');
+    if (!msgs) return;
+
+    // Remove empty-state msg
+    const empty = msgs.querySelector('.cp-sys');
+    if (empty && empty.textContent.includes('No messages')) empty.remove();
+
+    const myRole  = getMyRole();
+    const isMine  = m.role === myRole;
+    const color   = ROLE_COLOR[m.role] || '#888';
+    const initial = ROLE_INITIAL[m.role] || (m.name||'?')[0].toUpperCase();
+    const timeStr = new Date(m.at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+    const row = document.createElement('div');
+    row.className = 'cp-msg' + (isMine ? ' cp-mine' : '');
+    row.id = 'cpm-' + m.id;
+    if (animate) row.style.animation = 'cpMsgIn .18s ease both';
+
+    // Build bubble content
+    const textHtml = m.text
+      ? `<div class="cp-text">${escapeChat(m.text)}</div>`
+      : '';
+    const imgHtml = m.imageData
+      ? `<div class="cp-msg-img" onclick="window._chatLightbox('${m.id}','${escapeAttr(m.imageData)}')">
+           <img src="${escapeAttr(m.imageData)}" alt="image" loading="lazy"/>
+         </div>`
+      : '';
+
+    // Delete button (own messages or admin/management)
+    const canDel = isMine || myRole === 'admin' || myRole === 'management';
+    const delBtn = canDel
+      ? `<button class="cp-msg-del" onclick="window._chatDelete(${m.id})" title="Delete">✕</button>`
+      : '';
+
+    row.innerHTML = `
+      <div class="cp-avatar" style="background:${color}">${initial}</div>
+      <div class="cp-bubble">
+        <div class="cp-meta">
+          <span class="cp-name">${escapeChat(m.name)}</span>
+          <span class="cp-time">${timeStr}</span>
+        </div>
+        ${textHtml}
+        ${imgHtml}
+      </div>
+      ${delBtn}
+    `;
+
+    msgs.appendChild(row);
   }
 
-  function wirePanel() {
-    $('chatCloseBtn')?.addEventListener('click', closePanel);
-    $('chatSendBtn')?.addEventListener('click', send);
-    input()?.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
-
-    // Driver name modal
-    $('driverNameSaveBtn')?.addEventListener('click', () => {
-      const v = $('driverNameInput')?.value.trim();
-      if (!v) return;
-      localStorage.setItem('wb_driver_name', v);
-      _sender = v;
-      $('driverNameOv')?.classList.add('hidden');
-      openPanel();
-    });
+  // ── Scroll to bottom ─────────────────────────────────────────────
+  function scrollToBottom() {
+    const msgs = document.getElementById('cpMessages');
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
   }
 
-  async function togglePanel() {
-    if (_open) closePanel();
-    else {
-      // Driver: check if name is set
-      if (_role === 'driver' && !localStorage.getItem('wb_driver_name')) {
-        $('driverNameOv')?.classList.remove('hidden');
+  // ── Send message ─────────────────────────────────────────────────
+  window._chatSend = async function() {
+    const input = document.getElementById('cpInput');
+    const text  = (input?.value || '').trim();
+    if (!text && !_pendingImg) return;
+
+    const sendBtn = document.getElementById('cpSend');
+    if (sendBtn) sendBtn.disabled = true;
+
+    try {
+      const body = { channel: _channel, text };
+      if (_pendingImg) body.imageData = _pendingImg.dataUrl;
+
+      const res = await fetch('/api/chat/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          ...(typeof CSRF !== 'undefined' ? CSRF : {})
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        showToast('Chat error', err || 'Failed to send', 'err');
         return;
       }
-      openPanel();
+
+      // Clear input
+      if (input) { input.value = ''; input.style.height = 'auto'; }
+      clearPendingImg();
+    } catch (e) {
+      showToast('Chat error', e.message, 'err');
+    } finally {
+      if (sendBtn) sendBtn.disabled = !((document.getElementById('cpInput')?.value||'').trim() || _pendingImg);
+    }
+  };
+
+  window._chatKey = function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      window._chatSend();
+    }
+  };
+
+  window._chatInputChange = function(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+    const sendBtn = document.getElementById('cpSend');
+    if (sendBtn) sendBtn.disabled = !el.value.trim() && !_pendingImg;
+  };
+
+  // ── Image handling ────────────────────────────────────────────────
+  window._chatFileChange = function(input) {
+    const file = input.files[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      _pendingImg = { dataUrl: e.target.result };
+      renderImgPreview();
+    };
+    reader.readAsDataURL(file);
+    input.value = '';
+  };
+
+  function renderImgPreview() {
+    const strip = document.getElementById('cpImgStrip');
+    if (!strip) return;
+    if (!_pendingImg) { strip.innerHTML = ''; strip.classList.remove('has-img'); return; }
+    strip.classList.add('has-img');
+    strip.innerHTML = `<div class="cp-thumb-wrap">
+      <img src="${_pendingImg.dataUrl}" alt=""/>
+      <button class="cp-thumb-rm" onclick="window._chatRmImg()">✕</button>
+    </div>`;
+    const sendBtn = document.getElementById('cpSend');
+    if (sendBtn) sendBtn.disabled = false;
+  }
+
+  function clearPendingImg() {
+    _pendingImg = null;
+    renderImgPreview();
+  }
+
+  window._chatRmImg = function() {
+    clearPendingImg();
+    const sendBtn = document.getElementById('cpSend');
+    if (sendBtn) sendBtn.disabled = !(document.getElementById('cpInput')?.value||'').trim();
+  };
+
+  // ── Lightbox ─────────────────────────────────────────────────────
+  window._chatLightbox = function(id, src) {
+    const lb  = document.getElementById('chatLightbox');
+    const img = document.getElementById('chatLbImg');
+    if (!lb || !img) return;
+    // Find the actual src from the DOM to avoid attr escaping issues
+    const msgEl = document.getElementById('cpm-' + id);
+    const realSrc = msgEl?.querySelector('.cp-msg-img img')?.src || src;
+    img.src = realSrc;
+    lb.classList.add('open');
+  };
+
+  // ── Delete ────────────────────────────────────────────────────────
+  window._chatDelete = async function(id) {
+    try {
+      const res = await fetch(`/api/chat/message/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          ...(typeof CSRF !== 'undefined' ? CSRF : {})
+        }
+      });
+      if (!res.ok) { showToast('Delete failed', await res.text(), 'err'); return; }
+      // optimistic remove — WS chat_delete will also fire
+      const el = document.getElementById('cpm-' + id);
+      if (el) el.remove();
+    } catch (e) {
+      showToast('Delete failed', e.message, 'err');
+    }
+  };
+
+  // ── Unread badge ──────────────────────────────────────────────────
+  function addUnread(channel) {
+    if (_open && _channel === channel) return;
+    _unread[channel] = (_unread[channel] || 0) + 1;
+    // Channel tab badge
+    const btn = document.querySelector(`.cp-ch-btn[data-ch="${channel}"]`);
+    if (btn) {
+      let badge = btn.querySelector('.cp-ch-unread');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'cp-ch-unread';
+        btn.appendChild(badge);
+      }
+      badge.textContent = _unread[channel];
+    }
+    // Topbar badge
+    const topBadge = document.getElementById('chatUnreadBadge');
+    if (topBadge) topBadge.style.display = '';
+  }
+
+  function clearUnread(channel) {
+    _unread[channel] = 0;
+    const btn = document.querySelector(`.cp-ch-btn[data-ch="${channel}"]`);
+    btn?.querySelector('.cp-ch-unread')?.remove();
+    // Hide topbar badge if all channels clear
+    const anyUnread = Object.values(_unread).some(v => v > 0);
+    const topBadge = document.getElementById('chatUnreadBadge');
+    if (topBadge && !anyUnread) topBadge.style.display = 'none';
+  }
+
+  // ── Status bar ────────────────────────────────────────────────────
+  function setStatus(state, text) {
+    const el = document.getElementById('cpStatus');
+    const tx = document.getElementById('cpStatusText');
+    if (!el) return;
+    el.className = 'cp-status ' + (state === 'hidden' ? 'hidden' : state);
+    if (tx && text) tx.textContent = text;
+  }
+
+  // ── WS message handler (called from main WS onmessage) ───────────
+  // Hook into the existing WS handler
+  window._chatWsMsg = function(type, payload) {
+    if (type === 'chat') {
+      const m = payload;
+      if (!m || !m.id) return;
+      // If panel is open and on this channel, append
+      if (_open && _channel === m.channel) {
+        appendMessage(m, true);
+        scrollToBottom();
+      } else {
+        addUnread(m.channel);
+        // Show a toast if panel is closed
+        if (!_open) {
+          const myRole = getMyRole();
+          if (m.role !== myRole) {
+            showToast(`💬 ${m.name}`, m.text ? m.text.slice(0, 60) : '📷 Image', 'ok', 5000);
+          }
+        }
+      }
+      // If history loaded, mark channel as having loaded so new messages render on next open
+      _histLoaded.add(m.channel);
+    } else if (type === 'chat_delete') {
+      const el = document.getElementById('cpm-' + payload?.id);
+      if (el) {
+        el.style.opacity = '0';
+        el.style.transform = 'scale(.95)';
+        el.style.transition = 'all .15s';
+        setTimeout(() => el.remove(), 150);
+      }
+    }
+  };
+
+  // ── Escape helpers ────────────────────────────────────────────────
+  function escapeChat(s) {
+    return String(s)
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/`([^`]+)`/g, '<code>$1</code>');
+  }
+  function escapeAttr(s) {
+    return String(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  // ── Show chat button when logged in ──────────────────────────────
+  function maybeShowChatBtn() {
+    const myRole = getMyRole();
+    const chatRoles = ['dispatcher','management','admin','dock'];
+    const btn = document.getElementById('btnChatToggle');
+    if (btn && myRole && chatRoles.includes(myRole)) {
+      btn.style.display = '';
     }
   }
 
-  async function openPanel() {
-    _open = true;
-    panel()?.classList.add('chat-panel-open');
-    bubble()?.classList.add('chat-open');
-    _unread[_channel] = 0;
-    markSeen(_channel);
-    renderChannelTabs();
-    updateBubbleBadge();
-    await loadHistory();
-  }
+  // ── CSS animation ────────────────────────────────────────────────
+  const style = document.createElement('style');
+  style.textContent = `@keyframes cpMsgIn { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }`;
+  document.head.appendChild(style);
 
-  function closePanel() {
-    _open = false;
-    panel()?.classList.remove('chat-panel-open');
-    bubble()?.classList.remove('chat-open');
-  }
-
-  function showBubble() {
-    const b = bubble();
-    if (b) b.style.display = 'flex';
-  }
-
-  function scrollBottom() {
-    const area = msgArea();
-    if (area) area.scrollTop = area.scrollHeight;
-  }
-
-  // ── Unread tracking ────────────────────────────────────────────
-  function loadLastSeen() {
-    try { _lastSeen = JSON.parse(localStorage.getItem('wb_chat_seen') || '{}'); } catch { _lastSeen = {}; }
-  }
-  function markSeen(ch) {
-    _lastSeen[ch] = Date.now();
-    try { localStorage.setItem('wb_chat_seen', JSON.stringify(_lastSeen)); } catch {}
-  }
-  function updateBubbleBadge() {
-    const total = Object.values(_unread).reduce((a, b) => a + b, 0);
-    const dot = unreadDot();
-    if (!dot) return;
-    if (total > 0) {
-      dot.textContent = total > 99 ? '99+' : String(total);
-      dot.style.display = 'flex';
-    } else {
-      dot.style.display = 'none';
+  // ── Drag & drop images onto chat panel ───────────────────────────
+  document.addEventListener('DOMContentLoaded', () => {
+    maybeShowChatBtn();
+    const panel = document.getElementById('chatPanel');
+    if (panel) {
+      panel.addEventListener('dragover', e => { e.preventDefault(); });
+      panel.addEventListener('drop', e => {
+        e.preventDefault();
+        const file = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/'));
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => { _pendingImg = { dataUrl: ev.target.result }; renderImgPreview(); };
+        reader.readAsDataURL(file);
+      });
     }
-  }
+  });
 
-  // ── API helper ─────────────────────────────────────────────────
-  async function apiFetch(url, opts = {}) {
-    const r = await fetch(url, opts);
-    if (!r.ok) throw new Error(await r.text());
-    return r.json();
-  }
+  // Poll for role availability (set after login)
+  const _roleCheck = setInterval(() => {
+    const role = getMyRole();
+    if (role) {
+      maybeShowChatBtn();
+      clearInterval(_roleCheck);
+    }
+  }, 1000);
 
-  // ── Boot ───────────────────────────────────────────────────────
-  // Wait for DOM ready then init
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    setTimeout(init, 100); // slight delay so main IIFE sets window._chatReady
-  }
-
+  // Export the WS hook (called from main onmessage handler below)
 })();

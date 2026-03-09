@@ -21,7 +21,6 @@ const { PORT, APP_VERSION } = require('./lib/config');
 
 // ── Middleware (order matters) ────────────────────────────────────────────────
 const mw = require('./lib/middleware');
-app.set('trust proxy', 1); // Render sits behind a load balancer — read real IP from X-Forwarded-For
 app.use(mw.gzip);
 app.use(mw.securityHeaders);
 app.use(mw.requestTimeout);
@@ -36,6 +35,7 @@ app.use(require('./lib/routes/driver'));
 app.use(require('./lib/routes/push'));
 app.use(require('./lib/routes/admin'));
 app.use(require('./lib/routes/reports'));
+app.use(require('./lib/routes/chat'));      // team chat
 app.use(require('./lib/routes/static'));   // static + page routes last
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
@@ -48,6 +48,18 @@ const push = require('./lib/push');
 
 initDb()
   .then(async () => {
+    // Ensure chat_messages table exists (safe to run every startup)
+    const { run: dbRun } = require('./lib/db');
+    await dbRun(`CREATE TABLE IF NOT EXISTS chat_messages (
+      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+      at        INTEGER NOT NULL,
+      channel   TEXT    NOT NULL DEFAULT 'general',
+      role      TEXT    NOT NULL,
+      name      TEXT    NOT NULL,
+      text      TEXT    NOT NULL DEFAULT '',
+      imageData TEXT
+    )`);
+    await dbRun(`CREATE INDEX IF NOT EXISTS idx_chat_channel_at ON chat_messages(channel, at)`);
     push.loadOrGenVapid();
     await push.loadSubscriptions();
   })
@@ -74,55 +86,8 @@ initDb()
         }
       } catch (e) { require('./lib/helpers').logEvent('error', 'archive', 'Auto-archive failed', e.message); }
     }
-    // FIX: delay first run 10 s so DB is fully ready; run every hour at :00
-    setTimeout(() => {
-      archiveDeparted();
-      setInterval(archiveDeparted, 3_600_000);
-    }, 10_000);
-
-    // ── Auto-depart ───────────────────────────────────────────────────────────
-    // Advances 'Dock Ready' trailers to 'Departed' after AUTO_DEPART_MINUTES.
-    // Disabled when AUTO_DEPART_MINUTES === 0 (default).
-    async function runAutoDepart() {
-      const { AUTO_DEPART_MINUTES } = require('./lib/config');
-      if (!AUTO_DEPART_MINUTES || AUTO_DEPART_MINUTES <= 0) return;
-      try {
-        const { all, run: dbRun } = require('./lib/db');
-        const { broadcastTrailers, wsBroadcast } = require('./lib/ws');
-        const { broadcastPush }  = require('./lib/push');
-        const { audit, logEvent, fireWebhook } = require('./lib/helpers');
-        const { invalidateTrailers } = require('./lib/cache');
-        const cutoff = Date.now() - AUTO_DEPART_MINUTES * 60_000;
-        const due = await all(
-          `SELECT trailer, door FROM trailers WHERE status='Dock Ready' AND updatedAt <= ?`,
-          [cutoff]
-        );
-        if (!due.length) return;
-        const now = Date.now();
-        for (const { trailer, door } of due) {
-          await dbRun(
-            `UPDATE trailers SET status='Departed', updatedAt=? WHERE trailer=? AND status='Dock Ready'`,
-            [now, trailer]
-          );
-          wsBroadcast('notify', { kind: 'departed', trailer, door: door || '', auto: true });
-          broadcastPush('🚪 Auto-Departed', `${trailer}${door ? ' — Door ' + door + ' now free' : ' has departed'}`, { trailer, door }).catch(() => {});
-          fireWebhook('trailer.departed', { trailer, door, actor: 'auto-depart' });
-          await audit(null, 'auto-depart', 'trailer_status_set', 'trailer', trailer, { status: 'Departed', trigger: 'auto', minutesSinceDockReady: AUTO_DEPART_MINUTES });
-          await logEvent('info', 'auto-depart', `Auto-departed ${trailer} after ${AUTO_DEPART_MINUTES} min in Dock Ready`, `door=${door || '—'}`);
-          console.log(`[AUTO-DEPART] ${trailer} -> Departed (door ${door || '-'})`);
-        }
-        invalidateTrailers();
-        await broadcastTrailers();
-      } catch (e) {
-        require('./lib/helpers').logEvent('error', 'auto-depart', 'Auto-depart job failed', e.message);
-        console.error('[AUTO-DEPART]', e.message);
-      }
-    }
-    // Check every 2 minutes; first run after 15 s
-    setTimeout(() => {
-      runAutoDepart();
-      setInterval(runAutoDepart, 2 * 60_000);
-    }, 15_000);
+    setInterval(archiveDeparted, 3_600_000);
+    archiveDeparted();
 
     async function backupDb() {
       try {
@@ -136,17 +101,7 @@ initDb()
         console.error('[BACKUP]', e.message);
       }
     }
-    // FIX: stagger backup 30 min after archive to avoid simultaneous I/O
-    setTimeout(() => {
-      backupDb();
-      setInterval(backupDb, 3_600_000);
-    }, 30 * 60_000);
-
-    // FIX: WAL checkpoint every 30 min — prevents WAL file growing unbounded
-    setInterval(async () => {
-      try { await checkpoint(); }
-      catch (e) { console.error('[WAL] Checkpoint failed:', e.message); }
-    }, 30 * 60_000).unref();
+    setInterval(backupDb, 3_600_000);
 
     // ── Graceful shutdown ─────────────────────────────────────────────────────
     let shuttingDown = false;

@@ -97,6 +97,11 @@ body{background-image:none!important;background:transparent!important}
       <div class="chip" id="roleBadge" style="display:none;color:var(--amber);">—</div>
       <div class="chip">v<span id="verText">—</span></div>
       <button class="tb-btn" id="btnThemeToggle" title="Toggle light/dark mode" style="font-size:15px;padding:4px 8px;">🌙</button>
+      <button class="tb-btn" id="btnChatToggle" style="display:none;position:relative;" title="Team Chat" onclick="window._chatToggle()">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 2h10a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H8l-3 2v-2H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+        Chat
+        <span id="chatUnreadBadge" style="display:none;position:absolute;top:3px;right:3px;width:7px;height:7px;border-radius:50%;background:#ff4d4d;border:1.5px solid var(--bg);"></span>
+      </button>
       <button class="tb-btn" id="btnInstallPwa" style="display:none;" title="Add to home screen">⬇ Install</button>
       <button class="tb-btn" id="btnAudit" style="display:none;">Audit</button>
       <button class="tb-btn danger" id="btnLogout" style="display:none;">Sign Out</button>
@@ -775,8 +780,6 @@ body{background-image:none!important;background:transparent!important}
         if (state.carrier === 'Outside') {
           show('ts-s-ext-carrier');
         } else {
-          // Wesbell driver — enable chat
-          window._chatDriverOk = true;
           document.getElementById('ts-actions-trailer-tag').textContent = `🚛 ${state.trailer}`;
           buildActions();
           show('ts-s-actions');
@@ -1053,9 +1056,7 @@ body{background-image:none!important;background:transparent!important}
       pills.innerHTML = '';
       const plates = window._dockPlates || {};
       let firstAvail = null;
-      const _dFrom = window._doorsFrom || 28;
-      const _dTo   = window._doorsTo   || 42;
-      for (let d = _dFrom; d <= _dTo; d++) {
+      for (let d = 28; d <= 42; d++) {
         const isOOO = plates[String(d)]?.status === 'Out of Order';
         const p = document.createElement('div');
         if (isOOO) {
@@ -1398,10 +1399,7 @@ body{background-image:none!important;background:transparent!important}
       <div class="panel" style="grid-column:1/-1;">
         <div class="panel-hd">
           <div class="panel-title"><div class="ptdot" style="background:var(--red)"></div>Trailer Issue Reports</div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span class="badge badge-num" id="supIssueCount">0</span>
-            <button class="btn btn-default btn-sm" id="btnRefreshIssues" style="padding:4px 10px;font-size:10px;">↻ Refresh</button>
-          </div>
+          <span class="badge badge-num" id="supIssueCount">0</span>
         </div>
         <div class="panel-body-flush" id="supIssueBody">
           <div style="padding:24px;text-align:center;color:var(--t3);font-family:var(--mono);font-size:11px;">No issue reports yet.</div>
@@ -1785,50 +1783,39 @@ body{background-image:none!important;background:transparent!important}
   #dockView .dvp-toggle-label { flex:1; color:var(--t1,#aaa); letter-spacing:.04em; }
   #dockView .dvp-summary { font-size:11px; color:var(--t2,#888); }
   #dockView .dvp-chev { font-size:10px; color:var(--t3,#555); }
-  #dockView .dvp-body {
-    display: none;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
-    max-height: 52vh;
-  }
-  #dockView .dvp-body.dvp-body-open {
-    display: block;
-  }
+  #dockView .dvp-body { display:none; }
+  #dockView .dvp-body.dvp-body-open { display:block; }
   #dockView .dvp-grid {
-    display:grid; grid-template-columns:repeat(auto-fill,minmax(80px,1fr));
-    gap:6px; padding:10px 12px 16px;
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(70px,1fr));
+    gap:5px; padding:8px 10px 12px; max-height:160px; overflow-y:auto;
   }
   #dockView .dvp-card {
     border-radius:10px; border:1.5px solid rgba(255,255,255,.07);
-    background:rgba(255,255,255,.04); padding:10px 8px;
-    display:flex; flex-direction:column; gap:4px; position:relative; overflow:hidden;
-    cursor:pointer; transition:all .14s; min-height:72px;
+    background:rgba(255,255,255,.04); padding:7px 8px;
+    display:flex; flex-direction:column; gap:3px; position:relative; overflow:hidden;
+    cursor:pointer; transition:all .14s;
   }
   #dockView .dvp-card:active { transform:scale(.97); }
-  #dockView .dvp-door-num { font-size:17px; font-weight:800; color:var(--t0,#fff); letter-spacing:-.01em; }
-  #dockView .dvp-status { font-size:11px; font-weight:700; letter-spacing:.04em; color:var(--t2,#888); }
+  #dockView .dvp-door-num { font-size:14px; font-weight:800; color:var(--t0,#fff); letter-spacing:-.01em; }
+  #dockView .dvp-status { font-size:9px; font-weight:700; letter-spacing:.04em; color:var(--t2,#888); }
   #dockView .dvp-ok   { border-color:rgba(25,224,154,.2); } #dockView .dvp-ok .dvp-status { color:#19e09a; }
   #dockView .dvp-svc  { border-color:rgba(245,166,35,.25); } #dockView .dvp-svc .dvp-status { color:#f5a623; }
   #dockView .dvp-ooo  { border-color:rgba(240,74,74,.25); opacity:.6; } #dockView .dvp-ooo .dvp-status { color:#f04a4a; }
   #dockView .dvp-editing { border-color:rgba(24,212,232,.3); background:rgba(24,212,232,.05); }
   #dockView .dvp-select {
     width:100%; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
-    border-radius:6px; color:var(--t0,#fff); font-size:14px; padding:6px 8px;
-    font-family:var(--font); appearance:none; outline:none; margin-top:4px; min-height:36px;
+    border-radius:6px; color:var(--t0,#fff); font-size:11px; padding:4px 5px;
+    font-family:var(--font); appearance:none; outline:none; margin-top:2px;
   }
   #dockView .dvp-save-btn {
-    width:100%; margin-top:6px; padding:8px; border-radius:8px;
-    background:var(--cyan,#18d4e8); border:none; font-weight:700; font-size:13px;
-    color:#000; cursor:pointer; min-height:38px;
+    width:100%; margin-top:4px; padding:5px; border-radius:6px;
+    background:var(--cyan,#18d4e8); border:none; font-weight:700; font-size:11px;
+    color:#000; cursor:pointer;
   }
   #dockView .dvp-note-input {
     width:100%; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1);
-    border-radius:6px; color:var(--t0,#fff); font-size:13px; padding:5px 8px;
-    font-family:var(--font); outline:none; margin-top:4px; resize:none;
-  }
-  #dockView .dvp-toggle {
-    padding:14px 16px; font-size:13px; min-height:48px;
+    border-radius:6px; color:var(--t0,#fff); font-size:10px; padding:3px 5px;
+    font-family:var(--font); outline:none; margin-top:2px; resize:none;
   }
 </style>
 
@@ -2361,51 +2348,527 @@ body{background-image:none!important;background:transparent!important}
   </div>
 </div>
 
-<!-- ── Chat Bubble + Panel ─────────────────────────────────────── -->
-<div id="chatBubble" style="display:none;">
-  <span id="chatBubbleUnread" class="chat-bubble-unread" style="display:none;">0</span>
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-</div>
+<!-- ═══════════════════════════════════════════════════════
+     TEAM CHAT PANEL
+     ═══════════════════════════════════════════════════════ -->
+<style>
+/* ── Chat panel overlay ── */
+#chatPanel {
+  position: fixed;
+  top: 0; right: 0;
+  width: 380px;
+  height: 100vh;
+  background: #0f1117;
+  border-left: 1px solid rgba(255,255,255,.07);
+  display: flex;
+  flex-direction: column;
+  z-index: 900;
+  transform: translateX(100%);
+  transition: transform .28s cubic-bezier(.4,0,.2,1);
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  box-shadow: -12px 0 40px rgba(0,0,0,.5);
+}
+#chatPanel.open { transform: none; }
 
-<div id="chatPanel" class="chat-panel">
-  <div class="chat-panel-hd">
-    <div class="chat-panel-title">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      <span>Team Chat</span>
+/* Header */
+.cp-hd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px 14px;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  flex-shrink: 0;
+  background: #0b0d12;
+}
+.cp-hd-icon {
+  width: 32px; height: 32px;
+  border-radius: 9px;
+  background: rgba(71,200,255,.12);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.cp-hd-icon svg { color: #47c8ff; }
+.cp-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: #eef2ff;
+  letter-spacing: .03em;
+}
+.cp-subtitle {
+  font-size: 10px;
+  color: rgba(238,242,255,.35);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  margin-top: 1px;
+}
+.cp-close {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: rgba(238,242,255,.35);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  transition: background .12s, color .12s;
+  flex-shrink: 0;
+}
+.cp-close:hover { background: rgba(255,255,255,.07); color: #eef2ff; }
+
+/* Channel tabs */
+.cp-channels {
+  display: flex;
+  gap: 3px;
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.cp-channels::-webkit-scrollbar { display: none; }
+.cp-ch-btn {
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: rgba(238,242,255,.4);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .12s;
+  display: flex; align-items: center; gap: 5px;
+}
+.cp-ch-btn:hover { background: rgba(255,255,255,.05); color: rgba(238,242,255,.7); }
+.cp-ch-btn.active {
+  background: rgba(71,200,255,.1);
+  border-color: rgba(71,200,255,.2);
+  color: #47c8ff;
+}
+.cp-ch-hash { opacity: .5; }
+.cp-ch-unread {
+  background: #ff4d4d;
+  color: #fff;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  min-width: 16px;
+  text-align: center;
+}
+
+/* Connection status bar */
+.cp-status {
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  letter-spacing: .04em;
+  color: rgba(238,242,255,.4);
+  background: rgba(255,255,255,.025);
+  border-bottom: 1px solid rgba(255,255,255,.05);
+  flex-shrink: 0;
+  gap: 6px;
+  transition: all .2s;
+}
+.cp-status.connecting { color: #f5a623; }
+.cp-status.error      { color: #ff4d4d; background: rgba(255,77,77,.06); }
+.cp-status.hidden     { display: none; }
+.cp-status-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: cpDotBlink 1.2s ease infinite;
+}
+@keyframes cpDotBlink { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+/* Messages area */
+.cp-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.06) transparent;
+}
+.cp-messages::-webkit-scrollbar { width: 3px; }
+.cp-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 3px; }
+
+/* Day divider */
+.cp-day {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 8px;
+  color: rgba(238,242,255,.2);
+  font-size: 10px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.cp-day::before, .cp-day::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255,255,255,.06);
+}
+
+/* Message row */
+.cp-msg {
+  display: flex;
+  gap: 9px;
+  padding: 4px 8px;
+  border-radius: 9px;
+  transition: background .1s;
+  position: relative;
+  align-items: flex-start;
+  cursor: default;
+}
+.cp-msg:hover { background: rgba(255,255,255,.03); }
+.cp-msg:hover .cp-msg-del { opacity: 1; }
+.cp-msg.cp-mine { flex-direction: row-reverse; }
+
+/* Avatar */
+.cp-avatar {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 1px;
+}
+.cp-mine .cp-avatar { display: none; }
+
+/* Bubble */
+.cp-bubble {
+  max-width: 260px;
+  min-width: 0;
+}
+.cp-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+.cp-mine .cp-meta { flex-direction: row-reverse; }
+.cp-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(238,242,255,.7);
+}
+.cp-time {
+  font-size: 9px;
+  color: rgba(238,242,255,.25);
+}
+.cp-text {
+  font-size: 12px;
+  color: rgba(238,242,255,.85);
+  line-height: 1.5;
+  word-break: break-word;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 10px;
+  padding: 7px 10px;
+}
+.cp-mine .cp-text {
+  background: rgba(71,200,255,.12);
+  border-color: rgba(71,200,255,.18);
+  color: #e0f6ff;
+}
+.cp-text code {
+  background: rgba(0,0,0,.3);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #47c8ff;
+}
+
+/* Image in message */
+.cp-msg-img {
+  margin-top: 5px;
+  max-width: 220px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.08);
+  overflow: hidden;
+  cursor: zoom-in;
+}
+.cp-msg-img img { width: 100%; display: block; }
+
+/* System message */
+.cp-sys {
+  text-align: center;
+  font-size: 10px;
+  color: rgba(238,242,255,.25);
+  padding: 6px 0;
+  letter-spacing: .04em;
+}
+
+/* Delete button */
+.cp-msg-del {
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 20px; height: 20px;
+  border-radius: 5px;
+  border: none;
+  background: rgba(255,77,77,.12);
+  color: #ff4d4d;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0;
+  transition: opacity .12s;
+}
+.cp-mine .cp-msg-del { right: auto; left: 4px; }
+
+/* Loading state */
+.cp-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 24px 0;
+  color: rgba(238,242,255,.3);
+  font-size: 11px;
+}
+.cp-load-dots { display: flex; gap: 4px; }
+.cp-load-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: rgba(71,200,255,.4);
+  animation: cpLdot 1.2s ease infinite;
+}
+.cp-load-dot:nth-child(2) { animation-delay: .2s; }
+.cp-load-dot:nth-child(3) { animation-delay: .4s; }
+@keyframes cpLdot { 0%,60%,100%{transform:scale(.7);opacity:.3} 30%{transform:scale(1);opacity:1} }
+
+/* Error state */
+.cp-err-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 16px;
+  color: rgba(238,242,255,.3);
+  font-size: 11px;
+  text-align: center;
+}
+.cp-err-state button {
+  margin-top: 4px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(71,200,255,.2);
+  background: rgba(71,200,255,.06);
+  color: #47c8ff;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.cp-err-state button:hover { background: rgba(71,200,255,.12); }
+
+/* Image preview strip */
+.cp-img-strip {
+  display: none;
+  gap: 6px;
+  padding: 8px 14px 0;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.cp-img-strip.has-img { display: flex; }
+.cp-thumb-wrap {
+  position: relative;
+  width: 52px; height: 52px;
+  border-radius: 7px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.1);
+  flex-shrink: 0;
+}
+.cp-thumb-wrap img { width: 100%; height: 100%; object-fit: cover; }
+.cp-thumb-rm {
+  position: absolute; top: 2px; right: 2px;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,.8);
+  color: #fff;
+  font-size: 9px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  line-height: 1;
+}
+
+/* Composer */
+.cp-composer-wrap {
+  padding: 8px 14px 14px;
+  flex-shrink: 0;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+.cp-composer {
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color .15s;
+}
+.cp-composer:focus-within {
+  border-color: rgba(71,200,255,.25);
+}
+.cp-composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 6px 6px 6px 12px;
+}
+.cp-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #eef2ff;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: none;
+  min-height: 32px;
+  max-height: 120px;
+  padding: 4px 0;
+  scrollbar-width: thin;
+}
+.cp-input::placeholder { color: rgba(238,242,255,.2); }
+.cp-compose-btns {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.cp-btn {
+  width: 28px; height: 28px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: rgba(238,242,255,.3);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  transition: all .1s;
+}
+.cp-btn:hover { background: rgba(255,255,255,.06); color: rgba(238,242,255,.7); }
+.cp-send {
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  border: none;
+  background: #47c8ff;
+  color: #000;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  transition: opacity .12s, transform .1s;
+  flex-shrink: 0;
+}
+.cp-send:hover { opacity: .85; }
+.cp-send:active { transform: scale(.93); }
+.cp-send:disabled { opacity: .25; cursor: not-allowed; transform: none; }
+
+/* Typing indicator */
+.cp-typing {
+  height: 18px;
+  font-size: 10px;
+  color: rgba(238,242,255,.25);
+  padding: 0 14px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Chat lightbox */
+#chatLightbox {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.92);
+  z-index: 1100;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+}
+#chatLightbox.open { display: flex; }
+#chatLightbox img {
+  max-width: 90vw;
+  max-height: 90vh;
+  border-radius: 10px;
+}
+
+/* Mobile: full width */
+@media (max-width: 480px) {
+  #chatPanel { width: 100vw; }
+}
+</style>
+
+<!-- Chat Panel -->
+<div id="chatPanel">
+  <div class="cp-hd">
+    <div class="cp-hd-icon">
+      <svg width="16" height="16" viewBox="0 0 14 14" fill="none"><path d="M2 2h10a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H8l-3 2v-2H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
     </div>
-    <button class="chat-close-btn" id="chatCloseBtn" aria-label="Close chat">✕</button>
-  </div>
-
-  <div class="chat-channels" id="chatChannels">
-    <!-- tabs injected by JS -->
-  </div>
-
-  <div class="chat-messages" id="chatMessages">
-    <div class="chat-loading">Loading…</div>
-  </div>
-
-  <div class="chat-input-row">
-    <input class="chat-input" id="chatInput" type="text" placeholder="Message…" maxlength="1000" autocomplete="off"/>
-    <button class="chat-send-btn" id="chatSendBtn" aria-label="Send">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-    </button>
-  </div>
-</div>
-
-<!-- Driver name modal -->
-<div class="modal-ov hidden" id="driverNameOv">
-  <div class="modal" style="max-width:320px;">
-    <div class="m-hd">
-      <span class="m-title">Your Name</span>
+    <div>
+      <div class="cp-title">Team Chat</div>
+      <div class="cp-subtitle" id="cpSubtitle">#general</div>
     </div>
-    <div class="m-body" style="padding:16px;">
-      <p style="font-size:13px;color:var(--t1);margin-bottom:12px;">Enter your name so the team knows who you are in chat.</p>
-      <input class="fi" id="driverNameInput" type="text" placeholder="e.g. John" maxlength="40" autocomplete="off"/>
-      <div class="m-btns" style="margin-top:14px;">
-        <button class="btn btn-primary" id="driverNameSaveBtn">Save &amp; Open Chat</button>
+    <button class="cp-close" onclick="window._chatToggle()" title="Close">✕</button>
+  </div>
+
+  <div class="cp-channels" id="cpChannels">
+    <button class="cp-ch-btn active" data-ch="general" onclick="window._chatChannel(this)"><span class="cp-ch-hash">#</span>general</button>
+    <button class="cp-ch-btn" data-ch="dock" onclick="window._chatChannel(this)"><span class="cp-ch-hash">#</span>dock</button>
+    <button class="cp-ch-btn" data-ch="drivers" onclick="window._chatChannel(this)"><span class="cp-ch-hash">#</span>drivers</button>
+    <button class="cp-ch-btn" data-ch="issues" onclick="window._chatChannel(this)"><span class="cp-ch-hash">#</span>issues</button>
+    <button class="cp-ch-btn" data-ch="random" onclick="window._chatChannel(this)"><span class="cp-ch-hash">#</span>random</button>
+  </div>
+
+  <div class="cp-status hidden" id="cpStatus">
+    <span class="cp-status-dot"></span>
+    <span id="cpStatusText">Loading…</span>
+  </div>
+
+  <div class="cp-messages" id="cpMessages">
+    <div class="cp-loading">
+      <div class="cp-load-dots">
+        <div class="cp-load-dot"></div>
+        <div class="cp-load-dot"></div>
+        <div class="cp-load-dot"></div>
       </div>
     </div>
   </div>
+
+  <div class="cp-typing" id="cpTyping"></div>
+
+  <div class="cp-img-strip" id="cpImgStrip"></div>
+
+  <div class="cp-composer-wrap">
+    <div class="cp-composer" id="cpComposer">
+      <div class="cp-composer-row">
+        <textarea class="cp-input" id="cpInput" rows="1"
+          placeholder="Message #general"
+          onkeydown="window._chatKey(event)"
+          oninput="window._chatInputChange(this)"></textarea>
+        <div class="cp-compose-btns">
+          <button class="cp-btn" onclick="document.getElementById('cpFileIn').click()" title="Attach image">🖼</button>
+          <button class="cp-send" id="cpSend" onclick="window._chatSend()" disabled>↑</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="cpFileIn" accept="image/*" style="display:none" onchange="window._chatFileChange(this)"/>
+</div>
+
+<!-- Chat lightbox -->
+<div id="chatLightbox" onclick="this.classList.remove('open')">
+  <img id="chatLbImg" src="" alt=""/>
 </div>
 
 </body>

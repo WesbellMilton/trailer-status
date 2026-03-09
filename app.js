@@ -1,6 +1,6 @@
 (() => {
   const CSRF = {"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"};
-  let ROLE=null, VERSION="", _locationId=1, trailers={}, dockPlates={}, doorBlocks={}, confirmations=[];
+  let ROLE=null, VERSION="", _locationId=1, _doorsFrom=28, _doorsTo=42, trailers={}, dockPlates={}, doorBlocks={}, confirmations=[];
   const plateEditOpen={}, shuntOpen={};
   const el=id=>document.getElementById(id);
   const path=()=>location.pathname.toLowerCase();
@@ -57,7 +57,9 @@
   };
   const esc=s=>String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
   // Shared constants
-  const DOORS=[];for(let _d=28;_d<=42;_d++)DOORS.push(String(_d));
+  let DOORS=[];
+  function rebuildDoors(){DOORS=[];for(let _d=_doorsFrom;_d<=_doorsTo;_d++)DOORS.push(String(_d));}
+  rebuildDoors(); // init with defaults (28-42) — overwritten after whoami resolves
   const canEditPlates=()=>ROLE==="dispatcher"||ROLE==="dock"||ROLE==="management"||ROLE==="admin";
   const canEditTrailers=()=>ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin";
 
@@ -516,9 +518,10 @@
     const lu=el("lastUpdated");if(lu)lu.textContent="Updated "+fmtTime(Date.now());
     renderDockMap();
     const occupied=getOccupiedDoors();
-    const occupiedInRange=Object.keys(occupied).filter(d=>{const n=parseInt(d);return n>=28&&n<=42;}).length;
+    const occupiedInRange=Object.keys(occupied).filter(d=>{const n=parseInt(d);return n>=_doorsFrom&&n<=_doorsTo;}).length;
+    const totalDoors=_doorsTo-_doorsFrom+1;
     const badge=el("dockMapFreeCount");
-    if(badge)badge.textContent=`${15-occupiedInRange} free`;
+    if(badge)badge.textContent=`${totalDoors-occupiedInRange} free`;
     if(_selectedTrailer)renderDetailPanel(_selectedTrailer);
     renderDspOccupancy();
     renderDspPlates();
@@ -2044,6 +2047,10 @@
   async function loadInitial(){
     try{
       const w=await apiJson("/api/whoami");ROLE=w?.role;VERSION=w?.version||"";_locationId=w?.locationId||1;
+      _doorsFrom=w?.doorsFrom||28;_doorsTo=w?.doorsTo||42;
+      rebuildDoors();
+      // Expose for driver view and other modules
+      window._doorsFrom=_doorsFrom;window._doorsTo=_doorsTo;
       if(w?.redirectTo&&ROLE&&w.redirectTo!==location.pathname){location.replace(w.redirectTo);return;}
     }catch{ROLE=null;VERSION="";}
     el("verText").textContent=VERSION||"—";

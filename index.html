@@ -1049,14 +1049,25 @@ body{background-image:none!important;background:transparent!important}
       document.getElementById('ts-ds-title').innerHTML = titleHTML;
       const pills = document.getElementById('ts-ds-door-pills');
       pills.innerHTML = '';
+      const plates = window._dockPlates || {};
+      let firstAvail = null;
       for (let d = 28; d <= 42; d++) {
+        const isOOO = plates[String(d)]?.status === 'Out of Order';
         const p = document.createElement('div');
-        p.className = 'ts-eta-pill' + (d === 28 ? ' ts-sel' : '');
-        p.textContent = 'Door ' + d;
-        p.addEventListener('click', () => { pills.querySelectorAll('.ts-eta-pill').forEach(x => x.classList.remove('ts-sel')); p.classList.add('ts-sel'); state.door = d; });
+        if (isOOO) {
+          p.className = 'ts-eta-pill ts-eta-pill-ooo';
+          p.textContent = 'Door ' + d + ' — OOO';
+          p.title = 'Out of Order — cannot be assigned';
+          p.style.cssText = 'opacity:.38;cursor:not-allowed;text-decoration:line-through;';
+        } else {
+          p.className = 'ts-eta-pill' + (!firstAvail ? ' ts-sel' : '');
+          p.textContent = 'Door ' + d;
+          p.addEventListener('click', () => { pills.querySelectorAll('.ts-eta-pill:not(.ts-eta-pill-ooo)').forEach(x => x.classList.remove('ts-sel')); p.classList.add('ts-sel'); state.door = d; });
+          if (!firstAvail) { firstAvail = d; state.door = d; }
+        }
         pills.appendChild(p);
       }
-      state.door = 28;
+      if (!firstAvail) { state.door = null; }
       
       const submitBtn = document.getElementById('ts-ds-submit');
       const newBtn = submitBtn.cloneNode(true);

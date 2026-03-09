@@ -2223,6 +2223,8 @@ body.dim-mode .dock-search-bar { filter: brightness(1.4); }
 .dr-door-btn:hover:not(:disabled) { background:rgba(245,166,35,.1); border-color:var(--amber); color:var(--amber); }
 .dr-door-btn:disabled { opacity:.35; cursor:not-allowed; }
 .dr-door-occ { opacity:.4 !important; }
+.dr-door-ooo { opacity:.38 !important; border-color:rgba(240,74,74,.35) !important; color:var(--red) !important; }
+.dr-door-ooo .dr-occ-lbl { color:var(--red); }
 .dr-sel { border-color:var(--cyan) !important; background:rgba(24,212,232,.12) !important; color:var(--cyan) !important; }
 .dr-occ-lbl { font-size:8px; color:var(--t3); font-family:var(--mono); white-space:nowrap; overflow:hidden; max-width:100%; }
 

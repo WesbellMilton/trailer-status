@@ -58,10 +58,26 @@ router.post('/api/upsert', requireXHR, _rds, async (req, res) => {
     const allowed = ['Incoming', 'Dropped', 'Loading', 'Dock Ready', 'Ready', 'Departed', ''];
     if (!allowed.includes(finalStatus)) return res.status(400).send('Invalid status');
 
+    // ── Out of Order door check ──────────────────────────────────────────────
+    // Hard-block assignment to any door marked Out of Order on the dock plates.
+    const doorChanged = door && door !== (existing?.door || '');
+    if (doorChanged) {
+      const plate = await get(
+        `SELECT status FROM dockplates WHERE door=? AND location_id=?`,
+        [door, req.user?.locationId || 1]
+      );
+      if (plate?.status === 'Out of Order') {
+        return res.status(409).json({
+          ooo: true,
+          door,
+          message: `Door ${door} is marked Out of Order and cannot be assigned.`
+        });
+      }
+    }
+
     // ── Door conflict check ───────────────────────────────────────────────────
     // Warn (not block) if the requested door is already occupied by a different
     // active trailer. Client can pass force:true to proceed anyway.
-    const doorChanged = door && door !== (existing?.door || '');
     if (doorChanged && !req.body.force) {
       const occupant = await get(
         `SELECT trailer FROM trailers WHERE door=? AND trailer!=? AND status NOT IN ('Departed','')`,
@@ -165,6 +181,9 @@ router.post('/api/shunt', requireXHR, async (req, res) => {
     if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send('Invalid door (28–42)');
     const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
     if (!existing) return res.status(404).send('Trailer not found');
+    // Block shunt to OOO door
+    const shuntPlate = await get(`SELECT status FROM dockplates WHERE door=?`, [door]);
+    if (shuntPlate?.status === 'Out of Order') return res.status(409).json({ ooo: true, door, message: `Door ${door} is Out of Order.` });
     await run(`UPDATE trailers SET door=?,status='Dropped',updatedAt=? WHERE trailer=?`, [door, Date.now(), trailer]);
     await audit(req, actor, 'trailer_shunt', 'trailer', trailer, { fromDoor: existing.door || '—', toDoor: door });
     await broadcastTrailers();

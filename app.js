@@ -1383,7 +1383,11 @@
     const doors=DOORS;
     grid.innerHTML=doors.map(d=>{
       const occ=occupied[d]||doorBlocks[d];
-      return`<button class="dr-door-btn ${occ?"dr-door-occ":""}" data-door="${d}" ${occ?"disabled":""} onclick="selectReserveDoor(this,'${d}')">${d}${occ?`<span class='dr-occ-lbl'>${occ.trailer||"Block"}</span>`:""}</button>`;
+      const isOOO=dockPlates[String(d)]?.status==="Out of Order";
+      const disabled=occ||isOOO;
+      const lbl=isOOO?"OOO":occ?(occ.trailer||"Block"):null;
+      const cls=`dr-door-btn${isOOO?" dr-door-ooo":occ?" dr-door-occ":""}`;
+      return`<button class="${cls}" data-door="${d}" ${disabled?"disabled":""} onclick="selectReserveDoor(this,'${d}')">${d}${lbl?`<span class='dr-occ-lbl'>${lbl}</span>`:""}</button>`;
     }).join("");
   }
 
@@ -1560,6 +1564,10 @@
     if(force)payload.force=true;
     try{
       const res=await apiJson("/api/upsert",{method:"POST",headers:CSRF,body:JSON.stringify(payload)});
+      if(res?.ooo){
+        toast("⛔ Door Out of Order",res.message||`Door ${res.door} is Out of Order.`,"err");
+        return;
+      }
       if(res?.conflict){
         const ok=await showModal("⚠️ Door Conflict",res.message||`Door ${res.door} is already occupied.`,"Assign Anyway","Cancel");
         if(ok)return dispSave(true);
@@ -1950,7 +1958,7 @@
         triggered=true;ind.classList.add("ptr-loading");spin.style.display="block";txt.textContent="Refreshing…";haptic("light");
         try{
           const[t,p]=await Promise.all([apiJson("/api/state").catch(()=>null),apiJson("/api/dockplates").catch(()=>null)]);
-          if(t)trailers=t;if(p)dockPlates=p;
+          if(t)trailers=t;if(p){dockPlates=p;window._dockPlates=p;}
           renderBoard();renderDockView();renderPlates();renderSupBoard();haptic("success");
         }catch{}
         await new Promise(r=>setTimeout(r,600));
@@ -2407,7 +2415,7 @@
         apiJson("/api/doorblocks").catch(()=>null),
       ]);
       if(t){trailers=t;renderBoard();if(isDock())renderDockView();if(isSuper())renderSupBoard();}
-      if(p&&!isDriver()){dockPlates=p;renderPlates();}
+      if(p&&!isDriver()){dockPlates=p;renderPlates();}window._dockPlates=dockPlates;
       if(b&&!isDriver()){doorBlocks=b;renderDockMap();}
     }catch{}
   }
@@ -2469,7 +2477,7 @@
         clearTimeout(connectWs._etaTimer);
         connectWs._etaTimer=setTimeout(function tickEta(){renderBoard();if(isDock()){renderDockView();dvUpdateIncoming();}connectWs._etaTimer=setTimeout(tickEta,60000);},60000);
       }
-      else if(type==="dockplates"){dockPlates=payload||{};if(!isDriver()){renderPlates();if(isDock()){renderDockPlatesPanel();}}}
+      else if(type==="dockplates"){dockPlates=payload||{};window._dockPlates=dockPlates;if(!isDriver()){renderPlates();if(isDock()){renderDockPlatesPanel();}}}
       else if(type==="doorblocks"){doorBlocks=payload||{};renderDockMap();renderBoard();}
       else if(type==="confirmations"){confirmations=Array.isArray(payload)?payload:[];if(isSuper())renderSupConf();}
       else if(type==="ping"){/* keepalive */}

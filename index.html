@@ -1396,7 +1396,10 @@ body{background-image:none!important;background:transparent!important}
       <div class="panel" style="grid-column:1/-1;">
         <div class="panel-hd">
           <div class="panel-title"><div class="ptdot" style="background:var(--red)"></div>Trailer Issue Reports</div>
-          <span class="badge badge-num" id="supIssueCount">0</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="badge badge-num" id="supIssueCount">0</span>
+            <button class="btn btn-default btn-sm" id="btnRefreshIssues" style="padding:4px 10px;font-size:10px;">↻ Refresh</button>
+          </div>
         </div>
         <div class="panel-body-flush" id="supIssueBody">
           <div style="padding:24px;text-align:center;color:var(--t3);font-family:var(--mono);font-size:11px;">No issue reports yet.</div>

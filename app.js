@@ -261,6 +261,13 @@
   el("modalOv")?.addEventListener("click",e=>{if(e.target===el("modalOv")){el("modalOv").classList.add("hidden");if(_mr){_mr(false);_mr=null;}}});
   el("dmModalCancel")?.addEventListener("click",()=>el("dmModalOv")?.classList.add("hidden"));
   el("dmModalOv")?.addEventListener("click",e=>{if(e.target===el("dmModalOv"))el("dmModalOv").classList.add("hidden");});
+  // Issue reports refresh button
+  el("btnRefreshIssues")?.addEventListener("click",()=>loadIssueReports());
+  // Issue photo lightbox close
+  const _closeLightbox=()=>el("issueLightbox")?.classList.remove("open");
+  el("issueLightboxClose")?.addEventListener("click",_closeLightbox);
+  el("issueLightbox")?.addEventListener("click",e=>{if(e.target===el("issueLightbox"))_closeLightbox();});
+  document.addEventListener("keydown",e=>{if(e.key==="Escape"&&el("issueLightbox")?.classList.contains("open"))_closeLightbox();});
 
   function lockScroll(){document.body.style.overflow="hidden";}
   function unlockScroll(){document.body.style.overflow="";}
@@ -2574,6 +2581,8 @@
           if(!isDriver()){
             if(isDock())toast("⚠️ Issue Filed",`${trailer}${door?" Door "+door+" — ":""}${payload.note?.slice(0,60)||""}`,"warn",10000);
             _notifPush({icon:"⚠️",title:`Issue: ${trailer}`,body:`${door?"Door "+door+" — ":""}${payload.note?.slice(0,80)||""}`,kind:"issue",trailer,door,at:Date.now()});
+            // Refresh issue reports panel live if management view is visible
+            if(el('managementView')?.style.display!=="none")loadIssueReports();
           }
         } else {
           if(payload?.message)_notifPush({icon:"🔔",title:payload.title||"Notification",body:payload.message,kind:"generic",at:Date.now()});
@@ -3220,6 +3229,56 @@
   function updateOffloadSubmitState(){}
   function updateSafetySubmitState(){}
   function openDockIssueModal(t,d){openQuickIssue(t,d||"");}
-  async function loadIssueReports(){}
+  async function loadIssueReports(){
+    const body=el('supIssueBody');
+    const countBadge=el('supIssueCount');
+    if(!body)return;
+    try{
+      const rows=await apiJson('/api/issue-reports?limit=100');
+      if(!rows||!rows.length){
+        body.innerHTML='<div style="padding:24px;text-align:center;color:var(--t3);font-family:var(--mono);font-size:11px;">No issue reports yet.</div>';
+        if(countBadge)countBadge.textContent='0';
+        return;
+      }
+      if(countBadge)countBadge.textContent=rows.length>=100?'99+':String(rows.length);
+      const rowsHtml=rows.map(r=>{
+        const timeStr=fmtTime(r.at);
+        const agoStr=timeAgo(r.at);
+        const photoBtn=r.has_photo
+          ?`<button class="issue-view-photo" data-id="${esc(r.id)}" title="View photo" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:4px;border:1px solid rgba(245,166,35,.3);background:rgba(245,166,35,.08);color:var(--amber);font-size:10px;font-family:var(--mono);cursor:pointer;white-space:nowrap;">📷 Photo</button>`
+          :'<span style="color:var(--t3);font-size:10px;font-family:var(--mono);">—</span>';
+        const noteHtml=r.note
+          ?`<span title="${esc(r.note)}" style="display:block;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.note)}</span>`
+          :'<span style="color:var(--t3);">—</span>';
+        return `<tr>
+          <td class="mono muted" title="${esc(timeStr)}">${esc(agoStr)}</td>
+          <td class="mono" style="font-weight:600;color:var(--amber);">${esc(r.trailer||'—')}</td>
+          <td class="mono" style="color:var(--t1);">${r.door?'Door '+esc(r.door):'—'}</td>
+          <td style="font-size:11px;color:var(--t1);">${noteHtml}</td>
+          <td>${photoBtn}</td>
+        </tr>`;
+      }).join('');
+      body.innerHTML=`<div class="data-tbl-wrap"><table>
+        <thead><tr><th>When</th><th>Trailer</th><th>Door</th><th>Note</th><th>Photo</th></tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table></div>`;
+      // Wire photo buttons
+      body.querySelectorAll('.issue-view-photo').forEach(btn=>{
+        btn.addEventListener('click',()=>openIssueLightboxById(btn.dataset.id));
+      });
+    }catch(e){
+      body.innerHTML='<div style="padding:16px;color:var(--red);font-family:var(--mono);font-size:11px;">Failed to load issue reports.</div>';
+    }
+  }
+
+  async function openIssueLightboxById(id){
+    const lb=el('issueLightbox');
+    const img=el('issueLightboxImg');
+    if(!lb||!img)return;
+    img.src='';
+    lb.classList.add('open');
+    img.src=`/api/issue-reports/${encodeURIComponent(id)}/photo`;
+    img.onerror=()=>lb.classList.remove('open');
+  }
 
 })();

@@ -1460,6 +1460,53 @@
   }
   el("btnThemeToggle")?.addEventListener("click",toggleTheme);
   initTheme();
+
+  // ── Server Uptime Indicator ───────────────────────────────────────────────
+  // Polls /api/ping every 60s and shows a live dot + rolling uptime % in topbar.
+  // Tracks last 20 checks (20 min window) to calculate uptime %.
+  (function initUptimeChip(){
+    const chip=el("uptimeChip"),dot=el("uptimeDot"),txt=el("uptimeText");
+    if(!chip)return;
+    const MAX=20; // rolling window (20 checks × 60s = 20 min)
+    let history=[]; // true=up, false=down
+    let consecutiveDown=0;
+
+    function pct(){
+      if(!history.length)return 100;
+      return Math.round(history.filter(Boolean).length/history.length*100);
+    }
+
+    async function check(){
+      let up=false;
+      try{
+        const r=await fetch("/api/ping",{cache:"no-store"});
+        up=r.ok;
+      }catch{}
+      history.push(up);
+      if(history.length>MAX)history.shift();
+      consecutiveDown=up?0:consecutiveDown+1;
+
+      // Update chip visibility & dot state
+      chip.style.display="";
+      const p=pct();
+      if(consecutiveDown>=2){
+        dot.className="live-dot bad";
+        txt.textContent="Server down";
+        chip.title="Server is not responding";
+      } else if(p<100){
+        dot.className="live-dot warn";
+        txt.textContent=`Up ${p}%`;
+        chip.title=`Server uptime: ${p}% (last ${history.length} min)`;
+      } else {
+        dot.className="live-dot ok";
+        txt.textContent="100%";
+        chip.title=`Server uptime: 100% (last ${history.length} min)`;
+      }
+    }
+
+    // First check after 5s (let page settle), then every 60s
+    setTimeout(()=>{check();setInterval(check,60000);},5000);
+  })();
   function initDockRememberLogin(){try{if(ROLE)localStorage.setItem("wb_last_role",ROLE);}catch{}}
 
   function syncDockWsDot(state){

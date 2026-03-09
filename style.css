@@ -2762,8 +2762,6 @@ img,video,embed,object,iframe {
   height:calc(100vh - 54px);
   height:calc(100dvh - 54px);
   overflow:hidden;
-  /* iOS GPU layer */
-  -webkit-transform:translateZ(0); transform:translateZ(0);
 }
 
 /* ── LEFT COLUMN ── */
@@ -2778,9 +2776,6 @@ img,video,embed,object,iframe {
 .dsp-rows-area{
   flex:1;min-height:0;
   overflow-y:auto;overflow-x:hidden;
-  -webkit-overflow-scrolling:touch;
-  overscroll-behavior-y:contain;
-  touch-action:pan-y;
   display:flex;flex-direction:column;
 }
 .dsp-rows-area::-webkit-scrollbar{width:4px}
@@ -2790,8 +2785,6 @@ img,video,embed,object,iframe {
 .dsp-panels-area{
   flex:0 0 auto;
   overflow-y:auto;overflow-x:hidden;
-  -webkit-overflow-scrolling:touch;
-  overscroll-behavior-y:contain;
   max-height:55vh; /* cap so it never crushes the rows */
   border-top:1px solid var(--divider);
 }
@@ -2949,7 +2942,7 @@ img,video,embed,object,iframe {
 }
 
 /* ── RIGHT COLUMN ── */
-.dsp-right{ -webkit-overflow-scrolling:touch;
+.dsp-right{
   width:340px;flex-shrink:0;
   display:flex;flex-direction:column;
   background:var(--s0);
@@ -3096,7 +3089,7 @@ img,video,embed,object,iframe {
 
 
 /* ── Right panel default state (role controls) ── */
-.dsp-right-default{ -webkit-overflow-scrolling:touch;
+.dsp-right-default{
   display:flex;flex-direction:column;
   height:100%;overflow-y:auto;
   min-height:0;
@@ -4509,10 +4502,8 @@ select option { background: #0d1119; }
   /* ── Workspace fills viewport minus fixed chrome ── */
   .dsp-workspace{
     flex-direction:column;
-    height:calc(100vh - 48px - 56px);
     height:calc(100dvh - 48px - 56px);
     overflow:hidden;
-    -webkit-transform:translateZ(0); transform:translateZ(0);
   }
   .dsp-left{
     flex:1;min-height:0;width:100%;
@@ -4729,7 +4720,7 @@ select option { background: #0d1119; }
 .dvp-chev { flex-shrink: 0; font-size: 10px; transition: transform .2s; }
 
 .dvp-body { overflow: hidden; max-height: 0; transition: max-height .28s cubic-bezier(.22,1,.36,1); }
-.dvp-body.dvp-body-open { max-height: 800px; }
+.dvp-body.dvp-body-open { max-height: 52vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
 .dvp-grid {
   display: grid;
@@ -4759,7 +4750,7 @@ select option { background: #0d1119; }
 }
 .dvp-door-label {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--t3);
   letter-spacing: .04em;
@@ -4771,7 +4762,7 @@ select option { background: #0d1119; }
 }
 .dvp-occ {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
   color: var(--t2);
   white-space: nowrap;
   overflow: hidden;
@@ -4780,7 +4771,7 @@ select option { background: #0d1119; }
   text-align: center;
 }
 .dvp-note {
-  font-size: 9px;
+  font-size: 11px;
   color: var(--t3);
   text-align: center;
   white-space: nowrap;
@@ -5742,185 +5733,678 @@ select option { background: #0d1119; }
   .dvp-edit-open-btn { min-height:32px !important; }
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   GLASS COMMAND — CHAT SYSTEM
+══════════════════════════════════════════════════════════════════ */
 
-/* ═══════════════════════════════════════════════════════════════
-   MOBILE COMPATIBILITY PATCH — iPhone & Samsung
-   Covers: iOS Safari, Chrome Mobile, Samsung Internet
-   ═══════════════════════════════════════════════════════════════ */
-
-/* ── Universal touch scroll fix ── */
-* {
-  -webkit-tap-highlight-color: transparent;
+/* ── Bubble ─────────────────────────────────────────────────────── */
+.gc-bubble {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 301;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: rgba(255,255,255,.45);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color .2s, background .2s, color .2s, transform .15s cubic-bezier(.34,1.56,.64,1);
+  box-shadow: 0 2px 12px rgba(0,0,0,.35);
+}
+.gc-bubble:hover {
+  background: rgba(255,255,255,.09);
+  border-color: rgba(255,255,255,.22);
+  color: rgba(255,255,255,.85);
+  transform: scale(1.06);
+}
+.gc-bubble:active { transform: scale(.93); }
+.gc-bubble.gc-bubble--open {
+  background: rgba(255,255,255,.08);
+  border-color: rgba(255,255,255,.2);
+  color: rgba(255,255,255,.9);
 }
 
-/* ── Prevent body bounce on iOS ── */
-body {
-  overscroll-behavior-y: none;
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
+.gc-unread-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: #e05252;
+  color: #fff;
+  font-size: 9px;
+  font-family: var(--mono);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--bg-soft);
+  pointer-events: none;
+  letter-spacing: .01em;
 }
 
-/* ── Input zoom prevention on iOS (font-size must be ≥16px to prevent zoom) ── */
-@media (max-width: 768px) {
-  input[type="text"],
-  input[type="search"],
-  input[type="number"],
-  input[type="email"],
-  input[type="password"],
-  textarea,
-  select {
-    font-size: 16px !important;
-    /* override where fonts are smaller — visual size controlled by scale */
+/* ── Panel ──────────────────────────────────────────────────────── */
+.gc-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 300;
+  width: 380px;
+  background: rgba(10,13,18,.97);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border-left: 1px solid rgba(255,255,255,.055);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .28s cubic-bezier(.22,1,.36,1);
+  box-shadow: -12px 0 48px rgba(0,0,0,.55);
+}
+.gc-panel.gc-panel--open {
+  transform: translateX(0);
+}
+
+
+
+/* mobile: bottom sheet */
+@media (max-width: 640px) {
+  .gc-panel {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 88vh;
+    border-left: none;
+    border-top: 1px solid rgba(255,255,255,.07);
+    border-radius: 20px 20px 0 0;
+    transform: translateY(100%);
+    transition: transform .3s cubic-bezier(.22,1,.36,1);
+    box-shadow: 0 -8px 40px rgba(0,0,0,.6);
   }
-
-  /* Exception: inputs inside dock view use 16px naturally already */
-  #dockView .dv-scan-input,
-  #dockView .dv-search-input,
-  #driverView input,
-  #driverView select {
-    font-size: 16px !important;
-  }
+  .gc-panel.gc-panel--open { transform: translateY(0); }
+  .gc-bubble { bottom: 18px; right: 18px; }
 }
 
-/* ── Dock view full height including iOS dynamic toolbar ── */
-#dockView {
-  height: 100%;
-  height: 100dvh;
+/* ── Header ─────────────────────────────────────────────────────── */
+.gc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 18px 14px;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+}
+.gc-header-left {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.gc-header-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255,255,255,.5);
+}
+.gc-header-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,.75);
+  letter-spacing: .01em;
+}
+.gc-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.07);
+  background: rgba(255,255,255,.04);
+  color: rgba(255,255,255,.35);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .15s;
+}
+.gc-close:hover {
+  background: rgba(255,255,255,.09);
+  color: rgba(255,255,255,.7);
+  border-color: rgba(255,255,255,.14);
 }
 
-#dockView .dv-shell {
-  height: 100%;
-  height: 100dvh;
-  /* iOS Safari: fill-available fallback */
-  height: -webkit-fill-available;
+/* ── Channel pills ───────────────────────────────────────────────── */
+.gc-channels {
+  display: flex;
+  gap: 3px;
+  padding: 10px 14px 8px;
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.gc-channels::-webkit-scrollbar { display: none; }
+
+.gc-ch-pill {
+  position: relative;
+  padding: 4px 11px;
+  border-radius: 20px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: rgba(255,255,255,.3);
+  font-size: 11px;
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: .03em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .15s;
+  flex-shrink: 0;
+}
+.gc-ch-pill:hover {
+  color: rgba(255,255,255,.6);
+  background: rgba(255,255,255,.04);
+}
+.gc-ch-pill.active {
+  color: rgba(255,255,255,.88);
+  border-color: rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+}
+.gc-ch-dot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e05252;
+  border: 1.5px solid rgba(10,13,18,.92);
 }
 
-/* ── Dock plates panel: scrollable on all mobile ── */
-#dockView .dvp-grid {
-  -webkit-overflow-scrolling: touch !important;
-  overflow-y: auto !important;
-  touch-action: pan-y !important;
-}
-
-/* ── Cards area: ensure smooth scroll on all devices ── */
-#dockView .dv-cards {
-  -webkit-overflow-scrolling: touch !important;
-  touch-action: pan-y !important;
-}
-
-/* ── Filter pills: horizontal scroll on mobile ── */
-#dockView .dv-filters {
+/* ── Messages area ───────────────────────────────────────────────── */
+.gc-messages {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 14px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
+}
+.gc-messages::-webkit-scrollbar { width: 3px; }
+.gc-messages::-webkit-scrollbar-track { background: transparent; }
+.gc-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 2px; }
+
+/* empty / loading state */
+.gc-empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 0;
+}
+.gc-empty-icon { font-size: 28px; opacity: .35; }
+.gc-empty-text { font-size: 12px; color: rgba(255,255,255,.25); font-family: var(--mono); }
+
+/* date separator */
+.gc-date-sep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 6px;
+  font-size: 10px;
+  font-family: var(--mono);
+  color: rgba(255,255,255,.2);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.gc-date-sep::before,
+.gc-date-sep::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255,255,255,.05);
 }
 
-/* ── Dispatch panels area mobile bottom sheet ── */
-@media (max-width: 768px) {
-  .dsp-panels-area {
-    -webkit-overflow-scrolling: touch !important;
-    touch-action: pan-y !important;
-  }
-  .dsp-right {
-    -webkit-overflow-scrolling: touch !important;
-    touch-action: pan-y !important;
-    /* Safe area for home bar */
-    padding-bottom: max(16px, env(safe-area-inset-bottom, 16px)) !important;
-  }
-  .dsp-rows-area {
-    -webkit-overflow-scrolling: touch !important;
-    touch-action: pan-y !important;
-  }
+/* load more */
+.gc-load-more {
+  text-align: center;
+  padding: 6px 0 10px;
+}
+.gc-load-more-btn {
+  padding: 5px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,.07);
+  background: transparent;
+  color: rgba(255,255,255,.3);
+  font-size: 10px;
+  font-family: var(--mono);
+  cursor: pointer;
+  transition: all .15s;
+}
+.gc-load-more-btn:hover { background: rgba(255,255,255,.05); color: rgba(255,255,255,.6); }
 
-  /* Buttons: min touch target 44px (WCAG / Apple HIG) */
-  .dsp-next-btn,
-  .dv-cta-btn,
-  .dvp-toggle,
-  .dv-fpill,
-  .cp-ch-btn {
-    min-height: 44px;
-    min-width: 44px;
-  }
+/* ── Message row ─────────────────────────────────────────────────── */
+.gc-msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 82%;
+  animation: gcMsgIn .22s cubic-bezier(.22,1,.36,1) both;
+}
+@keyframes gcMsgIn {
+  from { opacity:0; transform:translateY(8px) scale(.98); }
+  to   { opacity:1; transform:none; }
+}
+.gc-msg--mine  { align-self: flex-end;  align-items: flex-end; }
+.gc-msg--theirs{ align-self: flex-start; align-items: flex-start; }
 
-  /* Chat panel: full width, avoid notch/home bar */
-  #chatPanel {
-    width: 100vw;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  .cp-composer-wrap {
-    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
-  }
+/* consecutive messages from same sender — tighten gap */
+.gc-msg--cont  { margin-top: 1px; }
+.gc-msg--cont .gc-msg-meta { display: none; }
 
-  /* Prevent horizontal overflow on dispatch */
-  #dispatchView {
-    overflow-x: hidden;
-  }
+/* group spacing */
+.gc-msg--new-group { margin-top: 10px; }
 
-  /* Bottom nav safe area */
-  .bottom-nav {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  .bottom-nav-inner {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
+.gc-msg-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 4px;
+  margin-bottom: 3px;
+}
+.gc-msg-sender {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,.55);
+  letter-spacing: .01em;
+}
+.gc-msg--mine .gc-msg-sender { color: rgba(245,166,35,.7); }
+.gc-msg-time {
+  font-size: 10px;
+  font-family: var(--mono);
+  color: rgba(255,255,255,.18);
+  opacity: 0;
+  transition: opacity .15s;
+}
+.gc-msg:hover .gc-msg-time { opacity: 1; }
+
+/* bubble */
+.gc-msg-bubble {
+  position: relative;
+  padding: 8px 12px;
+  border-radius: 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  word-break: break-word;
+  transition: background .1s;
+  cursor: default;
+}
+.gc-msg--mine  .gc-msg-bubble {
+  background: rgba(245,166,35,.13);
+  border: 1px solid rgba(245,166,35,.18);
+  border-bottom-right-radius: 4px;
+  color: rgba(255,255,255,.88);
+}
+.gc-msg--theirs .gc-msg-bubble {
+  background: rgba(255,255,255,.055);
+  border: 1px solid rgba(255,255,255,.07);
+  border-bottom-left-radius: 4px;
+  color: rgba(255,255,255,.82);
+}
+.gc-msg-bubble:hover { filter: brightness(1.06); }
+
+/* action bar (reply + react) — hidden until hover */
+.gc-msg-actions {
+  display: flex;
+  gap: 3px;
+  padding: 2px 4px;
+  opacity: 0;
+  transition: opacity .12s;
+  pointer-events: none;
+}
+.gc-msg:hover .gc-msg-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.gc-msg-action-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.07);
+  background: rgba(255,255,255,.04);
+  color: rgba(255,255,255,.35);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .12s;
+}
+.gc-msg-action-btn:hover {
+  background: rgba(255,255,255,.09);
+  color: rgba(255,255,255,.7);
+  border-color: rgba(255,255,255,.15);
 }
 
-/* ── iPhone notch / Dynamic Island: top safe area ── */
-@supports (padding-top: env(safe-area-inset-top)) {
-  #dockView .dv-topbar {
-    padding-top: calc(10px + env(safe-area-inset-top, 0px));
-  }
-  #driverView .ts-topbar {
-    padding-top: calc(20px + env(safe-area-inset-top, 0px));
-  }
-  .topbar {
-    padding-top: env(safe-area-inset-top, 0px);
-  }
+/* reactions row */
+.gc-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 2px 2px;
+}
+.gc-reaction-pill {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px 2px 5px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.04);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  transition: all .12s;
+}
+.gc-reaction-pill:hover { background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.16); }
+.gc-reaction-pill.mine  { border-color: rgba(245,166,35,.3); background: rgba(245,166,35,.08); }
+.gc-reaction-count {
+  font-size: 10px;
+  font-family: var(--mono);
+  font-weight: 600;
+  color: rgba(255,255,255,.45);
+  min-width: 8px;
 }
 
-/* ── Samsung Internet: fix position:fixed with transform ── */
-@media (max-width: 768px) {
-  #dockView,
-  #driverView,
-  #chatPanel {
-    /* Samsung Internet bugfix: force new stacking context */
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
-  }
+/* reply quote */
+.gc-reply-quote {
+  padding: 5px 10px;
+  margin-bottom: 4px;
+  border-left: 2px solid rgba(255,255,255,.2);
+  border-radius: 4px;
+  background: rgba(255,255,255,.03);
+  max-width: 100%;
+  overflow: hidden;
+}
+.gc-reply-quote-sender {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255,255,255,.45);
+  margin-bottom: 2px;
+  font-family: var(--mono);
+}
+.gc-reply-quote-body {
+  font-size: 11px;
+  color: rgba(255,255,255,.3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
 }
 
-/* ── iOS momentum scroll reset after keyboard dismiss ── */
-@media (max-width: 768px) {
-  .dsp-rows-area,
-  #dockView .dv-cards,
-  #dockView .dvp-grid,
-  .cp-messages,
-  .dsp-right,
-  .dsp-panels-area,
-  .dsp-right-default {
-    /* Prevent "rubber band" killing the scroll position */
-    overscroll-behavior: contain;
-  }
+/* photo in message */
+.gc-msg-photo {
+  margin-top: 6px;
+  border-radius: 10px;
+  overflow: hidden;
+  max-width: 220px;
+  cursor: zoom-in;
+  border: 1px solid rgba(255,255,255,.07);
+}
+.gc-msg-photo img {
+  display: block;
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  transition: filter .15s;
+}
+.gc-msg-photo:hover img { filter: brightness(1.1); }
+
+/* ── Emoji picker ────────────────────────────────────────────────── */
+.gc-emoji-picker {
+  position: fixed;
+  z-index: 700;
+  background: rgba(18,22,28,.96);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 28px;
+  padding: 6px 10px;
+  display: flex;
+  gap: 2px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.5);
+  backdrop-filter: blur(16px);
+  animation: gcPickerIn .15s cubic-bezier(.22,1,.36,1) both;
+}
+@keyframes gcPickerIn {
+  from { opacity:0; transform:scale(.85); }
+  to   { opacity:1; transform:scale(1); }
+}
+.gc-emoji-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .1s, transform .1s;
+}
+.gc-emoji-btn:hover { background: rgba(255,255,255,.08); transform: scale(1.2); }
+.gc-emoji-btn:active { transform: scale(.9); }
+
+/* ── Reply banner ────────────────────────────────────────────────── */
+.gc-reply-banner {
+  flex-shrink: 0;
+  border-top: 1px solid rgba(255,255,255,.04);
+  background: rgba(255,255,255,.025);
+  padding: 8px 14px;
+  animation: gcSlideUp .15s ease both;
+}
+@keyframes gcSlideUp { from { opacity:0; transform:translateY(4px) } to { opacity:1; transform:none } }
+.gc-reply-banner-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gc-reply-preview {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  font-size: 11px;
+}
+.gc-reply-label { color: rgba(255,255,255,.25); font-family: var(--mono); flex-shrink: 0; }
+.gc-reply-sender { color: rgba(245,166,35,.7); font-weight: 600; flex-shrink: 0; }
+.gc-reply-body {
+  color: rgba(255,255,255,.35);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gc-reply-cancel {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.04);
+  color: rgba(255,255,255,.4);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all .12s;
+}
+.gc-reply-cancel:hover { background: rgba(255,255,255,.1); color: rgba(255,255,255,.8); }
+
+/* ── Photo preview ───────────────────────────────────────────────── */
+.gc-photo-preview {
+  flex-shrink: 0;
+  padding: 8px 14px 0;
+  position: relative;
+  display: inline-block;
+  align-self: flex-start;
+  margin-left: 14px;
+  animation: gcSlideUp .15s ease both;
+}
+.gc-photo-preview img {
+  height: 64px;
+  width: auto;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.1);
+  display: block;
+}
+.gc-photo-remove {
+  position: absolute;
+  top: 4px; right: 10px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,.7);
+  color: #fff;
+  font-size: 9px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  line-height: 1;
 }
 
-/* ── Touch action on interactive elements ── */
-button, a, [role="button"], .dv-card, .dv-fpill, .dvp-card, .dsp-row {
-  touch-action: manipulation;
+/* ── Input row ───────────────────────────────────────────────────── */
+.gc-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 14px;
+  border-top: 1px solid rgba(255,255,255,.04);
+  flex-shrink: 0;
+}
+.gc-attach-btn {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.07);
+  background: rgba(255,255,255,.04);
+  color: rgba(255,255,255,.3);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all .15s;
+}
+.gc-attach-btn:hover {
+  background: rgba(255,255,255,.08);
+  color: rgba(255,255,255,.65);
+  border-color: rgba(255,255,255,.14);
+}
+.gc-input {
+  flex: 1;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 20px;
+  padding: 9px 15px;
+  color: rgba(255,255,255,.85);
+  font-size: 13px;
+  font-family: var(--sans);
+  outline: none;
+  transition: border-color .15s, background .15s;
+  min-height: 38px;
+}
+.gc-input:focus {
+  border-color: rgba(255,255,255,.18);
+  background: rgba(255,255,255,.07);
+}
+.gc-input::placeholder { color: rgba(255,255,255,.2); }
+.gc-send {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,.1);
+  color: rgba(255,255,255,.6);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all .15s;
+}
+.gc-send:hover { background: rgba(255,255,255,.18); color: rgba(255,255,255,.95); }
+.gc-send:active { transform: scale(.9); }
+.gc-send:disabled { opacity: .35; cursor: not-allowed; }
+
+/* ── Drag overlay ────────────────────────────────────────────────── */
+.gc-drag-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: rgba(10,13,18,.88);
+  backdrop-filter: blur(4px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed rgba(255,255,255,.2);
+  border-radius: 4px;
+  pointer-events: none;
+}
+.gc-drag-overlay.active {
+  display: flex;
+  pointer-events: auto;
+}
+.gc-drag-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: rgba(255,255,255,.4);
+  font-size: 13px;
+  font-family: var(--mono);
 }
 
-/* ── Fix select dropdown on iOS (needs min-height) ── */
-@media (max-width: 768px) {
-  select {
-    min-height: 44px;
-    border-radius: 8px;
-  }
-  #dockView .dvp-select,
-  #dockView .dv-scan-input {
-    min-height: 36px;
-  }
+/* ── Lightbox ────────────────────────────────────────────────────── */
+.gc-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: rgba(0,0,0,.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(8px);
+  animation: gcFadeIn .18s ease both;
+  cursor: zoom-out;
 }
-
-/* ── Prevent text selection on interactive elements ── */
-.dv-fpill, .dvp-toggle, .dvp-card, .dv-card .dv-card-inner {
-  -webkit-user-select: none;
-  user-select: none;
+@keyframes gcFadeIn { from { opacity:0 } to { opacity:1 } }
+.gc-lightbox img {
+  max-width: 92vw;
+  max-height: 88vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 12px 60px rgba(0,0,0,.7);
+  animation: gcZoomIn .2s cubic-bezier(.22,1,.36,1) both;
 }
+@keyframes gcZoomIn { from { transform:scale(.92) } to { transform:scale(1) } }
+.gc-lightbox-close {
+  position: absolute;
+  top: 20px; right: 24px;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.15);
+  background: rgba(255,255,255,.08);
+  color: rgba(255,255,255,.7);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .15s;
+}
+.gc-lightbox-close:hover { background: rgba(255,255,255,.18); color: #fff; }

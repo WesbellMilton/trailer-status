@@ -1,6 +1,6 @@
 (() => {
   const CSRF = {"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"};
-  let ROLE=null, VERSION="", _locationId=1, trailers={}, dockPlates={}, doorBlocks={}, confirmations=[];
+  let ROLE=null, VERSION="", _locationId=1, _doorsFrom=28, _doorsTo=42, trailers={}, dockPlates={}, doorBlocks={}, confirmations=[];
   const plateEditOpen={}, shuntOpen={};
   const el=id=>document.getElementById(id);
   const path=()=>location.pathname.toLowerCase();
@@ -57,7 +57,9 @@
   };
   const esc=s=>String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
   // Shared constants
-  const DOORS=[];for(let _d=28;_d<=42;_d++)DOORS.push(String(_d));
+  let DOORS=[];
+  function rebuildDoors(){DOORS=[];for(let _d=_doorsFrom;_d<=_doorsTo;_d++)DOORS.push(String(_d));}
+  rebuildDoors(); // init with defaults (28-42) — overwritten after whoami resolves
   const canEditPlates=()=>ROLE==="dispatcher"||ROLE==="dock"||ROLE==="management"||ROLE==="admin";
   const canEditTrailers=()=>ROLE==="dispatcher"||ROLE==="management"||ROLE==="admin";
 
@@ -259,6 +261,13 @@
   el("modalOv")?.addEventListener("click",e=>{if(e.target===el("modalOv")){el("modalOv").classList.add("hidden");if(_mr){_mr(false);_mr=null;}}});
   el("dmModalCancel")?.addEventListener("click",()=>el("dmModalOv")?.classList.add("hidden"));
   el("dmModalOv")?.addEventListener("click",e=>{if(e.target===el("dmModalOv"))el("dmModalOv").classList.add("hidden");});
+  // Issue reports refresh button
+  el("btnRefreshIssues")?.addEventListener("click",()=>loadIssueReports());
+  // Issue photo lightbox close
+  const _closeLightbox=()=>el("issueLightbox")?.classList.remove("open");
+  el("issueLightboxClose")?.addEventListener("click",_closeLightbox);
+  el("issueLightbox")?.addEventListener("click",e=>{if(e.target===el("issueLightbox"))_closeLightbox();});
+  document.addEventListener("keydown",e=>{if(e.key==="Escape"&&el("issueLightbox")?.classList.contains("open"))_closeLightbox();});
 
   function lockScroll(){document.body.style.overflow="hidden";}
   function unlockScroll(){document.body.style.overflow="";}
@@ -516,9 +525,10 @@
     const lu=el("lastUpdated");if(lu)lu.textContent="Updated "+fmtTime(Date.now());
     renderDockMap();
     const occupied=getOccupiedDoors();
-    const occupiedInRange=Object.keys(occupied).filter(d=>{const n=parseInt(d);return n>=28&&n<=42;}).length;
+    const occupiedInRange=Object.keys(occupied).filter(d=>{const n=parseInt(d);return n>=_doorsFrom&&n<=_doorsTo;}).length;
+    const totalDoors=_doorsTo-_doorsFrom+1;
     const badge=el("dockMapFreeCount");
-    if(badge)badge.textContent=`${15-occupiedInRange} free`;
+    if(badge)badge.textContent=`${totalDoors-occupiedInRange} free`;
     if(_selectedTrailer)renderDetailPanel(_selectedTrailer);
     renderDspOccupancy();
     renderDspPlates();
@@ -2044,6 +2054,12 @@
   async function loadInitial(){
     try{
       const w=await apiJson("/api/whoami");ROLE=w?.role;VERSION=w?.version||"";_locationId=w?.locationId||1;
+      _doorsFrom=w?.doorsFrom||28;_doorsTo=w?.doorsTo||42;
+      rebuildDoors();
+      // Expose for driver view and other modules
+      window._doorsFrom=_doorsFrom;window._doorsTo=_doorsTo;
+      // Expose for chat module
+      window._chatRole=ROLE;window._chatLocId=_locationId;window._chatReady=true;
       if(w?.redirectTo&&ROLE&&w.redirectTo!==location.pathname){location.replace(w.redirectTo);return;}
     }catch{ROLE=null;VERSION="";}
     el("verText").textContent=VERSION||"—";
@@ -2567,6 +2583,8 @@
           if(!isDriver()){
             if(isDock())toast("⚠️ Issue Filed",`${trailer}${door?" Door "+door+" — ":""}${payload.note?.slice(0,60)||""}`,"warn",10000);
             _notifPush({icon:"⚠️",title:`Issue: ${trailer}`,body:`${door?"Door "+door+" — ":""}${payload.note?.slice(0,80)||""}`,kind:"issue",trailer,door,at:Date.now()});
+            // Refresh issue reports panel live if management view is visible
+            if(el('managementView')?.style.display!=="none")loadIssueReports();
           }
         } else {
           if(payload?.message)_notifPush({icon:"🔔",title:payload.title||"Notification",body:payload.message,kind:"generic",at:Date.now()});
@@ -3213,6 +3231,684 @@
   function updateOffloadSubmitState(){}
   function updateSafetySubmitState(){}
   function openDockIssueModal(t,d){openQuickIssue(t,d||"");}
-  async function loadIssueReports(){}
+  async function loadIssueReports(){
+    const body=el('supIssueBody');
+    const countBadge=el('supIssueCount');
+    if(!body)return;
+    try{
+      const rows=await apiJson('/api/issue-reports?limit=100');
+      if(!rows||!rows.length){
+        body.innerHTML='<div style="padding:24px;text-align:center;color:var(--t3);font-family:var(--mono);font-size:11px;">No issue reports yet.</div>';
+        if(countBadge)countBadge.textContent='0';
+        return;
+      }
+      if(countBadge)countBadge.textContent=rows.length>=100?'99+':String(rows.length);
+      const rowsHtml=rows.map(r=>{
+        const timeStr=fmtTime(r.at);
+        const agoStr=timeAgo(r.at);
+        const photoBtn=r.has_photo
+          ?`<button class="issue-view-photo" data-id="${esc(r.id)}" title="View photo" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:4px;border:1px solid rgba(245,166,35,.3);background:rgba(245,166,35,.08);color:var(--amber);font-size:10px;font-family:var(--mono);cursor:pointer;white-space:nowrap;">📷 Photo</button>`
+          :'<span style="color:var(--t3);font-size:10px;font-family:var(--mono);">—</span>';
+        const noteHtml=r.note
+          ?`<span title="${esc(r.note)}" style="display:block;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.note)}</span>`
+          :'<span style="color:var(--t3);">—</span>';
+        return `<tr>
+          <td class="mono muted" title="${esc(timeStr)}">${esc(agoStr)}</td>
+          <td class="mono" style="font-weight:600;color:var(--amber);">${esc(r.trailer||'—')}</td>
+          <td class="mono" style="color:var(--t1);">${r.door?'Door '+esc(r.door):'—'}</td>
+          <td style="font-size:11px;color:var(--t1);">${noteHtml}</td>
+          <td>${photoBtn}</td>
+        </tr>`;
+      }).join('');
+      body.innerHTML=`<div class="data-tbl-wrap"><table>
+        <thead><tr><th>When</th><th>Trailer</th><th>Door</th><th>Note</th><th>Photo</th></tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table></div>`;
+      // Wire photo buttons
+      body.querySelectorAll('.issue-view-photo').forEach(btn=>{
+        btn.addEventListener('click',()=>openIssueLightboxById(btn.dataset.id));
+      });
+    }catch(e){
+      body.innerHTML='<div style="padding:16px;color:var(--red);font-family:var(--mono);font-size:11px;">Failed to load issue reports.</div>';
+    }
+  }
+
+  async function openIssueLightboxById(id){
+    const lb=el('issueLightbox');
+    const img=el('issueLightboxImg');
+    if(!lb||!img)return;
+    img.src='';
+    lb.classList.add('open');
+    img.src=`/api/issue-reports/${encodeURIComponent(id)}/photo`;
+    img.onerror=()=>lb.classList.remove('open');
+  }
+
+})();
+
+/* ══════════════════════════════════════════════════════════════════
+   GLASS COMMAND — CHAT MODULE
+══════════════════════════════════════════════════════════════════ */
+(function glassChatModule() {
+  'use strict';
+
+  // ── State ──────────────────────────────────────────────────────
+  let _open      = false;
+  let _channel   = 'general';
+  let _channels  = [];
+  let _unread    = {};
+  let _lastSeen  = {};
+  let _oldest    = {};
+  let _role      = null;
+  let _sender    = null;
+  let _locId     = 1;
+  let _replyTo   = null;   // { id, sender, body }
+  let _photoData = null;   // base64
+  let _photoMime = null;
+  let _wsRef     = null;
+  let _emojiTarget = null; // msg id for open emoji picker
+  let _msgCache  = {};     // id → msg object, for reply previews
+
+  const XHR = { 'X-Requested-With': 'XMLHttpRequest' };
+
+  // ── DOM ────────────────────────────────────────────────────────
+  const $  = id => document.getElementById(id);
+  const gc = {
+    bubble   : () => $('chatBubble'),
+    panel    : () => $('gcPanel'),
+    messages : () => $('gcMessages'),
+    channels : () => $('gcChannels'),
+    input    : () => $('gcInput'),
+    send     : () => $('gcSend'),
+    badge    : () => $('gcUnreadBadge'),
+    dragOv   : () => $('gcDragOverlay'),
+    replyBan : () => $('gcReplyBanner'),
+    replySnd : () => $('gcReplySender'),
+    replyBod : () => $('gcReplyBody'),
+    replyCnl : () => $('gcReplyCancel'),
+    photoPv  : () => $('gcPhotoPreview'),
+    photoImg : () => $('gcPhotoPreviewImg'),
+    photoRm  : () => $('gcPhotoRemove'),
+    fileInp  : () => $('gcFileInput'),
+    picker   : () => $('gcEmojiPicker'),
+    lb       : () => $('gcLightbox'),
+    lbImg    : () => $('gcLightboxImg'),
+    lbClose  : () => $('gcLightboxClose'),
+    nameOv   : () => $('gcNameOv'),
+    nameInp  : () => $('gcNameInput'),
+    nameSave : () => $('gcNameSave'),
+  };
+
+  // ── Init ───────────────────────────────────────────────────────
+  async function init() {
+    let attempts = 0;
+    while (!window._chatReady && attempts++ < 50) await sleep(100);
+
+    _role  = window._chatRole  || null;
+    _locId = window._chatLocId || 1;
+    if (!_role) return;
+
+    if (_role === 'driver') {
+      await sleep(600);
+      if (!window._chatDriverOk) return;
+    }
+
+    _sender = getSender();
+    loadLastSeen();
+    await loadChannels();
+    wire();
+    showBubble();
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  function getSender() {
+    if (_role === 'driver') return localStorage.getItem('wb_driver_name') || 'Driver';
+    return {dispatcher:'Dispatcher',dock:'Dock',management:'Management',admin:'Admin'}[_role] || 'User';
+  }
+
+  // ── Channels ───────────────────────────────────────────────────
+  async function loadChannels() {
+    try {
+      const vals = Object.values(_lastSeen);
+      const since = vals.length ? Math.max(0, ...vals) : 0;
+      const data = await api(`/api/chat/channels?since=${since}`);
+      _channels = data.channels || ['general'];
+      _unread   = data.unread   || {};
+      renderChannelPills();
+      updateBadge();
+    } catch {
+      _channels = ['general'];
+      renderChannelPills();
+    }
+  }
+
+  function renderChannelPills() {
+    const el = gc.channels();
+    if (!el) return;
+    el.innerHTML = _channels.map(ch => {
+      const u = _unread[ch] || 0;
+      return `<button class="gc-ch-pill${ch===_channel?' active':''}" data-ch="${ch}">
+        #${ch}${u > 0 ? '<span class="gc-ch-dot"></span>' : ''}
+      </button>`;
+    }).join('');
+    el.querySelectorAll('.gc-ch-pill').forEach(b => {
+      b.addEventListener('click', () => switchChannel(b.dataset.ch));
+    });
+  }
+
+  async function switchChannel(ch) {
+    if (!_channels.includes(ch)) return;
+    _channel = ch;
+    _unread[ch] = 0;
+    markSeen(ch);
+    renderChannelPills();
+    updateBadge();
+    gc.messages().innerHTML = '<div class="gc-empty-state"><div class="gc-empty-icon">⏳</div><div class="gc-empty-text">Loading…</div></div>';
+    await loadHistory();
+  }
+
+  // ── History ────────────────────────────────────────────────────
+  async function loadHistory(before = null) {
+    try {
+      const url = `/api/chat/history?channel=${_channel}&limit=50${before ? '&before='+before : ''}`;
+      const rows = await api(url);
+      if (!before) {
+        gc.messages().innerHTML = '';
+        _oldest[_channel] = null;
+      }
+      if (rows.length === 0 && !before) {
+        gc.messages().innerHTML = '<div class="gc-empty-state"><div class="gc-empty-icon">💬</div><div class="gc-empty-text">No messages yet — say hi 👋</div></div>';
+        return;
+      }
+      rows.forEach(r => { _msgCache[r.id] = r; });
+      if (_oldest[_channel] == null || (rows[0] && rows[0].id < _oldest[_channel])) {
+        _oldest[_channel] = rows[0]?.id;
+      }
+      if (rows.length === 50) insertLoadMore();
+      if (before) gc.messages().querySelector('.gc-load-more')?.remove();
+
+      const frag = document.createDocumentFragment();
+      let prevSender = null, prevDay = null;
+      rows.forEach((msg, i) => {
+        const day = dayStr(msg.at);
+        if (day !== prevDay) { frag.appendChild(mkDateSep(day)); prevDay = day; prevSender = null; }
+        const cont = (msg.sender === prevSender);
+        frag.appendChild(mkMsg(msg, cont));
+        prevSender = msg.sender;
+      });
+      if (before) {
+        gc.messages().insertBefore(frag, gc.messages().firstChild);
+      } else {
+        gc.messages().appendChild(frag);
+        scrollBottom();
+      }
+    } catch {
+      gc.messages().innerHTML = '<div class="gc-empty-state"><div class="gc-empty-icon">⚠️</div><div class="gc-empty-text" style="color:#e05252">Failed to load</div></div>';
+    }
+  }
+
+  function insertLoadMore() {
+    const w = document.createElement('div');
+    w.className = 'gc-load-more';
+    w.innerHTML = '<button class="gc-load-more-btn">↑ Load older</button>';
+    w.querySelector('button').addEventListener('click', () => loadHistory(_oldest[_channel]));
+    gc.messages().insertBefore(w, gc.messages().firstChild);
+  }
+
+  // ── Build message element ──────────────────────────────────────
+  function mkMsg(msg, cont = false) {
+    const mine = (msg.sender === _sender && msg.role === _role);
+    const wrap = document.createElement('div');
+    wrap.className = `gc-msg gc-msg--${mine?'mine':'theirs'}${cont?' gc-msg--cont':' gc-msg--new-group'}`;
+    wrap.dataset.id = msg.id;
+
+    const time = fmtTime(msg.at);
+    let inner = '';
+
+    // meta (sender + time) — hidden on cont
+    inner += `<div class="gc-msg-meta">
+      <span class="gc-msg-sender">${esc(msg.sender)}</span>
+      <span class="gc-msg-time">${time}</span>
+    </div>`;
+
+    // reply quote
+    if (msg.reply_to && _msgCache[msg.reply_to]) {
+      const parent = _msgCache[msg.reply_to];
+      inner += `<div class="gc-reply-quote">
+        <div class="gc-reply-quote-sender">${esc(parent.sender)}</div>
+        <div class="gc-reply-quote-body">${parent.has_photo ? '📷 Photo' : esc(parent.body)}</div>
+      </div>`;
+    }
+
+    // bubble
+    inner += `<div class="gc-msg-bubble">`;
+    if (msg.body) inner += esc(msg.body).replace(/\n/g,'<br>');
+    if (msg.has_photo) {
+      inner += `<div class="gc-msg-photo" data-photo-id="${msg.id}">
+        <img src="/api/chat/photo/${msg.id}" alt="Photo" loading="lazy"/>
+      </div>`;
+    }
+    inner += `</div>`;
+
+    // action buttons
+    inner += `<div class="gc-msg-actions">
+      <button class="gc-msg-action-btn" data-action="react" data-id="${msg.id}" title="React">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M8 13s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+      </button>
+      <button class="gc-msg-action-btn" data-action="reply" data-id="${msg.id}" title="Reply">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+      </button>
+    </div>`;
+
+    // reactions
+    const rxKeys = Object.keys(msg.reactions || {});
+    if (rxKeys.length) {
+      inner += `<div class="gc-reactions">`;
+      rxKeys.forEach(emoji => {
+        const users = msg.reactions[emoji] || [];
+        const mine2 = users.includes(_role);
+        inner += `<button class="gc-reaction-pill${mine2?' mine':''}" data-action="react-pill" data-id="${msg.id}" data-emoji="${emoji}">
+          ${emoji}<span class="gc-reaction-count">${users.length}</span>
+        </button>`;
+      });
+      inner += `</div>`;
+    }
+
+    wrap.innerHTML = inner;
+
+    // wire photo click
+    wrap.querySelectorAll('.gc-msg-photo').forEach(p => {
+      p.addEventListener('click', () => openLightbox(`/api/chat/photo/${p.dataset.photoId}`));
+    });
+
+    return wrap;
+  }
+
+  function mkDateSep(label) {
+    const d = document.createElement('div');
+    d.className = 'gc-date-sep';
+    d.textContent = label;
+    return d;
+  }
+
+  // ── Actions (react, reply) via delegation ──────────────────────
+  function wireMessageActions() {
+    gc.messages().addEventListener('click', e => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      const id = Number(btn.dataset.id);
+      if (action === 'react') showEmojiPicker(id, btn);
+      if (action === 'reply') startReply(id);
+      if (action === 'react-pill') doReact(id, btn.dataset.emoji);
+    });
+  }
+
+  // ── Emoji picker ───────────────────────────────────────────────
+  function showEmojiPicker(msgId, anchor) {
+    _emojiTarget = msgId;
+    const picker = gc.picker();
+    if (!picker) return;
+    const rect = anchor.getBoundingClientRect();
+    picker.style.display = 'flex';
+    // Position above the button
+    const ph = picker.offsetHeight || 50;
+    let top  = rect.top - ph - 8;
+    let left = rect.left - 20;
+    if (top < 8) top = rect.bottom + 8;
+    const maxLeft = window.innerWidth - 270;
+    if (left > maxLeft) left = maxLeft;
+    if (left < 8) left = 8;
+    picker.style.top  = top  + 'px';
+    picker.style.left = left + 'px';
+  }
+
+  function hideEmojiPicker() {
+    const p = gc.picker();
+    if (p) p.style.display = 'none';
+    _emojiTarget = null;
+  }
+
+  async function doReact(msgId, emoji) {
+    hideEmojiPicker();
+    try {
+      await api('/api/chat/react', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json', ...XHR },
+        body: JSON.stringify({ id: msgId, emoji }),
+      });
+    } catch {}
+  }
+
+  // ── Reply ──────────────────────────────────────────────────────
+  function startReply(msgId) {
+    const msg = _msgCache[msgId];
+    if (!msg) return;
+    _replyTo = { id: msgId, sender: msg.sender, body: msg.has_photo ? '📷 Photo' : msg.body };
+    const ban = gc.replyBan();
+    if (ban) ban.style.display = '';
+    if (gc.replySnd()) gc.replySnd().textContent = msg.sender;
+    if (gc.replyBod()) gc.replyBod().textContent = _replyTo.body;
+    gc.input()?.focus();
+  }
+
+  function cancelReply() {
+    _replyTo = null;
+    const ban = gc.replyBan();
+    if (ban) ban.style.display = 'none';
+  }
+
+  // ── Photo attach ───────────────────────────────────────────────
+  function attachPhoto(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    if (file.size > 4.5 * 1024 * 1024) { alert('Photo must be under 4 MB'); return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+      const b64 = e.target.result.split(',')[1];
+      _photoData = b64;
+      _photoMime = file.type;
+      const pv = gc.photoPv();
+      if (pv) { pv.style.display = ''; gc.photoImg().src = e.target.result; }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearPhoto() {
+    _photoData = null; _photoMime = null;
+    const pv = gc.photoPv();
+    if (pv) { pv.style.display = 'none'; gc.photoImg().src = ''; }
+    const fi = gc.fileInp();
+    if (fi) fi.value = '';
+  }
+
+  // ── Send ───────────────────────────────────────────────────────
+  async function send() {
+    const inp  = gc.input();
+    const body = inp?.value.trim() || '';
+    if (!body && !_photoData) return;
+
+    inp.value = '';
+    const sendBtn = gc.send();
+    if (sendBtn) sendBtn.disabled = true;
+
+    const payload = {
+      channel: _channel,
+      body,
+      sender: _sender,
+      reply_to: _replyTo?.id || null,
+      photo_data: _photoData,
+      photo_mime: _photoMime,
+    };
+
+    cancelReply();
+    clearPhoto();
+
+    try {
+      await api('/api/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json', ...XHR },
+        body: JSON.stringify(payload),
+      });
+    } catch { inp.value = body; }
+    finally { if (sendBtn) sendBtn.disabled = false; }
+  }
+
+  // ── WS ─────────────────────────────────────────────────────────
+  function wireWS() {
+    const hook = ws => {
+      if (!ws || ws._gcHooked) return;
+      ws._gcHooked = true;
+      const orig = ws.onmessage;
+      ws.onmessage = evt => {
+        if (orig) orig.call(ws, evt);
+        try {
+          const m = JSON.parse(evt.data);
+          if (m.type === 'chat') handleWS(m.payload);
+        } catch {}
+      };
+    };
+    const poll = setInterval(() => {
+      if (window._ws) { hook(window._ws); _wsRef = window._ws; }
+      if (_wsRef && window._ws !== _wsRef) hook(window._ws);
+    }, 500);
+  }
+
+  function handleWS(payload) {
+    if (!payload?.type) return;
+    if (payload.type === 'message') {
+      const msg = payload.data;
+      _msgCache[msg.id] = msg;
+      if (msg.channel !== _channel) {
+        if (_channels.includes(msg.channel)) {
+          _unread[msg.channel] = (_unread[msg.channel]||0) + 1;
+          renderChannelPills();
+          updateBadge();
+        }
+        return;
+      }
+      if (_open) {
+        const area = gc.messages();
+        const atBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 80;
+        // Remove empty state if present
+        area.querySelector('.gc-empty-state')?.remove();
+        // Date sep if needed
+        const day = dayStr(msg.at);
+        const lastSep = area.querySelector('.gc-date-sep:last-of-type');
+        const lastDay = lastSep?.textContent;
+        if (day !== lastDay) area.appendChild(mkDateSep(day));
+        // Consecutive check
+        const prevMsgEl = area.querySelector('.gc-msg:last-of-type');
+        const prevSender = prevMsgEl ? _msgCache[Number(prevMsgEl.dataset.id)]?.sender : null;
+        area.appendChild(mkMsg(msg, msg.sender === prevSender));
+        if (atBottom) scrollBottom();
+        markSeen(_channel);
+      } else {
+        _unread[_channel] = (_unread[_channel]||0) + 1;
+        renderChannelPills();
+        updateBadge();
+      }
+    }
+    if (payload.type === 'reaction') {
+      const { id, reactions } = payload.data;
+      if (_msgCache[id]) _msgCache[id].reactions = reactions;
+      // Update DOM
+      const el = gc.messages().querySelector(`[data-id="${id}"]`);
+      if (!el) return;
+      let rxRow = el.querySelector('.gc-reactions');
+      const keys = Object.keys(reactions || {});
+      if (!keys.length) { rxRow?.remove(); return; }
+      if (!rxRow) {
+        rxRow = document.createElement('div');
+        rxRow.className = 'gc-reactions';
+        el.querySelector('.gc-msg-bubble')?.after(rxRow);
+      }
+      rxRow.innerHTML = keys.map(emoji => {
+        const users = reactions[emoji]||[];
+        const mine2 = users.includes(_role);
+        return `<button class="gc-reaction-pill${mine2?' mine':''}" data-action="react-pill" data-id="${id}" data-emoji="${emoji}">
+          ${emoji}<span class="gc-reaction-count">${users.length}</span>
+        </button>`;
+      }).join('');
+    }
+  }
+
+  // ── Panel open/close ───────────────────────────────────────────
+  function togglePanel() {
+    _open ? closePanel() : openPanel();
+  }
+
+  async function openPanel() {
+    if (_role === 'driver' && !localStorage.getItem('wb_driver_name')) {
+      gc.nameOv()?.classList.remove('hidden');
+      return;
+    }
+    _open = true;
+    gc.panel()?.classList.add('gc-panel--open');
+    gc.bubble()?.classList.add('gc-bubble--open');
+    _unread[_channel] = 0;
+    markSeen(_channel);
+    renderChannelPills();
+    updateBadge();
+    await loadHistory();
+    gc.input()?.focus();
+  }
+
+  function closePanel() {
+    _open = false;
+    gc.panel()?.classList.remove('gc-panel--open');
+    gc.bubble()?.classList.remove('gc-bubble--open');
+    hideEmojiPicker();
+    cancelReply();
+  }
+
+  function showBubble() {
+    const b = gc.bubble();
+    if (b) b.style.display = 'flex';
+  }
+
+  // ── Lightbox ───────────────────────────────────────────────────
+  function openLightbox(src) {
+    const lb = gc.lb();
+    if (!lb) return;
+    gc.lbImg().src = src;
+    lb.style.display = 'flex';
+  }
+  function closeLightbox() {
+    const lb = gc.lb();
+    if (lb) { lb.style.display = 'none'; gc.lbImg().src = ''; }
+  }
+
+  // ── Wire everything ────────────────────────────────────────────
+  function wire() {
+    // Bubble
+    gc.bubble()?.addEventListener('click', togglePanel);
+
+    // Panel close
+    gc.panel()?.querySelector('#gcClose')?.addEventListener('click', closePanel);
+
+    // Input / send
+    gc.input()?.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    });
+    gc.send()?.addEventListener('click', send);
+
+    // File input
+    gc.fileInp()?.addEventListener('change', e => attachPhoto(e.target.files[0]));
+    gc.photoRm()?.addEventListener('click', clearPhoto);
+
+    // Reply cancel
+    gc.replyCnl()?.addEventListener('click', cancelReply);
+
+    // Message actions (delegated)
+    wireMessageActions();
+
+    // Emoji picker buttons
+    gc.picker()?.querySelectorAll('.gc-emoji-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (_emojiTarget) doReact(_emojiTarget, btn.dataset.emoji);
+      });
+    });
+
+    // Close emoji picker on outside click
+    document.addEventListener('click', e => {
+      const picker = gc.picker();
+      if (picker && !picker.contains(e.target) && !e.target.closest('[data-action="react"]')) {
+        hideEmojiPicker();
+      }
+    }, true);
+
+    // Lightbox
+    gc.lbClose()?.addEventListener('click', closeLightbox);
+    gc.lb()?.addEventListener('click', e => { if (e.target === gc.lb()) closeLightbox(); });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        closeLightbox();
+        closePanel();
+        hideEmojiPicker();
+      }
+    });
+
+    // Drag & drop onto panel
+    const panel = gc.panel();
+    const dragOv = gc.dragOv();
+    if (panel && dragOv) {
+      panel.addEventListener('dragover', e => { e.preventDefault(); dragOv.classList.add('active'); });
+      panel.addEventListener('dragleave', e => { if (!panel.contains(e.relatedTarget)) dragOv.classList.remove('active'); });
+      panel.addEventListener('drop', e => {
+        e.preventDefault();
+        dragOv.classList.remove('active');
+        const file = e.dataTransfer.files[0];
+        if (file) attachPhoto(file);
+      });
+    }
+
+    // Driver name modal
+    gc.nameSave()?.addEventListener('click', () => {
+      const v = gc.nameInp()?.value.trim();
+      if (!v) return;
+      localStorage.setItem('wb_driver_name', v);
+      _sender = v;
+      gc.nameOv()?.classList.add('hidden');
+      openPanel();
+    });
+    gc.nameInp()?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') gc.nameSave()?.click();
+    });
+
+    // Paste image anywhere in panel
+    document.addEventListener('paste', e => {
+      if (!_open) return;
+      const item = [...(e.clipboardData?.items||[])].find(i => i.type.startsWith('image/'));
+      if (item) attachPhoto(item.getAsFile());
+    });
+
+    wireWS();
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────
+  function scrollBottom() {
+    const a = gc.messages();
+    if (a) a.scrollTop = a.scrollHeight;
+  }
+
+  function loadLastSeen() {
+    try { _lastSeen = JSON.parse(localStorage.getItem('wb_gc_seen') || '{}'); } catch { _lastSeen = {}; }
+  }
+  function markSeen(ch) {
+    _lastSeen[ch] = Date.now();
+    try { localStorage.setItem('wb_gc_seen', JSON.stringify(_lastSeen)); } catch {}
+  }
+  function updateBadge() {
+    const total = Object.values(_unread).reduce((a,b)=>a+b, 0);
+    const b = gc.badge();
+    if (!b) return;
+    if (total > 0) { b.textContent = total > 99 ? '99+' : String(total); b.style.display = 'flex'; }
+    else b.style.display = 'none';
+  }
+
+  function dayStr(ts) {
+    const d = new Date(ts);
+    const t = new Date();
+    if (d.toDateString() === t.toDateString()) return 'Today';
+    const y = new Date(t); y.setDate(t.getDate()-1);
+    if (d.toDateString() === y.toDateString()) return 'Yesterday';
+    return d.toLocaleDateString('en-CA', { month:'short', day:'numeric' });
+  }
+  function fmtTime(ts) {
+    return new Date(ts).toLocaleTimeString('en-CA', { hour:'2-digit', minute:'2-digit' });
+  }
+  function esc(s) {
+    return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  async function api(url, opts = {}) {
+    const r = await fetch(url, opts);
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  }
+
+  // ── Boot ───────────────────────────────────────────────────────
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else setTimeout(init, 120);
 
 })();

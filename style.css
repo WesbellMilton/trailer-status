@@ -2762,6 +2762,8 @@ img,video,embed,object,iframe {
   height:calc(100vh - 54px);
   height:calc(100dvh - 54px);
   overflow:hidden;
+  /* iOS GPU layer */
+  -webkit-transform:translateZ(0); transform:translateZ(0);
 }
 
 /* ── LEFT COLUMN ── */
@@ -2776,6 +2778,9 @@ img,video,embed,object,iframe {
 .dsp-rows-area{
   flex:1;min-height:0;
   overflow-y:auto;overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-y:contain;
+  touch-action:pan-y;
   display:flex;flex-direction:column;
 }
 .dsp-rows-area::-webkit-scrollbar{width:4px}
@@ -2785,6 +2790,8 @@ img,video,embed,object,iframe {
 .dsp-panels-area{
   flex:0 0 auto;
   overflow-y:auto;overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-y:contain;
   max-height:55vh; /* cap so it never crushes the rows */
   border-top:1px solid var(--divider);
 }
@@ -2942,7 +2949,7 @@ img,video,embed,object,iframe {
 }
 
 /* ── RIGHT COLUMN ── */
-.dsp-right{
+.dsp-right{ -webkit-overflow-scrolling:touch;
   width:340px;flex-shrink:0;
   display:flex;flex-direction:column;
   background:var(--s0);
@@ -3089,7 +3096,7 @@ img,video,embed,object,iframe {
 
 
 /* ── Right panel default state (role controls) ── */
-.dsp-right-default{
+.dsp-right-default{ -webkit-overflow-scrolling:touch;
   display:flex;flex-direction:column;
   height:100%;overflow-y:auto;
   min-height:0;
@@ -4502,8 +4509,10 @@ select option { background: #0d1119; }
   /* ── Workspace fills viewport minus fixed chrome ── */
   .dsp-workspace{
     flex-direction:column;
+    height:calc(100vh - 48px - 56px);
     height:calc(100dvh - 48px - 56px);
     overflow:hidden;
+    -webkit-transform:translateZ(0); transform:translateZ(0);
   }
   .dsp-left{
     flex:1;min-height:0;width:100%;
@@ -4720,7 +4729,7 @@ select option { background: #0d1119; }
 .dvp-chev { flex-shrink: 0; font-size: 10px; transition: transform .2s; }
 
 .dvp-body { overflow: hidden; max-height: 0; transition: max-height .28s cubic-bezier(.22,1,.36,1); }
-.dvp-body.dvp-body-open { max-height: 52vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.dvp-body.dvp-body-open { max-height: 800px; }
 
 .dvp-grid {
   display: grid;
@@ -4750,7 +4759,7 @@ select option { background: #0d1119; }
 }
 .dvp-door-label {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--t3);
   letter-spacing: .04em;
@@ -4762,7 +4771,7 @@ select option { background: #0d1119; }
 }
 .dvp-occ {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 9px;
   color: var(--t2);
   white-space: nowrap;
   overflow: hidden;
@@ -4771,7 +4780,7 @@ select option { background: #0d1119; }
   text-align: center;
 }
 .dvp-note {
-  font-size: 11px;
+  font-size: 9px;
   color: var(--t3);
   text-align: center;
   white-space: nowrap;
@@ -5731,4 +5740,187 @@ select option { background: #0d1119; }
   .dsp-plate-btn { min-height:42px; }
   .dpb-edit-btn { min-height:24px; padding:3px 6px; font-size:9px; }
   .dvp-edit-open-btn { min-height:32px !important; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE COMPATIBILITY PATCH — iPhone & Samsung
+   Covers: iOS Safari, Chrome Mobile, Samsung Internet
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Universal touch scroll fix ── */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Prevent body bounce on iOS ── */
+body {
+  overscroll-behavior-y: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* ── Input zoom prevention on iOS (font-size must be ≥16px to prevent zoom) ── */
+@media (max-width: 768px) {
+  input[type="text"],
+  input[type="search"],
+  input[type="number"],
+  input[type="email"],
+  input[type="password"],
+  textarea,
+  select {
+    font-size: 16px !important;
+    /* override where fonts are smaller — visual size controlled by scale */
+  }
+
+  /* Exception: inputs inside dock view use 16px naturally already */
+  #dockView .dv-scan-input,
+  #dockView .dv-search-input,
+  #driverView input,
+  #driverView select {
+    font-size: 16px !important;
+  }
+}
+
+/* ── Dock view full height including iOS dynamic toolbar ── */
+#dockView {
+  height: 100%;
+  height: 100dvh;
+}
+
+#dockView .dv-shell {
+  height: 100%;
+  height: 100dvh;
+  /* iOS Safari: fill-available fallback */
+  height: -webkit-fill-available;
+}
+
+/* ── Dock plates panel: scrollable on all mobile ── */
+#dockView .dvp-grid {
+  -webkit-overflow-scrolling: touch !important;
+  overflow-y: auto !important;
+  touch-action: pan-y !important;
+}
+
+/* ── Cards area: ensure smooth scroll on all devices ── */
+#dockView .dv-cards {
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-y !important;
+}
+
+/* ── Filter pills: horizontal scroll on mobile ── */
+#dockView .dv-filters {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+}
+
+/* ── Dispatch panels area mobile bottom sheet ── */
+@media (max-width: 768px) {
+  .dsp-panels-area {
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-y !important;
+  }
+  .dsp-right {
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-y !important;
+    /* Safe area for home bar */
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 16px)) !important;
+  }
+  .dsp-rows-area {
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-y !important;
+  }
+
+  /* Buttons: min touch target 44px (WCAG / Apple HIG) */
+  .dsp-next-btn,
+  .dv-cta-btn,
+  .dvp-toggle,
+  .dv-fpill,
+  .cp-ch-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Chat panel: full width, avoid notch/home bar */
+  #chatPanel {
+    width: 100vw;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .cp-composer-wrap {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Prevent horizontal overflow on dispatch */
+  #dispatchView {
+    overflow-x: hidden;
+  }
+
+  /* Bottom nav safe area */
+  .bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .bottom-nav-inner {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* ── iPhone notch / Dynamic Island: top safe area ── */
+@supports (padding-top: env(safe-area-inset-top)) {
+  #dockView .dv-topbar {
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
+  }
+  #driverView .ts-topbar {
+    padding-top: calc(20px + env(safe-area-inset-top, 0px));
+  }
+  .topbar {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
+
+/* ── Samsung Internet: fix position:fixed with transform ── */
+@media (max-width: 768px) {
+  #dockView,
+  #driverView,
+  #chatPanel {
+    /* Samsung Internet bugfix: force new stacking context */
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
+}
+
+/* ── iOS momentum scroll reset after keyboard dismiss ── */
+@media (max-width: 768px) {
+  .dsp-rows-area,
+  #dockView .dv-cards,
+  #dockView .dvp-grid,
+  .cp-messages,
+  .dsp-right,
+  .dsp-panels-area,
+  .dsp-right-default {
+    /* Prevent "rubber band" killing the scroll position */
+    overscroll-behavior: contain;
+  }
+}
+
+/* ── Touch action on interactive elements ── */
+button, a, [role="button"], .dv-card, .dv-fpill, .dvp-card, .dsp-row {
+  touch-action: manipulation;
+}
+
+/* ── Fix select dropdown on iOS (needs min-height) ── */
+@media (max-width: 768px) {
+  select {
+    min-height: 44px;
+    border-radius: 8px;
+  }
+  #dockView .dvp-select,
+  #dockView .dv-scan-input {
+    min-height: 36px;
+  }
+}
+
+/* ── Prevent text selection on interactive elements ── */
+.dv-fpill, .dvp-toggle, .dvp-card, .dv-card .dv-card-inner {
+  -webkit-user-select: none;
+  user-select: none;
 }

@@ -35,7 +35,7 @@ app.use(require('./lib/routes/driver'));
 app.use(require('./lib/routes/push'));
 app.use(require('./lib/routes/admin'));
 app.use(require('./lib/routes/reports'));
-app.use(require('./lib/routes/chat'));
+app.use(require('./lib/routes/chat'));     // team chat
 app.use(require('./lib/routes/static'));   // static + page routes last
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────

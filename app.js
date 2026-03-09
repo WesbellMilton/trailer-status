@@ -3355,14 +3355,18 @@
   // ── Channels ───────────────────────────────────────────────────
   async function loadChannels() {
     try {
-      const since = Math.max(0, ...Object.values(_lastSeen));
+      const vals = Object.values(_lastSeen);
+      const since = vals.length ? Math.max(0, ...vals) : 0;
       const data = await apiFetch(`/api/chat/channels?since=${since}`);
       _channels = data.channels || ['general'];
       _unread   = data.unread   || {};
       // Don't count messages as unread if we've never opened chat
       renderChannelTabs();
       updateBubbleBadge();
-    } catch {}
+    } catch {
+      _channels = ['general'];
+      renderChannelTabs();
+    }
   }
 
   function renderChannelTabs() {

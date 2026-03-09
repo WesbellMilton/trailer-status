@@ -233,6 +233,29 @@ const MIGRATIONS = [
       }
     },
   },
+
+  {
+    version: 8,
+    description: 'Add messages table for Team Chat',
+    up: async (run) => {
+      await run(`CREATE TABLE IF NOT EXISTS messages (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        at          INTEGER NOT NULL,
+        channel     TEXT    NOT NULL DEFAULT 'general',
+        role        TEXT    NOT NULL DEFAULT 'dispatcher',
+        sender      TEXT    NOT NULL DEFAULT '',
+        body        TEXT    NOT NULL DEFAULT '',
+        reply_to    INTEGER,
+        reactions   TEXT,
+        photo_data  TEXT,
+        photo_mime  TEXT,
+        location_id INTEGER NOT NULL DEFAULT 1
+      )`);
+      await run(`CREATE INDEX IF NOT EXISTS idx_messages_channel_loc ON messages(channel, location_id)`);
+      await run(`CREATE INDEX IF NOT EXISTS idx_messages_at          ON messages(at DESC)`);
+      await run(`CREATE INDEX IF NOT EXISTS idx_messages_loc         ON messages(location_id)`);
+    },
+  },
 ];
 
 /**

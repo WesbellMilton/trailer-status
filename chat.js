@@ -45,12 +45,22 @@ router.get('/api/chat/history', requireChat, async (req, res) => {
     if (!canAccess(req.chatRole, channel)) return res.status(403).send('No access');
     const limit  = Math.min(100, Math.max(1, Number(req.query.limit)||50));
     const before = Number(req.query.before)||Number.MAX_SAFE_INTEGER;
-    const rows = await all(
-      `SELECT id,at,channel,role,sender,body,reply_to,reactions,photo_mime,
-              (CASE WHEN photo_data IS NOT NULL THEN 1 ELSE 0 END) as has_photo
-       FROM messages WHERE channel=? AND location_id=? AND id<? ORDER BY at DESC LIMIT ?`,
-      [channel, req.chatLocId, before, limit]
-    );
+    let rows;
+    try {
+      rows = await all(
+        `SELECT id,at,channel,role,sender,body,reply_to,reactions,photo_mime,
+                (CASE WHEN photo_data IS NOT NULL THEN 1 ELSE 0 END) as has_photo
+         FROM messages WHERE channel=? AND location_id=? AND id<? ORDER BY at DESC LIMIT ?`,
+        [channel, req.chatLocId, before, limit]
+      );
+    } catch {
+      // Migration 9 columns may not exist yet — fall back to base columns
+      rows = await all(
+        `SELECT id,at,channel,role,sender,body FROM messages
+         WHERE channel=? AND location_id=? AND id<? ORDER BY at DESC LIMIT ?`,
+        [channel, req.chatLocId, before, limit]
+      );
+    }
     res.json(rows.reverse().map(parseRow));
   } catch(e){ console.error('[chat]',e.message); res.status(500).send('History failed'); }
 });
@@ -74,10 +84,19 @@ router.post('/api/chat/send', requireChat, async (req, res) => {
       if (!parent) return res.status(400).send('Invalid reply_to');
     }
     const at = Date.now();
-    const result = await run(
-      `INSERT INTO messages(at,channel,role,sender,body,reply_to,photo_data,photo_mime,location_id) VALUES(?,?,?,?,?,?,?,?,?)`,
-      [at,channel,req.chatRole,sender,body||'',reply_to,photoData,photoMime,req.chatLocId]
-    );
+    let result;
+    try {
+      result = await run(
+        `INSERT INTO messages(at,channel,role,sender,body,reply_to,photo_data,photo_mime,location_id) VALUES(?,?,?,?,?,?,?,?,?)`,
+        [at,channel,req.chatRole,sender,body||'',reply_to,photoData,photoMime,req.chatLocId]
+      );
+    } catch {
+      // Migration 9 columns may not exist yet
+      result = await run(
+        `INSERT INTO messages(at,channel,role,sender,body,location_id) VALUES(?,?,?,?,?,?)`,
+        [at,channel,req.chatRole,sender,body||'',req.chatLocId]
+      );
+    }
     const msg = {id:result.lastID,at,channel,role:req.chatRole,sender,body:body||'',reply_to,reactions:{},has_photo:!!photoData,photo_mime:photoMime};
     wsBroadcastToLocation(req.chatLocId,'chat',{type:'message',data:msg});
     res.json({ok:true,id:result.lastID});

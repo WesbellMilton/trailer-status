@@ -3745,7 +3745,6 @@
     _open = true;
     gc.panel()?.classList.add('gc-panel--open');
     gc.bubble()?.classList.add('gc-bubble--open');
-    document.body.classList.add('gc-board-dim');
     _unread[_channel] = 0;
     markSeen(_channel);
     renderChannelPills();
@@ -3758,7 +3757,6 @@
     _open = false;
     gc.panel()?.classList.remove('gc-panel--open');
     gc.bubble()?.classList.remove('gc-bubble--open');
-    document.body.classList.remove('gc-board-dim');
     hideEmojiPicker();
     cancelReply();
   }

@@ -2458,9 +2458,9 @@
       }
     },5000);
 
-    ws.onopen=()=>{
+   ws.onopen=()=>{
   _wsConnecting=false;
-  const wasRetry=wsRetry>0;  // ← capture BEFORE reset
+  const wasRetry=wsRetry>0;
   wsRetry=0;
   wsStatus("ok");
   _replayOfflineQueue();

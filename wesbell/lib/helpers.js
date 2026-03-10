@@ -20,7 +20,7 @@ async function audit(req, actorRole, action, entityType, entityId, details) {
   let d = '';
   try { d = JSON.stringify(details || {}); } catch {}
   await run(
-    `INSERT INTO audit(at,"actorRole",action,"entityType","entityId",details,ip,"userAgent")
+    `INSERT INTO audit(at,actorRole,action,entityType,entityId,details,ip,userAgent)
      VALUES(?,?,?,?,?,?,?,?)`,
     [Date.now(), actorRole || 'unknown', action, entityType, entityId, d,
      ipOf(req), req.headers['user-agent'] || '']

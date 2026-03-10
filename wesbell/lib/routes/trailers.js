@@ -11,15 +11,9 @@ const { broadcastPush } = require('../push');
 
 const router = Router();
 
-// Lightweight keep-alive endpoint — no auth required, used by SW to prevent Render spin-down
-router.get('/api/ping', (req, res) => res.json({ ok: true, t: Date.now() }));
-
 router.get('/api/state', async (req, res) => {
   try {
-    const { getSession } = require('../auth');
-    const s = getSession(req);
-    const locationId = s?.locationId || null;  // null = all (for admin/unauthenticated fallback)
-    const data = await getTrailersCache(locationId);
+    const data = await getTrailersCache();
     const etag = `"${crypto.createHash('md5').update(JSON.stringify(data)).digest('hex').slice(0, 8)}"`;
     if (req.headers['if-none-match'] === etag) return res.status(304).end();
     res.setHeader('ETag', etag);
@@ -58,33 +52,14 @@ router.post('/api/upsert', requireXHR, _rds, async (req, res) => {
     const allowed = ['Incoming', 'Dropped', 'Loading', 'Dock Ready', 'Ready', 'Departed', ''];
     if (!allowed.includes(finalStatus)) return res.status(400).send('Invalid status');
 
-    // ── Door conflict check ───────────────────────────────────────────────────
-    // Warn (not block) if the requested door is already occupied by a different
-    // active trailer. Client can pass force:true to proceed anyway.
-    const doorChanged = door && door !== (existing?.door || '');
-    if (doorChanged && !req.body.force) {
-      const occupant = await get(
-        `SELECT trailer FROM trailers WHERE door=? AND trailer!=? AND status NOT IN ('Departed','')`,
-        [door, trailer]
-      );
-      if (occupant) {
-        return res.status(409).json({
-          conflict: true,
-          door,
-          occupant: occupant.trailer,
-          message: `Door ${door} is already assigned to trailer ${occupant.trailer}. Proceed anyway?`
-        });
-      }
-    }
-
     const doorAt = (door && door !== existing?.door) ? now : (existing?.doorAt || null);
     await run(
-      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt,doorAt)
+      `INSERT INTO trailers(trailer,direction,status,door,note,"dropType","carrierType","updatedAt","doorAt")
        VALUES(?,?,?,?,?,?,?,?,?)
        ON CONFLICT(trailer) DO UPDATE SET
          direction=excluded.direction,status=excluded.status,door=excluded.door,
-         note=excluded.note,dropType=excluded.dropType,carrierType=excluded.carrierType,
-         updatedAt=excluded.updatedAt,doorAt=COALESCE(trailers.doorAt,excluded.doorAt)`,
+         note=excluded.note,"dropType"=excluded."dropType","carrierType"=excluded."carrierType",
+         "updatedAt"=excluded."updatedAt","doorAt"=COALESCE(trailers."doorAt",excluded."doorAt")`,
       [trailer, direction, finalStatus, door, note, dropType, carrierType, now, doorAt]
     );
 
@@ -98,19 +73,9 @@ router.post('/api/upsert', requireXHR, _rds, async (req, res) => {
         wsBroadcast('notify', { kind: 'ready', trailer, door: door || '' });
         broadcastPush('🟢 Trailer Ready', `Trailer ${trailer} is ready${door ? ' at door ' + door : ''}`, { trailer, door }).catch(() => {});
         fireWebhook('trailer.ready', { trailer, door, actor });
-      } else if (finalStatus === 'Dock Ready') {
-        wsBroadcast('notify', { kind: 'dock_ready', trailer, door: door || '' });
-        broadcastPush('🔵 Dock Ready', `${trailer}${door ? ' · Door ' + door : ''} — ready to begin loading`, { trailer, door }).catch(() => {});
-        fireWebhook('trailer.dock_ready', { trailer, door, actor });
-      } else if (finalStatus === 'Loading') {
-        wsBroadcast('notify', { kind: 'loading', trailer, door: door || '' });
-        broadcastPush('🟡 Loading Started', `Trailer ${trailer}${door ? ' at Door ' + door : ''} — loading in progress`, { trailer, door }).catch(() => {});
-        fireWebhook('trailer.loading', { trailer, door, actor });
-      } else if (finalStatus === 'Departed') {
-        wsBroadcast('notify', { kind: 'departed', trailer, door: door || '' });
-        broadcastPush('🚪 Trailer Departed', `${trailer}${door ? ' — Door ' + door + ' now free' : ' has departed'}`, { trailer, door }).catch(() => {});
-        fireWebhook('trailer.departed', { trailer, door, actor });
-      }
+      } else if (finalStatus === 'Dock Ready') fireWebhook('trailer.dock_ready', { trailer, door, actor });
+      else if (finalStatus === 'Departed')     fireWebhook('trailer.departed',   { trailer, door, actor });
+      else if (finalStatus === 'Loading')      fireWebhook('trailer.loading',    { trailer, door, actor });
     }
 
     await logEvent('info', 'upsert', `${actor} set ${trailer} → ${finalStatus}`, `door=${door || '—'}`);
@@ -124,11 +89,8 @@ router.post('/api/delete', requireXHR, _rr(['dispatcher', 'management', 'admin']
   try {
     const trailer = String(req.body.trailer || '').trim().toUpperCase();
     if (!trailer) return res.status(400).send('Missing trailer');
-    // FIX: capture last known state before deletion for forensic audit trail
-    const before = await get(`SELECT status, door, direction FROM trailers WHERE trailer=?`, [trailer]);
     await run(`DELETE FROM trailers WHERE trailer=?`, [trailer]);
-    await audit(req, actor, 'trailer_delete', 'trailer', trailer,
-      { lastStatus: before?.status || '—', lastDoor: before?.door || '—', direction: before?.direction || '—' });
+    await audit(req, actor, 'trailer_delete', 'trailer', trailer, {});
     await broadcastTrailers();
     res.json({ ok: true });
   } catch { res.status(500).send('Delete failed'); }
@@ -137,12 +99,8 @@ router.post('/api/delete', requireXHR, _rr(['dispatcher', 'management', 'admin']
 router.post('/api/clear', requireXHR, _rr(['dispatcher', 'management', 'admin']), async (req, res) => {
   const actor = req.user?.role || 'unknown';
   try {
-    // FIX: capture count before clearing for audit trail
-    const countRow = await get(`SELECT COUNT(*) as cnt FROM trailers`);
-    const count = countRow?.cnt || 0;
     await run(`DELETE FROM trailers`);
-    await audit(req, actor, 'trailer_clear_all', 'trailer', '*',
-      { trailersCleared: count });
+    await audit(req, actor, 'trailer_clear_all', 'trailer', '*', {});
     await broadcastTrailers();
     res.json({ ok: true });
   } catch { res.status(500).send('Clear failed'); }
@@ -165,7 +123,7 @@ router.post('/api/shunt', requireXHR, async (req, res) => {
     if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send('Invalid door (28–42)');
     const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
     if (!existing) return res.status(404).send('Trailer not found');
-    await run(`UPDATE trailers SET door=?,status='Dropped',updatedAt=? WHERE trailer=?`, [door, Date.now(), trailer]);
+    await run(`UPDATE trailers SET door=?,status='Dropped',"updatedAt"=? WHERE trailer=?`, [door, Date.now(), trailer]);
     await audit(req, actor, 'trailer_shunt', 'trailer', trailer, { fromDoor: existing.door || '—', toDoor: door });
     await broadcastTrailers();
     res.json({ ok: true, door });
@@ -176,31 +134,20 @@ router.post('/api/shunt', requireXHR, async (req, res) => {
 router.get('/api/load-status', _rr(['dispatcher', 'management', 'admin', 'dock']), async (req, res) => {
   try {
     const { all } = require('../db');
-    const rows = await all(`SELECT * FROM trailers WHERE status NOT IN ('Departed','') ORDER BY updatedAt DESC`);
-    // FIX: was N+1 — one audit query per trailer row. Single query fetches last status change
-    // for all trailers at once; we then join in JS.
-    const ids = rows.map(r => r.trailer);
-    let statusSinceMap = {};
-    if (ids.length > 0) {
-      const placeholders = ids.map(() => '?').join(',');
-      const auditRows = await all(
-        `SELECT entityId, MAX(at) as at FROM audit
-         WHERE entityId IN (${placeholders}) AND action='trailer_status_set'
-         GROUP BY entityId`,
-        ids
+    const rows = await all(`SELECT * FROM trailers WHERE status NOT IN ('Departed','') ORDER BY "updatedAt" DESC`);
+    const result = await Promise.all(rows.map(async r => {
+      const lastChange = await get(
+        `SELECT at FROM audit WHERE entityId=? AND action='trailer_status_set' ORDER BY at DESC LIMIT 1`,
+        [r.trailer]
       );
-      for (const a of auditRows) statusSinceMap[a.entityId] = a.at;
-    }
-    const result = rows.map(r => {
-      const statusSince = statusSinceMap[r.trailer] || r.updatedAt;
       return {
         trailer: r.trailer, status: r.status, door: r.door || '', direction: r.direction || '',
         dropType: r.dropType || '', carrierType: r.carrierType || '',
         updatedAt: r.updatedAt, doorAt: r.doorAt || null, omwAt: r.omwAt || null, omwEta: r.omwEta || null,
-        statusSince,
-        timeInStatusMs: Date.now() - statusSince,
+        statusSince: lastChange?.at || r.updatedAt,
+        timeInStatusMs: Date.now() - (lastChange?.at || r.updatedAt),
       };
-    });
+    }));
     res.json(result);
   } catch (e) { console.error('[load-status]', e); res.status(500).send('Load status failed'); }
 });

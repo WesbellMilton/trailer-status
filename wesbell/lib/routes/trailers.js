@@ -13,7 +13,10 @@ const router = Router();
 
 router.get('/api/state', async (req, res) => {
   try {
-    const data = await getTrailersCache();
+    const { getSession } = require('../auth');
+    const s = getSession(req);
+    const locationId = s?.locationId || null;  // null = all (for admin/unauthenticated fallback)
+    const data = await getTrailersCache(locationId);
     const etag = `"${crypto.createHash('md5').update(JSON.stringify(data)).digest('hex').slice(0, 8)}"`;
     if (req.headers['if-none-match'] === etag) return res.status(304).end();
     res.setHeader('ETag', etag);
@@ -54,12 +57,12 @@ router.post('/api/upsert', requireXHR, _rds, async (req, res) => {
 
     const doorAt = (door && door !== existing?.door) ? now : (existing?.doorAt || null);
     await run(
-      `INSERT INTO trailers(trailer,direction,status,door,note,"dropType","carrierType","updatedAt","doorAt")
+      `INSERT INTO trailers(trailer,direction,status,door,note,dropType,carrierType,updatedAt,doorAt)
        VALUES(?,?,?,?,?,?,?,?,?)
        ON CONFLICT(trailer) DO UPDATE SET
          direction=excluded.direction,status=excluded.status,door=excluded.door,
-         note=excluded.note,"dropType"=excluded."dropType","carrierType"=excluded."carrierType",
-         "updatedAt"=excluded."updatedAt","doorAt"=COALESCE(trailers."doorAt",excluded."doorAt")`,
+         note=excluded.note,dropType=excluded.dropType,carrierType=excluded.carrierType,
+         updatedAt=excluded.updatedAt,doorAt=COALESCE(trailers.doorAt,excluded.doorAt)`,
       [trailer, direction, finalStatus, door, note, dropType, carrierType, now, doorAt]
     );
 
@@ -73,9 +76,16 @@ router.post('/api/upsert', requireXHR, _rds, async (req, res) => {
         wsBroadcast('notify', { kind: 'ready', trailer, door: door || '' });
         broadcastPush('🟢 Trailer Ready', `Trailer ${trailer} is ready${door ? ' at door ' + door : ''}`, { trailer, door }).catch(() => {});
         fireWebhook('trailer.ready', { trailer, door, actor });
-      } else if (finalStatus === 'Dock Ready') fireWebhook('trailer.dock_ready', { trailer, door, actor });
-      else if (finalStatus === 'Departed')     fireWebhook('trailer.departed',   { trailer, door, actor });
-      else if (finalStatus === 'Loading')      fireWebhook('trailer.loading',    { trailer, door, actor });
+      } else if (finalStatus === 'Dock Ready') {
+        wsBroadcast('notify', { kind: 'dock_ready', trailer, door: door || '' });
+        fireWebhook('trailer.dock_ready', { trailer, door, actor });
+      } else if (finalStatus === 'Loading') {
+        wsBroadcast('notify', { kind: 'loading', trailer, door: door || '' });
+        fireWebhook('trailer.loading', { trailer, door, actor });
+      } else if (finalStatus === 'Departed') {
+        wsBroadcast('notify', { kind: 'departed', trailer, door: door || '' });
+        fireWebhook('trailer.departed', { trailer, door, actor });
+      }
     }
 
     await logEvent('info', 'upsert', `${actor} set ${trailer} → ${finalStatus}`, `door=${door || '—'}`);
@@ -123,7 +133,7 @@ router.post('/api/shunt', requireXHR, async (req, res) => {
     if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send('Invalid door (28–42)');
     const existing = await get(`SELECT * FROM trailers WHERE trailer=?`, [trailer]);
     if (!existing) return res.status(404).send('Trailer not found');
-    await run(`UPDATE trailers SET door=?,status='Dropped',"updatedAt"=? WHERE trailer=?`, [door, Date.now(), trailer]);
+    await run(`UPDATE trailers SET door=?,status='Dropped',updatedAt=? WHERE trailer=?`, [door, Date.now(), trailer]);
     await audit(req, actor, 'trailer_shunt', 'trailer', trailer, { fromDoor: existing.door || '—', toDoor: door });
     await broadcastTrailers();
     res.json({ ok: true, door });
@@ -134,7 +144,7 @@ router.post('/api/shunt', requireXHR, async (req, res) => {
 router.get('/api/load-status', _rr(['dispatcher', 'management', 'admin', 'dock']), async (req, res) => {
   try {
     const { all } = require('../db');
-    const rows = await all(`SELECT * FROM trailers WHERE status NOT IN ('Departed','') ORDER BY "updatedAt" DESC`);
+    const rows = await all(`SELECT * FROM trailers WHERE status NOT IN ('Departed','') ORDER BY updatedAt DESC`);
     const result = await Promise.all(rows.map(async r => {
       const lastChange = await get(
         `SELECT at FROM audit WHERE entityId=? AND action='trailer_status_set' ORDER BY at DESC LIMIT 1`,

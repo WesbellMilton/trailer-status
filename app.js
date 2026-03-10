@@ -3532,16 +3532,18 @@
 
   // ── Actions (react, reply) via delegation ──────────────────────
   function wireMessageActions() {
-    gc.messages().addEventListener('click', e => {
-      const btn = e.target.closest('[data-action]');
-      if (!btn) return;
-      const action = btn.dataset.action;
-      const id = Number(btn.dataset.id);
-      if (action === 'react') showEmojiPicker(id, btn);
-      if (action === 'reply') startReply(id);
-      if (action === 'react-pill') doReact(id, btn.dataset.emoji);
-    });
-  }
+  const msgs = gc.messages();
+  if (!msgs) return;
+  msgs.addEventListener('click', e => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    const id = Number(btn.dataset.id);
+    if (action === 'react') showEmojiPicker(id, btn);
+    if (action === 'reply') startReply(id);
+    if (action === 'react-pill') doReact(id, btn.dataset.emoji);
+  });
+}
 
   // ── Emoji picker ───────────────────────────────────────────────
   function showEmojiPicker(msgId, anchor) {

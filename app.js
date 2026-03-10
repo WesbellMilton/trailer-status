@@ -2451,7 +2451,7 @@
 
     // Watchdog: if no message in 40s, force close so onclose fires and reconnects
     const watchdog=setInterval(()=>{
-      if(Date.now()-lastMsg>40000){
+      if(Date.now()-lastMsg>25000){
         console.warn("[WS] watchdog — no message in 40s, reconnecting");
         clearInterval(watchdog);
         try{ws.close();}catch{}

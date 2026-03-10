@@ -45,8 +45,8 @@ async function loadTrailersObject(locationId = null) {
 
 async function loadDockPlatesObject(locationId = null) {
   const rows = locationId
-    ? await all(`SELECT * FROM dockplates WHERE location_id=? ORDER BY CAST(door AS INTEGER) ASC`, [locationId])
-    : await all(`SELECT * FROM dockplates ORDER BY CAST(door AS INTEGER) ASC`);
+    ? await all(`SELECT * FROM dockplates WHERE location_id=? ORDER BY door::int ASC`, [locationId])
+    : await all(`SELECT * FROM dockplates ORDER BY door::int ASC`);
   const obj = {};
   for (const r of rows) {
     obj[r.door] = { status: r.status || 'Unknown', note: r.note || '', updatedAt: r.updatedAt || 0 };

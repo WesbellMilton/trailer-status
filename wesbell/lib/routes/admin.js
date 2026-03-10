@@ -32,13 +32,13 @@ router.post('/api/admin/locations', requireXHR, requireRole(['admin']), async (r
     const existing = await get(`SELECT id FROM locations WHERE slug=?`, [slug]);
     if (existing) return res.status(409).send('Slug already in use');
     const r = await run(
-      `INSERT INTO locations(name,slug,doors_from,doors_to,timezone,active,"createdAt") VALUES(?,?,?,?,?,1,?)`,
+      `INSERT INTO locations(name,slug,doors_from,doors_to,timezone,active,createdAt) VALUES(?,?,?,?,?,1,?)`,
       [name, slug, doors_from, doors_to, timezone, Date.now()]
     );
     const newId = r.lastID;
     // Seed dockplates for new location
     for (let d = doors_from; d <= doors_to; d++) {
-      await run(`INSERT INTO dockplates(door,status,note,updatedAt,location_id) VALUES(?,?,?,?,?) ON CONFLICT(door) DO NOTHING`,
+      await run(`INSERT OR IGNORE INTO dockplates(door,status,note,updatedAt,location_id) VALUES(?,?,?,?,?)`,
         [String(d), 'Unknown', '', Date.now(), newId]);
     }
     await audit(req, 'admin', 'location_create', 'location', slug, { name, slug, doors_from, doors_to });
@@ -74,7 +74,7 @@ router.get('/api/admin/overview', requireRole(['admin']), async (req, res) => {
         [loc.id, Date.now() - 24 * 3_600_000]);
       return {
         id: loc.id, name: loc.name, slug: loc.slug, timezone: loc.timezone,
-        total: trailers.length, byStatus, openIssues: Number(issues[0]?.cnt || 0),
+        total: trailers.length, byStatus, openIssues: issues[0]?.cnt || 0,
       };
     }));
     res.json(result);

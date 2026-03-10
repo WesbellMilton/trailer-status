@@ -52,8 +52,8 @@ router.post('/api/dockplates/set', requireXHR, requireRole(['dock', 'dispatcher'
     const dNum   = Number(door);
     if (!Number.isFinite(dNum) || dNum < 28 || dNum > 42) return res.status(400).send('Invalid door');
     if (!['OK', 'Service', 'Out of Order', 'Unknown'].includes(status)) return res.status(400).send('Invalid plate status');
-    await run(`INSERT INTO dockplates(door,status,note,"updatedAt") VALUES(?,?,?,?)
-               ON CONFLICT(door) DO UPDATE SET status=excluded.status,note=excluded.note,"updatedAt"=excluded."updatedAt"`,
+    await run(`INSERT INTO dockplates(door,status,note,updatedAt) VALUES(?,?,?,?)
+               ON CONFLICT(door) DO UPDATE SET status=excluded.status,note=excluded.note,updatedAt=excluded.updatedAt`,
       [door, status, note, Date.now()]);
     await audit(req, actor, 'plate_set', 'dockplate', door, { status, note });
     await broadcastPlates();

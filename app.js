@@ -2459,15 +2459,14 @@
     },5000);
 
     ws.onopen=()=>{
-      _wsConnecting=false;
-      wsRetry=0;
-      wsStatus("ok");
-      _replayOfflineQueue();
-      // Tell server which location this client belongs to
-      try{ws.send(JSON.stringify({type:"identify",locationId:_locationId||1}));}catch{}
-      // Resync after any reconnect (not first load — server sends state on connect)
-      if(wsRetry>0&&trailers&&Object.keys(trailers).length>0)_resyncState();
-    };
+  _wsConnecting=false;
+  const wasRetry=wsRetry>0;  // ← capture BEFORE reset
+  wsRetry=0;
+  wsStatus("ok");
+  _replayOfflineQueue();
+  try{ws.send(JSON.stringify({type:"identify",locationId:_locationId||1}));}catch{}
+  if(wasRetry&&trailers&&Object.keys(trailers).length>0)_resyncState();
+};
 
     ws.onclose=e=>{
       _wsConnecting=false;

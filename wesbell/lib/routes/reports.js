@@ -30,7 +30,7 @@ router.post('/api/report-issue', requireXHR, async (req, res) => {
     }
     const at = Date.now();
     const result = await run(
-      `INSERT INTO issue_reports(at,trailer,door,note,photo_data,photo_mime,ip,userAgent) VALUES(?,?,?,?,?,?,?,?)`,
+      `INSERT INTO issue_reports(at,trailer,door,note,photo_data,photo_mime,ip,"userAgent") VALUES(?,?,?,?,?,?,?,?)`,
       [at, trailer, door, note, photoData || null, photoMime || null, ipOf(req), req.headers['user-agent'] || '']
     );
     await audit(req, actorRole, 'issue_reported', 'trailer', trailer,
@@ -65,10 +65,25 @@ router.get('/api/issue-reports/:id/photo', requireRole(['dispatcher', 'managemen
   } catch { res.status(500).send('Fetch failed'); }
 });
 
+// ── Audit ─────────────────────────────────────────────────────────────────────
+router.get('/api/audit', requireRole(['dispatcher', 'management', 'admin']), async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(500, Number(req.query.limit || 200)));
+    const rows  = await all(
+      `SELECT at,"actorRole",action,"entityType","entityId",details,ip,"userAgent" FROM audit ORDER BY at DESC LIMIT ?`,
+      [limit]
+    );
+    res.json(rows.map(r => {
+      let details = {}; try { details = r.details ? JSON.parse(r.details) : {}; } catch {}
+      return { ...r, details };
+    }));
+  } catch { res.status(500).send('Audit failed'); }
+});
+
 // ── CSV exports ────────────────────────────────────────────────────────────────
 router.get('/api/export/trailers.csv', requireRole(['dispatcher', 'management', 'admin']), async (req, res) => {
   try {
-    const rows    = await all(`SELECT * FROM trailers ORDER BY updatedAt DESC`);
+    const rows    = await all(`SELECT * FROM trailers ORDER BY "updatedAt" DESC`);
     const headers = ['trailer', 'direction', 'status', 'door', 'note', 'dropType', 'carrierType', 'updatedAt', 'doorAt', 'omwAt', 'omwEta'];
     const fmt     = v => v == null ? '' : String(v).replace(/"/g, '""');
     const csv     = [headers.join(','), ...rows.map(r => headers.map(h => `"${fmt(r[h])}"`).join(','))].join('\n');

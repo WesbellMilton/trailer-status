@@ -1,64 +1,93 @@
 'use strict';
-const { run, all }            = require('./db');
-const { RESERVATION_TTL_MS }  = require('./config');
-const { broadcastTrailers }   = require('./ws');
+const { all } = require('./db');
 
-async function getOccupiedDoorSet(excludeTrailer = null) {
-  const occupied = await all(
-    `SELECT door FROM trailers WHERE door IS NOT NULL AND door != '' AND status NOT IN ('Departed','')${excludeTrailer ? ' AND trailer != ?' : ''}`,
-    excludeTrailer ? [excludeTrailer] : []
-  );
-  const blocks   = await all(`SELECT door FROM doorblocks`);
-  const reserved = await all(`SELECT door FROM door_reservations WHERE "expiresAt" > ?`, [Date.now()]);
-  return new Set([
-    ...occupied.map(r => String(r.door)),
-    ...blocks.map(r => String(r.door)),
-    ...reserved.map(r => String(r.door)),
-  ]);
-}
+// ── In-memory caches (keyed by locationId) ────────────────────────────────────
+const _trailersCache = new Map(); // locationId|'all' → object
+const _platesCache   = new Map(); // locationId|'all' → object
+const _blocksCache   = new Map(); // locationId|'all' → object
 
-async function pickBestDoor(excludeTrailer = null) {
-  const occupiedSet = await getOccupiedDoorSet(excludeTrailer);
-  const plates      = await all(`SELECT door,status FROM dockplates`);
-  const plateMap    = {};
-  plates.forEach(p => { plateMap[String(p.door)] = p.status; });
+const invalidateTrailers = (locationId = null) => {
+  if (locationId) _trailersCache.delete(locationId);
+  else _trailersCache.clear();
+};
+const invalidatePlates = (locationId = null) => {
+  if (locationId) _platesCache.delete(locationId);
+  else _platesCache.clear();
+};
+const invalidateBlocks = (locationId = null) => {
+  if (locationId) _blocksCache.delete(locationId);
+  else _blocksCache.clear();
+};
 
-  const candidates = [];
-  for (let d = 28; d <= 42; d++) {
-    const ds = String(d);
-    if (occupiedSet.has(ds)) continue;
-    const ps = plateMap[ds] || 'Unknown';
-    if (ps === 'Out of Order') continue;
-    candidates.push({ door: ds, priority: ps === 'OK' ? 0 : ps === 'Unknown' ? 1 : 2 });
+// ── Loaders ───────────────────────────────────────────────────────────────────
+async function loadTrailersObject(locationId = null) {
+  const rows = locationId
+    ? await all(`SELECT * FROM trailers WHERE location_id=?`, [locationId])
+    : await all(`SELECT * FROM trailers`);
+  const obj = {};
+  for (const r of rows) {
+    obj[r.trailer] = {
+      direction  : r.direction   || '',
+      status     : r.status      || '',
+      door       : r.door        || '',
+      note       : r.note        || '',
+      dropType   : r.dropType    || '',
+      carrierType: r.carrierType || '',
+      updatedAt  : r.updatedAt   || 0,
+      omwAt      : r.omwAt       ?? null,
+      omwEta     : r.omwEta      ?? null,
+      doorAt     : r.doorAt      ?? null,
+      locationId : r.location_id || 1,
+    };
   }
-  candidates.sort((a, b) => a.priority - b.priority);
-  return candidates[0]?.door || null;
+  return obj;
 }
 
-async function reserveDoor(door, trailer, carrierType) {
-  const now = Date.now();
-  await run(
-    `INSERT INTO door_reservations(door,trailer,"carrierType","reservedAt","expiresAt")
-     VALUES(?,?,?,?,?)
-     ON CONFLICT(door) DO UPDATE SET
-       trailer=excluded.trailer,
-       "carrierType"=excluded."carrierType",
-       "reservedAt"=excluded."reservedAt",
-       "expiresAt"=excluded."expiresAt"`,
-    [door, trailer, carrierType, now, now + RESERVATION_TTL_MS]
-  );
-}
-
-const releaseReservation = trailer =>
-  run(`DELETE FROM door_reservations WHERE trailer=?`, [trailer]);
-
-async function cleanupExpiredReservations() {
-  const r = await run(`DELETE FROM door_reservations WHERE "expiresAt" <= ?`, [Date.now()]);
-  if (r.changes > 0) {
-    console.log(`[reservations] Cleaned up ${r.changes} expired reservation(s)`);
-    await broadcastTrailers();
+async function loadDockPlatesObject(locationId = null) {
+  const rows = locationId
+    ? await all(`SELECT * FROM dockplates WHERE location_id=? ORDER BY CAST(door AS INTEGER) ASC`, [locationId])
+    : await all(`SELECT * FROM dockplates ORDER BY CAST(door AS INTEGER) ASC`);
+  const obj = {};
+  for (const r of rows) {
+    obj[r.door] = { status: r.status || 'Unknown', note: r.note || '', updatedAt: r.updatedAt || 0 };
   }
+  return obj;
 }
-setInterval(cleanupExpiredReservations, 2 * 60_000).unref();
 
-module.exports = { getOccupiedDoorSet, pickBestDoor, reserveDoor, releaseReservation, cleanupExpiredReservations };
+async function loadDoorBlocksObject(locationId = null) {
+  const rows = locationId
+    ? await all(`SELECT * FROM doorblocks WHERE location_id=?`, [locationId])
+    : await all(`SELECT * FROM doorblocks`);
+  const obj = {};
+  rows.forEach(r => { obj[r.door] = { note: r.note, setAt: r.setAt }; });
+  return obj;
+}
+
+// ── Cached getters ────────────────────────────────────────────────────────────
+async function getTrailersCache(locationId = null) {
+  const key = locationId || 'all';
+  if (!_trailersCache.has(key)) _trailersCache.set(key, await loadTrailersObject(locationId));
+  return _trailersCache.get(key);
+}
+async function getPlatesCache(locationId = null) {
+  const key = locationId || 'all';
+  if (!_platesCache.has(key)) _platesCache.set(key, await loadDockPlatesObject(locationId));
+  return _platesCache.get(key);
+}
+async function getBlocksCache(locationId = null) {
+  const key = locationId || 'all';
+  if (!_blocksCache.has(key)) _blocksCache.set(key, await loadDoorBlocksObject(locationId));
+  return _blocksCache.get(key);
+}
+
+const loadConfirmations = (limit = 250, locationId = null) =>
+  locationId
+    ? all(`SELECT at,trailer,door,action,ip,userAgent FROM confirmations WHERE location_id=? ORDER BY at DESC LIMIT ?`, [locationId, limit])
+    : all(`SELECT at,trailer,door,action,ip,userAgent FROM confirmations ORDER BY at DESC LIMIT ?`, [limit]);
+
+module.exports = {
+  invalidateTrailers, invalidatePlates, invalidateBlocks,
+  loadTrailersObject, loadDockPlatesObject, loadDoorBlocksObject,
+  getTrailersCache, getPlatesCache, getBlocksCache,
+  loadConfirmations,
+};

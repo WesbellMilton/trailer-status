@@ -370,8 +370,10 @@
     });
   }
 
+  // renderBoardInto: used only for management supTbody (read-only board).
+  // The tbodyEl===el("tbody") guard is dead code — supTbody is never tbody.
   function renderBoardInto(tbodyEl,countEl,countStrEl,sq,dq,stq,readOnly){
-    if(tbodyEl===el("tbody")){renderDispRows();return;}
+    if(tbodyEl===el("tbody")){renderDispRows();return;} // dead guard — kept for safety
     if(!tbodyEl)return;
     const q=(sq?.value||"").trim().toLowerCase(),df=(dq?.value||"").trim(),sf=(stq?.value||"").trim();
     const STATUS_PRIORITY={Ready:0,"Dock Ready":1,Loading:2,Dropped:3,Incoming:4,Departed:5};
@@ -1361,7 +1363,7 @@
     el("btnDockBulk")?.addEventListener("click",toggleDockBulkMode);
     el("btnDimMode")?.addEventListener("click",toggleDimMode);
     el("btnDockStaffLogin")?.addEventListener("click",()=>el("staffLoginOv")?.classList.remove("hidden"));
-    el("btnVoiceDock")?.addEventListener("click",startVoiceInput);
+    // Voice input wired by initVoiceInput() — do not add another listener here
     _wireDvPanel("dvPlatesToggle","dvPlatesBody");
   }
 
@@ -1694,6 +1696,7 @@
   async function dockSet(trailer,status){
     haptic("medium");
     // Optimistic update — reflect change instantly on both boards before WS round-trip
+    const _prevStatus=trailers[trailer]?.status;
     if(trailers[trailer]){
       trailers[trailer].status=status;
       trailers[trailer].updatedAt=Date.now();
@@ -1707,8 +1710,8 @@
       showToast(lbl[status]||`${trailer} → ${status}`,"ok");
     }
     catch(e){
-      // Revert optimistic update on failure
-      if(trailers[trailer]){delete trailers[trailer].status;renderBoard();if(isDock())renderDockView();}
+      // Revert optimistic update on failure — restore previous status (was incorrectly deleting the key)
+      if(trailers[trailer]&&_prevStatus!==undefined){trailers[trailer].status=_prevStatus;renderBoard();if(isDock())renderDockView();}
       toast("Update failed",e.message,"err");
     }
   }
@@ -3461,7 +3464,7 @@
     wrap.className = `gc-msg gc-msg--${mine?'mine':'theirs'}${cont?' gc-msg--cont':' gc-msg--new-group'}`;
     wrap.dataset.id = msg.id;
 
-    const time = fmtTime(msg.at);
+    const time = _gcFmtTime(msg.at);
     let inner = '';
 
     // meta (sender + time) — hidden on cont
@@ -3655,7 +3658,9 @@
   }
 
   // ── WS ─────────────────────────────────────────────────────────
+  let _wsPoll = null;
   function wireWS() {
+    if (_wsPoll) clearInterval(_wsPoll);
     const hook = ws => {
       if (!ws || ws._gcHooked) return;
       ws._gcHooked = true;
@@ -3668,7 +3673,7 @@
         } catch {}
       };
     };
-    const poll = setInterval(() => {
+    _wsPoll = setInterval(() => {
       if (window._ws) { hook(window._ws); _wsRef = window._ws; }
       if (_wsRef && window._ws !== _wsRef) hook(window._ws);
     }, 500);
@@ -3713,7 +3718,9 @@
       const { id, reactions } = payload.data;
       if (_msgCache[id]) _msgCache[id].reactions = reactions;
       // Update DOM
-      const el = gc.messages().querySelector(`[data-id="${id}"]`);
+      const _area = gc.messages();
+      if (!_area) return;
+      const el = _area.querySelector(`[data-id="${id}"]`);
       if (!el) return;
       let rxRow = el.querySelector('.gc-reactions');
       const keys = Object.keys(reactions || {});
@@ -3895,7 +3902,7 @@
     if (d.toDateString() === y.toDateString()) return 'Yesterday';
     return d.toLocaleDateString('en-CA', { month:'short', day:'numeric' });
   }
-  function fmtTime(ts) {
+  function _gcFmtTime(ts) {
     return new Date(ts).toLocaleTimeString('en-CA', { hour:'2-digit', minute:'2-digit' });
   }
   function esc(s) {

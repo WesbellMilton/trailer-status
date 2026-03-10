@@ -18,7 +18,7 @@ router.post('/api/push/subscribe', requireXHR, requireDriverRate, async (req, re
       return res.status(400).send('Invalid subscription');
     push.pushSubs.set(sub.endpoint, sub);
     await run(
-      `INSERT INTO push_subscriptions(endpoint,subscription,createdAt) VALUES(?,?,?)
+      `INSERT INTO push_subscriptions(endpoint,subscription,"createdAt") VALUES(?,?,?)
        ON CONFLICT(endpoint) DO UPDATE SET subscription=excluded.subscription`,
       [sub.endpoint, JSON.stringify(sub), Date.now()]
     );

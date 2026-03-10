@@ -44,5 +44,10 @@ router.get('/dock',       guardPage(['dock', 'dispatcher', 'management', 'admin'
 router.get('/driver',     guardPage(['__driver__', 'dock', 'dispatcher', 'management', 'admin']), sendIndex);
 router.get('/management', guardPage(['management', 'admin']), sendIndex);
 router.get('/login',      require('./login'));
+// ── Ping ──────────────────────────────────────────────────────────────────────
+router.get('/api/ping', (req, res) => {
+  res.json({ ok: true, t: Date.now() });
+});
 
+module.exports = router;
 module.exports = router;

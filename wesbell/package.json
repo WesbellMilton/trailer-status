@@ -1,6 +1,6 @@
 {
   "name": "wesbell-dispatch",
-  "version": "3.7.0",
+  "version": "3.8.0",
   "description": "Wesbell Dispatch — modular dock & driver portal",
   "main": "server.js",
   "scripts": {
@@ -10,7 +10,7 @@
   "dependencies": {
     "express": "^4.18.2",
     "ws": "^8.16.0",
-    "sqlite3": "^5.1.7"
+    "pg": "^8.12.0"
   },
   "engines": {
     "node": ">=18.0.0"

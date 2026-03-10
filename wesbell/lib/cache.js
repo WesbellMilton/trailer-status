@@ -1,30 +1,19 @@
 'use strict';
 const { all } = require('./db');
 
-// ── In-memory caches (keyed by locationId) ────────────────────────────────────
-const _trailersCache = new Map(); // locationId|'all' → object
-const _platesCache   = new Map(); // locationId|'all' → object
-const _blocksCache   = new Map(); // locationId|'all' → object
+// ── In-memory caches ──────────────────────────────────────────────────────────
+let _trailers = null;
+let _plates   = null;
+let _blocks   = null;
 
-const invalidateTrailers = (locationId = null) => {
-  if (locationId) _trailersCache.delete(locationId);
-  else _trailersCache.clear();
-};
-const invalidatePlates = (locationId = null) => {
-  if (locationId) _platesCache.delete(locationId);
-  else _platesCache.clear();
-};
-const invalidateBlocks = (locationId = null) => {
-  if (locationId) _blocksCache.delete(locationId);
-  else _blocksCache.clear();
-};
+const invalidateTrailers = () => { _trailers = null; };
+const invalidatePlates   = () => { _plates   = null; };
+const invalidateBlocks   = () => { _blocks   = null; };
 
 // ── Loaders ───────────────────────────────────────────────────────────────────
-async function loadTrailersObject(locationId = null) {
-  const rows = locationId
-    ? await all(`SELECT * FROM trailers WHERE location_id=?`, [locationId])
-    : await all(`SELECT * FROM trailers`);
-  const obj = {};
+async function loadTrailersObject() {
+  const rows = await all(`SELECT * FROM trailers`);
+  const obj  = {};
   for (const r of rows) {
     obj[r.trailer] = {
       direction  : r.direction   || '',
@@ -37,53 +26,43 @@ async function loadTrailersObject(locationId = null) {
       omwAt      : r.omwAt       ?? null,
       omwEta     : r.omwEta      ?? null,
       doorAt     : r.doorAt      ?? null,
-      locationId : r.location_id || 1,
     };
   }
   return obj;
 }
 
-async function loadDockPlatesObject(locationId = null) {
-  const rows = locationId
-    ? await all(`SELECT * FROM dockplates WHERE location_id=? ORDER BY door::int ASC`, [locationId])
-    : await all(`SELECT * FROM dockplates ORDER BY door::int ASC`);
-  const obj = {};
+async function loadDockPlatesObject() {
+  const rows = await all(`SELECT * FROM dockplates ORDER BY CAST(door AS INTEGER) ASC`);
+  const obj  = {};
   for (const r of rows) {
     obj[r.door] = { status: r.status || 'Unknown', note: r.note || '', updatedAt: r.updatedAt || 0 };
   }
   return obj;
 }
 
-async function loadDoorBlocksObject(locationId = null) {
-  const rows = locationId
-    ? await all(`SELECT * FROM doorblocks WHERE location_id=?`, [locationId])
-    : await all(`SELECT * FROM doorblocks`);
-  const obj = {};
+async function loadDoorBlocksObject() {
+  const rows = await all(`SELECT * FROM doorblocks`);
+  const obj  = {};
   rows.forEach(r => { obj[r.door] = { note: r.note, setAt: r.setAt }; });
   return obj;
 }
 
 // ── Cached getters ────────────────────────────────────────────────────────────
-async function getTrailersCache(locationId = null) {
-  const key = locationId || 'all';
-  if (!_trailersCache.has(key)) _trailersCache.set(key, await loadTrailersObject(locationId));
-  return _trailersCache.get(key);
+async function getTrailersCache() {
+  if (!_trailers) _trailers = await loadTrailersObject();
+  return _trailers;
 }
-async function getPlatesCache(locationId = null) {
-  const key = locationId || 'all';
-  if (!_platesCache.has(key)) _platesCache.set(key, await loadDockPlatesObject(locationId));
-  return _platesCache.get(key);
+async function getPlatesCache() {
+  if (!_plates) _plates = await loadDockPlatesObject();
+  return _plates;
 }
-async function getBlocksCache(locationId = null) {
-  const key = locationId || 'all';
-  if (!_blocksCache.has(key)) _blocksCache.set(key, await loadDoorBlocksObject(locationId));
-  return _blocksCache.get(key);
+async function getBlocksCache() {
+  if (!_blocks) _blocks = await loadDoorBlocksObject();
+  return _blocks;
 }
 
-const loadConfirmations = (limit = 250, locationId = null) =>
-  locationId
-    ? all(`SELECT at,trailer,door,action,ip,userAgent FROM confirmations WHERE location_id=? ORDER BY at DESC LIMIT ?`, [locationId, limit])
-    : all(`SELECT at,trailer,door,action,ip,userAgent FROM confirmations ORDER BY at DESC LIMIT ?`, [limit]);
+const loadConfirmations = (limit = 250) =>
+  all(`SELECT at,trailer,door,action,ip,"userAgent" FROM confirmations ORDER BY at DESC LIMIT ?`, [limit]);
 
 module.exports = {
   invalidateTrailers, invalidatePlates, invalidateBlocks,

@@ -1,6 +1,5 @@
 'use strict';
 const path = require('path');
-const fs   = require('fs');
 
 const PORT        = process.env.PORT || 3000;
 const APP_VERSION = process.env.APP_VERSION || '3.7.0';
@@ -8,12 +7,12 @@ const NODE_ENV    = process.env.NODE_ENV || 'development';
 const IS_PROD     = NODE_ENV === 'production';
 
 // ── Database ──────────────────────────────────────────────────────────────────
-const DB_FILE = process.env.DB_FILE || (() => {
-  for (const candidate of ['/var/data/wesbell.sqlite', '/tmp/wesbell.sqlite']) {
-    try { fs.mkdirSync(path.dirname(candidate), { recursive: true }); return candidate; } catch {}
-  }
-  return path.join(__dirname, '..', 'wesbell.sqlite');
-})();
+// PostgreSQL — connection string required
+if (!process.env.DATABASE_URL) {
+  console.error('[CONFIG] ERROR: DATABASE_URL environment variable is not set.');
+  console.error('[CONFIG] Create a PostgreSQL database on Render and link it to this service.');
+  process.exit(1);
+}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 const PIN_MIN_LEN    = 4;
@@ -70,7 +69,7 @@ const WEBHOOK_URL = process.env.WEBHOOK_URL || '';
 
 module.exports = {
   PORT, APP_VERSION, NODE_ENV, IS_PROD,
-  DB_FILE, PIN_MIN_LEN, SESSION_TTL_MS, COOKIE_NAME, ENV_PINS,
+  PIN_MIN_LEN, SESSION_TTL_MS, COOKIE_NAME, ENV_PINS,
   VAPID_FILE, RESERVATION_TTL_MS, GEOFENCE_ZONES,
   LOGIN_RATE_MAX, DRIVER_RATE_MAX,
   ROLE_HOME, MAX_LOGS, WEBHOOK_URL,

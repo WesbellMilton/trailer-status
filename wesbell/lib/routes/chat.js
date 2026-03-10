@@ -1,9 +1,8 @@
 'use strict';
 const { Router } = require('express');
-const { requireRole, requireDriverAccess, getSession } = require('../auth');
+const { getSession } = require('../auth');
 const { run, get, all } = require('../db');
 const { wsBroadcastToLocation } = require('../ws');
-const { ipOf } = require('../middleware');
 
 const router = Router();
 const MAX_PHOTO_BYTES = 4 * 1024 * 1024;
@@ -18,33 +17,8 @@ const CHANNEL_ROLES = {
 const VALID_CHANNELS = Object.keys(CHANNEL_ROLES);
 const canAccess = (role, ch) => !!(role && (CHANNEL_ROLES[ch]||[]).includes(role));
 
-// ── Ensure messages table exists (safe to call multiple times) ────────────────
-async function ensureMessagesTable() {
-  await run(`
-    CREATE TABLE IF NOT EXISTS messages (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      at          INTEGER NOT NULL,
-      channel     TEXT    NOT NULL DEFAULT 'general',
-      role        TEXT    NOT NULL DEFAULT 'dispatcher',
-      sender      TEXT    NOT NULL DEFAULT '',
-      body        TEXT    NOT NULL DEFAULT '',
-      reply_to    INTEGER,
-      reactions   TEXT,
-      photo_data  TEXT,
-      photo_mime  TEXT,
-      location_id INTEGER NOT NULL DEFAULT 1
-    )
-  `);
-  await run(`CREATE INDEX IF NOT EXISTS idx_messages_channel_loc ON messages(channel, location_id)`);
-  await run(`CREATE INDEX IF NOT EXISTS idx_messages_at ON messages(at)`);
-}
-
-// Run once on startup
-ensureMessagesTable()
-  .then(() => console.log('[CHAT] Messages table ready'))
-  .catch(e  => console.error('[CHAT] Table init error:', e.message));
-
 // ── Auth helper ───────────────────────────────────────────────────────────────
+// Note: messages table is created by migration v8 in migrations.js
 function requireChat(req, res, next) {
   const s = getSession(req);
   if (!s?.role) return res.status(401).send('Not authenticated');
@@ -197,7 +171,7 @@ router.post('/api/chat/react', requireChat, async (req, res) => {
   try {
     const id    = Number(req.body.id);
     const emoji = String(req.body.emoji || '').trim();
-    const ALLOWED = ['👍','✅','👀','⚠️','🚛','🔧'];
+    const ALLOWED = ['👍','✅','👀','⚠️','🚛','🔧','🔴','🟢','📦','🕐','💯','❓','🙏','🔥','💪','😅'];
 
     if (!id || !ALLOWED.includes(emoji)) return res.status(400).send('Invalid');
 
@@ -246,13 +220,22 @@ router.get('/api/chat/photo/:id', requireChat, async (req, res) => {
 // Admin only — deletes a message
 router.delete('/api/chat/message/:id', requireChat, async (req, res) => {
   try {
-    if (req.chatRole !== 'admin') return res.status(403).send('Admin only');
+    const msgId = Number(req.params.id);
+    if (!msgId) return res.status(400).send('Invalid id');
+    // Admins can delete any message; others can only delete their own
+    const existing = await get(
+      `SELECT role, sender FROM messages WHERE id=? AND location_id=?`,
+      [msgId, req.chatLocId]
+    );
+    if (!existing) return res.status(404).send('Not found');
+    const isOwn = (existing.role === req.chatRole);
+    if (req.chatRole !== 'admin' && !isOwn) return res.status(403).send('Cannot delete others\' messages');
     const result = await run(
       `DELETE FROM messages WHERE id=? AND location_id=?`,
-      [req.params.id, req.chatLocId]
+      [msgId, req.chatLocId]
     );
     if (!result.changes) return res.status(404).send('Not found');
-    wsBroadcastToLocation(req.chatLocId, 'chat', { type: 'deleted', data: { id: Number(req.params.id) } });
+    wsBroadcastToLocation(req.chatLocId, 'chat', { type: 'deleted', data: { id: msgId } });
     res.json({ ok: true });
   } catch (e) {
     console.error('[chat/delete]', e.message);
